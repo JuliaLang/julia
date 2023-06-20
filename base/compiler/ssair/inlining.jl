@@ -652,8 +652,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
     end
     finish_cfg_inline!(state)
 
-    boundscheck = inbounds_option()
-    if boundscheck === :default && propagate_inbounds
+    boundscheck = :default
+    if propagate_inbounds
         boundscheck = :propagate
     end
 

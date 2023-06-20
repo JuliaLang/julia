@@ -1736,26 +1736,10 @@ static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string 
     error_unless(ctx, emit_isconcrete(ctx, typ), msg);
 }
 
-#define CHECK_BOUNDS 1
-static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
-#if CHECK_BOUNDS==1
-    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON)
-        return 1;
-    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF)
-        return 0;
-    if (inbounds == jl_false)
-        return 0;
-    return 1;
-#else
-    return 0;
-#endif
-}
-
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
-#if CHECK_BOUNDS==1
-    if (bounds_check_enabled(ctx, boundscheck)) {
+    if (boundscheck != jl_false) {
         ++EmittedBoundschecks;
         Value *ok = ctx.builder.CreateICmpULT(im1, len);
         setName(ctx.emission_context, ok, "boundscheck");
@@ -1790,7 +1774,6 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
         ctx.f->getBasicBlockList().push_back(passBB);
         ctx.builder.SetInsertPoint(passBB);
     }
-#endif
     return im1;
 }
 
@@ -3031,14 +3014,12 @@ static Value *emit_array_nd_index(
     Value *a = boxed(ctx, ainfo);
     Value *i = Constant::getNullValue(ctx.types().T_size);
     Value *stride = ConstantInt::get(ctx.types().T_size, 1);
-#if CHECK_BOUNDS==1
-    bool bc = bounds_check_enabled(ctx, inbounds);
+    bool bc = inbounds != jl_false;
     BasicBlock *failBB = NULL, *endBB = NULL;
     if (bc) {
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
         endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
     }
-#endif
     SmallVector<Value *> idxs(nidxs);
     for (size_t k = 0; k < nidxs; k++) {
         idxs[k] = emit_unbox(ctx, ctx.types().T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
@@ -3050,7 +3031,6 @@ static Value *emit_array_nd_index(
         if (k < nidxs - 1) {
             assert(nd >= 0);
             Value *d = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, k + 1, nd);
-#if CHECK_BOUNDS==1
             if (bc) {
                 BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "ib");
                 // if !(i < d) goto error
@@ -3060,12 +3040,10 @@ static Value *emit_array_nd_index(
                 ctx.f->getBasicBlockList().push_back(okBB);
                 ctx.builder.SetInsertPoint(okBB);
             }
-#endif
             stride = ctx.builder.CreateMul(stride, d);
             setName(ctx.emission_context, stride, "stride");
         }
     }
-#if CHECK_BOUNDS==1
     if (bc) {
         // We have already emitted a bounds check for each index except for
         // the last one which we therefore have to do here.
@@ -3126,7 +3104,6 @@ static Value *emit_array_nd_index(
         ctx.f->getBasicBlockList().push_back(endBB);
         ctx.builder.SetInsertPoint(endBB);
     }
-#endif
 
     return i;
 }

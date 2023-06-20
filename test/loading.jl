@@ -1096,25 +1096,17 @@ pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
-check_bounds(val) = if val == 0
-    `--check-bounds=auto`
-elseif val == 1
-    `--check-bounds=yes`
-elseif val == 2
-    `--check-bounds=no`
-end
 
 @testset "CacheFlags" begin
     cf = Base.CacheFlags()
     opts = Base.JLOptions()
     @test cf.use_pkgimages == opts.use_pkgimages
     @test cf.debug_level == opts.debug_level
-    @test cf.check_bounds == opts.check_bounds
     @test cf.inline == opts.can_inline
     @test cf.opt_level == opts.opt_level
 
     # OOICCDDP
-    for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
+    for (P, D, I, O) in Iterators.product(0:1, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
         let
@@ -1122,25 +1114,23 @@ end
             opts = Base.JLOptions()
             cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
             cf.debug_level == opts.debug_level == $D || error("debug_level")
-            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
             cf.inline == opts.can_inline == $I || error("inline")
             cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
-        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stdout, stderr))
     end
 
     cf = Base.CacheFlags(255)
     @test cf.use_pkgimages
     @test cf.debug_level == 3
-    @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
 
     io = PipeBuffer()
     show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, is_mandatory = 1, inline = true, opt_level = 3"
 end
 
 empty!(Base.DEPOT_PATH)

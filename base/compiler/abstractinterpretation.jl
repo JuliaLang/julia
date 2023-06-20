@@ -835,13 +835,6 @@ end
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
     (;effects) = result
-    if inbounds_option() === :off
-        if !is_nothrow(effects)
-            # Disable concrete evaluation in `--check-bounds=no` mode,
-            # unless it is known to not throw.
-            return :none
-        end
-    end
     if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
         # If the current statement is @inbounds or we propagate inbounds, the call's consistency
         # is tainted and not consteval eligible.

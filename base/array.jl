@@ -1017,9 +1017,9 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 @eval setindex!(A::Array{T}, x, i1::Int) where {T} =
-    arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1)
+    arrayset(Core.should_check_bounds($(Expr(:boundscheck))), A, x isa T ? x : convert(T,x)::T, i1)
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
+    (@inline; arrayset(Core.should_check_bounds($(Expr(:boundscheck))), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
 
 __inbounds_setindex!(A::Array{T}, x, i1::Int) where {T} =
     arrayset(false, A, convert(T,x)::T, i1)

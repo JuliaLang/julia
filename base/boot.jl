@@ -854,4 +854,6 @@ function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
+should_check_bounds(boundscheck::Bool) = boundscheck
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

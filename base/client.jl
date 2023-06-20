@@ -272,6 +272,15 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
+    # Maybe redefine bounds checking if requested
+    if JLOptions().check_bounds != 0
+        if JLOptions().check_bounds == 1
+            Core.eval(Main, :(Core.should_check_bounds(boundscheck::Bool) = true))
+        else
+            Core.eval(Main, :(Core.should_check_bounds(boundscheck::Bool) = false))
+        end
+    end
+
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
 

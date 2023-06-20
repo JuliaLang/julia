@@ -3817,7 +3817,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         assert(jl_is_datatype(jt));
                         // This is not necessary for correctness, but allows to omit
                         // the extra code for getting the length of the tuple
-                        if (!bounds_check_enabled(ctx, boundscheck)) {
+                        if (boundscheck == jl_false) {
                             vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
                         }
                         else {
@@ -5772,7 +5772,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
     else if (head == jl_boundscheck_sym) {
-        return mark_julia_const(ctx, bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
+        return mark_julia_const(ctx, jl_true);
     }
     else if (head == jl_gc_preserve_begin_sym) {
         SmallVector<jl_cgval_t> argv(nargs);

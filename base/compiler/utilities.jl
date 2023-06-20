@@ -513,9 +513,3 @@ function coverage_enabled(m::Module)
     end
     return false
 end
-function inbounds_option()
-    opt_check_bounds = JLOptions().check_bounds
-    opt_check_bounds == 0 && return :default
-    opt_check_bounds == 1 && return :on
-    return :off
-end
