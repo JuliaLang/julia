@@ -59,11 +59,23 @@ function _nthreads_in_pool(tpid::Int8)
 end
 
 function _tpid_to_sym(tpid::Int8)
-    return tpid == 0 ? :interactive : :default
+    if tpid == 0
+        return :interactive
+    elseif tpid == 1
+        return :default
+    else
+        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+    end
 end
 
 function _sym_to_tpid(tp::Symbol)
-    return tp === :interactive ? Int8(0) : Int8(1)
+    if tp === :interactive
+        return Int8(0)
+    elseif tp === :default
+        return Int8(1)
+    else
+        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+    end
 end
 
 """
@@ -141,7 +153,7 @@ function threading_run(fun, static)
         Base._wait(tasks[i])
     end
     ccall(:jl_exit_threaded_region, Cvoid, ())
-    failed_tasks = filter(istaskfailed, tasks)
+    failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
@@ -386,20 +398,18 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    tp = :default
+    tp = QuoteNode(:default)
     na = length(args)
     if na == 2
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-        elseif ttype isa Symbol
-            # TODO: allow unquoted symbols
-            ttype = nothing
-        end
-        if ttype === :interactive || ttype === :default
-            tp = ttype
+            if ttype !== :interactive && ttype !== :default
+                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            end
+            tp = QuoteNode(ttype)
         else
-            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            tp = ttype
         end
     elseif na == 1
         ex = args[1]
@@ -415,7 +425,7 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(QuoteNode(tp)))
+            _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end
