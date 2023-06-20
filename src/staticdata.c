@@ -1165,7 +1165,9 @@ static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fn
 #ifndef JL_NDEBUG
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(jl_atomic_load_relaxed(&ci->specsigflags) & 0b100);
+        _jl_specsig_flags_t specsig;
+        specsig.bits = jl_atomic_load_relaxed(&ci->specsigflags);
+        assert(specsig.flags.from_image)
     }
 #endif
 }
@@ -2014,7 +2016,12 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             void *fptr = (void*)(base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
-                codeinst->specsigflags = 0b111; // TODO: set only if confirmed to be true
+                _jl_specsig_flags_t specsig = { { // TODO: set only if confirmed to be true
+                    /* specptr_specialized */ 1,
+                    /* specptr_matches_invokeptr */ 1,
+                    /* from_image */ 1,
+                } };
+                codeinst->specsigflags = specsig.bits;
             }
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
@@ -2038,7 +2045,11 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
     }
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(ci && (jl_atomic_load_relaxed(&ci->specsigflags) & 0b001));
+#ifndef JL_NDEBUG
+        _jl_specsig_flags_t specsig;
+        specsig.bits = jl_atomic_load_relaxed(&ci->specsigflags);
+        assert(ci && specsig.flags.specptr_specialized);
+#endif
         uintptr_t item = backref_id(s, (void*)ci, s->link_ids_external_fnvars);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
@@ -2088,7 +2099,11 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
                 v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
         } else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
-            assert(codeinst && (codeinst->specsigflags & 0b01) && codeinst->specptr.fptr);
+#ifndef JL_NDEBUG
+            _jl_specsig_flags_t specsig;
+            specsig.bits = jl_atomic_load_relaxed(&codeinst->specsigflags);
+            assert(codeinst && specsig.flags.specptr_specialized && codeinst->specptr.fptr);
+#endif
             v = (uintptr_t)codeinst->specptr.fptr;
         }
         *gv = v;

@@ -406,6 +406,17 @@ typedef struct _jl_opaque_closure_t {
     void *specptr;
 } jl_opaque_closure_t;
 
+typedef union __jl_specsig_flags_t {
+    struct {
+        uint8_t specptr_specialized: 1;
+        uint8_t specptr_matches_invokeptr: 1;
+        uint8_t from_image: 1;
+
+        uint8_t _unused: 5;
+    } flags;
+    uint8_t bits;
+} _jl_specsig_flags_t;
+
 // This type represents an executable operation
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
@@ -446,9 +457,7 @@ typedef struct _jl_code_instance_t {
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
-    _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
-                                   // & 0b010 == invokeptr matches specptr
-                                   // & 0b100 == From image
+    _Atomic(uint8_t) specsigflags; // flags/layout defined by _jl_specsig_flags_t
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
     _Atomic(jl_callptr_t) invoke; // jlcall entry point
