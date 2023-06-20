@@ -232,10 +232,7 @@ function complete_keyword(s::Union{String,SubString{String}})
     Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
 end
 
-function complete_path(path::AbstractString, pos::Int;
-                       use_envpath=false, shell_escape=false,
-                       string_escape=false)
-    @assert !(shell_escape && string_escape)
+function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_escape=false)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -262,9 +259,9 @@ function complete_path(path::AbstractString, pos::Int;
     matches = Set{String}()
     for file in files
         if startswith(file, prefix)
-            p = joinpath(dir, file)
-            is_dir = try isdir(p) catch; false end
-            push!(matches, is_dir ? joinpath(file, "") : file)
+            id = try isdir(joinpath(dir, file)) catch; false end
+            # joinpath is not used because windows needs to complete with double-backslash
+            push!(matches, id ? file * (@static Sys.iswindows() ? "\\\\" : "/") : file)
         end
     end
 
@@ -310,14 +307,8 @@ function complete_path(path::AbstractString, pos::Int;
         end
     end
 
-    function do_escape(s)
-        return shell_escape ? replace(s, r"(\s|\\)" => s"\\\0") :
-               string_escape ? escape_string(s, ('\"','$')) :
-               s
-    end
-
-    matchList = Completion[PathCompletion(do_escape(s)) for s in matches]
-    startpos = pos - lastindex(do_escape(prefix)) + 1
+    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
+    startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
@@ -776,7 +767,7 @@ end
 function close_path_completion(str, startpos, r, paths, pos)
     length(paths) == 1 || return false  # Only close if there's a single choice...
     _path = str[startpos:prevind(str, first(r))] * (paths[1]::PathCompletion).path
-    path = expanduser(unescape_string(replace(_path, "\\\$"=>"\$", "\\\""=>"\"")))
+    path = expanduser(replace(_path, r"\\ " => " "))
     # ...except if it's a directory...
     try
         isdir(path)
@@ -1048,44 +1039,23 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         return complete_identifiers!(Completion[], ffunc, context_module, string,
             string[startpos:pos], pos, dotpos, startpos)
-    elseif inc_tag === :cmd
+    # otherwise...
+    elseif inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
 
-        # This expansion with "\\ "=>' ' replacement and shell_escape=true
-        # assumes the path isn't further quoted within the cmd backticks.
         expanded = complete_expanduser(replace(string[r], r"\\ " => " "), r)
         expanded[3] && return expanded  # If user expansion available, return it
 
-        paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos,
-                                          shell_escape=true)
+        paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
-        return sort!(paths, by=p->p.path), r, success
-    elseif inc_tag === :string
-        # Find first non-escaped quote
-        m = match(r"\"(?!\\)", reverse(partial))
-        startpos = nextind(partial, reverseind(partial, m.offset))
-        r = startpos:pos
-
-        expanded = complete_expanduser(string[r], r)
-        expanded[3] && return expanded  # If user expansion available, return it
-
-        path_prefix = try
-            unescape_string(replace(string[r], "\\\$"=>"\$", "\\\""=>"\""))
-        catch
-            nothing
+        if inc_tag === :string && close_path_completion(string, startpos, r, paths, pos)
+            paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
         end
-        if !isnothing(path_prefix)
-            paths, r, success = complete_path(path_prefix, pos, string_escape=true)
 
-            if close_path_completion(string, startpos, r, paths, pos)
-                paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
-            end
-
-            # Fallthrough allowed so that Latex symbols can be completed in strings
-            success && return sort!(paths, by=p->p.path), r, success
-        end
+        #Latex symbols can be completed for strings
+        (success || inc_tag === :cmd) && return sort!(paths, by=p->p.path), r, success
     end
 
     ok, ret = bslash_completions(string, pos)

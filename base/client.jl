@@ -202,7 +202,10 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 # detect the reason which caused an :incomplete expression
 # from the error message
 # NOTE: the error messages are defined in src/julia-parser.scm
-function fl_incomplete_tag(msg::AbstractString)
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    Meta.isexpr(ex, :incomplete) || return :none
+    msg = ex.args[1]
     occursin("string", msg) && return :string
     occursin("comment", msg) && return :comment
     occursin("requires end", msg) && return :block
@@ -210,20 +213,6 @@ function fl_incomplete_tag(msg::AbstractString)
     occursin("character", msg) && return :char
     return :other
 end
-
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    if ex.head !== :incomplete
-        return :none
-    elseif isempty(ex.args)
-        return :other
-    elseif ex.args[1] isa String
-        return fl_incomplete_tag(ex.args[1])
-    else
-        return incomplete_tag(ex.args[1])
-    end
-end
-incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)

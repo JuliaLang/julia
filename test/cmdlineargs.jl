@@ -929,7 +929,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     close(in)
     close(err.in)
     txt = readline(err)
-    @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
+    @test startswith(txt, "ERROR: syntax: incomplete")
 end
 
 # Issue #29855
