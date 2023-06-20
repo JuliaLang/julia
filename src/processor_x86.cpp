@@ -148,7 +148,6 @@ static constexpr FeatureDep deps[] = {
     {avx512cd, avx512f},
     {avx512bw, avx512f},
     {avx512bf16, avx512bw},
-    {avxifma, avx2},
     {avx512bitalg, avx512bw},
     {avx512vl, avx512f},
     {avx512vbmi, avx512bw},
@@ -237,7 +236,7 @@ constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq,avx512bw, avx512vl,
-                        avx512vbmi,avx512vbmi2,avxifma,avx512vnni,avx512bitalg, gfni, avx512bf16,
+                        avx512vbmi,avx512vbmi2,avx512ifma,avx512vnni,avx512bitalg, gfni, avx512bf16,
                         shstk,avx512vpopcntdq);
 
 }
