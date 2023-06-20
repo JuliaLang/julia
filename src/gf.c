@@ -2402,10 +2402,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                         /* specptr_matches_invokeptr */ 0,
                         /* from_image */ 0
                     } };
+                    _jl_specsig_flags_t invokeptr_matches_flag_only = { {
+                        /* specptr_specialized */ 0,
+                        /* specptr_matches_invokeptr */ specsig.flags.specptr_matches_invokeptr,
+                        /* from_image */ 0
+                    } };
 
                     jl_atomic_store_relaxed(&codeinst->specsigflags, specialized_flag_only.bits);
                     jl_atomic_store_release(&codeinst->invoke, invoke);
-                    jl_atomic_store_release(&codeinst->specsigflags, specsig.bits);
+                    // unspec is probably not specsig, but might be using specptr
+                    jl_atomic_store_release(&codeinst->specsigflags, invokeptr_matches_flag_only.bits);
                 }
                 else {
                     // someone else already compiled it
