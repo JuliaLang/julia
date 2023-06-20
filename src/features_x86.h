@@ -112,6 +112,7 @@ JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 // EAX=7,ECX=1: EAX
 JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
+JL_FEATURE_DEF(avxifma, 32 * 9 + 23, 0)
 
 // EAX=0x14,ECX=0: EBX
 JL_FEATURE_DEF(ptwrite, 32 * 10 + 4, 0)

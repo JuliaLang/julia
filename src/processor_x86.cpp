@@ -94,6 +94,7 @@ enum class CPU : uint32_t {
     amd_znver1,
     amd_znver2,
     amd_znver3,
+    amd_znver4,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -147,6 +148,7 @@ static constexpr FeatureDep deps[] = {
     {avx512cd, avx512f},
     {avx512bw, avx512f},
     {avx512bf16, avx512bw},
+    {avxifma, avx2},
     {avx512bitalg, avx512bw},
     {avx512vl, avx512f},
     {avx512vbmi, avx512bw},
@@ -234,6 +236,9 @@ constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero
                                                     rdseed, sha, sse4a, xsavec);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
+constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq,avx512bw, avx512vl,
+                        avx512vbmi,avx512vbmi2,avxifma,avx512vnni,avx512bitalg, gfni, avx512bf16,
+                        shstk,avx512vpopcntdq);
 
 }
 
@@ -295,6 +300,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
+    {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -565,7 +571,9 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
     case 0x19:  // AMD Family 19h
         if (model <= 0x0f || model == 0x21)
             return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
-        return CPU::amd_znver3; // fallback
+        if (model <= 0x1F || model >= 0x60)
+            return CPU::amd_znver4; // 10h-1fh, >60h: Zen4
+        return CPU::amd_znver4; // fallback
     }
 }
 
