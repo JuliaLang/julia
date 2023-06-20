@@ -1108,6 +1108,10 @@ function sourcetext(stream::ParseStream; steal_textbuf=false)
     SubString(str, first_byte(stream), thisind(str, last_byte(stream)))
 end
 
+function SourceFile(stream::ParseStream; kws...)
+    return SourceFile(sourcetext(stream); first_index=first_byte(stream), kws...)
+end
+
 """
     unsafe_textbuf(stream)
 

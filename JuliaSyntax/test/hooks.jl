@@ -1,3 +1,15 @@
+function _unwrap_parse_error(core_hook_result)
+    @test Meta.isexpr(core_hook_result[1], :error, 1)
+    err = core_hook_result[1].args[1]
+    if JuliaSyntax._has_v1_10_hooks
+        @test err isa Meta.ParseError
+        return err.detail
+    else
+        @test err isa JuliaSyntax.ParseError
+        return err
+    end
+end
+
 @testset "Hooks for Core integration" begin
     @testset "whitespace parsing" begin
         @test JuliaSyntax.core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
@@ -19,26 +31,28 @@
         @test ex.args[2] == LineNumberNode(2, "otherfile")
 
         # Errors also propagate file & lineno
-        err = JuliaSyntax.core_parser_hook("[x)", "f1", 1, 0, :statement)[1].args[1]
-        if JuliaSyntax._has_v1_10_hooks
-            @test err isa Meta.ParseError
-            err = err.detail
-        else
-            @test err isa JuliaSyntax.ParseError
-        end
+        err = _unwrap_parse_error(
+            JuliaSyntax.core_parser_hook("[x)", "f1", 1, 0, :statement)
+        )
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f1"
         @test err.source.first_line == 1
-        err = JuliaSyntax.core_parser_hook("[x)", "f2", 2, 0, :statement)[1].args[1]
-        if JuliaSyntax._has_v1_10_hooks
-            @test err isa Meta.ParseError
-            err = err.detail
-        else
-            @test err isa JuliaSyntax.ParseError
-        end
+        err = _unwrap_parse_error(
+            JuliaSyntax.core_parser_hook("[x)", "f2", 2, 0, :statement)
+        )
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f2"
         @test err.source.first_line == 2
+
+        # Errors including nontrivial offset indices
+        err = _unwrap_parse_error(
+            JuliaSyntax.core_parser_hook("a\nh{x)\nb", "test.jl", 1, 2, :statement)
+        )
+        @test err isa JuliaSyntax.ParseError
+        @test err.source.first_line == 1
+        @test err.diagnostics[1].first_byte == 6
+        @test err.diagnostics[1].last_byte == 5
+        @test err.diagnostics[1].message == "Expected `}`"
     end
 
     @testset "toplevel errors" begin
