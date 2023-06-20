@@ -28,8 +28,14 @@
     end
 
     # byte offset
-    @test source_location(SourceFile("a\nbb\nccc\ndddd", first_index=10), 13) == (2,2)
-    @test source_line(SourceFile("a\nbb\nccc\ndddd", first_index=10), 15) == 3
+    sf = SourceFile("a\nbb\nccc\ndddd", first_index=10)
+    @test source_location(sf, 13) == (2,2)
+    @test source_line(sf, 15) == 3
+    @test source_line_range(sf, 10) == (10,11)
+    @test source_line_range(sf, 11) == (10,11)
+    @test source_line_range(sf, 12) == (12,14)
+    @test source_line_range(sf, 14) == (12,14)
+    @test source_line_range(sf, 15) == (15,18)
 
     # source_line convenience function
     @test source_line(SourceFile("a\nb\n"), 2) == 1
@@ -51,6 +57,11 @@ end
     @test sf[10] == 'a'
     @test sf[10:11] == "ab"
     @test view(sf, 10:11) == "ab"
+
+    @test thisind(SourceFile("xαx", first_index=10), 10) == 10
+    @test thisind(SourceFile("xαx", first_index=10), 11) == 11
+    @test thisind(SourceFile("xαx", first_index=10), 12) == 11
+    @test thisind(SourceFile("xαx", first_index=10), 13) == 13
 
     if Base.VERSION >= v"1.4"
         # Protect the `[begin` from being viewed by the parser on older Julia versions

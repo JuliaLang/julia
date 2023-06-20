@@ -125,8 +125,8 @@ function emit_diagnostic(ps::ParseState, args...; kws...)
     emit_diagnostic(ps.stream, args...; kws...)
 end
 
-function textbuf(ps::ParseState)
-    textbuf(ps.stream)
+function unsafe_textbuf(ps::ParseState)
+    unsafe_textbuf(ps.stream)
 end
 
 function first_child_position(ps::ParseState, pos::ParseStreamPosition)
@@ -3143,7 +3143,7 @@ function parse_brackets(after_parse::Function,
     return opts
 end
 
-is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
+_is_indentation(b::UInt8) = (b == u8" " || b == u8"\t")
 
 # Parse a string, embedded interpolations and deindent triple quoted strings
 # by marking indentation characters as whitespace trivia.
@@ -3157,7 +3157,7 @@ function parse_string(ps::ParseState, raw::Bool)
     indent_ref_i = 0
     indent_ref_len = typemax(Int)
     indent_chunks = acquire_positions(ps.stream)
-    buf = textbuf(ps)
+    txtbuf = unsafe_textbuf(ps)
     chunk_flags = raw ? RAW_STRING_FLAG : EMPTY_FLAGS
     bump(ps, TRIVIA_FLAG)
     first_chunk = true
@@ -3212,10 +3212,10 @@ function parse_string(ps::ParseState, raw::Bool)
             if triplestr && first_chunk && span(t) <= 2 &&
                     begin
                         s = span(t)
-                        b = buf[last_byte(t)]
+                        b = txtbuf[last_byte(t)]
                         # Test whether the string is a single logical newline
-                        (s == 1 && (b == UInt8('\n') || b == UInt8('\r'))) ||
-                        (s == 2 && (buf[first_byte(t)] == UInt8('\r') && b == UInt8('\n')))
+                        (s == 1 && (b == u8"\n" || b == u8"\r")) ||
+                        (s == 2 && (txtbuf[first_byte(t)] == u8"\r" && b == u8"\n"))
                     end
                 # First line of triple string is a newline only: mark as trivia.
                 # """\nx"""    ==> (string-s "x")
@@ -3253,8 +3253,8 @@ function parse_string(ps::ParseState, raw::Bool)
                     # """\n  $a \n  $b"""   ==> (string-s a " \n" b)
                     # """\n  $a\n  $b\n"""  ==> (string-s "  " a "\n" "  " b "\n")
                     #
-                    if prev_chunk_newline && (b = buf[first_byte(t)];
-                                              b != UInt8('\n') && b != UInt8('\r'))
+                    if prev_chunk_newline && (b = txtbuf[first_byte(t)];
+                                              b != u8"\n" && b != u8"\r")
                         # Compute length of longest common prefix of mixed
                         # spaces and tabs, in bytes
                         #
@@ -3267,7 +3267,7 @@ function parse_string(ps::ParseState, raw::Bool)
                             # No indentation found yet. Find indentation we'll
                             # use as a reference
                             i = first_byte(t) - 1
-                            while i < last_byte(t) && is_indentation(buf[i+1])
+                            while i < last_byte(t) && _is_indentation(txtbuf[i+1])
                                 i += 1
                             end
                             indent_ref_i = first_byte(t)
@@ -3277,7 +3277,7 @@ function parse_string(ps::ParseState, raw::Bool)
                             # shortening length if necessary.
                             j = 0
                             while j < span(t) && j < indent_ref_len
-                                if buf[j + first_byte(t)] != buf[j + indent_ref_i]
+                                if txtbuf[j + first_byte(t)] != txtbuf[j + indent_ref_i]
                                     break
                                 end
                                 j += 1
@@ -3287,7 +3287,7 @@ function parse_string(ps::ParseState, raw::Bool)
                         # Prepare a place for indentiation trivia, if necessary
                         push!(indent_chunks, bump_invisible(ps, K"TOMBSTONE"))
                     end
-                    b = buf[last_byte(t)]
+                    b = txtbuf[last_byte(t)]
                     prev_chunk_newline = b == UInt8('\n') || b == UInt8('\r')
                 end
                 bump(ps, chunk_flags)

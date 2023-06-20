@@ -9,6 +9,7 @@ using .JuliaSyntax:
     SourceFile,
     source_location,
     source_line,
+    source_line_range,
     parse!,
     parsestmt,
     parseall,
