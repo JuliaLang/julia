@@ -854,12 +854,15 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
     SysimgMatch match;
     bool match_name = false;
     int feature_size = 0;
+    std::vector<const char *> rejection_reasons;
+    rejection_reasons.reserve(sysimg.size());
     for (uint32_t i = 0; i < sysimg.size(); i++) {
         auto &imgt = sysimg[i];
         if (!(imgt.en.features & target.dis.features).empty()) {
             // Check sysimg enabled features against runtime disabled features
             // This is valid (and all what we can do)
             // even if one or both of the targets are unknown.
+            rejection_reasons.push_back("Rejecting this target due to use of runtime-disabled features\n");
             continue;
         }
         if (imgt.name == target.name) {
@@ -870,25 +873,43 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
             }
         }
         else if (match_name) {
+            rejection_reasons.push_back("Rejecting this target since another target has a cpu name match\n");
             continue;
         }
         int new_vsz = max_vector_size(imgt.en.features);
-        if (match.vreg_size > new_vsz)
+        if (match.vreg_size > new_vsz) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger vector register size\n");
             continue;
+        }
         int new_feature_size = imgt.en.features.nbits();
         if (match.vreg_size < new_vsz) {
             match.best_idx = i;
             match.vreg_size = new_vsz;
             feature_size = new_feature_size;
+            rejection_reasons.push_back("Updating best match to this target due to larger vector register size\n");
             continue;
         }
-        if (new_feature_size < feature_size)
+        if (new_feature_size < feature_size) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger feature set\n");
             continue;
+        }
         match.best_idx = i;
         feature_size = new_feature_size;
+        rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1)
-        jl_error("Unable to find compatible target in system image.");
+    if (match.best_idx == (uint32_t)-1) {
+        // Construct a nice error message for debugging purposes
+        std::string error_msg = "Unable to find compatible target in cached code image.\n";
+        for (size_t i = 0; i < rejection_reasons.size(); i++) {
+            error_msg += "Target ";
+            error_msg += std::to_string(i);
+            error_msg += " (";
+            error_msg += sysimg[i].name;
+            error_msg += "): ";
+            error_msg += rejection_reasons[i];
+        }
+        jl_error(error_msg.c_str());
+    }
     return match;
 }
 

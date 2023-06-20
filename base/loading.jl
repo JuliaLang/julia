@@ -2843,9 +2843,9 @@ get_compiletime_preferences(::Nothing) = String[]
 function check_clone_targets(clone_targets)
     try
         ccall(:jl_check_pkgimage_clones, Cvoid, (Ptr{Cchar},), clone_targets)
-        return true
-    catch
-        return false
+        nothing
+    catch err
+        return sprint(showerror, err)
     end
 end
 
@@ -3025,10 +3025,9 @@ end
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true
             end
-            if !check_clone_targets(clone_targets)
-                image_targets = parse_image_targets(clone_targets)
-                curr_targets = current_image_targets()
-                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target" image_targets curr_targets
+            rejection_reasons = check_clone_targets(clone_targets)
+            if !isnothing(rejection_reasons)
+                @debug "Rejecting cache file $cachefile for $modkey\n" * rejection_reasons
                 return true
             end
             if !isfile(ocachefile)
