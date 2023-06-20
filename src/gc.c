@@ -4040,6 +4040,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         // offset within object
         size_t off2 = (off - GC_PAGE_OFFSET);
         size_t osize = meta->osize;
+        if (osize == 0)
+            return NULL;
         off2 %= osize;
         if (off - off2 + osize > GC_PAGE_SZ)
             return NULL;
