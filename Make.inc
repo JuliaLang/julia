@@ -723,7 +723,7 @@ endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
-SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan -Wl,-rpath=$(dir $(shell $(CC) --print-file-name libclang_rt.asan-x86_64.so))
+SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
