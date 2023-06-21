@@ -1378,9 +1378,9 @@ Returns whether a given PkgId within the active project is precompiled.
 function isprecompiled(pkg::PkgId;
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
-        sourcepath::String=Base.locate_package(pkg)
+        sourcepath::Union{String,Nothing}=Base.locate_package(pkg)
     )
-    isnothing(sourcepath) && error("Cannot locate source for $(repr(PkgId))")
+    isnothing(sourcepath) && error("Cannot locate source for $(repr(pkg))")
     for path_to_try in cachepaths
         staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true)
         if staledeps === true
