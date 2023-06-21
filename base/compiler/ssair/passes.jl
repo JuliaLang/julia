@@ -2246,6 +2246,7 @@ function cfg_simplify!(ir::IRCode)
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
+        bb_start = true
         while ms != 0
             for i in bbs[ms].stmts
                 node = ir.stmts[i]
@@ -2304,7 +2305,14 @@ function cfg_simplify!(ir::IRCode)
                             isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
                         end
                     end
-                    compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
+                    if length(edges) == 0 || (length(edges) == 1 && !isassigned(values, 1))
+                        compact.result[compact.result_idx][:inst] = nothing
+                    elseif length(edges) == 1 && !bb_start
+                        compact.result[compact.result_idx][:inst] = values[1]
+                    else
+                        @assert bb_start
+                        compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
+                    end
                 else
                     ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
                     if ri == compact.result_idx
@@ -2318,6 +2326,7 @@ function cfg_simplify!(ir::IRCode)
                 compact.result_idx += 1
             end
             ms = merged_succ[ms]
+            bb_start = false
         end
     end
     compact.idx = length(ir.stmts)
