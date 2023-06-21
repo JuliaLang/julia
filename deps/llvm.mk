@@ -230,6 +230,8 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
@@ -288,7 +290,7 @@ fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(USE_INTEL_JITEVENTS),1)
-extract-llvm: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
 endif
 
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
