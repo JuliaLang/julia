@@ -200,6 +200,7 @@ Tooling Improvements
 
 * Printing of `MethodError` and methods (such as from `methods(my_func)`) is now prettified and colored consistently
   with printing of methods in stacktraces ([#45069]).
+
 Regressions
 -----------
 
