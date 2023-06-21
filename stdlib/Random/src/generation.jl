@@ -167,6 +167,9 @@ function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
+### random tuples
+
+rand(r::AbstractRNG, ::SamplerType{T}) where {T<:Tuple} = T(rand.(Ref(r), T.parameters))
 
 ## Generate random integer within a range
 
