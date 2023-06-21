@@ -139,11 +139,18 @@ struct ImmutableNonIsBits
     v::Vector{Int}
 end
 const ref50243 = Ref(ImmutableNonIsBits([1,2,3]))
-f50243() = unsafe_load(Ptr{ImmutableNonIsBits}(pointer_from_objref(ref50243)))
-sum50243() = sum(f50243().v)  # (Do something with v to prevent the compiler from eliding)
-@test f50243() === ref50243[]
+load50243() = unsafe_load(Ptr{ImmutableNonIsBits}(pointer_from_objref(ref50243)))
+sum50243() = sum(load50243().v)  # (Do something with v to prevent the compiler from eliding)
+@test load50243() === ref50243[]
 @test sum50243() === 6
 @test @allocated(sum50243()) === 0
+
+const ref50243 = Ref(ImmutableNonIsBits([1,2,3]))
+store50243!(v2) = unsafe_store!(Ptr{ImmutableNonIsBits}(pointer_from_objref(ref50243)), v2)
+new50243 = ImmutableNonIsBits([1])
+store50243!(new50243)
+@test ref50243[] === new50243
+@test @allocated(store50243!(ref50243[])) === 0
 
 # macro to verify and compare the compiled output of an intrinsic with its runtime version
 macro test_intrinsic(intr, args...)

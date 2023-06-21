@@ -775,7 +775,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (!jl_isbits(ety)) {
+    else if (!jl_is_immutable(ety)) {
         thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
