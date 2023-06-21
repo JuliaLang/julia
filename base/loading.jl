@@ -2832,8 +2832,8 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0)) * ".pi
 # The lock file is deleted and precompilation will proceed after `stale_age` seconds if
 #  - the locking process no longer exists
 #  - the lock is held by another host, since processes cannot be checked remotely
-# or after `stale_age * 25` seconds if it does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=60)
+# or after `stale_age * 25` seconds if the process does still exist.
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
