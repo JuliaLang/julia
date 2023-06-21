@@ -841,11 +841,11 @@ end
     length(sig.parameters) >= 1 || return nothing
 
     i = let sig=sig
-        findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
     end
     i === nothing && return nothing
     let sig=sig
-        any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
+        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
     end && return nothing
 
     arg = sig.parameters[i]
@@ -2182,15 +2182,15 @@ function cfg_simplify!(ir::IRCode)
                       bb_rename_succ = bb_rename_succ
 
         # Compute (renamed) successors and predecessors given (renamed) block
-        function compute_succs(i)
+        function compute_succs(i::Int)
             orig_bb = follow_merged_succ(result_bbs[i])
             return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
-        function compute_preds(i)
+        function compute_preds(i::Int)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
             res = Int[]
-            function scan_preds!(preds)
+            function scan_preds!(preds::Vector{Int})
                 for pred in preds
                     if pred == 0
                         push!(res, 0)
@@ -2223,7 +2223,7 @@ function cfg_simplify!(ir::IRCode)
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
+            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert terminator[:inst] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
