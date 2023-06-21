@@ -695,7 +695,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         ai.decorateInst(load);
         return mark_julia_type(ctx, load, true, ety);
     }
-    else if (!jl_isbits(ety)) {
+    else if (!jl_is_immutable(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
