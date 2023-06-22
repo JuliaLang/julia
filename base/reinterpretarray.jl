@@ -761,7 +761,7 @@ end
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = packedsize(T) == sizeof(T)
+@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
