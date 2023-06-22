@@ -860,7 +860,7 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 
 typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
 
-static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var, int inv) JL_NOTSAFEPOINT
+static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
 {
     return var_occurs_inside(v, var, 0, 1);
 }
@@ -909,7 +909,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var, 0);
+    int diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var);
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -941,8 +941,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             jl_value_t *vl = btemp->lb;
             // TODO: this takes a significant amount of time
             if (btemp->depth0 != vb.depth0 &&
-                ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && var_occurs_inside(vu, vb.var, 0, 1)) ||
-                 (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && var_occurs_inside(vl, vb.var, 0, 1)))) {
+                ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && var_occurs_invariant(vu, vb.var)) ||
+                 (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && var_occurs_invariant(vl, vb.var)))) {
                 ans = 0; break;
             }
             btemp = btemp->prev;
@@ -1988,7 +1988,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     jl_value_t *body = find_var_body(y0, (jl_tvar_t*)b);
                     if (body == NULL)
                         body = y0;
-                    if (var_occurs_invariant(body, (jl_tvar_t*)b, 0))
+                    if (var_occurs_invariant(body, (jl_tvar_t*)b))
                         return 0;
                 }
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
@@ -2973,7 +2973,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         res = intersect(u->body, t, e, param);
     }
     vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
-                     !var_occurs_invariant(u->body, u->var, 0));
+                     !var_occurs_invariant(u->body, u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -3014,6 +3014,38 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     return res;
 }
 
+static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, int param) JL_NOTSAFEPOINT
+{
+    if (param > 1) {
+        return 0;
+    }
+    else if (v == (jl_value_t*)var) {
+        return param == 1;
+    }
+    else if (jl_is_uniontype(v)) {
+        return always_occurs_cov(((jl_uniontype_t*)v)->a, var, param) &&
+               always_occurs_cov(((jl_uniontype_t*)v)->b, var, param);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        return ua->var != var && (
+            always_occurs_cov(ua->var->ub, var, 0) ||
+            always_occurs_cov(ua->body, var, param));
+    }
+    else if (jl_is_vararg(v)) {
+        jl_vararg_t *vm = (jl_vararg_t*)v;
+        return vm->T && always_occurs_cov(vm->T, var, param);
+    }
+    else if (jl_is_datatype(v)) {
+        int nparam = jl_is_tuple_type(v) ? 1 : param;
+        for (size_t i = 0; i < jl_nparams(v); i++) {
+            if (always_occurs_cov(jl_tparam(v, i), var, nparam))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     jl_value_t *res = NULL;
@@ -3022,7 +3054,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
-    if (is_leaf_typevar(u->var) && !var_occurs_invariant(u->body, u->var, 0))
+    int noinv = !var_occurs_invariant(u->body, u->var);
+    if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
@@ -3036,7 +3069,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
-        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
+        else if (vb.occurs_cov && noinv)
             vb.constraintkind = 1;
         int reintersection = constraint1 != vb.constraintkind || vb.concrete;
         if (reintersection) {
