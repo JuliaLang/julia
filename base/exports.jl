@@ -134,6 +134,7 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
+    PaddingException,
     ProcessFailedException,
     TaskFailedException,
     SystemError,
