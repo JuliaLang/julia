@@ -25,6 +25,9 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* Time to first execution (TTFX, sometimes called time to first plot) is greatly reduced. Package precompilation now
+  saves native code into a "pkgimage", meaning that code generated during the precompilation process will not
+  require compilation after package load. Use of pkgimages can be disabled via `--pkgimages=no` ([#44527]) ([#47184]).
 * The known quadratic behavior of type inference is now fixed and inference uses less memory in general.
   Certain edge cases with auto-generated long functions (e.g. ModelingToolkit.jl with partial
   differential equations and large causal models) should see significant compile-time improvements ([#45276], [#45404]).
@@ -65,8 +68,6 @@ New library functions
 ---------------------
 
 * New function `Iterators.flatmap` ([#44792]).
-* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
-  inspecting which function `f` was originally wrapped ([#42717]).
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)` ([#45607]).
 * New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
@@ -95,6 +96,8 @@ Standard library changes
 * `@kwdef` is now exported and added to the public API ([#46273]).
 * An issue with order of operations in `fld1` is now fixed ([#28973]).
 * Sorting is now always stable by default, as `QuickSort` was stabilized ([#45222]).
+* `Base.splat` is now exported. The return value is now a `Base.Splat` instead
+  of an anonymous function, which allows for pretty printing ([#42717]).
 
 #### Package Manager
 
@@ -132,8 +135,9 @@ Standard library changes
 * The contextual module which is active in the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
-* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
-  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup ([#46474]).
+* A "numbered prompt" mode which prints numbers for each input and output and stores evaluated results in `Out` can be
+  activated with `REPL.numbered_prompt!()`. See the manual for how to enable this at startup ([#46474]).
+* Tab completion displays available keyword arguments ([#43536])
 
 #### SuiteSparse
 
@@ -173,12 +177,11 @@ Standard library changes
 
 #### DelimitedFiles
 
-* DelimitedFiles has been moved out as a separate package. It now has to be explicitly installed to be used.
+* DelimitedFiles has been moved out as a separate package.
 
 Deprecated or removed
 ---------------------
 
-* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function ([#42717]).
 
 External dependencies
 ---------------------
@@ -5561,18 +5564,18 @@ Deprecated or removed
 
   * several syntax whitespace insensitivities have been deprecated ([#11891]).
     ```julia
-     # function call
-     f (x)
+    # function call
+    f (x)
 
-     # getindex
-     x [17]
-     rand(2) [1]
+    # getindex
+    x [17]
+    rand(2) [1]
 
-     # function definition
-     f (x) = x^2
-     function foo (x)
-	x^2
-     end
+    # function definition
+    f (x) = x^2
+    function foo (x)
+        x^2
+    end
     ```
 
   * indexing with `Real`s that are not subtypes of `Integer` (`Rational`, `AbstractFloat`, etc.) has been deprecated ([#10458]).

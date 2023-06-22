@@ -14,13 +14,13 @@ export libgfortran, libstdcxx, libgomp
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgfortran_handle = C_NULL
-libgfortran_path = ""
-libstdcxx_handle = C_NULL
-libstdcxx_path = ""
-libgomp_handle = C_NULL
-libgomp_path = ""
+artifact_dir::String = ""
+libgfortran_handle::Ptr{Cvoid} = C_NULL
+libgfortran_path::String = ""
+libstdcxx_handle::Ptr{Cvoid} = C_NULL
+libstdcxx_path::String = ""
+libgomp_handle::Ptr{Cvoid} = C_NULL
+libgomp_path::String = ""
 
 if Sys.iswindows()
     if arch(HostPlatform()) == "x86_64"
@@ -31,6 +31,7 @@ if Sys.iswindows()
     const libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
     const libstdcxx = "libstdc++-6.dll"
     const libgomp = "libgomp-1.dll"
+    const libssp = "libssp-0.dll"
 elseif Sys.isapple()
     if arch(HostPlatform()) == "aarch64" || libgfortran_version(HostPlatform()) == v"5"
         const libgcc_s = "@rpath/libgcc_s.1.1.dylib"
@@ -40,11 +41,15 @@ elseif Sys.isapple()
     const libgfortran = string("@rpath/", "libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
     const libstdcxx = "@rpath/libstdc++.6.dylib"
     const libgomp = "@rpath/libgomp.1.dylib"
+    const libssp = "@rpath/libssp.0.dylib"
 else
     const libgcc_s = "libgcc_s.so.1"
     const libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
     const libstdcxx = "libstdc++.so.6"
     const libgomp = "libgomp.so.1"
+    if libc(HostPlatform()) != "musl"
+        const libssp = "libssp.so.0"
+    end
 end
 
 function __init__()
@@ -56,6 +61,9 @@ function __init__()
     global libstdcxx_path = dlpath(libstdcxx_handle)
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
+    @static if libc(HostPlatform()) != "musl"
+        dlopen(libssp; throw_error = false)
+    end
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)
     push!(LIBPATH_list, LIBPATH[])

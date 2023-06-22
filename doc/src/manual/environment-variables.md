@@ -78,6 +78,7 @@ and a global configuration search path of
 A directory path that indicates which project should be the initial active project.
 Setting this environment variable has the same effect as specifying the `--project`
 start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+(note the trailing dot)
 then Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents. See also
 the chapter on [Code Loading](@ref code-loading).
@@ -162,9 +163,13 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
-### `JULIA_MAX_NUM_PRECOMPILE_FILES`
+### [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@id env-max-num-precompile-files)
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
+
+### `JULIA_VERBOSE_LINKING`
+
+If set to true, linker commands will be displayed during precompilation.
 
 ## Pkg.jl
 
@@ -272,7 +277,7 @@ To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization
 
-### `JULIA_CPU_THREADS`
+### [`JULIA_CPU_THREADS`](@id env-cpu-threads)
 
 Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
 logical CPU cores available.
@@ -310,6 +315,27 @@ If set to a string that starts with the case-insensitive substring `"infinite"`,
 then spinning threads never sleep. Otherwise, `$JULIA_THREAD_SLEEP_THRESHOLD` is
 interpreted as an unsigned 64-bit integer (`uint64_t`) and gives, in
 nanoseconds, the amount of time after which spinning threads should sleep.
+
+### [`JULIA_NUM_GC_THREADS`](@id env-gc-threads)
+
+Sets the number of threads used by Garbage Collection. If unspecified is set to
+half of the number of worker threads.
+
+!!! compat "Julia 1.10"
+    The environment variable was added in 1.10
+
+### [`JULIA_IMAGE_THREADS`](@id env-image-threads)
+
+An unsigned 32-bit integer that sets the number of threads used by image
+compilation in this Julia process. The value of this variable may be
+ignored if the module is a small module. If left unspecified, the smaller
+of the value of [`JULIA_CPU_THREADS`](@ref env-cpu-threads) or half the
+number of logical CPU cores is used in its place.
+
+### `JULIA_IMAGE_TIMINGS`
+
+A boolean value that determines if detailed timing information is printed during
+during image compilation. Defaults to 0.
 
 ### `JULIA_EXCLUSIVE`
 

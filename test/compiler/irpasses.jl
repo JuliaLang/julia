@@ -387,6 +387,22 @@ let # should work with constant globals
     @test count(isnew, src.code) == 0
 end
 
+# don't SROA statement that may throw
+# https://github.com/JuliaLang/julia/issues/48067
+function issue48067(a::Int, b)
+   r = Ref(a)
+   try
+       setfield!(r, :x, b)
+       nothing
+   catch err
+       getfield(r, :x)
+   end
+end
+let src = code_typed1(issue48067, (Int,String))
+    @test any(iscall((src, setfield!)), src.code)
+end
+@test issue48067(42, "julia") == 42
+
 # should work nicely with inlining to optimize away a complicated case
 # adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
 struct Point
@@ -521,7 +537,7 @@ end
 # comparison lifting
 # ==================
 
-let # lifting `===`
+let # lifting `===` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         y === nothing # => ϕ(false, true)
@@ -541,7 +557,15 @@ let # lifting `===`
     end
 end
 
-let # lifting `isa`
+let # lifting `===` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        y === nothing # => Core.ifelse(c, false, true)
+    end
+    @test count(iscall((src, ===)), src.code) == 0
+end
+
+let # lifting `isa` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         isa(y, Int) # => ϕ(true, false)
@@ -564,7 +588,16 @@ let # lifting `isa`
     end
 end
 
-let # lifting `isdefined`
+let # lifting `isa` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isa(y, Int) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isa)), src.code) == 0
+end
+
+
+let # lifting `isdefined` through PhiNode
     src = code_typed1((Bool,Some{Int},)) do c, x
         y = c ? x : nothing
         isdefined(y, 1) # => ϕ(true, false)
@@ -585,6 +618,14 @@ let # lifting `isdefined`
     @test !any(src.code) do @nospecialize x
         iscall((src, isdefined), x) && argextype(x.args[2], src) isa Union
     end
+end
+
+let # lifting `isdefined` through Core.ifelse
+    src = code_typed1((Bool,Some{Int},)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isdefined(y, 1) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
 end
 
 mutable struct Foo30594; x::Float64; end
@@ -692,9 +733,10 @@ let m = Meta.@lower 1 + 1
         Any
     ]
     nstmts = length(src.code)
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
+    src.codelocs = fill(one(Int32), nstmts)
+    src.ssaflags = fill(one(Int32), nstmts)
+    src.slotflags = fill(zero(UInt8), 3)
+    ir = Core.Compiler.inflate_ir(src)
     @test Core.Compiler.verify_ir(ir) === nothing
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
@@ -1205,3 +1247,26 @@ function a47180(b; stdout )
     c
 end
 @test isa(a47180(``; stdout), Base.AbstractCmd)
+
+# Test that _compute_sparams can be eliminated for NamedTuple
+named_tuple_elim(name::Symbol, result) = NamedTuple{(name,)}(result)
+let src = code_typed1(named_tuple_elim, Tuple{Symbol, Tuple})
+    @test count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+          count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+          count(iscall(x->!isa(argextype(x, src).val, Core.Builtin)), src.code) == 0
+end
+
+# Test that sroa works if the struct type is a PartialStruct
+mutable struct OneConstField
+    const a::Int
+    b::Int
+end
+
+@eval function one_const_field_partial()
+    # Use explicit :new here to avoid inlining messing with the type
+    strct = $(Expr(:new, OneConstField, 1, 2))
+    strct.b = 4
+    strct.b = 5
+    return strct.b
+end
+@test fully_eliminated(one_const_field_partial; retval=5)

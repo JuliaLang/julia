@@ -377,6 +377,7 @@ table = md"""
 let out =
     @test sprint(show, "text/plain", book) ==
         "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
+    @test sprint(show, "text/plain", md"#") == "  " # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -1148,7 +1149,7 @@ end
 # issue 20225, check this can print
 @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
 
-# different output depending on whether color is requested:	+# issue 20225, check this can print
+# different output depending on whether color is requested: +# issue 20225, check this can print
 let buf = IOBuffer()
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
@@ -1157,6 +1158,38 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
     @test String(take!(buf)) == "  \e[4memph\e[24m"
+end
+
+let word = "Markdown" # disable underline when wrapping lines
+    buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], length(word)))
+    long_italic_text = Markdown.parse('_' * join(fill(word, 10), ' ') * '_')
+    show(ctx, MIME("text/plain"), long_italic_text)
+    lines = split(String(take!(buf)), '\n')
+    @test endswith(lines[begin], Base.disable_text_style[:underline])
+    @test startswith(lines[begin+1], ' '^Markdown.margin * Base.text_colors[:underline])
+end
+
+let word = "Markdown" # pre is of size Markdown.margin when wrapping title
+    buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], length(word)))
+    long_title = Markdown.parse("# " * join(fill(word, 3)))
+    show(ctx, MIME("text/plain"), long_title)
+    lines = split(String(take!(buf)), '\n')
+    @test all(startswith(Base.text_colors[:bold] * ' '^Markdown.margin), lines)
+end
+
+struct Struct49454 end
+Base.show(io::IO, ::Struct49454) =
+    print(io, Base.text_colors[:underline], "Struct 49454()", Base.text_colors[:normal])
+
+let buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
+    show(stdout, MIME("text/plain"), md"""
+    text without $(Struct49454()) underline.
+    """)
+    lines = split(String(take!(buf)), '\n')
+    @test !occursin(Base.text_colors[:underline], lines[end])
 end
 
 # table rendering with term #25213

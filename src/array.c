@@ -509,7 +509,7 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
             jl_throw(jl_memory_exception);
         s = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
-    jl_set_typeof(s, jl_string_type);
+    jl_set_typetagof(s, jl_string_tag, 0);
     maybe_record_alloc_to_profile(s, len, jl_string_type);
     *(size_t*)s = len;
     jl_string_data(s)[len] = 0;
@@ -627,7 +627,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        jl_atomic_store_release(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
     else if (a->flags.hasptr) {
         size_t elsize = a->elsize;
         jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
@@ -1161,7 +1161,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
     if (sz <= a->maxsize) {
         size_t dec = a->maxsize - sz;
         //if we don't save at least an eighth of maxsize then its not worth it to shrink
-        if (dec < a->maxsize / 8) return;
+        if (dec <= a->maxsize / 8) return;
         jl_array_shrink(a, dec);
     }
     else {
@@ -1255,7 +1255,7 @@ JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
 
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
 {
-    assert(jl_typeis(a, jl_array_any_type));
+    assert(jl_typetagis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
     size_t n = jl_array_nrows(a);
     jl_array_ptr_set(a, n - 1, item);
@@ -1263,8 +1263,8 @@ JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
 
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
 {
-    assert(jl_typeis(a, jl_array_any_type));
-    assert(jl_typeis(a2, jl_array_any_type));
+    assert(jl_typetagis(a, jl_array_any_type));
+    assert(jl_typetagis(a2, jl_array_any_type));
     size_t i;
     size_t n = jl_array_nrows(a);
     size_t n2 = jl_array_nrows(a2);

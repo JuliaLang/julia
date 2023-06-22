@@ -618,7 +618,7 @@ end
             @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
             @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
         end
-        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
 end
 @testset "empty/invalid partitions" begin

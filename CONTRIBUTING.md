@@ -293,7 +293,7 @@ The process of [creating a patch release](https://docs.julialang.org/en/v1/devdo
 6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
 
 7. Open a pull request that bumps the version of the relevant minor release to the
-   next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
+   next prerelease patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
 
 Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
 been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
@@ -325,7 +325,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
- - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 

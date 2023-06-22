@@ -48,33 +48,46 @@ function gcd(a::T, b::T) where T<:Integer
 end
 
 function gcd(a::T, b::T) where T<:BitInteger
-    a == 0 && return checked_abs(b)
-    b == 0 && return checked_abs(a)
-    r = _gcd(a, b)
-    signbit(r) && __throw_gcd_overflow(a, b)
-    return r
+    a == 0 && return Base.checked_abs(b)
+    b == 0 && return Base.checked_abs(a)
+    if a isa Signed && a == typemin(T)
+        if a == b
+            Base.__throw_gcd_overflow(a, b)
+        else
+            a, b = b, a
+        end
+    end
+    return _gcd(a, b)
 end
 @noinline __throw_gcd_overflow(a, b) =
     throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
+function absdiff(x::T,y::T) where {T<:Unsigned}
+    d = max(x,y) - min(x,y)
+    d, d
+end
+function absdiff(x::T,y::T) where {T<:Signed}
+    d = x - y
+    abs(d), d
+end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
 # Since this is used in the Rational constructor, constant folding is something we do care about here.
-@assume_effects :terminates_locally function _gcd(a::T, b::T) where T<:BitInteger
-    za = trailing_zeros(a)
-    zb = trailing_zeros(b)
+@assume_effects :terminates_locally function _gcd(ain::T, bin::T) where T<:BitInteger
+    zb = trailing_zeros(bin)
+    za = trailing_zeros(ain)
+    a = abs(ain)
+    b = abs(bin >> zb)
     k = min(za, zb)
-    u = unsigned(abs(a >> za))
-    v = unsigned(abs(b >> zb))
-    while u != v
-        if u > v
-            u, v = v, u
-        end
-        v -= u
-        v >>= trailing_zeros(v)
+    while a != 0
+        a >>= za
+        absd, diff = absdiff(a, b)
+        za = trailing_zeros(diff)
+        b = min(a, b)
+        a = absd
     end
-    r = u << k
+    r = b << k
     return r % T
 end
 
@@ -369,13 +382,26 @@ julia> powermod(5, 3, 19)
 ```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
-    p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
+    # When the concrete type of p is signed and has the lowest value,
+    # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
+    # but will work for integer types like `BigInt` that don't have `typemin` defined
+    # It needs special handling otherwise will cause overflow problem.
+    if p == -p
+        imod = invmod(x, m)
+        rhalf = powermod(imod, -(p÷2), m)
+        r::T = mod(widemul(rhalf, rhalf), m)
+        isodd(p) && (r = mod(widemul(r, imod), m))
+        #else odd
+        return r
+    elseif p < 0
+        return powermod(invmod(x, m), -p, m)
+    end
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow(2, p)
-    r::T = 1
+    r = 1
     while true
         if p >= t
             r = mod(widemul(r,b),m)
@@ -391,9 +417,9 @@ end
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
 powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
-_nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
+_nextpow2(x::Unsigned) = oneunit(x)<<(top_set_bit(x-oneunit(x)))
 _nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_nextpow2(unsigned(-x)) : _nextpow2(unsigned(x)))
-_prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
+_prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
@@ -526,7 +552,7 @@ const powers_of_ten = [
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
 function bit_ndigits0z(x::Base.BitUnsigned64)
-    lz = (sizeof(x)<<3)-leading_zeros(x)
+    lz = top_set_bit(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
 end
@@ -571,12 +597,12 @@ function ndigits0zpb(x::Integer, b::Integer)
     x = abs(x)
     if x isa Base.BitInteger
         x = unsigned(x)::Unsigned
-        b == 2  && return sizeof(x)<<3 - leading_zeros(x)
-        b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+        b == 2  && return top_set_bit(x)
+        b == 8  && return (top_set_bit(x) + 2) ÷ 3
         b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
         b == 10 && return bit_ndigits0z(x)
         if ispow2(b)
-            dv, rm = divrem(sizeof(x)<<3 - leading_zeros(x), trailing_zeros(b))
+            dv, rm = divrem(top_set_bit(x), trailing_zeros(b))
             return iszero(rm) ? dv : dv + 1
         end
     end
@@ -638,6 +664,9 @@ function ndigits0z(x::Integer, b::Integer)
     end
 end
 
+# Extends the definition in base/int.jl
+top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)
 
@@ -673,7 +702,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = 8 * sizeof(x) - leading_zeros(x)
+    m = top_set_bit(x)
     n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -700,7 +729,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
+    m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n
@@ -1082,9 +1111,40 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
-        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, " overflows")))
+        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, ") overflows")))
         rr += one(T)
         nn += one(T)
     end
     copysign(x, sgn)
+end
+
+"""
+    binomial(x::Number, k::Integer)
+
+The generalized binomial coefficient, defined for `k ≥ 0` by
+the polynomial
+```math
+\\frac{1}{k!} \\prod_{j=0}^{k-1} (x - j)
+```
+When `k < 0` it returns zero.
+
+For the case of integer `x`, this is equivalent to the ordinary
+integer binomial coefficient
+```math
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
+```
+
+Further generalizations to non-integer `k` are mathematically possible, but
+involve the Gamma function and/or the beta function, which are
+not provided by the Julia standard library but are available
+in external packages such as [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).
+
+# External links
+* [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
+"""
+function binomial(x::Number, k::Integer)
+    k < 0 && return zero(x)/one(k)
+    # we don't use prod(i -> (x-i+1), 1:k) / factorial(k),
+    # and instead divide each term by i, to avoid spurious overflow.
+    return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end

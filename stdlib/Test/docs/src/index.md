@@ -55,6 +55,7 @@ julia> @test foo("f") == 20
 Test Failed at none:1
   Expression: foo("f") == 20
    Evaluated: 1 == 20
+
 ERROR: There was an error during testing
 ```
 
@@ -224,6 +225,7 @@ julia> @test 1 ≈ 0.999999
 Test Failed at none:1
   Expression: 1 ≈ 0.999999
    Evaluated: 1 ≈ 0.999999
+
 ERROR: There was an error during testing
 ```
 You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
@@ -256,6 +258,16 @@ in the test set reporting. The test will not run but gives a `Broken` `Result`.
 
 ```@docs
 Test.@test_skip
+```
+
+## Test result types
+
+```@docs
+Test.Result
+Test.Pass
+Test.Fail
+Test.Error
+Test.Broken
 ```
 
 ## Creating Custom `AbstractTestSet` Types
@@ -393,13 +405,13 @@ using Test
 
 @testset "Example tests" begin
 
-	@testset "Math tests" begin
-		include("math_tests.jl")
-	end
+    @testset "Math tests" begin
+        include("math_tests.jl")
+    end
 
-	@testset "Greeting tests" begin
-		include("greeting_tests.jl")
-	end
+    @testset "Greeting tests" begin
+        include("greeting_tests.jl")
+    end
 end
 ```
 
@@ -414,16 +426,16 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 
 ```julia
 @testset "Testset 1" begin
-	@test 2 == simple_add(1, 1)
-	@test 3.5 == simple_add(1, 2.5)
+    @test 2 == simple_add(1, 1)
+    @test 3.5 == simple_add(1, 2.5)
         @test_throws MethodError simple_add(1, "A")
         @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
-	@test 1.0 == type_multiply(1.0, 1.0)
+    @test 1.0 == type_multiply(1.0, 1.0)
         @test isa(type_multiply(2.0, 2.0), Float64)
-	@test_throws MethodError type_multiply(1, 2.5)
+    @test_throws MethodError type_multiply(1, 2.5)
 end
 ```
 

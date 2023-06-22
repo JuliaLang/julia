@@ -43,6 +43,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error("")
             end
         end
+
+        use_inst = ir[op]
+        if isa(use_inst[:inst], Union{GotoIfNot, GotoNode, ReturnNode})
+            @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
+            error("")
+        end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
@@ -63,7 +69,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "Left over SSA marker"
         error("")
-    elseif isa(op, Union{SlotNumber, TypedSlot})
+    elseif isa(op, UnoptSlot)
         @verify_error "Left over slot detected in converted IR"
         error("")
     end
@@ -79,8 +85,9 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false,
-                   lattice = OptimizerLattice())
+function verify_ir(ir::IRCode, print::Bool=true,
+                   allow_frontend_forms::Bool=false,
+                   𝕃ₒ::AbstractLattice = OptimizerLattice())
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -110,9 +117,9 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 error("")
             end
             if !(idx in ir.cfg.blocks[s].preds)
-                #@Base.show ir.cfg
-                #@Base.show ir
-                #@Base.show ir.argtypes
+                #Base.@show ir.cfg
+                #Base.@show ir
+                #Base.@show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
                 error("")
             end
@@ -167,32 +174,50 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                     end
                     isa(stmt, PhiNode) || break
                 end
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error("")
+                termidx = last(block.stmts)
+                stmttyp = ir.stmts[termidx][:type]
+                if isempty(block.succs) && stmttyp == Union{}
+                    # Allow fallthrough terminators that are known to error to
+                    # be removed from the CFG. Ideally we'd add an unreachable
+                    # here, but that isn't always possible.
+                else
+                    @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
+                    error("")
+                end
             end
         end
     end
+    lastbb = 0
+    is_phinode_block = false
     for (bb, idx) in bbidxiter(ir)
+        if bb != lastbb
+            is_phinode_block = true
+            lastbb = bb
+        end
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
         bb_unreachable(domtree, bb) && continue
         stmt = ir.stmts[idx][:inst]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
+            if !is_phinode_block
+                @verify_error "φ node $idx is not at the beginning of the basic block $bb"
+                error("")
+            end
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
                 for j = (i+1):length(stmt.edges)
                     edge′ = stmt.edges[j]
                     if edge == edge′
-                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is
+                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is always unique.
                         @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
                         error("")
                     end
                 end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
-                    #@Base.show ir.argtypes
-                    #@Base.show ir
+                    #Base.@show ir.argtypes
+                    #Base.@show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error("")
                 end
@@ -207,7 +232,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
-                    if !⊑(lattice, types(ir)[val], phiT)
+                    if !⊑(𝕃ₒ, types(ir)[val], phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT
@@ -218,7 +243,14 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 end
                 check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i, allow_frontend_forms)
             end
-        elseif isa(stmt, PhiCNode)
+            continue
+        elseif stmt === nothing
+            # Nothing to do
+            continue
+        end
+
+        is_phinode_block = false
+        if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
                 val = stmt.values[i]
                 if !isa(val, SSAValue)
@@ -267,7 +299,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
                 elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
+                        (stmt.args[1] isa GlobalRef || isexpr(stmt.args[1], :static_parameter))
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 elseif stmt.head === :call
