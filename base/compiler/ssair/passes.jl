@@ -841,11 +841,11 @@ end
     length(sig.parameters) >= 1 || return nothing
 
     i = let sig=sig
-        findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
     end
     i === nothing && return nothing
     let sig=sig
-        any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
+        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
     end && return nothing
 
     arg = sig.parameters[i]
@@ -2182,15 +2182,15 @@ function cfg_simplify!(ir::IRCode)
                       bb_rename_succ = bb_rename_succ
 
         # Compute (renamed) successors and predecessors given (renamed) block
-        function compute_succs(i)
+        function compute_succs(i::Int)
             orig_bb = follow_merged_succ(result_bbs[i])
             return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
-        function compute_preds(i)
+        function compute_preds(i::Int)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
             res = Int[]
-            function scan_preds!(preds)
+            function scan_preds!(preds::Vector{Int})
                 for pred in preds
                     if pred == 0
                         push!(res, 0)
@@ -2223,7 +2223,7 @@ function cfg_simplify!(ir::IRCode)
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
+            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert terminator[:inst] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
@@ -2246,6 +2246,7 @@ function cfg_simplify!(ir::IRCode)
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
+        bb_start = true
         while ms != 0
             for i in bbs[ms].stmts
                 node = ir.stmts[i]
@@ -2304,7 +2305,14 @@ function cfg_simplify!(ir::IRCode)
                             isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
                         end
                     end
-                    compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
+                    if length(edges) == 0 || (length(edges) == 1 && !isassigned(values, 1))
+                        compact.result[compact.result_idx][:inst] = nothing
+                    elseif length(edges) == 1 && !bb_start
+                        compact.result[compact.result_idx][:inst] = values[1]
+                    else
+                        @assert bb_start
+                        compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
+                    end
                 else
                     ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
                     if ri == compact.result_idx
@@ -2318,6 +2326,7 @@ function cfg_simplify!(ir::IRCode)
                 compact.result_idx += 1
             end
             ms = merged_succ[ms]
+            bb_start = false
         end
     end
     compact.idx = length(ir.stmts)

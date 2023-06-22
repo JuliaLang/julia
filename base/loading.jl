@@ -1919,7 +1919,7 @@ function _require(pkg::PkgId, env=nothing)
                     else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
-                    # fall-through to loading the file locally
+                    # fall-through to loading the file locally if not incremental
                 else
                     cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
                     m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
@@ -1928,6 +1928,10 @@ function _require(pkg::PkgId, env=nothing)
                     else
                         return m
                     end
+                end
+                if JLOptions().incremental != 0
+                    # during incremental precompilation, this should be fail-fast
+                    throw(PrecompilableError())
                 end
             end
         end
@@ -2727,7 +2731,7 @@ end
 
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     merged_prefs = Dict{String,Any}()
-    for env in reverse!(load_path())
+    for env in reverse(load_path())
         project_toml = env_project_file(env)
         if !isa(project_toml, String)
             continue
