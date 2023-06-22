@@ -169,7 +169,10 @@ typedef Instruction TerminatorInst;
 
 void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 {
-    if (params.debug_level) {
+    // we do the constant check again later, duplicating it here just makes sure the assertion
+    // fires on debug builds even if debug info is not enabled
+    assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
+    if (params.debug_level && !isa<Constant>(V)) {
         V->setName(Name);
     }
 }
@@ -2354,17 +2357,17 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 
 static void jl_name_jlfunc_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 3);
-    setName(params, F->getArg(0), "function");
-    setName(params, F->getArg(1), "args");
-    setName(params, F->getArg(2), "nargs");
+    F->getArg(0)->setName("function");
+    F->getArg(1)->setName("args");
+    F->getArg(2)->setName("nargs");
 }
 
 static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 4);
-    setName(params, F->getArg(0), "function");
-    setName(params, F->getArg(1), "args");
-    setName(params, F->getArg(2), "nargs");
-    setName(params, F->getArg(3), "sparams");
+    F->getArg(0)->setName("function");
+    F->getArg(1)->setName("args");
+    F->getArg(2)->setName("nargs");
+    F->getArg(3)->setName("sparams");
 }
 
 static void jl_init_function(Function *F, const Triple &TT)
