@@ -698,7 +698,7 @@ end
 """
     Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
 """
-@assume_effects :foldable function padding(T::DataType, baseoffset::UInt = 0)
+@assume_effects :foldable function padding(T::DataType, baseoffset::UInt = 0x0)
     pads = Padding[]
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
