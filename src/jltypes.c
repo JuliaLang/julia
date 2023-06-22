@@ -3162,6 +3162,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_svec2(jl_any_type, jl_array_any_type),
                                        jl_emptysvec, 0, 0, 2);
 
+    jl_interval_type = jl_new_datatype(jl_symbol("Interval"), core, jl_any_type, jl_emptysvec,
+                                       jl_perm_symsvec(3, "typ", "min", "max"),
+                                       jl_svec(3, jl_datatype_type, jl_any_type, jl_any_type),
+                                       jl_emptysvec, 0, 0, 3);
+
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
                                           jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
                                           jl_svec(3, jl_long_type, jl_any_type, jl_any_type),

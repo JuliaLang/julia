@@ -313,6 +313,9 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         elseif isa(result_type, PartialStruct)
             rettype_const = result_type.fields
             const_flags = 0x2
+        elseif isa(result_type, Interval)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isa(result_type, InterConditional)
             rettype_const = result_type
             const_flags = 0x2
@@ -888,6 +891,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
                     rettype = PartialStruct(rettype, rettype_const)
                 elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+                    rettype = rettype_const
+                elseif isa(rettype_const, Interval) && rettype !== Interval
                     rettype = rettype_const
                 elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
                     rettype = rettype_const

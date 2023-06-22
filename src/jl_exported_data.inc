@@ -54,6 +54,7 @@
     XX(jl_int8_type) \
     XX(jl_interconditional_type) \
     XX(jl_interrupt_exception) \
+    XX(jl_interval_type) \
     XX(jl_intrinsic_type) \
     XX(jl_kwcall_func) \
     XX(jl_lineinfonode_type) \
