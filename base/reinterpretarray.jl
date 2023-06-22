@@ -713,7 +713,7 @@ end
     if 0 < last_end - baseoffset < sizeof(T)
         push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
     end
-    return pads
+    return Core.svec(pads...)
 end
 
 function CyclePadding(T::DataType)
