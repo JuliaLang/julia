@@ -678,7 +678,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         ai.decorateInst(load);
         return mark_julia_type(ctx, load, true, ety);
     }
-    else if (!jl_isbits(ety)) {
+    else if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
@@ -697,7 +697,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            return typed_load(ctx, thePtr, im1, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, true, align_nb);
+            return typed_load(ctx, thePtr, im1, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
         }
         else {
             return ghostValue(ctx, ety);
@@ -751,7 +751,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (!jl_isbits(ety)) {
+    else if (x.ispointer()) {
         thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
@@ -824,7 +824,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         return jl_cgval_t();
     }
 
-    if (!jl_isbits(ety)) {
+    if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
@@ -848,7 +848,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            return typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, llvm_order, true, nb);
+            return typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, llvm_order, false, nb);
         }
         else {
             if (order > jl_memory_order_monotonic)
@@ -924,6 +924,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     }
 
     if (!jl_isbits(ety)) {
+        //if (!deserves_stack(ety))
         //Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         //uint64_t size = jl_datatype_size(ety);
         return emit_runtime_call(ctx, f, argv, nargs); // TODO: optimizations
