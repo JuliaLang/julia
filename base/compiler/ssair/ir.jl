@@ -824,7 +824,7 @@ function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,Incremen
     flag !== nothing && return flag
     flag = IR_FLAG_NULL
     (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(
-        fallback_lattice, newinst.stmt, newinst.type, src)
+        fallback_lattice, newinst.stmt, newinst.type, src, flag)
     if consistent
         flag |= IR_FLAG_CONSISTENT
     end

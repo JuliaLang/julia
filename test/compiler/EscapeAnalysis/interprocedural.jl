@@ -2,6 +2,8 @@
 # ===========
 # EA works on pre-inlining IR
 
+module IPOEATest
+
 include(normpath(@__DIR__, "setup.jl"))
 
 # callsites
@@ -260,3 +262,5 @@ let result = code_escapes() do
     r = only(findall(isreturn, result.ir.stmts.inst))
     @test !has_return_escape(result.state[SSAValue(i)], r)
 end
+
+end # module IPOEATest

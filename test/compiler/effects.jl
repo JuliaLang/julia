@@ -337,17 +337,6 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
-# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
-# https://github.com/JuliaLang/julia/issues/48099
-function A1_inbounds()
-    r = 0
-    @inbounds begin
-        @boundscheck r += 1
-    end
-    return r
-end
-@test !Core.Compiler.is_consistent(Base.infer_effects(A1_inbounds))
-
 # Test that purity doesn't try to accidentally run unreachable code due to
 # boundscheck elimination
 function f_boundscheck_elim(n)
@@ -394,7 +383,8 @@ end |> !Core.Compiler.is_foldable
     entry_to_be_invalidated('a')
 end
 
-@test !Core.Compiler.builtin_nothrow(Core.Compiler.fallback_lattice, Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+@test !Core.Compiler.builtin_nothrow(Bool, Core.Compiler.fallback_lattice,
+    Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
@@ -478,17 +468,6 @@ end
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
 end |> Core.Compiler.is_consistent
-
-# getfield is nothrow when bounds checking is turned off
-@test Base.infer_effects((Tuple{Int,Int},Int)) do t, i
-    getfield(t, i, false)
-end |> Core.Compiler.is_nothrow
-@test Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
-    getfield(t, i, false)
-end |> Core.Compiler.is_nothrow
-@test Base.infer_effects((Tuple{Int,Int},String)) do t, i
-    getfield(t, i, false) # invalid name type
-end |> !Core.Compiler.is_nothrow
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
@@ -680,6 +659,60 @@ end
 end
 @test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused3!))
 
+# assume `:nothrow`-ness of `getfield` when applied `@inbounds`
+for tt = Any[(Some{Any},Symbol), (Base.RefValue{Int},Symbol)]
+    @testset let tt = tt
+        @test Base.infer_effects(tt) do x, f
+            getfield(x, f)
+        end |> Core.Compiler.is_nothrow_if_inbounds
+        @test Base.infer_effects(tt) do x, f
+            @inbounds getfield(x, f)
+        end |> Core.Compiler.is_nothrow
+        @test Base.infer_effects(tt) do x, f
+            @inbounds getproperty(x, f)
+        end |> Core.Compiler.is_nothrow
+    end
+end
+for tt = Any[(Tuple{Int},Int), (Tuple{Int,Vararg{Int}},Int)]
+    @testset let tt = tt
+        @test Base.infer_effects(tt) do x, i
+            getfield(x, i)
+        end |> Core.Compiler.is_nothrow_if_inbounds
+        @test Base.infer_effects(tt) do x, i
+            @inbounds getfield(x, i)
+        end |> Core.Compiler.is_nothrow
+        @test Base.infer_effects(tt) do x, i
+            @inbounds getindex(x, i)
+        end |> Core.Compiler.is_nothrow
+    end
+end
+
+# should account for possibility of uninitialized fields
+struct GetfieldExhaustiveCheck{T}
+    a
+    b
+    c::T
+    GetfieldExhaustiveCheck(a, b) = new{Any}(a, b)
+    GetfieldExhaustiveCheck(a, b, c::T) where T = new{T}(a, b, c)
+end
+@test Base.infer_effects((GetfieldExhaustiveCheck{Int}, Symbol)) do x, f
+    getfield(x, f)
+end |> Core.Compiler.is_nothrow_if_inbounds
+@test Base.infer_effects((GetfieldExhaustiveCheck{Any}, Symbol)) do x, f
+    getfield(x, f) # the `c` field may be uninitialized
+end |> !Core.Compiler.is_nothrow_if_inbounds
+
+# `:nothrow_if_inbounds` should respect the behavior of `@inbounds`:
+# it should refine `:nothrow`-ness only one function call layer deep unless propagated
+mygetindex(t::Tuple, i::Int) = t[i]
+Base.@propagate_inbounds mygetindex_propagate(t::Tuple, i::Int) = t[i]
+Base.infer_effects((Tuple,Int)) do
+    @inbounds mygetindex(t, i)
+end |> !Core.Compiler.is_nothrow
+Base.infer_effects((Tuple,Int)) do
+    @inbounds mygetindex_propagate(t, i)
+end |> Core.Compiler.is_nothrow
+
 # array ops
 # =========
 
@@ -762,39 +795,47 @@ end
 
 for tt = Any[(Bool,Vector{Any},Int),
              (Bool,Matrix{Any},Int,Int)]
-    @testset let effects = Base.infer_effects(Base.arrayref, tt)
+    @testset let tt = tt,
+                 effects = Base.infer_effects(Base.arrayref, tt)
         @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
         @test Core.Compiler.is_effect_free(effects)
         @test !Core.Compiler.is_nothrow(effects)
         @test Core.Compiler.is_terminates(effects)
     end
 end
+@test Core.Compiler.is_nothrow_if_inbounds(Base.infer_effects(Base.arrayref, (Bool,Vector{Int},Int)))
+@test !Core.Compiler.is_nothrow_if_inbounds(Base.infer_effects(Base.arrayref, (Bool,Vector{Any},Int))) # may raise `UndefRefError` also
+
+# assume :nothrow-ness of `arrayref` in `@inbounds` region
+@test @eval Base.infer_effects((Vector{Int},Int,)) do a, i
+    @inbounds Base.arrayref($(Expr(:boundscheck)), a, i)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Int},Int)) do a, i
+    @inbounds a[i]
+end |> Core.Compiler.is_nothrow
 
 # arrayset
 # --------
 
 for tt = Any[(Bool,Vector{Any},Any,Int),
              (Bool,Matrix{Any},Any,Int,Int)]
-    @testset let effects = Base.infer_effects(Base.arrayset, tt)
+    @testset let tt = tt,
+                 effects = Base.infer_effects(Base.arrayset, tt)
         @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
         @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
         @test !Core.Compiler.is_nothrow(effects)
         @test Core.Compiler.is_terminates(effects)
     end
 end
-# nothrow for arrayset
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    Base.arrayset(true, a, v, i)
-end |> !Core.Compiler.is_nothrow
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    a[i] = v # may throw
-end |> !Core.Compiler.is_nothrow
-# when bounds checking is turned off, it should be safe
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    Base.arrayset(false, a, v, i)
+@test Core.Compiler.is_nothrow_if_inbounds(Base.infer_effects(Base.arrayset, (Bool,Vector{Int},Int,Int)))
+@test Core.Compiler.is_nothrow_if_inbounds(Base.infer_effects(Base.arrayset, (Bool,Vector{Any},Any,Int)))
+
+# assume :nothrow-ness of `arrayset` in `@inbounds` region
+@test @eval Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    @inbounds Base.arrayset($(Expr(:boundscheck)), a, v, i)
 end |> Core.Compiler.is_nothrow
-@test Base.infer_effects((Vector{Number},Number,Int)) do a, v, i
-    Base.arrayset(false, a, v, i)
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    @inbounds a[i] = v
 end |> Core.Compiler.is_nothrow
 
 # arraysize
@@ -883,21 +924,6 @@ end |> Core.Compiler.is_foldable
 # Flow-sensitive consistenct for _typevar
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
-end |> Core.Compiler.is_foldable_nothrow
-
-# Test that dead `@inbounds` does not taint consistency
-# https://github.com/JuliaLang/julia/issues/48243
-@test Base.infer_effects(Tuple{Int64}) do i
-    false && @inbounds (1,2,3)[i]
-    return 1
-end |> Core.Compiler.is_foldable_nothrow
-
-@test Base.infer_effects(Tuple{Int64}) do i
-    @inbounds (1,2,3)[i]
-end |> !Core.Compiler.is_consistent
-
-@test Base.infer_effects(Tuple{Tuple{Int64}}) do x
-    @inbounds x[1]
 end |> Core.Compiler.is_foldable_nothrow
 
 # Test that :new of non-concrete, but otherwise known type
