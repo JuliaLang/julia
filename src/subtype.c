@@ -3023,13 +3023,12 @@ static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, int param) JL_NOTSAF
         return param == 1;
     }
     else if (jl_is_uniontype(v)) {
-        return always_occurs_cov(((jl_uniontype_t*)v)->a, var, param) ||
+        return always_occurs_cov(((jl_uniontype_t*)v)->a, var, param) &&
                always_occurs_cov(((jl_uniontype_t*)v)->b, var, param);
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
         return ua->var != var && (
-            always_occurs_cov(ua->var->lb, var, 0) ||
             always_occurs_cov(ua->var->ub, var, 0) ||
             always_occurs_cov(ua->body, var, param));
     }
