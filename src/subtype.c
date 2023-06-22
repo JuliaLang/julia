@@ -1386,7 +1386,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         // Once limit_slow == 1, also skip it if
         // 1) `forall_exists_subtype` return false
         // 2) the left `Union` looks big
-        if (noRmore || (limit_slow && (count > 3  || !sub)))
+        // NOTE: altered to fix issue 49857
+        if (noRmore || limit_slow)
             e->Runions.more = oldRmore;
     }
     else {
