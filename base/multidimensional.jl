@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
-                  min, max, zero, oneunit, isless, eachindex,  IteratorSize,
+                  min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule
 
     import .Base: +, -, *, (:)
@@ -396,8 +396,6 @@ module IteratorsMD
         Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
         CartesianIndices(axsA)
     end
-
-    IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
     @inline function iterate(iter::CartesianIndices)
         iterfirst = first(iter)
