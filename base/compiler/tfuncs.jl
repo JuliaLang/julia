@@ -1086,13 +1086,6 @@ end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
 
-@nospecs function _getfield_tfunc(𝕃::OptimizerLattice, s00, name, setfield::Bool)
-    # If undef, that's a Union, but that doesn't affect the rt when tmerged
-    # into the unwrapped result.
-    isa(s00, MaybeUndef) && (s00 = s00.typ)
-    return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
-end
-
 @nospecs function _getfield_tfunc(𝕃::AnyConditionalsLattice, s00, name, setfield::Bool)
     if isa(s00, AnyConditional)
         return Bottom # Bool has no fields

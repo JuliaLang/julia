@@ -436,12 +436,12 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 JL_DLLEXPORT const char *jl_dlfind(const char *f_name)
 {
     void * dummy;
-    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
-        return JL_EXE_LIBNAME;
     if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0))
         return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
     if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
         return JL_LIBJULIA_DL_LIBNAME;
+    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
+        return JL_EXE_LIBNAME;
 #ifdef _OS_WINDOWS_
     if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
