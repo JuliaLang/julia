@@ -491,12 +491,12 @@ end
 """
     pkgdir(m::Module[, paths::String...])
 
-Return the root directory of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package. Optionally further
+Return the root directory of the package that declared module `m`,
+or `nothing` if `m` was not declared in a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
-To get the root directory of the package that imported the current module
+To get the root directory of the package that implements the current module
 the form `pkgdir(@__MODULE__)` can be used.
 
 ```julia-repl
