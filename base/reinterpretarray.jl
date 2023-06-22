@@ -696,7 +696,7 @@ function iterate(cp::CyclePadding, state::Tuple)
 end
 
 """
-    Compute the location of padding in a type. Recursive for nested types.
+    Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
 """
 @assume_effects :foldable function padding(T, baseoffset = UInt(0))
     pads = Padding[]
