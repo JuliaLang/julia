@@ -770,7 +770,7 @@ function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
         fT = fieldtype(In, i)
         if ispacked(fT)
             readsize = sizeof(fT)
-            _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
             writeoffset += readsize
         else # nested padded type
             _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
@@ -786,7 +786,7 @@ function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
         fT = fieldtype(Out, i)
         if ispacked(fT)
             writesize = sizeof(fT)
-            _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
             readoffset += writesize
         else # nested padded type
             _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
@@ -809,7 +809,7 @@ end
         GC.@preserve in out begin
             ptr_in = unsafe_convert(Ptr{In}, in)
             ptr_out = unsafe_convert(Ptr{Out}, out)
-            _memcpy!(ptr_out, ptr_in, sizeof(Out))
+            memcpy(ptr_out, ptr_in, sizeof(Out))
         end
         return out[]
     else
