@@ -875,7 +875,7 @@ julia> sqrt(A)
 sqrt(::AbstractMatrix)
 
 function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
-    if isempty(A)
+    if checksquare(A) == 0
         return copy(A)
     elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
