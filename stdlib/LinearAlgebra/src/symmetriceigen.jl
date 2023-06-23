@@ -172,19 +172,13 @@ function eigen(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{
 end
 
 function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), C; sortby)
-end
-function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Cholesky decomposition based eigenvalues and eigenvectors
-    vals, w = eigen!(UtiAUi!(A, C.U))
+    vals, w = eigen!(UtiAUi!(copy(A), C.U))
     vecs = C.U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
 function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), B; sortby)
-end
-function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Bunchkaufman decomposition based eigenvalues and eigenvectors
     if B.uplo == 'U'
         vals, w = eigen!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.U)); sortby)
@@ -229,19 +223,13 @@ function eigvals(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix
     return eigvals!(Matrix{T}(A), eigencopy_oftype(B, T); sortby)
 end
 
-function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    # Cholesky decomposition based eigenvalues
-    return eigvals!(UtiAUi!(A, C.U); sortby)
-end
 function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(eigencopy_oftype(A, T), C; sortby)
+    # Cholesky decomposition based eigenvalues
+    return eigvals!(UtiAUi!(eigencopy_oftype(A, T), C.U); sortby)
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(copy(A), B; sortby)
-end
-function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     if B.uplo == 'U'
         return eigvals!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.U)); sortby)
     else # B.uplo == 'L'
