@@ -172,8 +172,11 @@ function eigen(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{
 end
 
 function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    eigen!(copy(A), C; sortby)
+end
+function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Cholesky decomposition based eigenvalues and eigenvectors
-    vals, w = eigen!(UtiAUi!(copy(A), C.U))
+    vals, w = eigen!(UtiAUi!(A, C.U))
     vecs = C.U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
@@ -224,8 +227,11 @@ function eigvals(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix
 end
 
 function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    eigvals!(eigencopy_oftype(A, T), C; sortby)
+end
+function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Cholesky decomposition based eigenvalues
-    return eigvals!(UtiAUi!(eigencopy_oftype(A, T), C.U); sortby)
+    return eigvals!(UtiAUi!(A, C.U); sortby)
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
