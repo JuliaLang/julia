@@ -1215,6 +1215,7 @@ end
 
 @testset "sqrt of empty Matrix of type $T" for T in [Int,Float32,Float64,ComplexF32,ComplexF64]
     @test sqrt(Matrix{T}(undef, 0, 0)) == Matrix{T}(undef, 0, 0)
+    @test_throws DimensionMismatch sqrt(Matrix{T}(undef, 2, 3))
 end
 
 struct TypeWithoutZero end
