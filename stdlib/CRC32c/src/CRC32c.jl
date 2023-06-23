@@ -9,7 +9,7 @@ module CRC32c
 
 import Base.FastContiguousSubArray
 
-export crc32c, adjust_crc32c!
+export crc32c, adjust_crc32c!, adjust_crc32c
 
 """
     crc32c(data, crc::UInt32=0x00000000)

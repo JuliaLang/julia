@@ -61,6 +61,12 @@ Standard library changes
 #### DelimitedFiles
 
 
+#### CRC32c
+
+* New functions `adjust_crc32c` and `adjust_crc32c!` that write padding bytes into
+  a file, stream, or array in order to force the CRC32c checksum to equal an arbitrary
+  given value, mainly useful to store a file's checksum within the file itself ([#50269]).
+
 #### InteractiveUtils
 
 Deprecated or removed
