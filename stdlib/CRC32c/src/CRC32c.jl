@@ -52,8 +52,8 @@ crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 #####################################################################
 # Code to adjust a byte array to have an arbitrary given crc, by
 # injecting 4 bytes at fixpos, following:
-#     Martin Stigge, Henryk Plötz, Wolf Müller, Jens-Peter Redlich,
-#     "Reversing CRC — Theory and Practice",
+#     Martin Stigge, Henryk Plötz, Wolf Müller, & Jens-Peter Redlich,
+#     "Reversing CRC — Theory and Practice,"
 #     HU Berlin Public Report SAR-PR-2006-05 (May 2006).
 # This is useful if you want to store the CRC of a file in the file.
 
