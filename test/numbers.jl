@@ -2216,7 +2216,7 @@ end
     @test round(Int16, -32768.1) === Int16(-32768)
 end
 # issue #7508
-@test_throws ErrorException reinterpret(Int, 0x01)
+@test_throws ArgumentError reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
     @test_throws ArgumentError reinterpret(Float64, Complex{Int64}(1))
