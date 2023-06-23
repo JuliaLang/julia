@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
+    IteratorSize, HasShape, IsInfinite, tail
 
 import Base:
     sort,
@@ -43,6 +44,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -86,7 +88,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(QuickerSort(k)), o, (;))
+    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -295,6 +297,8 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+
 See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
 
 # Examples
@@ -313,6 +317,9 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1:0
+
+julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
+2:3
 ```
 """ searchsorted
 
@@ -324,6 +331,8 @@ specified order. Return `lastindex(a) + 1` if `x` is greater than all values in 
 `a` is assumed to be sorted.
 
 `insert!`ing `x` at this index will maintain sorted order.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -343,6 +352,9 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
+
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
+3
 ```
 """ searchsortedfirst
 
@@ -352,6 +364,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
 assumed to be sorted.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 # Examples
 ```jldoctest
@@ -369,6 +383,9 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
+
+julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
+2
 ```
 """ searchsortedlast
 
@@ -414,19 +431,18 @@ macro getkw(syms...)
     Expr(:block, (:($(esc(:((kw, $sym) = $getter(v, o, kw))))) for (sym, getter) in zip(syms, getters))...)
 end
 
-for (sym, deps, exp, type) in [
-        (:lo, (), :(firstindex(v)), Integer),
-        (:hi, (), :(lastindex(v)),  Integer),
-        (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
-        (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
-        (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, (), true, Bool)]
+for (sym, exp, type) in [
+        (:lo, :(firstindex(v)), Integer),
+        (:hi, :(lastindex(v)),  Integer),
+        (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
+        (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
+        (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
         res = get(kw, $(Expr(:quote, sym)), missing)
         res !== missing && return kw, res::$type
-        @getkw $(deps...)
         $sym = $exp
         (;kw..., $sym), $sym::$type
     end
@@ -484,8 +500,6 @@ internal or recursive calls.
 """
 function _sort! end
 
-abstract type Algorithm end
-
 
 """
     MissingOptimization(next) <: Algorithm
@@ -509,22 +523,23 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
     v.data[i] = x
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
+Base.axes(v::WithoutMissingVector) = axes(v.data)
 
 """
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
 
 Send every element of `v` for which `f` returns `true` to the end of the vector and return
-the index of the last element which for which `f` returns `false`.
+the index of the last element for which `f` returns `false`.
 
 `send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
 
@@ -563,19 +578,21 @@ elements that are not
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
-    if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
+    if o isa DirectOrdering && eltype(v) >: Missing && nonmissingtype(eltype(v)) != eltype(v)
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering &&
-                nonmissingtype(eltype(o.data)) != eltype(o.data) &&
+    elseif o isa Perm && o.order isa DirectOrdering && eltype(v) <: Integer &&
+                eltype(o.data) >: Missing && nonmissingtype(eltype(o.data)) != eltype(o.data) &&
                 all(i === j for (i,j) in zip(v, eachindex(o.data)))
         # TODO make this branch known at compile time
         # This uses a custom function because we need to ensure stability of both sides and
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for (i,x) in zip(eachindex(o.data), o.data)
-            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
+            if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
             else
@@ -771,7 +788,7 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
-        # If reversing is valid, do so. This does violates stability.
+        # If reversing is valid, do so. This violates stability.
         reverse!(v, lo, hi)
         return scratch
     end
@@ -799,7 +816,6 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
     end
-    mn, mx
 
     lt(o, mn, mx) || return scratch # all same
 
@@ -885,7 +901,7 @@ ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx
     urange = uint_map(mx, o)-uint_map(mn, o)
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
     if sizeof(eltype(v)) <= 8 && bits+70 < 22log(hi-lo)
         _sort!(v, a.radix, o, kw)
     else
@@ -920,7 +936,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
     umn = uint_map(mn, o)
     urange = uint_map(mx, o)-umn
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -950,12 +966,12 @@ end
 
 
 """
-    QuickerSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
-    QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
 
-Use the `QuickerSort` algorithm with the `next` algorithm as a base case.
+Use the `ScratchQuickSort` algorithm with the `next` algorithm as a base case.
 
-`QuickerSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
+`ScratchQuickSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
 for the possibility of maintaining stability.
 
 If `lo` and `hi` are provided, finds and sorts the elements in the range `lo:hi`, reordering
@@ -973,31 +989,25 @@ Characteristics:
   * *quadratic worst case runtime* in pathological cases
   (vanishingly rare for non-malicious input)
 """
-struct QuickerSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
+struct ScratchQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
     lo::L
     hi::H
     next::T
 end
-QuickerSort(next::Algorithm=SMALL_ALGORITHM) = QuickerSort(missing, missing, next)
-QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickerSort(lo, hi, SMALL_ALGORITHM)
-QuickerSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(lo, lo, next)
-QuickerSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(first(r), last(r), next)
-
-# select a pivot for QuickerSort
-#
-# This method is redefined to rand(lo:hi) in Random.jl
-# We can't use rand here because it is not available in Core.Compiler and
-# because rand is defined in the stdlib Random.jl after sorting is used in Base.
-select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(missing, missing, next)
+ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = ScratchQuickSort(lo, hi, SMALL_ALGORITHM)
+ScratchQuickSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(lo, lo, next)
+ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(first(r), last(r), next)
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
 #
-# returns (pivot, pivot_index) where pivot_index is the location the pivot
-# should end up, but does not set t[pivot_index] = pivot
+# sets `pivot_dest[pivot_index+pivot_index_offset] = pivot` and returns that index.
 function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering,
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
-    pivot_index = select_pivot(lo, hi)
+    # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
+    # and would mutate the global RNG in sorting.
+    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
@@ -1026,7 +1036,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     pivot_index
 end
 
-function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
+function _sort!(v::AbstractVector, a::ScratchQuickSort, o::Ordering, kw;
                 t=nothing, offset=nothing, swap=false, rev=false)
     @getkw lo hi scratch
 
@@ -1044,7 +1054,7 @@ function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
         end
         swap = !swap
 
-        # For QuickerSort(), a.lo === a.hi === missing, so the first two branches get skipped
+        # For ScratchQuickSort(), a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
             swap && copyto!(v, lo, t, lo+offset, j-lo)
             rev && reverse!(v, lo, j-1)
@@ -1130,7 +1140,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             counts[i] += 1            # increment that bucket's count
         end
 
-        counts[1] = lo                # set target index for the first bucket
+        counts[1] = lo + offset       # set target index for the first bucket
         cumsum!(counts, counts)       # set target indices for subsequent buckets
         # counts[1:mask+1] now stores indices where the first member of each bucket
         # belongs, not the number of elements in each bucket. We will put the first element
@@ -1141,7 +1151,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
-            t[j + offset] = x         # put the element where it belongs
+            t[j] = x                  # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
     end
@@ -1161,15 +1171,6 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
-function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    mn = mx = v[lo]
-    @inbounds for i in (lo+1):hi
-        vi = v[i]
-        lt(o, vi, mn) && (mn = vi)
-        lt(o, mx, vi) && (mx = vi)
-    end
-    mn, mx
-end
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
@@ -1242,13 +1243,13 @@ the initial optimizations because they can change the input vector's type and or
 make them `UIntMappable`.
 
 If the input is not [`UIntMappable`](@ref), then we perform a presorted check and dispatch
-to [`QuickerSort`](@ref).
+to [`ScratchQuickSort`](@ref).
 
 Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40` and then
 perform a presorted check ([`CheckSorted`](@ref)).
 
 We check for short inputs before performing the presorted check to avoid the overhead of the
-check for small inputs. Because the alternate dispatch is to [`InseritonSort`](@ref) which
+check for small inputs. Because the alternate dispatch is to [`InsertionSort`](@ref) which
 has efficient `O(n)` runtime on presorted inputs, the check is not necessary for small
 inputs.
 
@@ -1274,7 +1275,7 @@ Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that r
 stage.
 
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
-otherwise we dispatch to [`QuickerSort`](@ref).
+otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
 const DEFAULT_STABLE = InitialOptimizations(
     IsUIntMappable(
@@ -1284,9 +1285,9 @@ const DEFAULT_STABLE = InitialOptimizations(
                     ConsiderCountingSort(
                         ConsiderRadixSort(
                             Small{80}(
-                                QuickerSort())))))),
+                                ScratchQuickSort())))))),
         StableCheckSorted(
-            QuickerSort())))
+            ScratchQuickSort())))
 """
     DEFAULT_UNSTABLE
 
@@ -1334,7 +1335,8 @@ specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) 
 available algorithms). The `by` keyword lets you provide a function that will be applied to
 each element before comparison; the `lt` keyword allows providing a custom "less than"
 function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
+Elements that compare equal are not reversed. These options are independent and can
 be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
 function is applied to the result of the `by` function; `rev=true` reverses whatever
 ordering specified via the `by` and `lt` keywords.
@@ -1382,6 +1384,11 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+Uses `Base.copymutable` to support immutable collections and iterables.
+
+!!! compat "Julia 1.10"
+    `sort` of arbitrary iterables requires at least Julia 1.10.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1399,7 +1406,39 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+function sort(v; kws...)
+    size = IteratorSize(v)
+    size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
+    size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
+    sort!(copymutable(v); kws...)
+end
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
+sort(::AbstractString; kws...) =
+    throw(ArgumentError("sort(::AbstractString) is not supported"))
+sort(::Tuple; kws...) =
+    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
+
+function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
+              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
+    o = ord(lt,by,rev,order)
+    if N > 9
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        tuple((v[i] for i in 1:N)...)
+    else
+        _sort(x, o)
+    end
+end
+_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _sort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_sort(a, o), _sort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
+
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
@@ -1491,7 +1530,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, InitialOptimizations(QuickerSort(k)), Perm(ord(lt, by, rev, order), v), (;))
+    _sort!(ix, InitialOptimizations(ScratchQuickSort(k)), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
@@ -1770,7 +1809,7 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
+               scratch::Union{Vector{T}, Nothing}=Vector{T}(undef, size(A, dims))) where T
     __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
@@ -1897,6 +1936,27 @@ Characteristics:
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+
+  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+
+```jldoctest
+julia> x = rand(100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -1933,6 +1993,8 @@ Characteristics:
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
+  * *good performance* for large collections but typically not quite as
+    fast as [`QuickSort`](@ref).
 """
 const MergeSort     = MergeSortAlg()
 
@@ -1943,7 +2005,7 @@ maybe_apply_initial_optimizations(alg::InsertionSortAlg) = InitialOptimizations(
 
 # selectpivot!
 #
-# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi]) and
+# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi] and
 # choose the middle value as a pivot
 #
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
@@ -2087,25 +2149,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
         sort!(v, lo, hi, a, o)
         scratch
-    else
-        # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
     end
 end
 

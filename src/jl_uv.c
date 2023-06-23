@@ -30,6 +30,68 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+static uv_timer_t wait_empty_worker;
+
+static void walk_print_cb(uv_handle_t *h, void *arg)
+{
+    if (!uv_is_active(h) || !uv_has_ref(h))
+        return;
+    const char *type = uv_handle_type_name(h->type);
+    if (!type)
+        type = "<unknown>";
+    uv_os_fd_t fd;
+    if (h->type == UV_PROCESS)
+        fd = uv_process_get_pid((uv_process_t*)h);
+    else if (uv_fileno(h, &fd))
+        fd = (uv_os_fd_t)-1;
+    const char *pad = "                "; // 16 spaces
+    int npad = fd == -1 ? 0 : snprintf(NULL, 0, "%zd", (size_t)fd);
+    if (npad < 0)
+        npad = 0;
+    npad += strlen(type);
+    pad += npad < strlen(pad) ? npad : strlen(pad);
+    if (fd == -1)
+        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+    else
+        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+}
+
+static void wait_empty_func(uv_timer_t *t)
+{
+    // make sure this is hidden now, since we would auto-unref it later
+    uv_unref((uv_handle_t*)&signal_async);
+    if (!uv_loop_alive(t->loop))
+        return;
+    jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
+                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   (size_t)uv_os_getpid());
+    uv_walk(jl_io_loop, walk_print_cb, NULL);
+    jl_gc_collect(JL_GC_FULL);
+}
+
+void jl_wait_empty_begin(void)
+{
+    JL_UV_LOCK();
+    if (wait_empty_worker.type != UV_TIMER && jl_io_loop) {
+        // try to purge anything that is just waiting for cleanup
+        jl_io_loop->stop_flag = 0;
+        uv_run(jl_io_loop, UV_RUN_NOWAIT);
+        uv_timer_init(jl_io_loop, &wait_empty_worker);
+        uv_update_time(jl_io_loop);
+        uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
+        uv_unref((uv_handle_t*)&wait_empty_worker);
+    }
+    JL_UV_UNLOCK();
+}
+
+void jl_wait_empty_end(void)
+{
+    JL_UV_LOCK();
+    uv_close((uv_handle_t*)&wait_empty_worker, NULL);
+    JL_UV_UNLOCK();
+}
+
+
 
 static void jl_signal_async_cb(uv_async_t *hdl)
 {
@@ -49,7 +111,8 @@ jl_mutex_t jl_uv_mutex;
 void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
-    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
+    uv_unref((uv_handle_t*)&signal_async);
+    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
 _Atomic(int) jl_uv_n_waiters = 0;
@@ -110,7 +173,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         ct->world_age = last_age;
         return;
     }
-    if (handle == (uv_handle_t*)&signal_async)
+    if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&wait_empty_worker)
         return;
     free(handle);
 }
@@ -213,7 +276,9 @@ JL_DLLEXPORT int jl_process_events(void)
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
+            uv_ref((uv_handle_t*)&signal_async); // force the loop alive
             int r = uv_run(loop, UV_RUN_NOWAIT);
+            uv_unref((uv_handle_t*)&signal_async);
             JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
             JL_UV_UNLOCK();
             return r;

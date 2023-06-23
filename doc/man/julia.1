@@ -119,6 +119,11 @@ process affinity is not configured, it uses the number of CPU
 threads.
 
 .TP
+--gcthreads <n>
+Enable n GC threads; If unspecified is set to half of the
+compute worker threads.
+
+.TP
 -p, --procs {N|auto}
 Integer value N launches N additional local worker processes `auto` launches as many workers
 as the number of local CPU threads (logical cores)

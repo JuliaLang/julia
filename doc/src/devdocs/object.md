@@ -189,6 +189,8 @@ then tagged with its type:
 jl_value_t *jl_gc_allocobj(size_t nbytes);
 void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
 ```
+!!! note "Out of date Warning"
+    The documentation and usage for the function `jl_gc_allocobj` may be out of date
 
 Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer
 size. Memory is allocated from a pool for smaller objects, or directly with `malloc()` for large

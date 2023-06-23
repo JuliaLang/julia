@@ -185,7 +185,7 @@ function dlclose(p::Nothing)
 end
 
 """
-    find_library(names, locations)
+    find_library(names [, locations])
 
 Searches for the first library in `names` in the paths in the `locations` list,
 `DL_LOAD_PATH`, or system library paths (in that order) which can successfully be dlopen'd.

@@ -179,13 +179,12 @@ function multiq_deletemin()
     return task
 end
 
-
 function multiq_check_empty()
-    for j = UInt32(1):length(heaps)
-        for i = UInt32(1):length(heaps[j])
-            if heaps[j][i].ntasks != 0
-                return false
-            end
+    tid = Threads.threadid()
+    tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    for i = UInt32(1):length(heaps[tp])
+        if heaps[tp][i].ntasks != 0
+            return false
         end
     end
     return true

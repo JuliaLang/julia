@@ -81,7 +81,7 @@ julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-ERROR: cannot assign a value to imported variable MathConstants.pi from module Main
+ERROR: cannot assign a value to imported variable Base.pi from module Main
 
 julia> sqrt(100)
 10.0
@@ -216,7 +216,7 @@ a [`mutable struct`](@ref).
 
 When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
 the argument values to new variable names corresponding to the function arguments, as discussed
-in [Argument-Passing Behavior](@ref man-functions).  (By [convention](@ref man-punctuation),
+in [Argument-Passing Behavior](@ref man-argument-passing).  (By [convention](@ref man-punctuation),
 functions that mutate one or more of their arguments have names ending with `!`.)
 
 
