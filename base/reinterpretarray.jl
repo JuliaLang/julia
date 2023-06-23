@@ -796,8 +796,8 @@ function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
 end
 
 @inline function reinterpret(::Type{Out}, x::In) where {Out, In}
-    isbitstype(Out) || error("reinterpret target type must be isbits")
-    isbitstype(In) || error("reinterpret source type must be isbits")
+    isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
+    isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
     isprimitivetype(Out) && isprimitivetype(In) && return bitcast(Out, x)
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
