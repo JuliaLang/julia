@@ -477,7 +477,7 @@ function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     if !iszero(F.μ)
         print("\nwith shift μI for μ = ", F.μ)
     end
-    println(io, "\nQ factor:")
+    print(io, "\nQ factor: ")
     show(io, mime, F.Q)
     println(io, "\nH factor:")
     show(io, mime, F.H)
