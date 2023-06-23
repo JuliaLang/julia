@@ -2219,8 +2219,8 @@ end
 @test_throws ErrorException reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
-    @test_throws PaddingException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws PaddingException reinterpret(Int32, false)
+    @test_throws PaddingError reinterpret(Float64, Complex{Int64}(1))
+    @test_throws PaddingError reinterpret(Int32, false)
 end
 # issue #41
 ndigf(n) = Float64(log(Float32(n)))
