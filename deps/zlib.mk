@@ -7,6 +7,9 @@ $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 # use `-DUNIX=true` to ensure that it is always named `libz`
 ZLIB_BUILD_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUNIX=true
 ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+ifeq ($(BUILD_OS),WINNT)
+ZLIB_BUILD_OPTS += -G"MSYS Makefiles"
+endif
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -17,9 +20,18 @@ $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-co
 	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
 	echo 1 > $@
 
+define ZLIB_INSTALL
+
+ifeq ($$(BUILD_OS),WINNT)
+	mkdir -p $2/$$(build_shlibdir)
+	cp $1/libz.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libz.$$(SHLIB_EXT)
+else
+	$(call MAKE_INSTALL,$1,$2,$3)
+endif
+endef
 $(eval $(call staged-install, \
 	zlib,$(ZLIB_SRC_DIR), \
-	MAKE_INSTALL,,, \
+	ZLIB_INSTALL,,, \
 	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_shlibdir)/libz.$(SHLIB_EXT)))
 
 clean-zlib:
