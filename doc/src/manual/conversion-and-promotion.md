@@ -175,6 +175,19 @@ argument: the argument name is omitted prior to the `::` symbol, and only the ty
 This is the syntax in Julia for a function argument whose type is specified but whose value
 does not need to be referenced by name.
 
+Note that implicit type conversion requires `import Base.convert`:
+
+```julia
+module Test
+  import Base.convert #necessary for implicit conversion
+  type MyType <: Number
+    n :: Int
+  end
+  #       DESIRED      GIVEN        HOW
+  convert(::Type{Int}, x::MyType) = x.n
+end
+```
+
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
 For example, this definition states that it's valid to `convert` any `Number` type to
@@ -194,6 +207,8 @@ convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
 Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
+
+
 
 ## Promotion
 
