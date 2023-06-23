@@ -168,7 +168,7 @@ function eigen(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T
     return eigen!(Matrix{T}(A), eigencopy_oftype(B, T); sortby)
 end
 function eigen(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigen!(eigencopy_oftype(A, T), Matrix{T}(B); sortby) ;
+    return eigen!(eigencopy_oftype(A, T), Matrix{T}(B); sortby)
 end
 
 function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
