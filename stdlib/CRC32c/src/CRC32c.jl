@@ -9,7 +9,7 @@ module CRC32c
 
 import Base.FastContiguousSubArray
 
-export crc32c
+export crc32c, adjust_crc32c!
 
 """
     crc32c(data, crc::UInt32=0x00000000)
@@ -48,5 +48,91 @@ mixed with a starting `crc` integer.  If `nb` is not supplied, then
 crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000) = Base._crc32c(io, nb, crc)
 crc32c(io::IO, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
+
+#####################################################################
+# Code to adjust a byte array to have an arbitrary given crc, by
+# injecting 4 bytes at fixpos, following:
+#     Martin Stigge, Henryk Plötz, Wolf Müller, Jens-Peter Redlich,
+#     "Reversing CRC — Theory and Practice",
+#     HU Berlin Public Report SAR-PR-2006-05 (May 2006).
+# This is useful if you want to store the CRC of a file in the file.
+
+const POLY = 0x82f63b78 # CRC-32C (iSCSI) polynomial in reversed bit order.
+
+# reversed CRC32c table: Algorithm 5 from Stigge et al.
+const revtable = let table = Vector{UInt32}(undef, 256)
+    for index = UInt32(0):UInt32(255)
+        crc = index << 24;
+        for i = 1:8
+            crc = !iszero(crc & 0x80000000) ? ((crc ⊻ POLY) << 1) + 0x01 : crc << 1;
+        end
+        table[index+1] = crc;
+    end
+    table
+end
+
+# Table-driven "backwards" calculation of CRC: Algorithm 6 from Stigge et al.
+function bwcrc32c(a::AbstractVector{UInt8}, crc::UInt32)
+    crc = crc ⊻ 0xffffffff
+    for i = reverse(eachindex(a))
+        crc = (crc << 8) ⊻ revtable[(crc >> 24) + 1] ⊻ a[i]
+    end
+    return crc
+end
+
+"""
+    adjust_crc32c!(a::AbstractVector{UInt8}, wantcrc::UInt32, fixpos::Integer)
+
+Write 4 bytes to `a[fixpos:fixpos+3]` so that `crc32c(a)` becomes equal to `wantcrc`.
+
+This is especially useful if you want to store the checksum of some data *within
+the data* itself, which is accomplished by:
+
+1. Pad the data with 8 bytes (of any values).
+2. Compute the checksum `crc` of the data.
+3. Store `crc` in the data using 4 bytes of the padding.
+4. Call `adjust_crc32c!` to change the other 4 bytes so that the checksum equals `crc`.
+
+For example, the following code takes some arbitrary `data`, pads it with 8
+bytes at the end, stores its checksum in the last 4 bytes (in little-endian order),
+and then adjusts the preceding 4 bytes so that the original checksum is restored:
+
+```jldoctest
+julia> using CRC32c
+
+julia> data = UInt8[0xff, 0x20, 0x21, 0x09, 0x2d, 0x25, 0xa4, 0xff, 0xa3, 0xbe];
+
+julia> data = [data; 0x01:0x08]; # pad with 8 bytes
+
+julia> crc = crc32c(data)
+0x1a5f345c
+
+julia> data[end-3:end] = reinterpret(UInt8, [htol(crc)]); # write crc at end
+
+julia> crc32c(data) # crc has changed 😢
+0x01b684ee
+
+julia> adjust_crc32c!(data, crc, length(data)-7); # adjust crc via padding bytes
+
+julia> crc32c(data) # original crc is restored! 😄
+0x1a5f345c
+
+julia> ltoh(reinterpret(UInt32, data[end-3:end])[1]) # crc is stored in data 😄
+0x1a5f345c
+```
+"""
+function adjust_crc32c!(a::AbstractVector{UInt8}, wantcrc::UInt32, fixpos::Integer)
+    # store v in little-endian order at b[k:k+3]
+    function store_le!(b::AbstractVector{UInt8}, k::Integer, v::UInt32)
+        @inbounds b[k],b[k+1],b[k+2],b[k+3] =
+            v%UInt8, (v>>8)%UInt8, (v>>16)%UInt8, (v>>24)%UInt8
+    end
+
+    # Algorithm 8 from Stigge et al.
+    checkbounds(a, fixpos:fixpos+3)
+    @views store_le!(a, fixpos, crc32c(a[begin:fixpos-1]) ⊻ 0xffffffff)
+    @views store_le!(a, fixpos, bwcrc32c(a[fixpos:end], wantcrc))
+    return a
+end
 
 end

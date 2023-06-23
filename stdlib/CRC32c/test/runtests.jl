@@ -68,3 +68,13 @@ end
 crc32c_sw(io::IO, crc::UInt32=0x00000000) = crc32c_sw(io, typemax(Int64), crc)
 test_crc32c(crc32c)
 test_crc32c(crc32c_sw)
+
+@testset "adjust_crc32c!" begin
+    wantcrc = 0x01020304
+    for fixpos = 1:98
+        data = adjust_crc32c!(rand(UInt8, 101), wantcrc, fixpos)
+        @test crc32c(data) == wantcrc
+    end
+    @test_throws BoundsError adjust_crc32c!(rand(UInt8, 101), wantcrc, 0)
+    @test_throws BoundsError adjust_crc32c!(rand(UInt8, 101), wantcrc, 99)
+end
