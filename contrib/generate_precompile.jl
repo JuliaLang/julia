@@ -465,6 +465,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     print("Total ─────── "); Base.time_print(stdout, tot_time); println()
 finally
     fancyprint && print(ansi_enablecursor)
+    GC.gc(true) # reduce memory footprint
     return
 end
 
