@@ -87,7 +87,7 @@ end
 
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
-                   𝕃ₒ::AbstractLattice = OptimizerLattice())
+                   𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
