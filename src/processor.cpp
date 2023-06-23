@@ -630,7 +630,12 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
     const void *ids = pointers->target_data;
-    uint32_t target_idx = callback(ids);
+    jl_value_t* rejection_reason = C_NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t target_idx = callback(ids, &rejection_reason);
+    if target_idx == -1;
+        jl_error(rejection_reason);
+    JL_GC_POP();
 
     if (pointers->header->version != 1) {
         jl_error("Image file is not compatible with this version of Julia");
@@ -849,7 +854,7 @@ struct SysimgMatch {
 // Find the best match in the sysimg.
 // Select the best one based on the largest vector register and largest compatible feature set.
 template<typename S, typename T, typename F>
-static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size)
+static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size, jl_value_t **rejection_reason)
 {
     SysimgMatch match;
     bool match_name = false;
@@ -908,7 +913,8 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
             error_msg += "): ";
             error_msg += rejection_reasons[i];
         }
-        jl_error(error_msg.c_str());
+        if (rejection_reason)
+            *rejection_reason = jl_pchar_to_string(error_msg.data(), error_msg.size());
     }
     return match;
 }

@@ -840,7 +840,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
     return 16;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -868,7 +868,9 @@ static uint32_t sysimg_init_cb(const void *id)
                  "virtualized environment.  Please read "
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if match.best_idx == -1
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -884,7 +886,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -893,7 +895,7 @@ static uint32_t pkgimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
@@ -1032,9 +1034,15 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == -1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)

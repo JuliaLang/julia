@@ -2841,11 +2841,9 @@ get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uu
 get_compiletime_preferences(::Nothing) = String[]
 
 function check_clone_targets(clone_targets)
-    try
-        ccall(:jl_check_pkgimage_clones, Cvoid, (Ptr{Cchar},), clone_targets)
-        nothing
-    catch err
-        return sprint(showerror, err)
+    rejection_reason = ccall(:jl_check_pkgimage_clones, Any, (Ptr{Cchar},), clone_targets)
+    if rejection_reason !== nothing
+        return rejection_reason
     end
 end
 

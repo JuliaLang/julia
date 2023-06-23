@@ -175,9 +175,15 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == -1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)
