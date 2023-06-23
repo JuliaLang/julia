@@ -96,8 +96,7 @@ L factor:
 2×2 Matrix{Float64}:
  -8.60233   0.0
   4.41741  -0.697486
-Q factor:
-2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}
+Q factor: 2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}
 
 julia> S.L * S.Q
 2×2 Matrix{Float64}:
