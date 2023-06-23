@@ -158,7 +158,7 @@ position within an array.
 function adjust_crc32c(io::IO, wantcrc::UInt32)
     le(v::UInt32) = [v%UInt8, (v>>8)%UInt8, (v>>16)%UInt8, (v>>24)%UInt8]
     # specialized version of adjust_crc32c! for writing to end
-    write(io, le(bwcrc32c(le(crc32c(seekstart(io)) ⊻ 0xffffffff), wantcrc)))
+    write(io, htol(bwcrc32c(le(crc32c(seekstart(io)) ⊻ 0xffffffff), wantcrc)))
     return io
 end
 
