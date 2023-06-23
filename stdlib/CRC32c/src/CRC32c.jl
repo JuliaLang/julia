@@ -89,7 +89,7 @@ This is especially useful if you want to store the checksum of some data *within
 the data* itself, which is accomplished by:
 
 1. Pad the data with 8 bytes (of any values).
-2. Compute the checksum `crc` of the data.
+2. Compute the checksum `crc` of the data.  (Or pick an arbitrary `crc`, such as `rand(UInt32)`.)
 3. Store `crc` in the data using 4 bytes of the padding.
 4. Call `adjust_crc32c!` to change the other 4 bytes so that the checksum equals `crc`.
 
