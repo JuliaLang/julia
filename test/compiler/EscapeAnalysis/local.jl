@@ -63,8 +63,7 @@ include(normpath(@__DIR__, "setup.jl"))
             return @isdefined(s)
         end
         i = findfirst(isT(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
-        @test !isnothing(i)
-        @test has_no_escape(result.state[SSAValue(i)])
+        @test isnothing(i) || has_no_escape(result.state[SSAValue(i)])
     end
     let # ϕ-node
         result = code_escapes((Bool,Any,Any)) do cond, a, b

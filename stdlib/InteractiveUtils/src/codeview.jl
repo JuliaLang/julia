@@ -172,7 +172,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool)
         params = CodegenParams(debug_info_kind=Cint(0),
-                               safepoint_on_entry=raw)
+                               safepoint_on_entry=raw, gcstack_arg=raw)
         _dump_function(f, t, native, wrapper, raw, dump_module, syntax,
                        optimize, debuginfo, binary, params)
 end

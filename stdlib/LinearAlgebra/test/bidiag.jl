@@ -797,6 +797,14 @@ end
             @test iszero(BL[i,j])
         end
     end
+
+    M = ones(2,2)
+    for n in 0:1
+        dv = fill(M, n)
+        ev = fill(M, 0)
+        B = Bidiagonal(dv, ev, :U)
+        @test B == Matrix{eltype(B)}(B)
+    end
 end
 
 @testset "copyto! with UniformScaling" begin

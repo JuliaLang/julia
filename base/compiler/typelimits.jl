@@ -305,8 +305,6 @@ end
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 @nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
-    typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
     @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype lattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
@@ -377,19 +375,6 @@ end
     suba && subb && return typea
     subb && issimplertype(lattice, typea, typeb) && return typea
     return nothing
-end
-
-function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(typeb))
-    r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
-
-    # type-lattice for MaybeUndef wrapper
-    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
-        return MaybeUndef(tmerge(
-            isa(typea, MaybeUndef) ? typea.typ : typea,
-            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
-    end
-    return tmerge(widenlattice(lattice), typea, typeb)
 end
 
 function union_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})

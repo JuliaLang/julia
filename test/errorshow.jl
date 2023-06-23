@@ -578,7 +578,7 @@ let
     end
 end
 
-@testset "show for manually thrown MethodError" begin
+@testset "show for MethodError with world age issue" begin
     global f21006
 
     f21006() = nothing
@@ -618,6 +618,32 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+end
+
+# Issue #50200
+using Base.Experimental: @opaque
+@testset "show for MethodError with world age issue (kwarg)" begin
+    test_no_error(f) = @test f() === nothing
+    function test_worldage_error(f)
+        ex = try; f(); error("Should not have been reached") catch ex; ex; end
+        @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
+        @test !occursin("!Matched::", sprint(Base.showerror, ex))
+    end
+
+    global callback50200
+
+    # First the no-kwargs version
+    callback50200 = (args...)->nothing
+    f = @opaque ()->callback50200()
+    test_no_error(f)
+    callback50200 = (args...)->nothing
+    test_worldage_error(f)
+
+    callback50200 = (args...; kwargs...)->nothing
+    f = @opaque ()->callback50200(;a=1)
+    test_no_error(f)
+    callback50200 = (args...; kwargs...)->nothing
+    test_worldage_error(f)
 end
 
 # Custom hints

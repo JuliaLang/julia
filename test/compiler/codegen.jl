@@ -17,7 +17,7 @@ end
 
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
-    params = Base.CodegenParams(safepoint_on_entry=false)
+    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false)
     d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end

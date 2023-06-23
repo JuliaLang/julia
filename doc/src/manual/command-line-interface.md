@@ -1,4 +1,4 @@
-# Command-line Interface
+# [Command-line Interface](@id cli)
 
 ## Using arguments inside scripts
 

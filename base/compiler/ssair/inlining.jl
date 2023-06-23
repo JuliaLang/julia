@@ -488,7 +488,7 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
         push!(tuple_call.args, arg)
         push!(tuple_typs, argextype(arg, inline_target))
     end
-    tuple_typ = tuple_tfunc(OptimizerLattice(), tuple_typs)
+    tuple_typ = tuple_tfunc(SimpleInferenceLattice.instance, tuple_typs)
     tuple_inst = NewInstruction(tuple_call, tuple_typ, line_idx)
     push!(newargexprs, insert_node!(tuple_inst))
     return newargexprs
@@ -1406,7 +1406,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         fully_covered &= split_fully_covered
     end
 
-    joint_effects = Effects(joint_effects; nothrow=fully_covered)
+    fully_covered || (joint_effects = Effects(joint_effects; nothrow=false))
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,

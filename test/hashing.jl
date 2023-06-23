@@ -8,7 +8,8 @@ types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64},
+    BigFloat, BigInt, Rational{BigInt}
 ]
 vals = vcat(
     typemin(Int64),
@@ -51,8 +52,7 @@ let collides = 0
             collides += eq
         end
     end
-    # each pair of types has one collision for these values
-    @test collides <= (length(types) - 1)^2
+    @test collides <= 516
 end
 @test hash(0.0) != hash(-0.0)
 

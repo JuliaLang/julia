@@ -237,6 +237,14 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
 else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
+ifeq ($(SANITIZE),1)
+ifeq ($(USECLANG),1)
+JL_PRIVATE_LIBS-1 += libclang_rt.asan
+else
+JL_PRIVATE_LIBS-1 += libasan
+endif
+endif
+
 ifeq ($(WITH_TRACY),1)
 JL_PRIVATE_LIBS-0 += libTracyClient
 endif
@@ -365,6 +373,10 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/source-extracted
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-configured
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-compiled
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-checked
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/source-extracted
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled

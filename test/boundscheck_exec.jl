@@ -282,7 +282,6 @@ begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
     end
 end
 
-
 # Test that --check-bounds=off doesn't permit const prop of indices into
 # function that are not dynamically reachable (the same test for @inbounds
 # is in the compiler tests).
@@ -293,5 +292,10 @@ function f_boundscheck_elim(n)
     ntuple(x->getfield(sin, x), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+# https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
+@test Base.return_types() do
+    typeintersect(Int, Integer)
+end |> only === Type{Int}
 
 end

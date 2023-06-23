@@ -8010,3 +8010,26 @@ end
 # donotdelete should not taint consistency of the containing function
 f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
 @test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))
+
+# Test conditional UndefRefError (#50250)
+struct Foo50250
+    a::Int
+    x
+    Foo50250(a) = new()
+    Foo50250(a, x) = new(x)
+end
+
+struct Bar50250
+    a::Int
+    x
+    Bar50250(a) = new(a)
+    Bar50250(a, x) = new(a, x)
+end
+
+foo50250(b, y) = (b ? Foo50250(y, y) : Foo50250(y)).x
+bar50250(b, y) = (b ? Bar50250(y, y) : Bar50250(y)).x
+
+@test_throws UndefRefError foo50250(true, 1)
+@test_throws UndefRefError foo50250(false, 1)
+@test bar50250(true, 1) === 1
+@test_throws UndefRefError bar50250(false, 1)

@@ -133,12 +133,6 @@ function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     end
 end
 
-# Like NamedTuple{names, T} as a constructor, but omits the additional
-# `convert` call, when the types are known to match the fields
-@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
-    $(Expr(:splatnew, :T, :args))
-end
-
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
@@ -160,6 +154,12 @@ NamedTuple(itr) = (; itr...)
 NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
 
 end # if Base
+
+# Like NamedTuple{names, T} as a constructor, but omits the additional
+# `convert` call, when the types are known to match the fields
+@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
+    $(Expr(:splatnew, :T, :args))
+end
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
