@@ -60,7 +60,7 @@ crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 const POLY = 0x82f63b78 # CRC-32C (iSCSI) polynomial in reversed bit order.
 
 # reversed CRC32c table: Algorithm 5 from Stigge et al.
-const revtable = let table = Vector{UInt32}(undef, 256)
+const REVTABLE = let table = Vector{UInt32}(undef, 256)
     for index = UInt32(0):UInt32(255)
         crc = index << 24;
         for i = 1:8
@@ -75,7 +75,7 @@ end
 function bwcrc32c(a::AbstractVector{UInt8}, crc::UInt32)
     crc = crc ⊻ 0xffffffff
     for i = reverse(eachindex(a))
-        crc = (crc << 8) ⊻ revtable[(crc >> 24) + 1] ⊻ a[i]
+        crc = (crc << 8) ⊻ REVTABLE[(crc >> 24) + 1] ⊻ a[i]
     end
     return crc
 end
@@ -150,7 +150,9 @@ to cause the CRC32c checksum of the whole stream/file to equal `wantcrc`.
 (This is mainly useful if you want to store the checksum of the file *within the file*:
 simply set `wantcrc` to be an arbitrary number, such as `rand(UInt32)`, store it within
 the file as desired, and then call `adjust_crc32c` to write padding bytes that force
-the checksum to match `wantcrc`.)
+the checksum to match `wantcrc`.  Even more simply, you could force all of your files
+to have a checksum that matches a hard-coded value like `0x01020304`, in which case you
+don't need to store the checksum in the file itself.)
 
 See also [`adjust_crc32c!`](@ref) to write similar padding bytes to an arbitrary
 position within an array.
