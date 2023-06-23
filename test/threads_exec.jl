@@ -1322,4 +1322,25 @@ end
     @test t.cpu_time_ns > 0
 end
 
+@testset "CPU time counter: lots of spawns" begin
+    using Base.Threads, Dates
+    # create more tasks than we have cores
+    # the wall time each task gets should be less
+    @sync begin
+        for i in 1:1000
+            start_time = now()
+            task = @spawn begin
+                peakflops()
+            end
+            @spawn begin
+                wait(task)
+                end_time = now()
+                time_delta = end_time - start_time
+                cpu_time = Nanosecond(task.cpu_time_ns)
+                @test cpu_time < time_delta
+            end
+        end
+    end
+end
+
 end # main testset
