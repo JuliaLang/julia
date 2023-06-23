@@ -18,7 +18,7 @@ extern "C" {
 _Atomic(int) gc_n_threads_marking;
 // `tid` of mutator thread that triggered GC
 _Atomic(int) gc_master_tid;
-// Number of thredas that entered the GC
+// Number of threads that entered the GC
 _Atomic(int) gc_n_threads_entered;
 // `tid` of first GC thread
 int gc_first_tid;
