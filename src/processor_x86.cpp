@@ -869,7 +869,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
-    if match.best_idx == -1
+    if (match.best_idx == (uint32_t)-1)
         return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
@@ -1040,7 +1040,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == -1)
+    if (match_idx == (uint32_t)-1)
         return rejection_reason;
     return jl_nothing;
 }

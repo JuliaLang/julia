@@ -630,11 +630,12 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
     const void *ids = pointers->target_data;
-    jl_value_t* rejection_reason = C_NULL;
+    jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t target_idx = callback(ids, &rejection_reason);
-    if target_idx == -1;
-        jl_error(rejection_reason);
+    if (target_idx == (uint32_t)-1) {
+        jl_throw(jl_new_struct(jl_errorexception_type, rejection_reason));
+    }
     JL_GC_POP();
 
     if (pointers->header->version != 1) {
@@ -984,7 +985,7 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
         data.insert(data.end(), specdata.begin(), specdata.end());
     }
 
-    arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
+    jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = (uint8_t*)jl_array_data(arr);
     memcpy(out, data.data(), data.size());
     return arr;
