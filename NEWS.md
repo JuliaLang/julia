@@ -4,6 +4,9 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
+* JuliaSyntax.jl is now used as the default parser, providing better diagnostics and faster
+  parsing. Set environment variable `JULIA_USE_NEW_PARSER` to `0` to switch back to the old
+  parser if necessary (and if you find this necessary, please file an issue) ([#46372]).
 * `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
   may now be used as binary operators with arrow precedence. ([#45962])
 
@@ -18,12 +21,17 @@ Language changes
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* When a method with keyword arguments is displayed in the stack trace view, the textual
+  representation of the keyword arguments' types is simplified using the new
+  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
 Compiler/Runtime improvements
 -----------------------------
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
+* [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
+  This should resolve many segmentation faults previously observed on this platform.
 
 Command-line option changes
 ---------------------------
@@ -44,6 +52,7 @@ New library functions
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
 
 New library features
 --------------------

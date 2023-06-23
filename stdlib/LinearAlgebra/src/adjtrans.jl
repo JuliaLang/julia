@@ -94,11 +94,8 @@ inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
 inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
 inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 
-adj_or_trans_char(::T) where {T<:AbstractArray} = adj_or_trans_char(T)
-adj_or_trans_char(::Type{<:AbstractArray}) = 'N'
-adj_or_trans_char(::Type{<:Adjoint}) = 'C'
-adj_or_trans_char(::Type{<:Adjoint{<:Real}}) = 'T'
-adj_or_trans_char(::Type{<:Transpose}) = 'T'
+_unwrap(A::Adjoint)   = parent(A)
+_unwrap(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -508,3 +505,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::AdjOrTrans,i::Integer,j::Integer,s::AbstractString)
+    Base.replace_in_print_matrix(parent(A), j, i, s)
+end

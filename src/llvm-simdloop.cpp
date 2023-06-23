@@ -282,7 +282,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 /// prevent SIMDization.
 
 
-PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses LowerSIMDLoopPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
 

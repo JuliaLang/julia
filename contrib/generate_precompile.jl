@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Prevent this from putting anyting into the Main namespace
+@eval Module() begin
+
 if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
-# Prevent this from being put into the Main namespace
-@eval Module() begin
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
@@ -152,7 +153,6 @@ if Artifacts !== nothing
     """
 end
 
-
 Pkg = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
           nothing)
@@ -234,6 +234,13 @@ end
 
 ansi_enablecursor = "\e[?25h"
 ansi_disablecursor = "\e[?25l"
+blackhole = Sys.isunix() ? "/dev/null" : "nul"
+procenv = Dict{String,Any}(
+        "JULIA_HISTORY" => blackhole,
+        "JULIA_PROJECT" => nothing, # remove from environment
+        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
+        "TERM" => "")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
@@ -285,7 +292,9 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
+                --cpu-target=native --startup-file=no --color=yes`, procenv),
+                 stdin=IOBuffer(s), stdout=debug_output))
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
             isfile(f) || continue
@@ -305,23 +314,15 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         # Collect statements from running a REPL process and replaying our REPL script
         touch(precompile_file)
         pts, ptm = open_fake_pty()
-        blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
-            cmdargs = ```--color=yes
-                      -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                      ```
+            cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
         else
             cmdargs = `-e nothing`
         end
-        p = withenv("JULIA_HISTORY" => blackhole,
-                    "JULIA_PROJECT" => nothing, # remove from environment
-                    "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
-                    "JULIA_PKG_PRECOMPILE_AUTO" => "0",
-                    "TERM" => "") do
-            run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                   --cpu-target=native --startup-file=no -i $cmdargs```,
-                   pts, pts, pts; wait=false)
-        end
+        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                --cpu-target=native --startup-file=no --color=yes -i $cmdargs```, procenv),
+                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
+            pts, pts, pts; wait=false)
         Base.close_stdio(pts)
         # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
@@ -452,18 +453,16 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     failed = length(statements) - n_succeeded
     print_state("step3" => string("F$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
     println()
-    if have_repl
-        # Seems like a reasonable number right now, adjust as needed
-        # comment out if debugging script
-        n_succeeded > 1500 || @warn "Only $n_succeeded precompile statements"
-    end
+    # Seems like a reasonable number right now, adjust as needed
+    # comment out if debugging script
+    n_succeeded > (have_repl ? 900 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
     fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
 
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time);     println()
+    print("Total ─────── "); Base.time_print(stdout, tot_time); println()
 finally
     fancyprint && print(ansi_enablecursor)
     return
@@ -474,22 +473,30 @@ generate_precompile_statements()
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
 Base.Filesystem.temp_cleanup_purge(force=true)
-@eval Base PROGRAM_FILE = ""
-@eval Sys begin
-    BINDIR = ""
-    STDLIB = ""
-end
-empty!(Base.ARGS)
-empty!(Core.ARGS)
 
-end # @eval
-end # if
+let stdout = Ref{IO}(stdout)
+    Base.PROGRAM_FILE = ""
+    Sys.BINDIR = ""
+    Sys.STDLIB = ""
+    empty!(Base.ARGS)
+    empty!(Core.ARGS)
+    empty!(Base.TOML_CACHE.d)
+    Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 
-println("Outputting sysimage file...")
-let pre_output_time = time_ns()
+    println("Outputting sysimage file...")
+    Base.stdout = Core.stdout
+    Base.stderr = Core.stderr
+
     # Print report after sysimage has been saved so all time spent can be captured
+    pre_output_time = time_ns()
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
-        print("Output ────── "); Base.time_print(output_time); println()
+        let stdout = stdout[]
+            print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
+        end
+        stdout[] = Core.stdout
     end
 end
+
+end # if
+end # @eval

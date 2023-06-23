@@ -760,21 +760,27 @@ end
 # arrayref
 # --------
 
-let effects = Base.infer_effects(Base.arrayref, (Vector{Any},Int))
-    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
-    @test Core.Compiler.is_effect_free(effects)
-    @test !Core.Compiler.is_nothrow(effects)
-    @test Core.Compiler.is_terminates(effects)
+for tt = Any[(Bool,Vector{Any},Int),
+             (Bool,Matrix{Any},Int,Int)]
+    @testset let effects = Base.infer_effects(Base.arrayref, tt)
+        @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test Core.Compiler.is_terminates(effects)
+    end
 end
 
 # arrayset
 # --------
 
-let effects = Base.infer_effects(Base.arrayset, (Vector{Any},Any,Int))
-    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
-    @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
-    @test !Core.Compiler.is_nothrow(effects)
-    @test Core.Compiler.is_terminates(effects)
+for tt = Any[(Bool,Vector{Any},Any,Int),
+             (Bool,Matrix{Any},Any,Int,Int)]
+    @testset let effects = Base.infer_effects(Base.arrayset, tt)
+        @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test Core.Compiler.is_terminates(effects)
+    end
 end
 # nothrow for arrayset
 @test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
@@ -982,3 +988,8 @@ isassigned_effects(s) = isassigned(Ref(s))
 @test fully_eliminated(; retval=true) do
     isassigned_effects(:foo)
 end
+
+# Effects of Base.hasfield (#50198)
+hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
+f50198() = (hf50198(Ref(:x)[]); nothing)
+@test fully_eliminated(f50198)

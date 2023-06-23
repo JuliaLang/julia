@@ -1982,6 +1982,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 // tasks and exceptions -------------------------------------------------------
 
 typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
 
 // info describing an exception handler
@@ -2343,6 +2344,7 @@ typedef struct {
                             // limited, standalone
 
     int safepoint_on_entry; // Emit a safepoint on entry to each function
+    int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;

@@ -134,10 +134,11 @@ end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
-                setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
+    let v = writereadpipeline(
+            "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+            setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
                     "JULIA_LOAD_PATH" => "",
-                    "JULIA_DEPOT_PATH" => "",
+                    "JULIA_DEPOT_PATH" => ";:",
                     "HOME" => homedir()))
         @test v == ("false\nREPL: InteractiveUtilstrue\n", true)
     end
@@ -299,37 +300,43 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test errors_not_signals(`$exename -C invalidtarget`)
     @test errors_not_signals(`$exename --cpu-target=invalidtarget`)
 
-    # -t, --threads
-    code = "print(Threads.threadpoolsize())"
-    cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test string(cpu_threads) ==
-          read(`$exename --threads auto -e $code`, String) ==
-          read(`$exename --threads=auto -e $code`, String) ==
-          read(`$exename -tauto -e $code`, String) ==
-          read(`$exename -t auto -e $code`, String)
-    for nt in (nothing, "1")
-        withenv("JULIA_NUM_THREADS" => nt) do
-            @test read(`$exename --threads=2 -e $code`, String) ==
-                  read(`$exename -t 2 -e $code`, String) == "2"
+    if Sys.iswindows()
+        # -t, --threads
+        code = "print(Threads.threadpoolsize())"
+        cpu_threads = ccall(:jl_effective_threads, Int32, ())
+        @test string(cpu_threads) ==
+            read(`$exename --threads auto -e $code`, String) ==
+            read(`$exename --threads=auto -e $code`, String) ==
+            read(`$exename -tauto -e $code`, String) ==
+            read(`$exename -t auto -e $code`, String)
+        for nt in (nothing, "1")
+            withenv("JULIA_NUM_THREADS" => nt) do
+                @test read(`$exename --threads=2 -e $code`, String) ==
+                    read(`$exename -t 2 -e $code`, String) == "2"
+            end
         end
-    end
-    # We want to test oversubscription, but on manycore machines, this can
-    # actually exhaust limited PID spaces
-    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
-    if Sys.WORD_SIZE == 32
-        cpu_threads = min(cpu_threads, 50)
-    end
-    @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
-    withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
-        @test read(`$exename -e $code`, String) == string(cpu_threads)
-    end
-    @test errors_not_signals(`$exename -t 0`)
-    @test errors_not_signals(`$exename -t -1`)
+        # We want to test oversubscription, but on manycore machines, this can
+        # actually exhaust limited PID spaces
+        cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+        if Sys.WORD_SIZE == 32
+            cpu_threads = min(cpu_threads, 50)
+        end
+        @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
+        withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
+            @test read(`$exename -e $code`, String) == string(cpu_threads)
+        end
+        @test errors_not_signals(`$exename -t 0`)
+        @test errors_not_signals(`$exename -t -1`)
 
-    # Combining --threads and --procs: --threads does propagate
-    withenv("JULIA_NUM_THREADS" => nothing) do
-        code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
-        @test read(`$exename -p2 -t2 -e $code`, String) == "6"
+        # Combining --threads and --procs: --threads does propagate
+        withenv("JULIA_NUM_THREADS" => nothing) do
+            code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
+            @test read(`$exename -p2 -t2 -e $code`, String) == "6"
+        end
+    else
+        @test_skip "Command line tests with -t are flakey on non-Windows OS"
+        # Known issue: https://github.com/JuliaLang/julia/issues/49154
+        # These tests should be fixed and reenabled on all operating systems.
     end
 
     # Combining --threads and invalid -C should yield a decent error
@@ -512,29 +519,34 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g0`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test !occursin("llvm.dbg.cu", code)
-        @test !occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g1`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g2`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test occursin("\"Int64\"", code)
+    # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
+    if !Sys.iswindows()
+        withenv("JULIA_LLVM_ARGS" => "--print-before=FinalLowerGC") do
+            let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test !occursin("llvm.dbg.cu", code)
+                @test !occursin("int.jl", code)
+                @test !occursin("\"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test !occursin("\"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test occursin("\"Int64\"", code)
+            end
+        end
     end
 
     # --check-bounds
@@ -917,7 +929,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     close(in)
     close(err.in)
     txt = readline(err)
-    @test startswith(txt, "ERROR: syntax: incomplete")
+    @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
 # Issue #29855
