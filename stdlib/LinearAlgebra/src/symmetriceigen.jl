@@ -184,10 +184,10 @@ end
 function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Bunchkaufman decomposition based eigenvalues and eigenvectors
     if B.uplo == 'U'
-        vals, w = eigen!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.U)); sortby)
+        vals, w = eigen!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.U')); sortby)
         vecs = (B.U' \ w)[invperm(B.p),:]
     else # B.uplo == 'L'
-        vals, w = eigen!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.L)); sortby)
+        vals, w = eigen!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.L')); sortby)
         vecs = (B.L' \ w)[invperm(B.p),:]
     end
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
@@ -198,12 +198,6 @@ UtiAUi!(A, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
 UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
 _UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
-
-# Perform U \ A / U' in-place, where U::Union{UpperTriangular,Diagonal}
-UiAUti!(A, U) = _UiAUti!(A, U)
-UiAUti!(A::Symmetric, U) = Symmetric(_UiAUti!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
-UiAUti!(A::Hermitian, U) = Hermitian(_UiAUti!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
-_UiAUti!(A, U) = rdiv!(ldiv!(U, A), U')
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
@@ -237,8 +231,8 @@ end
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     if B.uplo == 'U'
-        return eigvals!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.U)); sortby)
+        return eigvals!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.U')); sortby)
     else # B.uplo == 'L'
-        return eigvals!(ldiv(lu!(copy(B.D)), UiAUti!(A[B.p,B.p], B.L)); sortby)
+        return eigvals!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.L')); sortby)
     end
 end
