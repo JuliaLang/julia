@@ -798,10 +798,19 @@ end
 @inline function reinterpret(::Type{Out}, x::In) where {Out, In}
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
-    isprimitivetype(Out) && isprimitivetype(In) && return bitcast(Out, x)
+    if isprimitivetype(Out) && isprimitivetype(In)
+        outsize = sizeof(Out)
+        insize = sizeof(In)
+        outsize == insize ||
+            throw(ArgumentError("Sizes of types $Out and $In do not match; got $outsize \
+                and $insize, respectively."))
+        return bitcast(Out, x)
+    end
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
-    inpackedsize == outpackedsize || throw(ArgumentError("Packed sizes of types $Out and $In do not match; got $outpackedsize and $inpackedsize, respectively."))
+    inpackedsize == outpackedsize ||
+        throw(ArgumentError("Packed sizes of types $Out and $In do not match; got $outpackedsize \
+            and $inpackedsize, respectively."))
     in = Ref{In}(x)
     out = Ref{Out}()
     if struct_subpadding(Out, In)

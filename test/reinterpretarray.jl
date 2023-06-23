@@ -452,8 +452,8 @@ end
 
     @test_throws ArgumentError reinterpret(Int, nothing)
     @test_throws ArgumentError reinterpret(Missing, 3)
-    @test_throws ErrorException reinterpret(Missing, NotASingleton())
-    @test_throws ErrorException reinterpret(NotASingleton, ())
+    @test_throws ArgumentError reinterpret(Missing, NotASingleton())
+    @test_throws ArgumentError reinterpret(NotASingleton, ())
 
     @test_throws ArgumentError reinterpret(NotASingleton, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(reshape, NotASingleton, fill(missing, 3))
