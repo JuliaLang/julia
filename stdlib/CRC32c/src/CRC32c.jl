@@ -120,6 +120,10 @@ julia> crc32c(data) # original crc is restored! 😄
 julia> ltoh(reinterpret(UInt32, data[end-3:end])[1]) # crc is stored in data 😄
 0x1a5f345c
 ```
+
+See also [`adjust_crc32c`](@ref) to append similar padding bytes to the end of
+a file or I/O stream (which has the advantage of not requiring you to read the
+entire file into memory at once).
 """
 function adjust_crc32c!(a::AbstractVector{UInt8}, wantcrc::UInt32, fixpos::Integer)
     # store v in little-endian order at b[k:k+3]
@@ -134,5 +138,31 @@ function adjust_crc32c!(a::AbstractVector{UInt8}, wantcrc::UInt32, fixpos::Integ
     @views store_le!(a, fixpos, bwcrc32c(a[fixpos:end], wantcrc))
     return a
 end
+
+"""
+    adjust_crc32c(filename::AbstractString, wantcrc::UInt32)
+    adjust_crc32c(io::IO, wantcrc::UInt32)
+
+Write 4 bytes of "padding" to the *end* of the the I/O stream `io`
+(which *must* be seekable and read/write) or the file `filename`, in order
+to cause the CRC32c checksum of the whole stream/file to equal `wantcrc`.
+
+(This is mainly useful if you want to store the checksum of the file *within the file*:
+simply set `wantcrc` to be an arbitrary number, such as `rand(UInt32)`, store it within
+the file as desired, and then call `adjust_crc32c` to write padding bytes that force
+the checksum to match `wantcrc`.)
+
+See also [`adjust_crc32c!`](@ref) to write similar padding bytes to an arbitrary
+position within an array.
+"""
+function adjust_crc32c(io::IO, wantcrc::UInt32)
+    le(v::UInt32) = [v%UInt8, (v>>8)%UInt8, (v>>16)%UInt8, (v>>24)%UInt8]
+    # specialized version of adjust_crc32c! for writing to end
+    write(io, le(bwcrc32c(le(crc32c(seekstart(io)) ⊻ 0xffffffff), wantcrc)))
+    return io
+end
+
+adjust_crc32c(filename::AbstractString, wantcrc::UInt32) =
+    open(io -> adjust_crc32c(io, wantcrc), filename, "r+")
 
 end
