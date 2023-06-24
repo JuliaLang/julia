@@ -121,6 +121,8 @@ julia> ltoh(reinterpret(UInt32, data[end-3:end])[1]) # crc is stored in data ðŸ˜
 0x1a5f345c
 ```
 
+Note that the `adjust_crc32c!` function is most efficient when `fixpos` is
+close to the end of the array `a`, and is slowest for `fixpos` near the beginning.
 See also [`adjust_crc32c`](@ref) to append similar padding bytes to the end of
 a file or I/O stream (which has the advantage of not requiring you to read the
 entire file into memory at once).
