@@ -875,7 +875,9 @@ julia> sqrt(A)
 sqrt(::AbstractMatrix)
 
 function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
-    if ishermitian(A)
+    if checksquare(A) == 0
+        return copy(A)
+    elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     elseif istriu(A)
