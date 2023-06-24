@@ -190,6 +190,9 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
                 rename = compact.ssa_rename[defssa.id]
+                if isa(rename, Refined)
+                    rename = rename.val
+                end
                 if isa(rename, AnySSAValue)
                     defssa = rename
                     continue
@@ -463,6 +466,9 @@ function lift_arg!(
         lifted = OldSSAValue(lifted.id)
         if already_inserted(compact, lifted)
             lifted = compact.ssa_rename[lifted.id]
+            if isa(lifted, Refined)
+                lifted = lifted.val
+            end
         end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -481,6 +487,9 @@ end
 function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
     if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
         leaf = compact.ssa_rename[leaf.id]
+        if isa(leaf, Refined)
+            leaf = leaf.val
+        end
         if isa(leaf, AnySSAValue)
             leaf = simple_walk(compact, leaf)
         end
@@ -886,6 +895,14 @@ end
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
 
+struct IntermediaryCollector
+    intermediaries::SPCSet
+end
+function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
+    push!(this.intermediaries, ssa.id)
+    return false
+end
+
 """
     sroa_pass!(ir::IRCode) -> newir::IRCode
 
@@ -1013,7 +1030,6 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-
         struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
@@ -1030,14 +1046,12 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             continue
         end
 
+
         # analyze this mutable struct here for the later pass
         if ismutabletype(struct_typ)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
-                callback = function (@nospecialize(pi), @nospecialize(ssa))
-                    push!(intermediaries, ssa.id)
-                    return false
-                end
+                callback = IntermediaryCollector(intermediaries)
                 def = simple_walk(compact, val, callback)
                 # Mutable stuff here
                 isa(def, SSAValue) || continue
@@ -1105,7 +1119,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        if !isa(compact[SSAValue(idx)][:type], Const)
+            # Cheap heuristic: Calls already known to be `Const` are not
+            # considered refined.
+            compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        end
     end
 
     non_dce_finish!(compact)
@@ -2118,7 +2136,7 @@ function cfg_simplify!(ir::IRCode)
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
                     processed_idx = i
-                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
+                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, ()->nothing)
                     edges = Int32[]
                     values = Any[]
                     sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
