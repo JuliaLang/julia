@@ -23,14 +23,14 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     preds = cfg.blocks[to].preds
     succs = cfg.blocks[from].succs
     # Assumes that blocks appear at most once in preds and succs
-    deleteat!(preds, findfirst(x->x === from, preds)::Int)
-    deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
     nothing
 end
 
 function bb_ordering()
-    lt=(<=)
-    by=x->first(x.stmts)
+    lt = (<=)
+    by = x::BasicBlock -> first(x.stmts)
     ord(lt, by, nothing, Forward)
 end
 
@@ -458,7 +458,7 @@ function is_relevant_expr(e::Expr)
                       :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
-                      :undefcheck, :throw_undef_if_not,
+                      :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
                       :new_opaque_closure)
 end
@@ -594,7 +594,7 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                 end
             end
             # Dead blocks get removed from the predecessor list
-            filter!(x->x !== -1, preds)
+            filter!(x::Int->x≠-1, preds)
             # Rename succs
             for j = 1:length(succs)
                 succs[j] = bb_rename[succs[j]]
@@ -637,7 +637,7 @@ mutable struct IncrementalCompact
     function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
-        perm = sort!(collect(eachindex(info)); by=i->(2info[i].pos+info[i].attach_after, i))
+        perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
         used_ssas = fill(0, new_len)
@@ -656,7 +656,7 @@ mutable struct IncrementalCompact
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
         info = code.new_nodes.info
-        perm = sort!(collect(eachindex(info)); by=i->(info[i].pos, i))
+        perm = sort!(collect(eachindex(info)); by=i::Int->(info[i].pos, i))
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
@@ -783,7 +783,7 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
     return dominates(domtree, xb, yb)
 end
 
-function _count_added_node!(compact,  @nospecialize(val))
+function _count_added_node!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
         compact.used_ssas[val.id] += 1
         return false
@@ -805,7 +805,7 @@ end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     node = add_inst!(compact.pending_nodes, pos, attach_after)
-    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x -> compact.pending_nodes.info[x].pos))
+    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x::Int->compact.pending_nodes.info[x].pos))
     return node
 end
 
@@ -997,7 +997,7 @@ const __check_ssa_counts__ = fill(false)
 should_check_ssa_counts() = __check_ssa_counts__[]
 
 # specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
-function find_ssavalue_uses1(compact)
+function find_ssavalue_uses1(compact::IncrementalCompact)
     body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
     nvals = length(compact.used_ssas)
     nvalsnew = length(compact.new_new_used_ssas)
@@ -1166,8 +1166,8 @@ end
 # Used in inlining before we start compacting - Only works at the CFG level
 function kill_edge!(bbs::Vector{BasicBlock}, from::Int, to::Int, callback=nothing)
     preds, succs = bbs[to].preds, bbs[from].succs
-    deleteat!(preds, findfirst(x->x === from, preds)::Int)
-    deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
     if length(preds) == 0
         for succ in copy(bbs[to].succs)
             kill_edge!(bbs, to, succ, callback)
@@ -1190,12 +1190,12 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     (; bb_rename_pred, bb_rename_succ, result_bbs) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
-    deleteat!(preds, findfirst(x->x === bb_rename_pred[from], preds)::Int)
-    deleteat!(succs, findfirst(x->x === bb_rename_succ[to], succs)::Int)
+    deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
     # Check if the block is now dead
     if length(preds) == 0
         for succ in copy(result_bbs[bb_rename_succ[to]].succs)
-            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, bb_rename_pred)::Int)
+            kill_edge!(compact, active_bb, to, findfirst(x::Int->x==succ, bb_rename_pred)::Int)
         end
         if to < active_bb
             # Kill all statements in the block
@@ -1222,7 +1222,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 stmt = compact.result[idx][:inst]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x == bb_rename_pred[from], stmt.edges)
+                i = findfirst(x::Int32->x==bb_rename_pred[from], stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -1234,7 +1234,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x == from, stmt.edges)
+                i = findfirst(x::Int32->x==from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -1350,7 +1350,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         if cfg_transforms_enabled
             # Rename phi node edges
             let bb_rename_pred=bb_rename_pred
-                map!(i::Int32 -> bb_rename_pred[i], stmt.edges, stmt.edges)
+                map!(i::Int32->bb_rename_pred[i], stmt.edges, stmt.edges)
             end
 
             # Remove edges and values associated with dead blocks. Entries in
@@ -1424,7 +1424,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     return result_idx
 end
 
-function resize!(compact::IncrementalCompact, nnewnodes)
+function resize!(compact::IncrementalCompact, nnewnodes::Int)
     old_length = length(compact.result)
     resize!(compact.result, nnewnodes)
     resize!(compact.used_ssas, nnewnodes)
@@ -1434,7 +1434,8 @@ function resize!(compact::IncrementalCompact, nnewnodes)
     return compact
 end
 
-function finish_current_bb!(compact::IncrementalCompact, active_bb, old_result_idx=compact.result_idx, unreachable=false)
+function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
+                            old_result_idx::Int=compact.result_idx, unreachable::Bool=false)
     (;result_bbs, cfg_transforms_enabled, bb_rename_succ) = compact.cfg_transform
     if compact.active_result_bb > length(result_bbs)
         #@assert compact.bb_rename[active_bb] == -1
@@ -1573,7 +1574,7 @@ function iterate_compact(compact::IncrementalCompact)
             if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
                 break
             end
-            heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
+            heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
         compact.idx += 1
@@ -1600,7 +1601,7 @@ function iterate_compact(compact::IncrementalCompact)
     elseif !isempty(compact.pending_perm) &&
         (info = compact.pending_nodes.info[compact.pending_perm[1]];
          info.attach_after ? info.pos == idx - 1 : info.pos == idx)
-        new_idx = heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
+        new_idx = heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         new_node_entry = compact.pending_nodes.stmts[new_idx]
         new_node_info = compact.pending_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
