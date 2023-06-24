@@ -1417,6 +1417,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = stmt
     elseif isa(stmt, NewSSAValue)
         ssa_rename[idx] = SSAValue(stmt.id)
+    elseif (inst[:flag] & IR_FLAG_REFINED) != 0
+        # Do not compact constants that are the result of refinement until
+        # inference had a chance to propagate any type changes.
+        # TODO: We could mark this specifically in the ssa_rename, rather tha
+        # keeping the extra statement, but keep it simple for now.
+        result[result_idx][:inst] = stmt
+        result_idx += 1
     else
         # Constant assign, replace uses of this ssa value with its result
         ssa_rename[idx] = stmt
