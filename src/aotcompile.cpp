@@ -1436,6 +1436,7 @@ void jl_dump_native_impl(void *native_code,
         delete data;
         return;
     }
+
     auto TSCtx = data->M.getContext();
     auto lock = TSCtx.getLock();
     LLVMContext &Context = *TSCtx.getContext();
@@ -1470,10 +1471,39 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
+    auto compile = [&](Module &M, StringRef name, unsigned threads) {
+        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname);
+    };
+
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
+
+    SmallVector<AOTOutputs, 16> sysimg_outputs;
+    if (sysimg_data) {
+        auto Context = new LLVMContext();
+        auto sysimgM = std::make_unique<Module>("sysimg", *Context);
+        sysimgM->setTargetTriple(dataM->getTargetTriple());
+        sysimgM->setDataLayout(dataM->getDataLayout());
+        sysimgM->setStackProtectorGuard(dataM->getStackProtectorGuard());
+        sysimgM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
+        Constant *data = ConstantDataArray::get(*Context,
+            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+        auto sysdata = new GlobalVariable(*sysimgM, data->getType(), false,
+                                     GlobalVariable::ExternalLinkage,
+                                     data, "jl_system_image_data");
+        sysdata->setAlignment(Align(64));
+        addComdat(sysdata, TheTriple);
+        Constant *len = ConstantInt::get(sysimgM->getDataLayout().getIntPtrType(*Context), sysimg_len);
+        addComdat(new GlobalVariable(*sysimgM, len->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     len, "jl_system_image_size"), TheTriple);
+        //TODO free sysimg_data here
+        sysimg_outputs = compile(*sysimgM, "sysimg", 1);
+        sysimgM.reset();
+        delete Context;
+    }
 
     Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
     Type *T_psize = T_size->getPointerTo();
@@ -1553,17 +1583,13 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads) {
-        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname);
-    };
-
     auto data_outputs = compile(*dataM, "text", threads);
 
-    auto sysimageM = std::make_unique<Module>("sysimage", Context);
-    sysimageM->setTargetTriple(dataM->getTargetTriple());
-    sysimageM->setDataLayout(dataM->getDataLayout());
-    sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
-    sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
+    auto metadataM = std::make_unique<Module>("metadata", Context);
+    metadataM->setTargetTriple(dataM->getTargetTriple());
+    metadataM->setDataLayout(dataM->getDataLayout());
+    metadataM->setStackProtectorGuard(dataM->getStackProtectorGuard());
+    metadataM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
     bool has_veccall = dataM->getModuleFlag("julia.mv.veccall");
     delete data; // free memory for data->M
 
@@ -1574,25 +1600,11 @@ void jl_dump_native_impl(void *native_code,
         auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
         auto T_int32 = Type::getInt32Ty(Context);
         auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
-        auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", *sysimageM);
+        auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", *metadataM);
         F->setCallingConv(CallingConv::X86_StdCall);
 
         llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
         builder.CreateRet(ConstantInt::get(T_int32, 1));
-    }
-
-    if (sysimg_data) {
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        auto sysdata = new GlobalVariable(*sysimageM, data->getType(), false,
-                                     GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
-        addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*sysimageM, len->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"), TheTriple);
     }
     if (imaging_mode) {
         auto specs = jl_get_llvm_clone_targets();
@@ -1610,21 +1622,21 @@ void jl_dump_native_impl(void *native_code,
             data.insert(data.end(), specdata.begin(), specdata.end());
         }
         auto value = ConstantDataArray::get(Context, data);
-        auto target_ids = new GlobalVariable(*sysimageM, value->getType(), true,
+        auto target_ids = new GlobalVariable(*metadataM, value->getType(), true,
                                       GlobalVariable::InternalLinkage,
                                       value, "jl_dispatch_target_ids");
-        auto shards = emit_shard_table(*sysimageM, T_size, T_psize, threads);
-        auto ptls = emit_ptls_table(*sysimageM, T_size, T_psize);
-        auto header = emit_image_header(*sysimageM, threads, nfvars, ngvars);
+        auto shards = emit_shard_table(*metadataM, T_size, T_psize, threads);
+        auto ptls = emit_ptls_table(*metadataM, T_size, T_psize);
+        auto header = emit_image_header(*metadataM, threads, nfvars, ngvars);
         auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
-        auto small_typeof_copy = new GlobalVariable(*sysimageM, AT, false,
+        auto small_typeof_copy = new GlobalVariable(*metadataM, AT, false,
                                                     GlobalVariable::ExternalLinkage,
                                                     Constant::getNullValue(AT),
                                                     "small_typeof");
         small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
         small_typeof_copy->setDSOLocal(true);
         AT = ArrayType::get(T_psize, 5);
-        auto pointers = new GlobalVariable(*sysimageM, AT, false,
+        auto pointers = new GlobalVariable(*metadataM, AT, false,
                                            GlobalVariable::ExternalLinkage,
                                            ConstantArray::get(AT, {
                                                 ConstantExpr::getBitCast(header, T_psize),
@@ -1641,65 +1653,34 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    auto sysimg_outputs = compile(*sysimageM, "data", 1);
+    auto metadata_outputs = compile(*metadataM, "data", 1);
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-    if (unopt_bc_fname) {
-        std::vector<NewArchiveMember> unopt_bc_Archive(threads + 1);
-        SmallVector<std::string, 16> unopt_bc_filenames(threads + 1);
-        for (size_t i = 0; i < threads; i++) {
-            unopt_bc_filenames[i] = "text" + std::to_string(i) + "_unopt.bc";
-            StringRef buffer(data_outputs[i].unopt.data(), data_outputs[i].unopt.size());
-            unopt_bc_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, unopt_bc_filenames[i]));
-        }
-        unopt_bc_filenames.back() = "data_unopt.bc";
-        StringRef buffer(sysimg_outputs[0].unopt.data(), sysimg_outputs[0].unopt.size());
-        unopt_bc_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, unopt_bc_filenames.back()));
-        handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
-                    Kind, true, false), reportWriterError);
+#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
+    if (fname) {\
+        std::vector<NewArchiveMember> archive; \
+        SmallVector<std::string, 16> filenames; \
+        SmallVector<StringRef, 16> buffers; \
+        for (size_t i = 0; i < threads; i++) { \
+            filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
+            buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
+        } \
+        filenames.push_back("metadata" prefix suffix); \
+        buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+        if (sysimg_data) { \
+            filenames.push_back("sysimg" prefix suffix); \
+            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
+        } \
+        for (size_t i = 0; i < filenames.size(); i++) { \
+            archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
+        } \
+        handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
     }
-    if (bc_fname) {
-        std::vector<NewArchiveMember> bc_Archive(threads + 1);
-        SmallVector<std::string, 16> bc_filenames(threads + 1);
-        for (size_t i = 0; i < threads; i++) {
-            bc_filenames[i] = "text" + std::to_string(i) + "_opt.bc";
-            StringRef buffer(data_outputs[i].opt.data(), data_outputs[i].opt.size());
-            bc_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, bc_filenames[i]));
-        }
-        bc_filenames.back() = "data_opt.bc";
-        StringRef buffer(sysimg_outputs[0].opt.data(), sysimg_outputs[0].opt.size());
-        bc_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, bc_filenames.back()));
-        handleAllErrors(writeArchive(bc_fname, bc_Archive, true,
-                    Kind, true, false), reportWriterError);
-    }
-    if (obj_fname) {
-        std::vector<NewArchiveMember> obj_Archive(threads + 1);
-        SmallVector<std::string, 16> obj_filenames(threads + 1);
-        for (size_t i = 0; i < threads; i++) {
-            obj_filenames[i] = "text" + std::to_string(i) + ".o";
-            StringRef buffer(data_outputs[i].obj.data(), data_outputs[i].obj.size());
-            obj_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, obj_filenames[i]));
-        }
-        obj_filenames.back() = "data.o";
-        StringRef buffer(sysimg_outputs[0].obj.data(), sysimg_outputs[0].obj.size());
-        obj_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, obj_filenames.back()));
-        handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
-                    Kind, true, false), reportWriterError);
-    }
-    if (asm_fname) {
-        std::vector<NewArchiveMember> asm_Archive(threads + 1);
-        SmallVector<std::string, 16> asm_filenames(threads + 1);
-        for (size_t i = 0; i < threads; i++) {
-            asm_filenames[i] = "text" + std::to_string(i) + ".s";
-            StringRef buffer(data_outputs[i].asm_.data(), data_outputs[i].asm_.size());
-            asm_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, asm_filenames[i]));
-        }
-        asm_filenames.back() = "data.s";
-        StringRef buffer(sysimg_outputs[0].asm_.data(), sysimg_outputs[0].asm_.size());
-        asm_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, asm_filenames.back()));
-        handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
-                    Kind, true, false), reportWriterError);
-    }
+
+    WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
+    WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
+    WRITE_ARCHIVE(obj_fname, obj, "", ".o");
+    WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
 }
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
