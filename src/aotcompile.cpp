@@ -1427,7 +1427,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len, ios_t *s)
+        ios_t *z, ios_t *s)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -1481,7 +1481,7 @@ void jl_dump_native_impl(void *native_code,
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
-    if (sysimg_data) {
+    if (z) {
         auto Context = new LLVMContext();
         auto sysimgM = std::make_unique<Module>("sysimg", *Context);
         sysimgM->setTargetTriple(dataM->getTargetTriple());
@@ -1489,18 +1489,25 @@ void jl_dump_native_impl(void *native_code,
         sysimgM->setStackProtectorGuard(dataM->getStackProtectorGuard());
         sysimgM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
         Constant *data = ConstantDataArray::get(*Context,
-            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
         auto sysdata = new GlobalVariable(*sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
         sysdata->setAlignment(Align(64));
         addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM->getDataLayout().getIntPtrType(*Context), sysimg_len);
+        Constant *len = ConstantInt::get(sysimgM->getDataLayout().getIntPtrType(*Context), z->size);
         addComdat(new GlobalVariable(*sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
-        //TODO free sysimg_data here
+        // Free z here, since we've copied out everything into data
+        // Results in serious memory savings
+        ios_close(z);
+        free(z);
+        // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
+        // to function as expected
         sysimg_outputs = compile(*sysimgM, "sysimg", 1);
+        // Now that we have the sysimg outputs, free LLVM resources associated with getting
+        // that object file asap.
         sysimgM.reset();
         delete Context;
     }
@@ -1667,7 +1674,7 @@ void jl_dump_native_impl(void *native_code,
         } \
         filenames.push_back("metadata" prefix suffix); \
         buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
-        if (sysimg_data) { \
+        if (z) { \
             filenames.push_back("sysimg" prefix suffix); \
             buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
         } \

@@ -137,14 +137,15 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     // We need to postpone the srctext writing after that.
     if (native_code) {
         ios_t *targets = jl_options.outputji ? &f : NULL;
+        // jl_dump_native will close and free z when appropriate
+        // this is a horrible abstraction, but
+        // this helps reduce live memory significantly
         jl_dump_native(native_code,
                         jl_options.outputbc,
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        (const char*)z->buf, (size_t)z->size, targets);
-        ios_close(z);
-        free(z);
+                        z, targets);
         jl_postoutput_hook();
     }
 
