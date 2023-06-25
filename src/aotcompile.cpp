@@ -952,10 +952,15 @@ struct ShardTimers {
 
 void emitFloat16Wrappers(Module &M, bool external);
 
+struct AOTOutputs {
+    SmallVector<char, 0> unopt, opt, obj, asm_;
+};
+
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
-                    NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
-                    ShardTimers &timers, unsigned shardidx) {
+static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
+        bool unopt, bool opt, bool obj, bool asm_) {
+    assert((unopt || opt || obj || asm_) && "no output requested");
+    AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -968,17 +973,16 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     if (unopt) {
         timers.unopt.startTimer();
-        raw_string_ostream OS(*outputs);
+        raw_svector_ostream OS(out.unopt);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
         MPM.run(M, AM.MAM);
-        *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
-        return;
+        return out;
     }
     assert(!verifyModule(M, &errs()));
 
@@ -1037,43 +1041,38 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     if (opt) {
         timers.opt.startTimer();
-        raw_string_ostream OS(*outputs);
+        raw_svector_ostream OS(out.opt);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
         MPM.run(M, AM.MAM);
-        *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
 
     if (obj) {
         timers.obj.startTimer();
-        SmallVector<char, 0> Buffer;
-        raw_svector_ostream OS(Buffer);
+        raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
         emitter.run(M);
-        *outputs = { Buffer.data(), Buffer.size() };
-        *obj = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.obj.stopTimer();
     }
 
     if (asm_) {
         timers.asm_.startTimer();
-        SmallVector<char, 0> Buffer;
-        raw_svector_ostream OS(Buffer);
+        raw_svector_ostream OS(out.asm_);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
-        *outputs = { Buffer.data(), Buffer.size() };
-        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.asm_.stopTimer();
     }
+
+    return out;
 }
 
 // serialize module to bitcode
@@ -1233,20 +1232,11 @@ static void dropUnusedGlobals(Module &M) {
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
-static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, StringRef name,
-                std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
-                std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
-                bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
-                unsigned threads, ModuleInfo module_info) {
-    unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
-    assert(outcount);
-    outputs.resize(outputs.size() + outcount * threads * 2);
-    auto names_start = outputs.data() + outputs.size() - outcount * threads * 2;
-    auto outputs_start = names_start + outcount * threads;
-    unopt.resize(unopt.size() + unopt_out * threads);
-    opt.resize(opt.size() + opt_out * threads);
-    obj.resize(obj.size() + obj_out * threads);
-    asm_.resize(asm_.size() + asm_out * threads);
+static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
+                bool unopt_out, bool opt_out, bool obj_out, bool asm_out) {
+    SmallVector<AOTOutputs, 16> outputs(threads);
+    assert(threads);
+    assert(unopt_out || opt_out || obj_out || asm_out);
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
@@ -1282,27 +1272,10 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
-    for (unsigned i = 0; i < threads; ++i) {
-        auto start = names_start + i * outcount;
-        auto istr = std::to_string(i);
-        if (unopt_out)
-            *start++ = (name + "_unopt#" + istr + ".bc").str();
-        if (opt_out)
-            *start++ = (name + "_opt#" + istr + ".bc").str();
-        if (obj_out)
-            *start++ = (name + "#" + istr + ".o").str();
-        if (asm_out)
-            *start++ = (name + "#" + istr + ".s").str();
-    }
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        add_output_impl(M, TM, outputs_start, names_start,
-                        unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
-                        opt_out ? opt.data() + opt.size() - 1 : nullptr,
-                        obj_out ? obj.data() + obj.size() - 1 : nullptr,
-                        asm_out ? asm_.data() + asm_.size() - 1 : nullptr,
-                        timers[0], 0);
+        outputs[0] = add_output_impl(M, TM, timers[0], unopt_out, opt_out, obj_out, asm_out);
         output_timer.stopTimer();
 
         if (!report_timings) {
@@ -1313,7 +1286,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 t.print(dbgs(), true);
             }
         }
-        return;
+        return outputs;
     }
 
     partition_timer.startTimer();
@@ -1334,15 +1307,10 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     output_timer.startTimer();
 
-    auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
-    auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
-    auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
-    auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
-
     // Start all of the worker threads
     std::vector<std::thread> workers(threads);
     for (unsigned i = 0; i < threads; i++) {
-        workers[i] = std::thread([&, i](){
+        workers[i] = std::thread([&, i]() {
             LLVMContext ctx;
             // Lazily deserialize the entire module
             timers[i].deserialize.startTimer();
@@ -1367,12 +1335,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             dropUnusedGlobals(*M);
             timers[i].deletion.stopTimer();
 
-            add_output_impl(*M, TM, outputs_start + i * outcount, names_start + i * outcount,
-                            unoptstart ? unoptstart + i : nullptr,
-                            optstart ? optstart + i : nullptr,
-                            objstart ? objstart + i : nullptr,
-                            asmstart ? asmstart + i : nullptr,
-                            timers[i], i);
+            outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
         });
     }
 
@@ -1400,6 +1363,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
         dbgs() << "]\n";
     }
+    return outputs;
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
@@ -1506,13 +1470,6 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-
-    std::vector<NewArchiveMember> bc_Archive;
-    std::vector<NewArchiveMember> obj_Archive;
-    std::vector<NewArchiveMember> asm_Archive;
-    std::vector<NewArchiveMember> unopt_bc_Archive;
-    std::vector<std::string> outputs;
-
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
@@ -1596,20 +1553,11 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    // Reserve space for the output files and names
-    // DO NOT DELETE, this is necessary to ensure memorybuffers
-    // have a stable backing store for both their object files and
-    // their names
-    outputs.reserve((threads + 1) * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2);
+    auto compile = [&](Module &M, StringRef name, unsigned threads) {
+        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname);
+    };
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
-            M, *SourceTM, outputs, name,
-            unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
-            !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
-            threads, module_info
-    ); };
-
-    compile(*dataM, "text", threads);
+    auto data_outputs = compile(*dataM, "text", threads);
 
     auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
@@ -1693,21 +1641,65 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    compile(*sysimageM, "data", 1);
+    auto sysimg_outputs = compile(*sysimageM, "data", 1);
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-    if (unopt_bc_fname)
+    if (unopt_bc_fname) {
+        std::vector<NewArchiveMember> unopt_bc_Archive(threads + 1);
+        SmallVector<std::string, 16> unopt_bc_filenames(threads + 1);
+        for (size_t i = 0; i < threads; i++) {
+            unopt_bc_filenames[i] = "text" + std::to_string(i) + "_unopt.bc";
+            StringRef buffer(data_outputs[i].unopt.data(), data_outputs[i].unopt.size());
+            unopt_bc_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, unopt_bc_filenames[i]));
+        }
+        unopt_bc_filenames.back() = "data_unopt.bc";
+        StringRef buffer(sysimg_outputs[0].unopt.data(), sysimg_outputs[0].unopt.size());
+        unopt_bc_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, unopt_bc_filenames.back()));
         handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
                     Kind, true, false), reportWriterError);
-    if (bc_fname)
+    }
+    if (bc_fname) {
+        std::vector<NewArchiveMember> bc_Archive(threads + 1);
+        SmallVector<std::string, 16> bc_filenames(threads + 1);
+        for (size_t i = 0; i < threads; i++) {
+            bc_filenames[i] = "text" + std::to_string(i) + "_opt.bc";
+            StringRef buffer(data_outputs[i].opt.data(), data_outputs[i].opt.size());
+            bc_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, bc_filenames[i]));
+        }
+        bc_filenames.back() = "data_opt.bc";
+        StringRef buffer(sysimg_outputs[0].opt.data(), sysimg_outputs[0].opt.size());
+        bc_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, bc_filenames.back()));
         handleAllErrors(writeArchive(bc_fname, bc_Archive, true,
                     Kind, true, false), reportWriterError);
-    if (obj_fname)
+    }
+    if (obj_fname) {
+        std::vector<NewArchiveMember> obj_Archive(threads + 1);
+        SmallVector<std::string, 16> obj_filenames(threads + 1);
+        for (size_t i = 0; i < threads; i++) {
+            obj_filenames[i] = "text" + std::to_string(i) + ".o";
+            StringRef buffer(data_outputs[i].obj.data(), data_outputs[i].obj.size());
+            obj_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, obj_filenames[i]));
+        }
+        obj_filenames.back() = "data.o";
+        StringRef buffer(sysimg_outputs[0].obj.data(), sysimg_outputs[0].obj.size());
+        obj_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, obj_filenames.back()));
         handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
                     Kind, true, false), reportWriterError);
-    if (asm_fname)
+    }
+    if (asm_fname) {
+        std::vector<NewArchiveMember> asm_Archive(threads + 1);
+        SmallVector<std::string, 16> asm_filenames(threads + 1);
+        for (size_t i = 0; i < threads; i++) {
+            asm_filenames[i] = "text" + std::to_string(i) + ".s";
+            StringRef buffer(data_outputs[i].asm_.data(), data_outputs[i].asm_.size());
+            asm_Archive[i] = NewArchiveMember(MemoryBufferRef(buffer, asm_filenames[i]));
+        }
+        asm_filenames.back() = "data.s";
+        StringRef buffer(sysimg_outputs[0].asm_.data(), sysimg_outputs[0].asm_.size());
+        asm_Archive.back() = NewArchiveMember(MemoryBufferRef(buffer, asm_filenames.back()));
         handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
+    }
 }
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
