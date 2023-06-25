@@ -364,7 +364,7 @@ const LiftedDefs = IdDict{Any, Bool}
 
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
-function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field::Int,
+function lift_leaves(compact::IncrementalCompact, field::Int,
                      leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
@@ -394,15 +394,6 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field
                         continue
                     end
                     return nothing
-                    # Expand the Expr(:new) to include it's element Expr(:new) nodes up until the one we want
-                    compact[leaf] = nothing
-                    for i = (length(def.args) + 1):(1+field)
-                        ftyp = fieldtype(typ, i - 1)
-                        isbitstype(ftyp) || return nothing
-                        ninst = effect_free(NewInstruction(Expr(:new, ftyp), result_t))
-                        push!(def.args, insert_node!(compact, leaf, ninst))
-                    end
-                    compact[leaf] = def
                 end
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
@@ -1080,10 +1071,15 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
         isempty(leaves) && continue
 
-        result_t = argextype(SSAValue(idx), compact)
-        lifted_result = lift_leaves(compact, result_t, field, leaves, 𝕃ₒ)
+        lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
+
+        result_t = Union{}
+        for v in values(lifted_leaves)
+            v === nothing && continue
+            result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+        end
 
         lifted_val = perform_lifting!(compact,
             visited_philikes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
@@ -1098,7 +1094,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
                 def_val = perform_lifting!(compact,
-                    visited_philikes, field, def_lifting_cache, result_t, lifted_leaves_def, val, lazydomtree).val
+                    visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree).val
             end
             insert_node!(compact, SSAValue(idx), non_effect_free(NewInstruction(
                 Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing)))
