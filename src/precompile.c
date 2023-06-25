@@ -111,7 +111,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
 
-    bool_t emit_split = jl_options.outputji && emit_native;
+    const char *outputji = jl_options.outputji;
+
+    bool_t emit_split = outputji && emit_native;
 
     ios_t *s = NULL;
     ios_t *z = NULL;
@@ -125,9 +127,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     ios_t f;
 
-    if (jl_options.outputji) {
-        if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-            jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
+    if (outputji) {
+        if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
+            jl_errorf("cannot open system image file \"%s\" for writing", outputji);
         ios_write(&f, (const char *)s->buf, (size_t)s->size);
         ios_close(s);
         free(s);
@@ -136,7 +138,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     // jl_dump_native writes the clone_targets into `s`
     // We need to postpone the srctext writing after that.
     if (native_code) {
-        ios_t *targets = jl_options.outputji ? &f : NULL;
+        ios_t *targets = outputji ? &f : NULL;
         // jl_dump_native will close and free z when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
@@ -149,7 +151,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         jl_postoutput_hook();
     }
 
-    if (jl_options.outputji) {
+    if (outputji) {
         if (jl_options.incremental) {
             write_srctext(&f, udeps, srctextpos);
         }
