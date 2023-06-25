@@ -1614,10 +1614,10 @@ void jl_dump_native_impl(void *native_code,
     auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
     sysimageM->setDataLayout(dataM->getDataLayout());
-#if JL_LLVM_VERSION >= 130000
     sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
     sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
-#endif
+    bool has_veccall = dataM->getModuleFlag("julia.mv.veccall");
+    delete data; // free memory for data->M
 
     if (TheTriple.isOSWindows()) {
         // Windows expect that the function `_DllMainStartup` is present in an dll.
@@ -1632,8 +1632,6 @@ void jl_dump_native_impl(void *native_code,
         llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
         builder.CreateRet(ConstantInt::get(T_int32, 1));
     }
-    bool has_veccall = dataM->getModuleFlag("julia.mv.veccall");
-    data->M = orc::ThreadSafeModule(); // free memory for data->M
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
@@ -1710,8 +1708,6 @@ void jl_dump_native_impl(void *native_code,
     if (asm_fname)
         handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
-
-    delete data;
 }
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
