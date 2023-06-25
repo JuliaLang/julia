@@ -1261,7 +1261,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     ssa_rename[idx] = SSAValue(result_idx)
     local mark_refined!
-    let result_idx=result_idx
+    let result_idx=result_idx, result=result
         mark_refined!() = result[result_idx][:flag] |= IR_FLAG_REFINED
     end
     if stmt === nothing
