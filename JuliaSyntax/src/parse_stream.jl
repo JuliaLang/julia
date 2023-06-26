@@ -331,7 +331,7 @@ function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
 end
 
 function show_diagnostics(io::IO, stream::ParseStream)
-    show_diagnostics(io, stream.diagnostics, sourcetext(stream))
+    show_diagnostics(io, stream.diagnostics, SourceFile(stream))
 end
 
 # We manage a pool of stream positions as parser working space
@@ -1078,17 +1078,8 @@ function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
     end
 end
 
-"""
-    sourcetext(stream::ParseStream; steal_textbuf=true)
-
-Return the source text being parsed by this `ParseStream` as a UTF-8 encoded
-string.
-
-If `steal_textbuf==true`, this is permitted to steal the content of the
-stream's text buffer. Note that this leaves the `ParseStream` in an invalid
-state for further parsing.
-"""
 function sourcetext(stream::ParseStream; steal_textbuf=false)
+    Base.depwarn("Use of `sourcetext(::ParseStream)` is deprecated. Use `SourceFile(stream)` instead", :sourcetext)
     root = stream.text_root
     # The following kinda works but makes the return type of this method type
     # unstable. (Also codeunit(root) == UInt8 doesn't imply UTF-8 encoding?)
@@ -1109,7 +1100,21 @@ function sourcetext(stream::ParseStream; steal_textbuf=false)
 end
 
 function SourceFile(stream::ParseStream; kws...)
-    return SourceFile(sourcetext(stream); first_index=first_byte(stream), kws...)
+    fbyte = first_byte(stream)
+    lbyte = last_byte(stream)
+    if !isempty(stream.diagnostics)
+        lbyte = max(lbyte, maximum(last_byte(d) for d in stream.diagnostics))
+    end
+    # See also sourcetext()
+    srcroot = stream.text_root
+    str = if srcroot isa String
+        SubString(srcroot, fbyte, thisind(srcroot, lbyte))
+    elseif srcroot isa SubString{String}
+        SubString(srcroot, fbyte, thisind(srcroot, lbyte))
+    else
+        SubString(String(stream.textbuf[fbyte:lbyte]))
+    end
+    return SourceFile(str; first_index=first_byte(stream), kws...)
 end
 
 """

@@ -219,7 +219,9 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
         print(io, source[x:p-1])
         _printstyled(io, hitext; bgcolor=color)
         print(io, source[q+1:d])
-        source[thisind(source, d)] == '\n' || print(io, "\n")
+        if d >= firstindex(source) && source[thisind(source, d)] != '\n'
+            print(io, "\n")
+        end
         _print_marker_line(io, source[a:p-1], hitext, true, true, marker_line_color, note, notecolor)
     else
         # x   --------------
