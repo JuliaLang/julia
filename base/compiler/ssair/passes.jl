@@ -1336,6 +1336,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree, inlining::Union{Nothing, InliningState})
+    𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     lazypostdomtree = LazyPostDomtree(ir)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -1491,11 +1492,14 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 end
                 for b in phiblocks
                     n = ir[phinodes[b]][:inst]::PhiNode
+                    result_t = Bottom
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
+                        v = compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, p)
+                        push!(n.values, v)
+                        result_t = tmerge(𝕃ₒ, result_t, argextype(v, ir))
                     end
+                    ir[phinodes[b]][:type] = result_t
                 end
             end
             all_eliminated || continue
