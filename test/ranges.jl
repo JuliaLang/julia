@@ -59,6 +59,9 @@ using InteractiveUtils: code_llvm
     @test last(10:0.2:3) === 9.8
     @test step(10:0.2:3) === 0.2
     @test isempty(10:0.2:3)
+
+    unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
+    @test_throws unitrangeerrstr UnitRange('a', 'b')
 end
 
 using Dates, Random

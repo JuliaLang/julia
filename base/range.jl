@@ -404,7 +404,11 @@ struct UnitRange{T<:Real} <: AbstractUnitRange{T}
 end
 UnitRange{T}(start, stop) where {T<:Real} = UnitRange{T}(convert(T, start), convert(T, stop))
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
-UnitRange(start, stop) = UnitRange(promote(start, stop)...)
+function UnitRange(start, stop)
+    a, b = promote(start, stop)
+    not_sametype((start, stop), (a, b))
+    UnitRange(a, b)
+end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
