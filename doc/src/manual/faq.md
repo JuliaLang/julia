@@ -22,7 +22,8 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-Julia's public API is the behavior described in documentation of symbols exported from `Base`
+Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
+documentation of symbols exported from `Base`
 and the standard libraries. Functions, types, and constants are not part of the public
 API if they are not exported, _even if they have docstrings_. Further, only the documented
 behavior of exported symbols is part of the public API. Undocumented behavior of exported
@@ -48,6 +49,9 @@ B marks foo as public, then A.B.foo is public, but if A does not mark B as publi
 then writing A.B.foo outside of A is accessing an internal and anything that B marks as
 public forms a sub-api that is not covered by the SymVer of A. This could be for the
 convenience of developers of A if A is a large package...
+
+Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
+will not be removed or receive meaningful breaking changes in a minor version update.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
