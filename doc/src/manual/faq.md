@@ -42,6 +42,13 @@ You can get a complete list of the symbols exported from a module with `names(My
 
 Package authors are encouraged to define their public API similarly.
 
+Documented behavior of symbols exported from submodules are only part of the public API
+if the module they belong to is also exported. If module A marks submodule B as public and
+B marks foo as public, then A.B.foo is public, but if A does not mark B as public,
+then writing A.B.foo outside of A is accessing an internal and anything that B marks as
+public forms a sub-api that is not covered by the SymVer of A. This could be for the
+convenience of developers of A if A is a large package...
+
 ### There is a useful undocumented function/type/constant. Can I use it?
 
 Updating Julia may break your code if you use non-public API.  If the code is
