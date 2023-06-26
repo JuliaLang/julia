@@ -1214,6 +1214,8 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
+    pg->prev_nold = 0;
+    pg->nold = 0;
     pg->fl_begin_offset = UINT16_MAX;
     pg->fl_end_offset = UINT16_MAX;
     return beg;
