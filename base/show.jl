@@ -221,7 +221,7 @@ function show(io::IO, ::MIME"text/plain", nt::NamedTuple)
     recur_io_k = IOContext(recur_io, :typeinfo=>keytype(nt))
     recur_io_v = IOContext(recur_io, :typeinfo=>valtype(nt))
 
-    print(io, "NamedTuple with $(length(nt)) entries")
+    print(io, "$(length(nt))-element NamedTuple")
     isempty(nt) && return
     print(io, ":")
     show_circular(io, nt) && return
@@ -254,9 +254,14 @@ function show(io::IO, ::MIME"text/plain", nt::NamedTuple)
     end
 
     for (i, (k, v)) in enumerate(zip(keys(nt), nt))
-        print(io, "\n  ")
+        if i ==  1
+            print(io, "\n (")
+        else
+            print(io, "\n  ")
+        end
+
         if i == rows < length(nt)
-            print(io, rpad("⋮", keywidth), " => ⋮")
+            print(io, rpad("⋮", keywidth), "= ⋮ ")
             break
         end
 
@@ -275,6 +280,7 @@ function show(io::IO, ::MIME"text/plain", nt::NamedTuple)
             show(recur_io_v, v)
         end
     end
+    print(io, ")")
 end
 
 function summary(io::IO, t::AbstractSet)
