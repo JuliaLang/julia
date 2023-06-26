@@ -1078,12 +1078,19 @@ function getindex(view::TypesView, idx::NewSSAValue)
     return view.ir[idx][:type]
 end
 
+# N.B.: Don't make this <: Function to avoid ::Function deopt
+struct Refiner
+    result_flags::Vector{UInt8}
+    result_idx::Int
+end
+(this::Refiner)() = (this.result_flags[this.result_idx] |= IR_FLAG_REFINED; nothing)
+
 function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},
                                 processed_idx::Int, result_idx::Int,
                                 ssa_rename::Vector{Any}, used_ssas::Vector{Int},
                                 new_new_used_ssas::Vector{Int},
                                 do_rename_ssa::Bool,
-                                mark_refined!)
+                                mark_refined!::Union{Refiner, Nothing})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
@@ -1121,7 +1128,7 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
 end
 
 function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
-        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!)
+        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     id = val.id
     if do_rename_ssa
         if id > length(ssanums)
@@ -1131,7 +1138,7 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{In
     end
     if isa(val, Refined)
         val = val.val
-        mark_refined!()
+        mark_refined! !== nothing && mark_refined!()
     end
     if isa(val, SSAValue)
         used_ssas[val.id] += 1
@@ -1140,7 +1147,7 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{In
 end
 
 function renumber_ssa2(val::NewSSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
-        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!)
+        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     if val.id < 0
         new_new_used_ssas[-val.id] += 1
         return val
@@ -1150,7 +1157,7 @@ function renumber_ssa2(val::NewSSAValue, ssanums::Vector{Any}, used_ssas::Vector
     end
 end
 
-function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Vector{Int}, new_new_used_ssas::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool, mark_refined!)
+function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Vector{Int}, new_new_used_ssas::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     urs = userefs(stmt)
     for op in urs
         val = op[]
@@ -1259,11 +1266,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     stmt = inst[:inst]
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
-    ssa_rename[idx] = SSAValue(result_idx)
-    local mark_refined!
-    let result_idx=result_idx, result=result
-        mark_refined!() = result[result_idx][:flag] |= IR_FLAG_REFINED
-    end
+    mark_refined! = Refiner(result.flag, result_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
@@ -1271,6 +1274,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, GotoNode) && cfg_transforms_enabled
         label = bb_rename_succ[stmt.label]
         @assert label > 0
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
@@ -1279,10 +1283,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         if (flag & total_flags) == total_flags
             ssa_rename[idx] = stmt
         else
+            ssa_rename[idx] = SSAValue(result_idx)
             result[result_idx][:inst] = stmt
             result_idx += 1
         end
     elseif isa(stmt, GotoNode)
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, GotoIfNot) && cfg_transforms_enabled
@@ -1298,12 +1304,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 isa(cond, Bool) || @goto bail
             end
             if cond
+                ssa_rename[idx] = nothing
                 result[result_idx][:inst] = nothing
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
                 label = bb_rename_succ[stmt.dest]
                 @assert label > 0
+                ssa_rename[idx] = SSAValue(result_idx)
                 result[result_idx][:inst] = GotoNode(label)
                 kill_edge!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
@@ -1312,6 +1320,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             @label bail
             label = bb_rename_succ[stmt.dest]
             @assert label > 0
+            ssa_rename[idx] = SSAValue(result_idx)
             result[result_idx][:inst] = GotoIfNot(cond, label)
             result_idx += 1
         end
@@ -1326,9 +1335,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if isa(cond, Bool) && cond === true
                 # cond was folded to true - this statement
                 # is dead.
+                ssa_rename[idx] = nothing
                 return result_idx
             end
         end
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, PiNode)
@@ -1355,12 +1366,17 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 return result_idx
             end
         end
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)
         result_idx += 1
     elseif isa(stmt, PhiNode)
+        # N.B.: For PhiNodes, this needs to be at the top, since PhiNodes
+        # can self-reference.
+        ssa_rename[idx] = SSAValue(result_idx)
         if cfg_transforms_enabled
             # Rename phi node edges
             let bb_rename_pred=bb_rename_pred
@@ -1378,6 +1394,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             # not a value we can copy), we copy only the edges and (defined)
             # values we want to keep to new arrays initialized with undefined
             # elements.
+
             edges = Vector{Int32}(undef, length(stmt.edges))
             values = Vector{Any}(undef, length(stmt.values))
             new_index = 1
@@ -1421,6 +1438,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result_idx += 1
         end
     elseif isa(stmt, PhiCNode)
+        ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
