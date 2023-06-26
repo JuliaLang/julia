@@ -1289,3 +1289,18 @@ let src = code_typed1(immut50285, Tuple{Bool, Int, Float64})
     @test count(isnew, src.code) == 0
     @test count(iscall((src, typeassert)), src.code) == 0
 end
+
+function mut50285(b, x, y)
+    z = Ref{Any}()
+    if b
+       z[] = x
+    else
+       z[] = y
+    end
+    z[]::Union{Float64, Int}
+end
+
+let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, typeassert)), src.code) == 0
+end
