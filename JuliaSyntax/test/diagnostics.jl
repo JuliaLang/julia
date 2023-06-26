@@ -1,6 +1,6 @@
-function diagnostic(str; only_first=false, allow_multiple=false)
+function diagnostic(str; only_first=false, allow_multiple=false, rule=:all)
     stream = ParseStream(str)
-    parse!(stream)
+    parse!(stream, rule=rule)
     if allow_multiple
         stream.diagnostics
     else
@@ -52,7 +52,11 @@ end
         Diagnostic(6, 5, :error, "invalid macro name")
 
 	@test diagnostic("a, , b") ==
-        Diagnostic(4, 3, :error, "unexpected `,`")
+        Diagnostic(4, 4, :error, "unexpected `,`")
+    @test diagnostic(")", allow_multiple=true) == [
+        Diagnostic(1, 1, :error, "unexpected `)`")
+        Diagnostic(1, 1, :error, "extra tokens after end of expression")
+    ]
 
     @test diagnostic("if\nfalse\nend") ==
         Diagnostic(3, 3, :error, "missing condition in `if`")
@@ -99,6 +103,11 @@ end
 
     @test diagnostic("\"\$(x,y)\"") ==
         Diagnostic(3, 7, :error, "invalid interpolation syntax")
+
+    @test diagnostic("", rule=:statement) ==
+        Diagnostic(1, 0, :error, "premature end of input")
+    @test diagnostic("", rule=:atom) ==
+        Diagnostic(1, 0, :error, "premature end of input")
 end
 
 @testset "parser warnings" begin

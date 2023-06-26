@@ -115,6 +115,9 @@ end
     @test sprint(highlight, SourceFile("a\nα"), 1:4) == "┌\na\nα\n┘"
     @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n╙\nα"
 
+    # empty files
+    @test sprint(highlight, SourceFile(""), 1:0) == "└"
+
     # Multi-line ranges
     @test sprint(highlight, src, 1:7) == """
         ┌───
