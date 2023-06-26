@@ -1119,8 +1119,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-            compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        if lifted_val !== nothing
+            if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+                compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+            end
         end
     end
 
