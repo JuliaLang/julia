@@ -1446,18 +1446,8 @@ done:
         push_page_metadata_back(lazily_freed, pg);
     }
     else {
-    #ifdef _P64 // only enable concurrent sweeping on 64bit
-        if (jl_n_sweepthreads == 0) {
-            jl_gc_free_page(pg);
-            push_lf_page_metadata_back(&global_page_pool_freed, pg);
-        }
-        else {
-            push_lf_page_metadata_back(&global_page_pool_lazily_freed, pg);
-        }
-    #else
-        jl_gc_free_page(pg);
-        push_lf_page_metadata_back(&global_page_pool_freed, pg);
-    #endif
+        // Concurrent page freeing (either supported by a GC thread or delayed until after STW)
+        push_lf_page_metadata_back(&global_page_pool_lazily_freed, pg);
     }
     gc_time_count_page(freedall, pg_skpd);
     gc_num.freed += (nfree - old_nfree) * osize;
@@ -3448,6 +3438,21 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
+
+    // Run concurrent page freeing
+    #ifdef _P64
+        int do_concurrent = jl_n_sweepthreads == 0;
+    #else
+        int do_concurrent = 1;
+    #endif
+    while (do_concurrent) {
+        jl_gc_pagemeta_t *pg = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
+        if (pg == NULL) {
+            break;
+        }
+        jl_gc_free_page(pg);
+        push_lf_page_metadata_back(&global_page_pool_freed, pg);
+    }
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
