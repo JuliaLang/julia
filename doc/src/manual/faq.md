@@ -22,9 +22,21 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-Julia's public API is the behavior described in docstrings of symbols exported from `Base`
+Julia's public API is the behavior described in documentation of symbols exported from `Base`
 and the standard libraries. Functions, types, and constants are not part of the public
-API if they are not exported, _even if they have docstrings_.
+API if they are not exported, _even if they have docstrings_. Further, only the documented
+behavior of exported symbols is part of the public API. Undocumented behavior of exported
+symbols is internal.
+
+In other words:
+
+- Documented behavior of exported symbols is part of the public API.
+
+- Undocumented behavior of exported symbols is not part of the public API.
+
+- Documented behavior of unexported symbols is not part of the public API.
+
+- Undocumented behavior of unexported symbols is not part of the public API.
 
 You can get a complete list of the symbols exported from a module with `names(MyModule)`.
 
