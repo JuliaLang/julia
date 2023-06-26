@@ -1119,9 +1119,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        if !isa(compact[SSAValue(idx)][:type], Const)
-            # Cheap heuristic: Calls already known to be `Const` are not
-            # considered refined.
+        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
             compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
         end
     end
