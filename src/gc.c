@@ -1415,6 +1415,8 @@ static inline jl_taggedvalue_t *reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *
     pg->has_marked = 0;
     pg->fl_begin_offset = -1;
     pg->fl_end_offset = -1;
+    pg->prev_nold = 0;
+    pg->nold = 0;
     return beg;
 }
 
