@@ -405,9 +405,9 @@ end
 UnitRange{T}(start, stop) where {T<:Real} = UnitRange{T}(convert(T, start), convert(T, stop))
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 function UnitRange(start, stop)
-    a, b = promote(start, stop)
-    not_sametype((start, stop), (a, b))
-    UnitRange(a, b)
+    startstop_promoted = promote(start, stop)
+    not_sametype((start, stop), startstop_promoted)
+    UnitRange(startstop_promoted...)
 end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
