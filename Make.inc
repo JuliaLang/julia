@@ -764,7 +764,7 @@ endif
 ifeq ($(WITH_ITTAPI), 1)
 JCXXFLAGS += -DUSE_ITTAPI
 JCFLAGS += -DUSE_ITTAPI
-LIBITTAPI:=-littnotify
+LIBITTAPI:=-l:libittnotify.a
 endif
 
 ifeq ($(WITH_TRACY), 1)
@@ -782,6 +782,8 @@ ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
 endif
+
+LIBURING:=-l:liburing.a
 
 # ===========================================================================
 

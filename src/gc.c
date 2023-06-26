@@ -6,6 +6,7 @@
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
+#include "liburing.h"
 
 #ifdef __cplusplus
 extern "C" {
