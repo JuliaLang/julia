@@ -38,6 +38,7 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
+const LOCALEPOCH = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at UTC 1970-01-01T00:00:00
 
 """
     unix2datetime(x) -> DateTime
@@ -48,6 +49,11 @@ corresponding `DateTime`.
 function unix2datetime(x)
     # Rounding should match `now` below
     rata = UNIXEPOCH + trunc(Int64, Int64(1000) * x)
+    return DateTime(UTM(rata))
+end
+
+function unix2datetime_local(x::Real)
+    rata = LOCALEPOCH + trunc(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
 
