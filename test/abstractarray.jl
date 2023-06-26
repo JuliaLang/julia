@@ -236,6 +236,19 @@ end
     end
 end
 
+@testset "AbstractArray fallbacks for CartesianIndices" begin
+    @test ndims(CartesianIndices{3}) == 3
+    @test eltype(CartesianIndices{3}) == CartesianIndex{3}
+    for t in ((1:2, 1:2), (3:4,), ())
+        C2 = CartesianIndices(t)
+        @test ndims(C2) == length(t)
+        @test ndims(typeof(C2)) == length(t)
+        @test IndexStyle(C2) == IndexCartesian()
+        @test eltype(C2) == CartesianIndex{length(t)}
+        @test Base.IteratorSize(C2) isa Base.HasShape{length(t)}
+    end
+end
+
 @testset "LinearIndices" begin
     @testset "constructors" begin
         for oinds in [
