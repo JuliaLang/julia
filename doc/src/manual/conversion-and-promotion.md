@@ -180,7 +180,7 @@ Note that implicit type conversion requires `import Base.convert`:
 ```julia
 module Test
   import Base.convert #necessary for implicit conversion
-  type MyType <: Number
+  struct MyType <: Number
     n :: Int
   end
   #       DESIRED      GIVEN        HOW
