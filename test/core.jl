@@ -8033,3 +8033,10 @@ bar50250(b, y) = (b ? Bar50250(y, y) : Bar50250(y)).x
 @test_throws UndefRefError foo50250(false, 1)
 @test bar50250(true, 1) === 1
 @test_throws UndefRefError bar50250(false, 1)
+
+# Test that Type{typeof(Union{})} doesn't get codegen'ed as a constant (#50293)
+baz50293(x::Union{Type, Core.Const}) = Base.issingletontype(x)
+bar50293(@nospecialize(u)) = (Base.issingletontype(u.a), baz50293(u.a))
+let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
+    @test ab[1] == ab[2] == false
+end
