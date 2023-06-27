@@ -54,10 +54,13 @@ function unix2datetime(x::Real; local_time::Bool=false)
 end
 
 """
-    datetime2unix(dt::DateTime) -> Float64
+    datetime2unix(dt::DateTime; local_time::Bool=false) -> Float64
 
 Take the given `DateTime` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
+
+If `local_time` is `true`, then the number of seconds since the local epoch
+corresponding to unix epoch `1970-01-01T00:00:00` is returned.
 """
 function datetime2unix(dt::DateTime; local_time::Bool=false)
     return (value(dt) - (local_time ? LOCALEPOCH : UNIXEPOCH)) / 1000.0
