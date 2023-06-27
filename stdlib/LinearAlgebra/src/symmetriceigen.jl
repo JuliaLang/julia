@@ -156,6 +156,11 @@ end
 eigmax(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, 1:1)[1]
 
+function eigen(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigen!(eigencopy_oftype{S}(A), eigencopy_oftype(B, S); kws...)
+end
+
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
@@ -164,17 +169,15 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
-function eigen(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigen!(Matrix{T}(A), eigencopy_oftype(B, T); sortby)
-end
-function eigen(A::AbstractMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigen!(eigencopy_oftype(A, T), Matrix{T}(B); sortby)
-end
 
-function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), C; sortby)
+function eigen(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigen!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
 end
-function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
     # Cholesky decomposition based eigenvalues and eigenvectors
     vals, w = eigen!(UtiAUi!(A, C.U))
     vecs = C.U \ w
@@ -186,6 +189,11 @@ UtiAUi!(A, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
 UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
 _UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
+
+function eigvals(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigen!(eigencopy_oftype{S}(A), eigencopy_oftype(B, S); kws...)
+end
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
@@ -199,17 +207,12 @@ function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,N
 end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
-# Note: No specilized LAPACK routines for Matrix+Symmetric and Symmetric+Matrix exist. Hence, the calls are forwarded to conventional Matrix eigvals!
-function eigvals(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigvals!(eigencopy_oftype(A, T), Matrix{T}(B); sortby)
-end
-
-function eigvals(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigvals!(Matrix{T}(A), eigencopy_oftype(B, T); sortby)
-end
-
-function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(eigencopy_oftype(A, T), C; sortby)
+function eigvals(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigvals!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigvals!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
 end
 function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Cholesky decomposition based eigenvalues
