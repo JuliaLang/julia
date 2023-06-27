@@ -1718,6 +1718,16 @@ end
     end
 end
 
+@testset "stat! buffer resizing" begin
+    mktempdir() do dir
+        buf = UInt8[]
+        @test length(buf) < Base.Filesystem.STAT_BUFFER_SIZE
+        stat!(buf, dir)
+        @test length(buf) == Base.Filesystem.STAT_BUFFER_SIZE
+        @test iszero(@allocated stat!(buf, dir))
+    end
+end
+
 @testset "diskstat() works" begin
     # Sanity check assuming disk is smaller than 32PB
     PB = Int64(2)^44
