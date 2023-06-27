@@ -1,7 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
+
 # RUN: julia --startup-file=no %s %t
-# RUN: cat %t/* | FileCheck %s
+# RUN: cat %t/* | FileCheck %s --check-prefixes=CHECK,TYPED
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
+
+# RUN: julia --startup-file=no %s %t
+# RUN: cat %t/* | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
@@ -28,7 +35,8 @@ emit(foo, Float16)
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
 
 # CHECK: define
@@ -46,7 +54,8 @@ emit(foo, NTuple{2, Float16})
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
 
 # CHECK: define
@@ -64,16 +73,20 @@ emit(foo, NTuple{2, VecElement{Float16}})
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
 
 # CHECK: define
-# CHECK-SAME: i8 addrspace(3)* @julia_foo
+# TYPED-SAME: i8 addrspace(3)* @julia_foo
+# OPAQUE-SAME: ptr addrspace(3) @julia_foo
 # CHECK-SAME: {
 # CHECK-NOT: define
-# CHECK: [[FOO_RET:%.*]] call i8 addrspace(3)* @foo(i8 addrspace(3)* [[FOO_ARG:%.*]])
+# TYPED: [[FOO_RET:%.*]] call i8 addrspace(3)* @foo(i8 addrspace(3)* [[FOO_ARG:%.*]])
+# OPAQUE: [[FOO_RET:%.*]] call ptr addrspace(3) @foo(ptr addrspace(3) [[FOO_ARG:%.*]])
 # CHECK-NOT: define
-# CHECK: ret i8 addrspace(3)*
+# TYPED: ret i8 addrspace(3)*
+# OPAQUE: ret ptr addrspace(3)
 # CHECK-NOT: define
 # CHECK: }
 emit(foo, Core.LLVMPtr{Float32, 3})
@@ -82,7 +95,8 @@ emit(foo, Core.LLVMPtr{Float32, 3})
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
 
 # CHECK: define
@@ -100,12 +114,14 @@ emit(foo, Foo)
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
 
 # CHECK: define
 # CHECK-SAME: <2 x half> @julia_bar
-# CHECK-SAME: [2 x half]
+# TYPED-SAME: [2 x half]
+# OPAQUE-SAME: ptr
 # CHECK-SAME: {
 # CHECK-NOT: define
 # CHECK: ret <2 x half>
@@ -117,5 +133,6 @@ emit(bar, NTuple{2, Float16})
 # CHECK-NOT: {
 # CHECK-NOT: }
 # CHECK: define
-# CHECK-SAME: nonnull {} addrspace(10)* @jfptr
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {

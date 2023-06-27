@@ -190,6 +190,9 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
                 rename = compact.ssa_rename[defssa.id]
+                if isa(rename, Refined)
+                    rename = rename.val
+                end
                 if isa(rename, AnySSAValue)
                     defssa = rename
                     continue
@@ -364,7 +367,7 @@ const LiftedDefs = IdDict{Any, Bool}
 
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
-function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field::Int,
+function lift_leaves(compact::IncrementalCompact, field::Int,
                      leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
@@ -394,15 +397,6 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field
                         continue
                     end
                     return nothing
-                    # Expand the Expr(:new) to include it's element Expr(:new) nodes up until the one we want
-                    compact[leaf] = nothing
-                    for i = (length(def.args) + 1):(1+field)
-                        ftyp = fieldtype(typ, i - 1)
-                        isbitstype(ftyp) || return nothing
-                        ninst = effect_free(NewInstruction(Expr(:new, ftyp), result_t))
-                        push!(def.args, insert_node!(compact, leaf, ninst))
-                    end
-                    compact[leaf] = def
                 end
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
@@ -472,6 +466,9 @@ function lift_arg!(
         lifted = OldSSAValue(lifted.id)
         if already_inserted(compact, lifted)
             lifted = compact.ssa_rename[lifted.id]
+            if isa(lifted, Refined)
+                lifted = lifted.val
+            end
         end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -490,6 +487,9 @@ end
 function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
     if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
         leaf = compact.ssa_rename[leaf.id]
+        if isa(leaf, Refined)
+            leaf = leaf.val
+        end
         if isa(leaf, AnySSAValue)
             leaf = simple_walk(compact, leaf)
         end
@@ -895,6 +895,14 @@ end
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
 
+struct IntermediaryCollector
+    intermediaries::SPCSet
+end
+function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
+    push!(this.intermediaries, ssa.id)
+    return false
+end
+
 """
     sroa_pass!(ir::IRCode) -> newir::IRCode
 
@@ -1022,7 +1030,6 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-
         struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
@@ -1039,14 +1046,12 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             continue
         end
 
+
         # analyze this mutable struct here for the later pass
         if ismutabletype(struct_typ)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
-                callback = function (@nospecialize(pi), @nospecialize(ssa))
-                    push!(intermediaries, ssa.id)
-                    return false
-                end
+                callback = IntermediaryCollector(intermediaries)
                 def = simple_walk(compact, val, callback)
                 # Mutable stuff here
                 isa(def, SSAValue) || continue
@@ -1080,10 +1085,15 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
         isempty(leaves) && continue
 
-        result_t = argextype(SSAValue(idx), compact)
-        lifted_result = lift_leaves(compact, result_t, field, leaves, 𝕃ₒ)
+        lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
+
+        result_t = Union{}
+        for v in values(lifted_leaves)
+            v === nothing && continue
+            result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+        end
 
         lifted_val = perform_lifting!(compact,
             visited_philikes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
@@ -1098,7 +1108,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
                 def_val = perform_lifting!(compact,
-                    visited_philikes, field, def_lifting_cache, result_t, lifted_leaves_def, val, lazydomtree).val
+                    visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree).val
             end
             insert_node!(compact, SSAValue(idx), non_effect_free(NewInstruction(
                 Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing)))
@@ -1109,7 +1119,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        if lifted_val !== nothing
+            if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+                compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+            end
+        end
     end
 
     non_dce_finish!(compact)
@@ -1322,6 +1336,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree, inlining::Union{Nothing, InliningState})
+    𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     lazypostdomtree = LazyPostDomtree(ir)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -1477,11 +1492,14 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 end
                 for b in phiblocks
                     n = ir[phinodes[b]][:inst]::PhiNode
+                    result_t = Bottom
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
+                        v = compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, p)
+                        push!(n.values, v)
+                        result_t = tmerge(𝕃ₒ, result_t, argextype(v, ir))
                     end
+                    ir[phinodes[b]][:type] = result_t
                 end
             end
             all_eliminated || continue
@@ -2122,7 +2140,7 @@ function cfg_simplify!(ir::IRCode)
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
                     processed_idx = i
-                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
+                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
                     sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))

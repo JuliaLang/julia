@@ -122,7 +122,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     rt = nothing
     if isa(inst, Expr)
         head = inst.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew
+        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, irsv)
             ir.stmts[idx][:flag] |= flags_for_effects(effects)
         elseif head === :invoke
@@ -149,7 +149,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     elseif isa(inst, GlobalRef)
         # GlobalRef is not refinable
     else
-        error("reprocess_instruction!: unhandled instruction found")
+        rt = argextype(inst, irsv.ir)
     end
     if rt !== nothing
         if isa(rt, Const)

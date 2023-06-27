@@ -1,7 +1,10 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
+
+; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 
 define i64 @getindex({} addrspace(10)* nonnull align 16 dereferenceable(40)) {
@@ -34,7 +37,8 @@ top:
 define nonnull {} addrspace(10)* @constexpr(i64) {
 ; CHECK-LABEL: @constexpr
 top:
-; CHECK: call {}* inttoptr (i64 139806640486784 to {}* ({}*, i64)*)({}* inttoptr (i64 139806425039920 to {}*), i64 1)
+; TYPED: call {}* inttoptr (i64 139806640486784 to {}* ({}*, i64)*)({}* inttoptr (i64 139806425039920 to {}*), i64 1)
+; OPAQUE: call ptr inttoptr (i64 139806640486784 to ptr)(ptr inttoptr (i64 139806425039920 to ptr), i64 1)
   %1 = call {} addrspace(10)* inttoptr (i64 139806640486784 to {} addrspace(10)* ({} addrspace(10)*, i64)*)({} addrspace(10)* addrspacecast ({}* inttoptr (i64 139806425039920 to {}*) to {} addrspace(10)*), i64 1)
 ; CHECK-NOT: addrspacecast
 ; CHECK-NOT: addrspace
@@ -63,23 +67,23 @@ top:
   %c.cdr = getelementptr %list, %list* %c, i32 0, i32 1
 ; COM: Allow remove-addrspaces to rename the type but expect it to use the same prefix.
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %a
+; TYPED-SAME: %list* %a
+; OPAQUE-SAME: ptr %a
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %a
+; TYPED-SAME: %list* %a
+; OPAQUE-SAME: ptr %a
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %b
+; TYPED-SAME: %list* %b
+; OPAQUE-SAME: ptr %b
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %b
+; TYPED-SAME: %list* %b
+; OPAQUE-SAME: ptr %b
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %c
+; TYPED-SAME: %list* %c
+; OPAQUE-SAME: ptr %c
 ; CHECK: getelementptr %list
-; CHECK-SAME: %list
-; CHECK-SAME: * %c
+; TYPED-SAME: %list* %c
+; OPAQUE-SAME: ptr %c
   store i64 111, i64* %a.car
   store i64 222, i64* %b.car
   store i64 333, i64* %c.car
@@ -108,7 +112,8 @@ exit:
 
 ; COM: check that address spaces in byval types are processed correctly
 define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} addrspace(10)*]) %0) {
-; CHECK: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
+; TYPED: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
+; OPAQUE: define void @byval_type(ptr byval([1 x ptr]) %0)
   ret void
 }
 
