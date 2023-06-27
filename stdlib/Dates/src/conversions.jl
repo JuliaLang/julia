@@ -59,7 +59,9 @@ end
 Take the given `DateTime` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 """
-datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
+function datetime2unix(dt::DateTime; local_time::Bool=false)
+    return (value(dt) - (local_time ? LOCALEPOCH : UNIXEPOCH)) / 1000.0
+end
 
 """
     now() -> DateTime
