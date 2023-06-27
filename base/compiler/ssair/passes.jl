@@ -730,7 +730,7 @@ function perform_lifting!(compact::IncrementalCompact,
             new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
             new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
 
-            ssa = insert_node!(compact, old_ssa, new_inst)
+            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
         end
         # lifting_cache[ckey] = ssa
@@ -766,6 +766,21 @@ function perform_lifting!(compact::IncrementalCompact,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
             else_result = lifted_value(compact, old_node_ssa, else_result,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
+
+            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
+            # to a PiNode from a guarding conditional, replace with the remaining branch.
+            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
+                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
+
+                # Replace Core.ifelse(%cond, %a, %b) with %a
+                compact[lf.ssa][:inst] = only_result
+                should_count && _count_added_node!(compact, only_result)
+
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # we have not deleted the preceding statement that this was derived from, this
+                # replacement is safe, i.e. it will not affect the effects observed.
+                continue
+            end
 
             @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
             @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
