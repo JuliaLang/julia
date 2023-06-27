@@ -347,11 +347,8 @@ struct JuliaLICM : public JuliaPassContext {
                     auto align = Align(DL.getPointerSize(0));
                     auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
                     if (MSSAU.getMemorySSA()) {
-                        auto alloc_mdef = MSSAU.getMemorySSA()->getMemoryAccess(call);
-                        assert(isa<MemoryDef>(alloc_mdef) && "Expected alloc to be associated with a memory def!");
-                        auto clear_mdef = MSSAU.createMemoryAccessAfter(clear_obj, nullptr, alloc_mdef);
-                        assert(isa<MemoryDef>(clear_mdef) && "Expected memset to be associated with a memory def!");
-                        (void) clear_mdef;
+                        auto clear_mdef = MSSAU.createMemoryAccessInBB(clear_obj, nullptr, clear_obj->getParent(), MemorySSA::BeforeTerminator);
+                        MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
                 }
