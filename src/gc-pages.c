@@ -4,6 +4,9 @@
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif
+#ifdef USE_LIBURING
+#include "liburing.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -151,26 +154,37 @@ exit:
     return meta;
 }
 
-// return a page to the freemap allocator
-void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+void* jl_gc_free_page_prequel(jl_gc_pagemeta_t *pg, size_t *decommit_size) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
     gc_alloc_map_set((char*)p, 0);
     // tell the OS we don't need these pages right now
-    size_t decommit_size = GC_PAGE_SZ;
+    *decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {
         // ensure so we don't release more memory than intended
         size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
-        decommit_size = jl_page_size;
+        *decommit_size = jl_page_size;
         void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
         p = otherp;
         while (n_pages--) {
             if (gc_alloc_map_is_set((char*)otherp)) {
-                return;
+                return NULL;
             }
             otherp = (void*)((char*)otherp + GC_PAGE_SZ);
         }
     }
+    return p;
+}
+
+
+// return a page to the freemap allocator
+void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    size_t decommit_size;
+    void *p = jl_gc_free_page_prequel(pg, &decommit_size);
+    if (!p)
+        return;
+
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #elif defined(MADV_FREE)

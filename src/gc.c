@@ -6,7 +6,9 @@
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
+#ifdef USE_LIBURING
 #include "liburing.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -2969,48 +2971,37 @@ static void sweep_finalizer_list(arraylist_t *list)
     list->len = j;
 }
 
-static void flush_lazily_pages(void) {
+#ifdef USE_LIBURING
+int flush_pages_lazily_uring(void) {
     struct io_uring ring;
-	struct io_uring_sqe *sqe;
+    struct io_uring_sqe *sqe;
 	struct io_uring_cqe *cqe;
 
     int QueueDepth = 4;
     int ret;
+    int pending = 0;
+    size_t decommit_size;
+
     ret = io_uring_queue_init(QueueDepth, &ring, 0);
 
     if (ret < 0) {
         // io_uring not supported under rr...
         fprintf(stderr, "Queue not available");
-        goto flush_madvise;
+        return 0;
 	}
 
-    int pending = 0;
     while (1) {
         jl_gc_pagemeta_t *pg = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
         if (pg == NULL) {
             break;
         }
-
-        void *p = pg->data;
-        gc_alloc_map_set((char*)p, 0);
-        // tell the OS we don't need these pages right now
-        size_t decommit_size = GC_PAGE_SZ;
-        if (GC_PAGE_SZ < jl_page_size) {
-            // ensure so we don't release more memory than intended
-            size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
-            decommit_size = jl_page_size;
-            void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
-            p = otherp;
-            while (n_pages--) {
-                if (gc_alloc_map_is_set((char*)otherp)) {
-                    return;
-                }
-                otherp = (void*)((char*)otherp + GC_PAGE_SZ);
-            }
-        }
+        void *p = jl_gc_free_page_prequel(pg, &decommit_size);
+        if (!p)
+            continue;
 
         sqe = io_uring_get_sqe(&ring);
         if (!sqe) {
+            // Queue is full, submit
             ret = io_uring_submit(&ring);
             if (ret < 0)
                 fprintf(stderr, "Failed to submit");
@@ -3036,9 +3027,15 @@ static void flush_lazily_pages(void) {
         io_uring_cqe_seen(&ring, cqe);
     }
     io_uring_queue_exit(&ring);
-    return;
+    return 1;
+}
+#endif
 
-flush_madvise:
+static void flush_lazily_pages(void) {
+#ifdef USE_LIBURING
+    if (flush_pages_lazily_uring())
+        return;
+#endif
     while (1) {
         jl_gc_pagemeta_t *pg = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
         if (pg == NULL) {

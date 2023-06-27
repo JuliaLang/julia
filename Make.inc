@@ -444,6 +444,12 @@ USE_PERF_JITEVENTS ?= 0
 USE_INTEL_JITEVENTS ?= 0
 endif
 
+ifeq ("$(OS)", "Linux")
+USE_LIBURING ?= 1
+else
+USE_LIBURING ?= 0
+endif
+
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
@@ -782,8 +788,6 @@ ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
 endif
-
-LIBURING:=-l:liburing.a
 
 # ===========================================================================
 
@@ -1167,6 +1171,12 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 1)
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
+endif
+
+ifeq ($(USE_LIBURING), 1)
+JCXXFLAGS += -DUSE_LIBURING
+JCFLAGS += -DUSE_LIBURING
+LIBURING:=-l:liburing.a
 endif
 
 # We need python for things like BB triplet recognition.  We don't really care
