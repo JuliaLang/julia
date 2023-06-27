@@ -723,7 +723,7 @@ endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
-SANITIZE_LDFLAGS += -fsanitize=address
+SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
@@ -1499,6 +1499,12 @@ endef
 
 # Overridable in Make.user
 WINE ?= wine
+
+ifeq ($(BINARY),32)
+HEAPLIM := --heap-size-hint=500M
+else
+HEAPLIM :=
+endif
 
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS

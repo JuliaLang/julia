@@ -35,6 +35,7 @@ convert(::Type{AbstractQ{T}}, adjQ::AdjointQ{T}) where {T} = adjQ
 convert(::Type{AbstractQ{T}}, adjQ::AdjointQ) where {T} = convert(AbstractQ{T}, adjQ.Q)'
 
 # ... to matrix
+collect(Q::AbstractQ) = copyto!(Matrix{eltype(Q)}(undef, size(Q)), Q)
 Matrix{T}(Q::AbstractQ) where {T} = convert(Matrix{T}, Q*I) # generic fallback, yields square matrix
 Matrix{T}(adjQ::AdjointQ{S}) where {T,S} = convert(Matrix{T}, lmul!(adjQ, Matrix{S}(I, size(adjQ))))
 Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
@@ -55,6 +56,15 @@ function size(Q::AbstractQ, dim::Integer)
     end
 end
 size(adjQ::AdjointQ) = reverse(size(adjQ.Q))
+
+# comparison
+(==)(Q::AbstractQ, A::AbstractMatrix) = lmul!(Q, Matrix{eltype(Q)}(I, size(A))) == A
+(==)(A::AbstractMatrix, Q::AbstractQ) = Q == A
+(==)(Q::AbstractQ, P::AbstractQ) = Matrix(Q) == Matrix(P)
+isapprox(Q::AbstractQ, A::AbstractMatrix; kwargs...) =
+    isapprox(lmul!(Q, Matrix{eltype(Q)}(I, size(A))), A, kwargs...)
+isapprox(A::AbstractMatrix, Q::AbstractQ; kwargs...) = isapprox(Q, A, kwargs...)
+isapprox(Q::AbstractQ, P::AbstractQ; kwargs...) = isapprox(Matrix(Q), Matrix(P), kwargs...)
 
 # pseudo-array behaviour, required for indexing with `begin` or `end`
 axes(Q::AbstractQ) = map(Base.oneto, size(Q))
@@ -125,14 +135,31 @@ function show(io::IO, ::MIME{Symbol("text/plain")}, Q::AbstractQ)
 end
 
 # multiplication
+# generically, treat AbstractQ like a matrix with its definite size
+qsize_check(Q::AbstractQ, B::AbstractVecOrMat) =
+    size(Q, 2) == size(B, 1) ||
+        throw(DimensionMismatch("second dimension of Q, $(size(Q,2)), must coincide with first dimension of B, $(size(B,1))"))
+qsize_check(A::AbstractVecOrMat, Q::AbstractQ) =
+    size(A, 2) == size(Q, 1) ||
+        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must coincide with first dimension of Q, $(size(Q,1))"))
+qsize_check(Q::AbstractQ, P::AbstractQ) =
+    size(Q, 2) == size(P, 1) ||
+        throw(DimensionMismatch("second dimension of A, $(size(Q,2)), must coincide with first dimension of B, $(size(P,1))"))
+
 (*)(Q::AbstractQ, J::UniformScaling) = Q*J.λ
 function (*)(Q::AbstractQ, b::Number)
     T = promote_type(eltype(Q), typeof(b))
     lmul!(convert(AbstractQ{T}, Q), Matrix{T}(b*I, size(Q)))
 end
-function (*)(A::AbstractQ, B::AbstractVecOrMat)
-    T = promote_type(eltype(A), eltype(B))
-    lmul!(convert(AbstractQ{T}, A), copy_similar(B, T))
+function (*)(Q::AbstractQ, B::AbstractVector)
+    T = promote_type(eltype(Q), eltype(B))
+    qsize_check(Q, B)
+    mul!(similar(B, T, size(Q, 1)), convert(AbstractQ{T}, Q), B)
+end
+function (*)(Q::AbstractQ, B::AbstractMatrix)
+    T = promote_type(eltype(Q), eltype(B))
+    qsize_check(Q, B)
+    mul!(similar(B, T, (size(Q, 1), size(B, 2))), convert(AbstractQ{T}, Q), B)
 end
 
 (*)(J::UniformScaling, Q::AbstractQ) = J.λ*Q
@@ -140,21 +167,28 @@ function (*)(a::Number, Q::AbstractQ)
     T = promote_type(typeof(a), eltype(Q))
     rmul!(Matrix{T}(a*I, size(Q)), convert(AbstractQ{T}, Q))
 end
-*(a::AbstractVector, Q::AbstractQ) = reshape(a, length(a), 1) * Q
+function (*)(A::AbstractVector, Q::AbstractQ)
+    T = promote_type(eltype(A), eltype(Q))
+    qsize_check(A, Q)
+    return mul!(similar(A, T, length(A)), A, convert(AbstractQ{T}, Q))
+end
 function (*)(A::AbstractMatrix, Q::AbstractQ)
     T = promote_type(eltype(A), eltype(Q))
-    return rmul!(copy_similar(A, T), convert(AbstractQ{T}, Q))
+    qsize_check(A, Q)
+    return mul!(similar(A, T, (size(A, 1), size(Q, 2))), A, convert(AbstractQ{T}, Q))
 end
 (*)(u::AdjointAbsVec, Q::AbstractQ) = (Q'u')'
 
 ### Q*Q (including adjoints)
-*(Q::AbstractQ, P::AbstractQ) = Q * (P*I)
+(*)(Q::AbstractQ, P::AbstractQ) = Q * (P*I)
 
 ### mul!
-function mul!(C::AbstractVecOrMat{T}, Q::AbstractQ{T}, B::Union{AbstractVecOrMat{T},AbstractQ{T}}) where {T}
+function mul!(C::AbstractVecOrMat{T}, Q::AbstractQ{T}, B::Union{AbstractVecOrMat,AbstractQ}) where {T}
     require_one_based_indexing(C, B)
-    mB = size(B, 1)
-    mC = size(C, 1)
+    mB, nB = size(B, 1), size(B, 2)
+    mC, nC = size(C, 1), size(C, 2)
+    qsize_check(Q, B)
+    nB != nC && throw(DimensionMismatch())
     if mB < mC
         inds = CartesianIndices(axes(B))
         copyto!(view(C, inds), B)
@@ -164,9 +198,21 @@ function mul!(C::AbstractVecOrMat{T}, Q::AbstractQ{T}, B::Union{AbstractVecOrMat
         return lmul!(Q, copyto!(C, B))
     end
 end
-mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
-mul!(C::AbstractVecOrMat{T}, adjQ::AdjointQ{T}, B::AbstractVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
-mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, adjQ::AdjointQ{T}) where {T} = rmul!(copyto!(C, A), adjQ)
+function mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat, Q::AbstractQ{T}) where {T}
+    require_one_based_indexing(C, A)
+    mA, nA = size(A, 1), size(A, 2)
+    mC, nC = size(C, 1), size(C, 2)
+    mA != mC && throw(DimensionMismatch())
+    qsize_check(A, Q)
+    if nA < nC
+        inds = CartesianIndices(axes(A))
+        copyto!(view(C, inds), A)
+        C[CartesianIndices((axes(C, 1), nA+1:nC))] .= zero(T)
+        return rmul!(C, Q)
+    else
+        return rmul!(copyto!(C, A), Q)
+    end
+end
 
 ### division
 \(Q::AbstractQ, A::AbstractVecOrMat) = Q'*A
@@ -319,7 +365,7 @@ rmul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,<:StridedMatrix}) where {T<:BlasF
     LAPACK.gemqrt!('R', 'N', B.factors, B.T, A)
 rmul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,<:StridedMatrix}) where {T<:BlasFloat} =
     LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
-function rmul!(A::AbstractMatrix, Q::QRPackedQ)
+function rmul!(A::AbstractVecOrMat, Q::QRPackedQ)
     require_one_based_indexing(A)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
@@ -354,7 +400,7 @@ rmul!(A::StridedVecOrMat{T}, adjQ::AdjointQ{<:Any,<:QRPackedQ{T}}) where {T<:Bla
     (Q = adjQ.Q; LAPACK.ormqr!('R', 'T', Q.factors, Q.τ, A))
 rmul!(A::StridedVecOrMat{T}, adjQ::AdjointQ{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
     (Q = adjQ.Q; LAPACK.ormqr!('R', 'C', Q.factors, Q.τ, A))
-function rmul!(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:QRPackedQ})
+function rmul!(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:QRPackedQ})
     require_one_based_indexing(A)
     Q = adjQ.Q
     mQ, nQ = size(Q.factors)
@@ -459,42 +505,12 @@ lmul!(adjQ::AdjointQ{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}
 rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::AdjointQ{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # flexible left-multiplication (and adjoint right-multiplication)
-function (*)(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, b::AbstractVector)
-    T = promote_type(eltype(Q), eltype(b))
-    if size(Q.factors, 1) == length(b)
-        bnew = copy_similar(b, T)
-    elseif size(Q.factors, 2) == length(b)
-        bnew = [b; zeros(T, size(Q.factors, 1) - length(b))]
-    else
-        throw(DimensionMismatch("vector must have length either $(size(Q.factors, 1)) or $(size(Q.factors, 2))"))
-    end
-    lmul!(convert(AbstractQ{T}, Q), bnew)
-end
-function (*)(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, B::AbstractMatrix)
-    T = promote_type(eltype(Q), eltype(B))
-    if size(Q.factors, 1) == size(B, 1)
-        Bnew = copy_similar(B, T)
-    elseif size(Q.factors, 2) == size(B, 1)
-        Bnew = [B; zeros(T, size(Q.factors, 1) - size(B,1), size(B, 2))]
-    else
-        throw(DimensionMismatch("first dimension of matrix must have size either $(size(Q.factors, 1)) or $(size(Q.factors, 2))"))
-    end
-    lmul!(convert(AbstractQ{T}, Q), Bnew)
-end
-function (*)(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}})
-    Q = adjQ.Q
-    T = promote_type(eltype(A), eltype(adjQ))
-    adjQQ = convert(AbstractQ{T}, adjQ)
-    if size(A, 2) == size(Q.factors, 1)
-        AA = copy_similar(A, T)
-        return rmul!(AA, adjQQ)
-    elseif size(A, 2) == size(Q.factors, 2)
-        return rmul!([A zeros(T, size(A, 1), size(Q.factors, 1) - size(Q.factors, 2))], adjQQ)
-    else
-        throw(DimensionMismatch("matrix A has dimensions $(size(A)) but Q-matrix B has dimensions $(size(adjQ))"))
-    end
-end
-(*)(u::AdjointAbsVec, Q::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}}) = (Q'u')'
+qsize_check(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, B::AbstractVecOrMat) =
+    size(B, 1) in size(Q.factors) ||
+        throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+qsize_check(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}}) =
+    (Q = adjQ.Q; size(A, 2) in size(Q.factors) ||
+        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))")))
 
 det(Q::HessenbergQ) = _det_tau(Q.τ)
 
@@ -518,50 +534,6 @@ convert(::Type{AbstractQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
 size(Q::LQPackedQ) = (n = size(Q.factors, 2); return n, n)
 
 ## Multiplication
-### QB / QcB
-lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    (A = adjA.Q; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
-lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-    (A = adjA.Q; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
-
-function (*)(adjA::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractVector)
-    A = adjA.Q
-    T = promote_type(eltype(A), eltype(B))
-    if length(B) == size(A.factors, 2)
-        C = copy_similar(B, T)
-    elseif length(B) == size(A.factors, 1)
-        C = [B; zeros(T, size(A.factors, 2) - size(A.factors, 1), size(B, 2))]
-    else
-        throw(DimensionMismatch("length of B, $(length(B)), must equal one of the dimensions of A, $(size(A))"))
-    end
-    lmul!(convert(AbstractQ{T}, adjA), C)
-end
-function (*)(adjA::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractMatrix)
-    A = adjA.Q
-    T = promote_type(eltype(A), eltype(B))
-    if size(B,1) == size(A.factors,2)
-        C = copy_similar(B, T)
-    elseif size(B,1) == size(A.factors,1)
-        C = [B; zeros(T, size(A.factors, 2) - size(A.factors, 1), size(B, 2))]
-    else
-        throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
-    end
-    lmul!(convert(AbstractQ{T}, adjA), C)
-end
-
-# in-place right-application of LQPackedQs
-# these methods require that the applied-to matrix's (A's) number of columns
-# match the number of columns (nQ) of the LQPackedQ (Q) (necessary for in-place
-# operation, and the underlying LAPACK routine (ormlq) treats the implicit Q
-# as its (nQ-by-nQ) square form)
-rmul!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
-    LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-rmul!(A::StridedMatrix{T}, adjB::AdjointQ{<:Any,<:LQPackedQ{T}}) where {T<:BlasReal} =
-    (B = adjB.Q; LAPACK.ormlq!('R', 'T', B.factors, B.τ, A))
-rmul!(A::StridedMatrix{T}, adjB::AdjointQ{<:Any,<:LQPackedQ{T}}) where {T<:BlasComplex} =
-    (B = adjB.Q; LAPACK.ormlq!('R', 'C', B.factors, B.τ, A))
-
 # out-of-place right application of LQPackedQs
 #
 # these methods: (1) check whether the applied-to matrix's (A's) appropriate dimension
@@ -571,51 +543,32 @@ rmul!(A::StridedMatrix{T}, adjB::AdjointQ{<:Any,<:LQPackedQ{T}}) where {T<:BlasC
 # A instead matches the number of rows of the matrix of which Q is a factor (i.e.
 # size(Q.factors, 1)), and if so implicitly apply Q's truncated form to A by zero extending
 # A as necessary for check (1) to pass (if possible) and then applying Q's square form
-#
-function (*)(A::AbstractVector, Q::LQPackedQ)
-    T = promote_type(eltype(A), eltype(Q))
-    if 1 == size(Q.factors, 2)
-        C = copy_similar(A, T)
-    elseif 1 == size(Q.factors, 1)
-        C = zeros(T, length(A), size(Q.factors, 2))
-        copyto!(C, 1, A, 1, length(A))
-    else
-        _rightappdimmismatch("columns")
-    end
-    return rmul!(C, convert(AbstractQ{T}, Q))
-end
-function (*)(A::AbstractMatrix, Q::LQPackedQ)
-    T = promote_type(eltype(A), eltype(Q))
-    if size(A, 2) == size(Q.factors, 2)
-        C = copy_similar(A, T)
-    elseif size(A, 2) == size(Q.factors, 1)
-        C = zeros(T, size(A, 1), size(Q.factors, 2))
-        copyto!(C, 1, A, 1, length(A))
-    else
-        _rightappdimmismatch("columns")
-    end
-    return rmul!(C, convert(AbstractQ{T}, Q))
-end
-function (*)(adjA::AdjointAbsMat, Q::LQPackedQ)
-    A = adjA.parent
-    T = promote_type(eltype(A), eltype(Q))
-    if size(A, 1) == size(Q.factors, 2)
-        C = copy_similar(adjA, T)
-    elseif size(A, 1) == size(Q.factors, 1)
-        C = zeros(T, size(A, 2), size(Q.factors, 2))
-        adjoint!(view(C, :, 1:size(A, 1)), A)
-    else
-        _rightappdimmismatch("rows")
-    end
-    return rmul!(C, convert(AbstractQ{T}, Q))
-end
-(*)(u::AdjointAbsVec, Q::LQPackedQ) = (Q'u')'
 
-_rightappdimmismatch(rowsorcols) =
-    throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
-        "must match either (1) the number of columns of the (LQPackedQ) matrix on the right ",
-        "or (2) the number of rows of that (LQPackedQ) matrix's internal representation ",
-        "(the factorization's originating matrix's number of rows)")))
+qsize_check(adjQ::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractVecOrMat) =
+    size(B, 1) in size(adjQ.Q.factors) ||
+        throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(adjQ.Q.factors))"))
+qsize_check(A::AbstractVecOrMat, Q::LQPackedQ) =
+    size(A, 2) in size(Q.factors) ||
+        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+
+# in-place right-application of LQPackedQs
+# these methods require that the applied-to matrix's (A's) number of columns
+# match the number of columns (nQ) of the LQPackedQ (Q) (necessary for in-place
+# operation, and the underlying LAPACK routine (ormlq) treats the implicit Q
+# as its (nQ-by-nQ) square form)
+rmul!(A::StridedVecOrMat{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
+    LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
+rmul!(A::StridedVecOrMat{T}, adjB::AdjointQ{<:Any,<:LQPackedQ{T}}) where {T<:BlasReal} =
+    (B = adjB.Q; LAPACK.ormlq!('R', 'T', B.factors, B.τ, A))
+rmul!(A::StridedVecOrMat{T}, adjB::AdjointQ{<:Any,<:LQPackedQ{T}}) where {T<:BlasComplex} =
+    (B = adjB.Q; LAPACK.ormlq!('R', 'C', B.factors, B.τ, A))
+
+### QB / QcB
+lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
+    (A = adjA.Q; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
+lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+    (A = adjA.Q; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
 
 # In LQ factorization, `Q` is expressed as the product of the adjoint of the
 # reflectors.  Thus, `det` has to be conjugated.

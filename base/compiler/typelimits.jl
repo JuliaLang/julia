@@ -305,8 +305,6 @@ end
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 @nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
-    typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
     @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype lattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
@@ -377,19 +375,6 @@ end
     suba && subb && return typea
     subb && issimplertype(lattice, typea, typeb) && return typea
     return nothing
-end
-
-function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(typeb))
-    r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
-
-    # type-lattice for MaybeUndef wrapper
-    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
-        return MaybeUndef(tmerge(widenlattice(lattice),
-            isa(typea, MaybeUndef) ? typea.typ : typea,
-            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
-    end
-    return tmerge(widenlattice(lattice), typea, typeb)
 end
 
 function union_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
@@ -471,8 +456,6 @@ end
         return tmerge_limited(lattice, typea, typeb)
     end
 
-    r = tmerge_fast_path(widenlattice(lattice), typea, typeb)
-    r !== nothing && return r
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -506,8 +489,13 @@ end
         end
         return Bool
     end
-    typea = widenconditional(typea)
-    typeb = widenconditional(typeb)
+    if isa(typea, Conditional)
+        typeb === Union{} && return typea
+        typea = widenconditional(typea)
+    elseif isa(typeb, Conditional)
+        typea === Union{} && return typeb
+        typeb = widenconditional(typeb)
+    end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -541,14 +529,25 @@ end
         end
         return Bool
     end
-    typea = widenconditional(typea)
-    typeb = widenconditional(typeb)
+    if isa(typea, InterConditional)
+        typeb === Union{} && return typea
+        typea = widenconditional(typea)
+    elseif isa(typeb, InterConditional)
+        typea === Union{} && return typeb
+        typeb = widenconditional(typeb)
+    end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
 @nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea = widenmustalias(typea)
-    typeb = widenmustalias(typeb)
+    if is_valid_lattice_norec(𝕃, typea)
+        typeb === Union{} && return typea
+        typea = widenmustalias(typea)
+    end
+    if is_valid_lattice_norec(𝕃, typeb)
+        typea === Union{} && return typeb
+        typeb = widenmustalias(typeb)
+    end
     return tmerge(widenlattice(𝕃), typea, typeb)
 end
 
@@ -613,6 +612,9 @@ end
 end
 
 @nospecializeinfer function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+    r = tmerge_fast_path(lattice, typea, typeb)
+    r !== nothing && return r
+
     # type-lattice for Const and PartialStruct wrappers
     aps = isa(typea, PartialStruct)
     bps = isa(typeb, PartialStruct)

@@ -465,15 +465,15 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
 typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    OptimizerLattice(InferenceLattice(SimpleInferenceLattice.instance)) :
+    InferenceLattice(SimpleInferenceLattice.instance) :
     InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
     InferenceLattice(SimpleInferenceLattice.instance) :
     InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+optimizer_lattice(interp::NativeInterpreter) = SimpleInferenceLattice.instance
 
 """
     switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter

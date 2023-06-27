@@ -202,7 +202,7 @@ function _parse_string(text::AbstractString, filename::AbstractString,
 end
 
 """
-    parse(str, start; greedy=true, raise=true, depwarn=true)
+    parse(str, start; greedy=true, raise=true, depwarn=true, filename="none")
 
 Parse the expression string and return an expression (which could later be
 passed to eval for execution). `start` is the code unit index into `str` of the
@@ -214,6 +214,7 @@ return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default),
 syntax errors other than incomplete expressions will raise an error. If `raise`
 is `false`, `parse` will return an expression that will raise an error upon
 evaluation. If `depwarn` is `false`, deprecation warnings will be suppressed.
+The `filename` argument is used to display diagnostics when an error is raised.
 
 ```jldoctest
 julia> Meta.parse("(α, β) = 3, 5", 1) # start of string
@@ -232,10 +233,10 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 (3, 13)
 ```
 """
-function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
-               depwarn::Bool=true)
-    ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
-    if raise && isa(ex,Expr) && ex.head === :error
+function parse(str::AbstractString, pos::Integer;
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+    if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
             err = ParseError(err) # For flisp parser
@@ -246,13 +247,13 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
 end
 
 """
-    parse(str; raise=true, depwarn=true)
+    parse(str; raise=true, depwarn=true, filename="none")
 
 Parse the expression string greedily, returning a single expression. An error is thrown if
 there are additional characters after the first expression. If `raise` is `true` (default),
 syntax errors will raise an error; otherwise, `parse` will return an expression that will
 raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
-suppressed.
+suppressed. The `filename` argument is used to display diagnostics when an error is raised.
 
 ```jldoctest; filter=r"(?<=Expr\\(:error).*|(?<=Expr\\(:incomplete).*"
 julia> Meta.parse("x = 3")
@@ -272,9 +273,10 @@ julia> Meta.parse("x = ")
 :(\$(Expr(:incomplete, "incomplete: premature end of input")))
 ```
 """
-function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
-    ex, pos = parse(str, 1, greedy=true, raise=raise, depwarn=depwarn)
-    if isa(ex,Expr) && ex.head === :error
+function parse(str::AbstractString;
+               filename="none", raise::Bool=true, depwarn::Bool=true)
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn)
+    if isexpr(ex, :error)
         return ex
     end
     if pos <= ncodeunits(str)

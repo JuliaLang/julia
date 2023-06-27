@@ -143,7 +143,8 @@ typedef struct _mallocarray_t {
 } mallocarray_t;
 
 // pool page metadata
-typedef struct {
+typedef struct _jl_gc_pagemeta_t {
+    struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
     // Whether any cell in the page is marked
@@ -177,28 +178,55 @@ typedef struct {
     char *data;
 } jl_gc_pagemeta_t;
 
-// Page layout:
-//  Newpage freelist: sizeof(void*)
-//  Padding: GC_PAGE_OFFSET - sizeof(void*)
-//  Blocks: osize * n
-//    Tag: sizeof(jl_taggedvalue_t)
-//    Data: <= osize - sizeof(jl_taggedvalue_t)
+typedef struct {
+    _Atomic(jl_gc_pagemeta_t *) page_metadata_back;
+} jl_gc_global_page_pool_t;
 
-// Memory map:
-//  The complete address space is divided up into a multi-level page table.
-//  The three levels have similar but slightly different structures:
-//    - pagetable0_t: the bottom/leaf level (covers the contiguous addresses)
-//    - pagetable1_t: the middle level
-//    - pagetable2_t: the top/leaf level (covers the entire virtual address space)
-//  Corresponding to these similar structures is a large amount of repetitive
-//  code that is nearly the same but not identical. It could be made less
-//  repetitive with C macros, but only at the cost of debuggability. The specialized
-//  structure of this representation allows us to partially unroll and optimize
-//  various conditions at each level.
+extern jl_gc_global_page_pool_t global_page_pool_clean;
+extern jl_gc_global_page_pool_t global_page_pool_freed;
 
-//  The following constants define the branching factors at each level.
-//  The constants and GC_PAGE_LG2 must therefore sum to sizeof(void*).
-//  They should all be multiples of 32 (sizeof(uint32_t)) except that REGION2_PG_COUNT may also be 1.
+#define GC_BACKOFF_MIN 4
+#define GC_BACKOFF_MAX 12
+
+STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
+{
+    if (*i < GC_BACKOFF_MAX) {
+        (*i)++;
+    }
+    for (int j = 0; j < (1 << *i); j++) {
+        jl_cpu_pause();
+    }
+}
+
+// Lock-free stack implementation taken
+// from Herlihy's "The Art of Multiprocessor Programming"
+
+STATIC_INLINE void push_lf_page_metadata_back(jl_gc_global_page_pool_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
+{
+    while (1) {
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        elt->next = old_back;
+        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, elt)) {
+            break;
+        }
+        jl_cpu_pause();
+    }
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *pop_lf_page_metadata_back(jl_gc_global_page_pool_t *pool) JL_NOTSAFEPOINT
+{
+    while (1) {
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        if (old_back == NULL) {
+            return NULL;
+        }
+        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, old_back->next)) {
+            return old_back;
+        }
+        jl_cpu_pause();
+    }
+}
+
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
@@ -217,34 +245,111 @@ typedef struct {
 
 // define the representation of the levels of the page-table (0 to 2)
 typedef struct {
-    jl_gc_pagemeta_t *meta[REGION0_PG_COUNT];
-    uint32_t allocmap[REGION0_PG_COUNT / 32];
-    uint32_t freemap[REGION0_PG_COUNT / 32];
-    // store a lower bound of the first free page in each region
-    int lb;
-    // an upper bound of the last non-free page
-    int ub;
+    uint8_t meta[REGION0_PG_COUNT];
 } pagetable0_t;
 
 typedef struct {
     pagetable0_t *meta0[REGION1_PG_COUNT];
-    uint32_t allocmap0[REGION1_PG_COUNT / 32];
-    uint32_t freemap0[REGION1_PG_COUNT / 32];
-    // store a lower bound of the first free page in each region
-    int lb;
-    // an upper bound of the last non-free page
-    int ub;
 } pagetable1_t;
 
 typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
-    uint32_t allocmap1[(REGION2_PG_COUNT + 31) / 32];
-    uint32_t freemap1[(REGION2_PG_COUNT + 31) / 32];
-    // store a lower bound of the first free page in each region
-    int lb;
-    // an upper bound of the last non-free page
-    int ub;
 } pagetable_t;
+
+extern pagetable_t alloc_map;
+
+STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
+{
+    uintptr_t data = ((uintptr_t)_data);
+    unsigned i;
+    i = REGION_INDEX(data);
+    pagetable1_t *r1 = alloc_map.meta1[i];
+    if (r1 == NULL)
+        return 0;
+    i = REGION1_INDEX(data);
+    pagetable0_t *r0 = r1->meta0[i];
+    if (r0 == NULL)
+        return 0;
+    i = REGION0_INDEX(data);
+    return r0->meta[i];
+}
+
+STATIC_INLINE void gc_alloc_map_set(char *_data, uint8_t v) JL_NOTSAFEPOINT
+{
+    uintptr_t data = ((uintptr_t)_data);
+    unsigned i;
+    i = REGION_INDEX(data);
+    pagetable1_t *r1 = alloc_map.meta1[i];
+    assert(r1 != NULL);
+    i = REGION1_INDEX(data);
+    pagetable0_t *r0 = r1->meta0[i];
+    assert(r0 != NULL);
+    i = REGION0_INDEX(data);
+    r0->meta[i] = v;
+}
+
+STATIC_INLINE void gc_alloc_map_maybe_create(char *_data) JL_NOTSAFEPOINT
+{
+    uintptr_t data = ((uintptr_t)_data);
+    unsigned i;
+    i = REGION_INDEX(data);
+    pagetable1_t *r1 = alloc_map.meta1[i];
+    if (r1 == NULL) {
+        r1 = (pagetable1_t*)calloc_s(sizeof(pagetable1_t));
+        alloc_map.meta1[i] = r1;
+    }
+    i = REGION1_INDEX(data);
+    pagetable0_t *r0 = r1->meta0[i];
+    if (r0 == NULL) {
+        r0 = (pagetable0_t*)calloc_s(sizeof(pagetable0_t));
+        r1->meta0[i] = r0;
+    }
+}
+
+// Page layout:
+//  Metadata pointer: sizeof(jl_gc_pagemeta_t*)
+//  Padding: GC_PAGE_OFFSET - sizeof(jl_gc_pagemeta_t*)
+//  Blocks: osize * n
+//    Tag: sizeof(jl_taggedvalue_t)
+//    Data: <= osize - sizeof(jl_taggedvalue_t)
+
+STATIC_INLINE char *gc_page_data(void *x) JL_NOTSAFEPOINT
+{
+    return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata_unsafe(void *_data) JL_NOTSAFEPOINT
+{
+    return *(jl_gc_pagemeta_t**)(gc_page_data(_data));
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data) JL_NOTSAFEPOINT
+{
+    if (!gc_alloc_map_is_set((char*)_data)) {
+        return NULL;
+    }
+    return page_metadata_unsafe(_data);
+}
+
+STATIC_INLINE void set_page_metadata(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    *(jl_gc_pagemeta_t**)(pg->data) = pg;
+}
+
+STATIC_INLINE void push_page_metadata_back(jl_gc_pagemeta_t **ppg, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
+{
+    elt->next = *ppg;
+    *ppg = elt;
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) JL_NOTSAFEPOINT
+{
+    jl_gc_pagemeta_t *v = *ppg;
+    if (*ppg != NULL) {
+        *ppg = (*ppg)->next;
+    }
+    return v;
+}
 
 #ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
 unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
@@ -256,23 +361,17 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 #endif
 
 extern jl_gc_num_t gc_num;
-extern pagetable_t memory_map;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
+extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
     return container_of(o, bigval_t, header);
-}
-
-// round an address inside a gcpage's data to its beginning
-STATIC_INLINE char *gc_page_data(void *x) JL_NOTSAFEPOINT
-{
-    return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
 }
 
 STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
@@ -312,52 +411,6 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data) JL_NOTSAFEPOINT
-{
-    uintptr_t data = ((uintptr_t)_data);
-    unsigned i;
-    i = REGION_INDEX(data);
-    pagetable1_t *r1 = memory_map.meta1[i];
-    if (!r1)
-        return NULL;
-    i = REGION1_INDEX(data);
-    pagetable0_t *r0 = r1->meta0[i];
-    if (!r0)
-        return NULL;
-    i = REGION0_INDEX(data);
-    return r0->meta[i];
-}
-
-struct jl_gc_metadata_ext {
-    pagetable1_t *pagetable1;
-    pagetable0_t *pagetable0;
-    jl_gc_pagemeta_t *meta;
-    unsigned pagetable_i32, pagetable_i;
-    unsigned pagetable1_i32, pagetable1_i;
-    unsigned pagetable0_i32, pagetable0_i;
-};
-
-STATIC_INLINE struct jl_gc_metadata_ext page_metadata_ext(void *_data) JL_NOTSAFEPOINT
-{
-    uintptr_t data = (uintptr_t)_data;
-    struct jl_gc_metadata_ext info;
-    unsigned i;
-    i = REGION_INDEX(data);
-    info.pagetable_i = i % 32;
-    info.pagetable_i32 = i / 32;
-    info.pagetable1 = memory_map.meta1[i];
-    i = REGION1_INDEX(data);
-    info.pagetable1_i = i % 32;
-    info.pagetable1_i32 = i / 32;
-    info.pagetable0 = info.pagetable1->meta0[i];
-    i = REGION0_INDEX(data);
-    info.pagetable0_i = i % 32;
-    info.pagetable0_i32 = i / 32;
-    info.meta = info.pagetable0->meta[i];
-    assert(info.meta);
-    return info;
-}
-
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr) JL_NOTSAFEPOINT
 {
     *hdr->prev = hdr->next;
@@ -375,14 +428,10 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
-extern uv_mutex_t gc_threads_lock;
-extern uv_cond_t gc_threads_cond;
 extern _Atomic(int) gc_n_threads_marking;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin,
-                                    jl_value_t **fl_end) JL_NOTSAFEPOINT;
-void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
-                                   size_t start) JL_NOTSAFEPOINT;
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
@@ -391,9 +440,9 @@ void jl_gc_debug_init(void);
 
 // GC pages
 
-void jl_gc_init_page(void);
+void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
-void jl_gc_free_page(void *p) JL_NOTSAFEPOINT;
+void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 
 // GC debug
 

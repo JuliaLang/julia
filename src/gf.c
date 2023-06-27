@@ -2392,7 +2392,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 if (jl_atomic_cmpswap_acqrel(&codeinst->specptr.fptr, &prev_fptr, fptr)) {
                     jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & 0b1);
                     jl_atomic_store_release(&codeinst->invoke, invoke);
-                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags);
+                    // unspec is probably not specsig, but might be using specptr
+                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
                 } else {
                     // someone else already compiled it
                     while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {

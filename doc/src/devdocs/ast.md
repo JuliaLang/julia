@@ -438,10 +438,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
-  * `undefcheck`
-
-    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
-
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on

@@ -644,7 +644,6 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
         @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
     test_inferred_static(codetype, all_ssa)
@@ -699,7 +698,7 @@ f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 let fieldtype_tfunc(@nospecialize args...) =
         Core.Compiler.fieldtype_tfunc(Core.Compiler.fallback_lattice, args...),
     fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(
-        Core.Compiler.OptimizerLattice(), s0, name)
+        Core.Compiler.SimpleInferenceLattice.instance, s0, name)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
@@ -727,19 +726,6 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
-end
-
-import Core.Compiler: MaybeUndef, builtin_nothrow
-let 𝕃ₒ = Core.Compiler.OptimizerLattice()
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
-    @test !builtin_nothrow(𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
-    @test !builtin_nothrow(𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
-    @test !builtin_nothrow(𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
-    @test !builtin_nothrow(𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
-    @test !builtin_nothrow(𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
 end
 
 # issue #11480
@@ -1733,7 +1719,7 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
 end
 let setfield!_nothrow(@nospecialize xs...) =
-        Core.Compiler.setfield!_nothrow(Core.Compiler.OptimizerLattice(), xs...)
+        Core.Compiler.setfield!_nothrow(Core.Compiler.SimpleInferenceLattice.instance, xs...)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
     @test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
@@ -2165,15 +2151,15 @@ mutable struct AliasableConstField{S,T}
 end
 
 import Core.Compiler:
-    InferenceLattice, OptimizerLattice, MustAliasesLattice, InterMustAliasesLattice,
-    BaseInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
+    InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
+    BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
 include("newinterp.jl")
 @newinterp MustAliasInterpreter
 let CC = Core.Compiler
     CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-    CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+    CC.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.instance
 end
 
 # lattice
@@ -3397,7 +3383,7 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    𝕃 = Core.Compiler.OptimizerLattice()
+    𝕃 = Core.Compiler.SimpleInferenceLattice.instance
     argtypes = Any[Core.Compiler.Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)]
@@ -5009,7 +4995,7 @@ let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do 
 end
 
 struct Issue49785{S, T<:S} end
-let 𝕃 = Core.Compiler.OptimizerLattice()
+let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
     argtypes = Any[Core.Compiler.Const(Issue49785),
         Union{Type{String},Type{Int}},
         Union{Type{String},Type{Int}}]
