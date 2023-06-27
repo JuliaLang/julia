@@ -26,6 +26,8 @@ export
     stat!,
     uperm
 
+const STAT_BUFFER_SIZE = Int(ccall(:jl_sizeof_stat, Int32, ()))
+
 struct StatStruct
     desc    :: Union{String, OS_HANDLE} # for show method, not included in equality or hash
     device  :: UInt
@@ -147,6 +149,7 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 macro stat_call!(stat_buf, sym, arg1type, arg)
     return quote
+        length($(esc(stat_buf))) < STAT_BUFFER_SIZE && resize!($(esc(stat_buf)), STAT_BUFFER_SIZE)
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), $(esc(stat_buf)))
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             uv_error(string("stat(", repr($(esc(arg))), ")"), r)
@@ -162,9 +165,11 @@ end
 """
     stat!(stat_buf::Vector{UInt8}, file)
 
-Like [`stat`](@ref), but avoids internal allocations by using a pre-allocated buffer,
-`stat_buf`.  For a small performance gain over `stat`, consecutive calls to `stat!` can use
-the same `stat_buf`.  See also [`Base.Filesystem.get_stat_buf`](@ref).
+Like [`stat`](@ref), but tries to avoid internal allocations by using a pre-allocated
+buffer, `stat_buf`.  For a small performance gain over `stat`, consecutive calls to `stat!`
+can use the same `stat_buf`.  If `stat_buf` is not large enough to hold the result, it will
+be automatically resized.  A buffer with the minimum capacity can be allocated using:
+`Vector{UInt8}(undef, Base.Filesystem.STAT_BUFFER_SIZE)`.
 """
 stat!(stat_buf::Vector{UInt8}, fd::OS_HANDLE)         = @stat_call! stat_buf jl_fstat OS_HANDLE fd
 stat!(stat_buf::Vector{UInt8}, path::AbstractString)  = @stat_call! stat_buf jl_stat  Cstring path
@@ -174,15 +179,8 @@ if RawFD !== OS_HANDLE
 end
 stat!(stat_buf::Vector{UInt8}, fd::Integer)           = stat!(stat_buf, RawFD(fd))
 
-stat(x) = stat!(get_stat_buf(), x)
-lstat(x) = lstat!(get_stat_buf(), x)
-
-"""
-    get_stat_buf()
-
-Return a buffer of bytes of the right size for [`stat!`](@ref).
-"""
-get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+stat(x) = stat!(Vector{UInt8}(undef, STAT_BUFFER_SIZE), x)
+lstat(x) = lstat!(Vector{UInt8}(undef, STAT_BUFFER_SIZE), x)
 
 """
     stat(file)
