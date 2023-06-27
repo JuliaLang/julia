@@ -46,14 +46,9 @@ const LOCALEPOCH = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to the
 corresponding `DateTime`.
 """
-function unix2datetime(x)
+function unix2datetime(x::Real; local_time::Bool=false)
     # Rounding should match `now` below
-    rata = UNIXEPOCH + trunc(Int64, Int64(1000) * x)
-    return DateTime(UTM(rata))
-end
-
-function unix2datetime_local(x::Real)
-    rata = LOCALEPOCH + trunc(Int64, Int64(1000) * x)
+    rata = (local_time ? LOCALEPOCH : UNIXEPOCH) + trunc(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
 
