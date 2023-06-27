@@ -566,7 +566,7 @@ false (as it is by default), these trailing newline characters are removed from 
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
 
-Returns a `String`.   See also [`copyline`](@ref) to instead write in-place
+Return a `String`.   See also [`copyline`](@ref) to instead write in-place
 to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
 See also [`readuntil`](@ref) for reading until more general delimiters.
