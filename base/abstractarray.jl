@@ -2611,6 +2611,7 @@ end
 
 function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
                               d1::Int, d2::Int, as::Tuple) where {T, N}
+    N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
     0 < d1 < 3 &&
