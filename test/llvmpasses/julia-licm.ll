@@ -12,6 +12,75 @@ declare void @julia.write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 
+declare token @llvm.julia.gc_preserve_begin(...)
+
+declare void @llvm.julia.gc_preserve_end(token)
+
+; COM: check basic preserve hoist/sink functionality
+; CHECK-LABEL: @hoist_sink_preserves
+define void @hoist_sink_preserves({} addrspace(10)* %obj, i1 %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: %preserve_token = call token (...) @llvm.julia.gc_preserve_begin
+; CHECK-NEXT: br label %loop
+  br label %loop
+; CHECK: loop:
+loop:
+; CHECK-NOT: call token (...) @llvm.julia.gc_preserve_begin
+  %preserve_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj)
+; CHECK-NOT: call void @llvm.julia.gc_preserve_end
+  call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: br i1 %ret
+  br i1 %ret, label %return, label %loop
+; CHECK: return:
+return:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: ret void
+  ret void
+}
+
+; COM: check sink functionality when there are multiple loop exit blocks
+; CHECK-LABEL: @hoist_multisink_preserves
+define void @hoist_multisink_preserves({} addrspace(10)* %obj, i1 %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: %preserve_token = call token (...) @llvm.julia.gc_preserve_begin
+; CHECK-NEXT: br label %loop
+  br label %loop
+; CHECK: loop:
+loop:
+; CHECK-NOT: call token (...) @llvm.julia.gc_preserve_begin
+  %preserve_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj)
+; CHECK-NOT: call void @llvm.julia.gc_preserve_end
+  call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: br i1 %ret
+  br i1 %ret, label %return, label %loop2
+; CHECK: loop2:
+loop2:
+; CHECK-NEXT: br i1 %ret
+  br i1 %ret, label %return2, label %loop
+; CHECK: return:
+return:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: ret void
+  ret void
+; CHECK: return2:
+return2:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: ret void
+  ret void
+}
+
 ; COM: check basic allocation hoisting functionality
 ; CHECK-LABEL: @julia_allocation_hoist
 define nonnull {} addrspace(10)* @julia_allocation_hoist(i64 signext %0) #0 {
