@@ -148,8 +148,9 @@ function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
             ndata = tpdum.data[idx+1]
             ndata == 0 && break
             tpdum.data[idx] = ndata
+            idx += 1
         end
-        tpdum.data[idx + 1] = 0
+        tpdum.data[idx] = 0
     end
 end
 kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =

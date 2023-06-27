@@ -1270,3 +1270,22 @@ end
     return strct.b
 end
 @test fully_eliminated(one_const_field_partial; retval=5)
+
+# Test that SROA updates the type of intermediate phi nodes (#50285)
+struct Immut50285
+    x::Any
+end
+
+function immut50285(b, x, y)
+    if b
+       z = Immut50285(x)
+    else
+       z = Immut50285(y)
+    end
+    z.x::Union{Float64, Int}
+end
+
+let src = code_typed1(immut50285, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, typeassert)), src.code) == 0
+end
