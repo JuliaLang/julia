@@ -472,7 +472,7 @@ function lift_arg!(
         end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
-        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
+        lifted = insert_node!(compact, leaf, effect_free_and_nothrow(NewInstruction(lifted, argextype(lifted, compact))))
         compact[leaf] = nothing
         stmt.args[argidx] = lifted
         compact[leaf] = stmt
@@ -718,7 +718,7 @@ function perform_lifting!(compact::IncrementalCompact,
         end
         if isa(old_node, PhiNode)
             new_node = PhiNode()
-            ssa = insert_node!(compact, old_ssa, effect_free(NewInstruction(new_node, result_t)))
+            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
             lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
         else
             @assert is_known_call(old_node, Core.ifelse, compact)
@@ -1110,8 +1110,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 def_val = perform_lifting!(compact,
                     visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree).val
             end
-            insert_node!(compact, SSAValue(idx), non_effect_free(NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing)))
+            insert_node!(compact, SSAValue(idx), NewInstruction(
+                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing))
 
         else
             # val must be defined
