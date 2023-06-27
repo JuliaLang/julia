@@ -504,8 +504,8 @@ The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
-Returns a `String` if `delim` is an `AbstractChar` or a string
-or otherwise returns a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
+Return a `String` if `delim` is an `AbstractChar` or a string
+or otherwise return a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
 to instead write in-place to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
 # Examples
