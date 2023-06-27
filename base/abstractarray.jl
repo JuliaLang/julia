@@ -2407,8 +2407,12 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     # putting these in separate functions leads to unnecessary allocations
     if row_first
         nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
         na = prod(size(A)[3:end])
+        len = length(xs)
+        nrc = nr * nc
+        if nrc * na != len
+            throw(ArgumentError("argument count $(len) does not match specified shape $(size(A))"))
+        end
         k = 1
         @inbounds for d ∈ 1:na
             dd = nrc * (d - 1)
