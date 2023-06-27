@@ -169,7 +169,7 @@ Like [`stat`](@ref), but tries to avoid internal allocations by using a pre-allo
 buffer, `stat_buf`.  For a small performance gain over `stat`, consecutive calls to `stat!`
 can use the same `stat_buf`.  If `stat_buf` is not large enough to hold the result, it will
 be automatically resized.  A buffer with the minimum capacity can be allocated using:
-`Vector{UInt8}(undef, Base.Filesystem.STAT_BUFFER_SIZE)`.
+`zeros(UInt8, Base.Filesystem.STAT_BUFFER_SIZE)`.
 """
 stat!(stat_buf::Vector{UInt8}, fd::OS_HANDLE)         = @stat_call! stat_buf jl_fstat OS_HANDLE fd
 stat!(stat_buf::Vector{UInt8}, path::AbstractString)  = @stat_call! stat_buf jl_stat  Cstring path
@@ -179,8 +179,8 @@ if RawFD !== OS_HANDLE
 end
 stat!(stat_buf::Vector{UInt8}, fd::Integer)           = stat!(stat_buf, RawFD(fd))
 
-stat(x) = stat!(Vector{UInt8}(undef, STAT_BUFFER_SIZE), x)
-lstat(x) = lstat!(Vector{UInt8}(undef, STAT_BUFFER_SIZE), x)
+stat(x) = stat!(zeros(UInt8, STAT_BUFFER_SIZE), x)
+lstat(x) = lstat!(zeros(UInt8, STAT_BUFFER_SIZE), x)
 
 """
     stat(file)
