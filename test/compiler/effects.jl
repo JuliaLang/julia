@@ -988,3 +988,8 @@ isassigned_effects(s) = isassigned(Ref(s))
 @test fully_eliminated(; retval=true) do
     isassigned_effects(:foo)
 end
+
+# Effects of Base.hasfield (#50198)
+hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
+f50198() = (hf50198(Ref(:x)[]); nothing)
+@test fully_eliminated(f50198)

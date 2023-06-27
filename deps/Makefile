@@ -36,7 +36,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS :=
+DEP_LIBS := JuliaSyntax
 
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
@@ -44,6 +44,10 @@ endif
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
+endif
+
+ifeq ($(SANITIZE), 1)
+DEP_LIBS += sanitizers
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -188,7 +192,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse lld libtracyclient ittapi
+	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -223,6 +227,7 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
 include $(SRCDIR)/csl.mk
+include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -247,5 +252,8 @@ include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
+
+# vendored Julia libs
+include $(SRCDIR)/JuliaSyntax.mk
 
 include $(SRCDIR)/tools/uninstallers.mk
