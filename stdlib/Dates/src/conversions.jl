@@ -38,7 +38,7 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
-const LOCALEPOCH = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at UTC 1970-01-01T00:00:00
+localepoch() = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at UTC 1970-01-01T00:00:00
 
 """
     unix2datetime(x::Real; local_time::Bool=false) -> DateTime
@@ -47,9 +47,9 @@ Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to
 corresponding `DateTime`. If `local_time` is `true`, then the output is in the local
 time zone, otherwise it is in UTC/GMT.
 """
-function unix2datetime(x::Real; local_time::Bool=false)
+function unix2datetime(x::Real; localtime::Bool=false)
     # Rounding should match `now` below
-    rata = (local_time ? LOCALEPOCH : UNIXEPOCH) + trunc(Int64, Int64(1000) * x)
+    rata = (localtime ? localepoch() : UNIXEPOCH) + trunc(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
 
@@ -62,8 +62,8 @@ since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 If `local_time` is `true`, then the number of seconds since the local epoch
 corresponding to unix epoch `1970-01-01T00:00:00` is returned.
 """
-function datetime2unix(dt::DateTime; local_time::Bool=false)
-    return (value(dt) - (local_time ? LOCALEPOCH : UNIXEPOCH)) / 1000.0
+function datetime2unix(dt::DateTime; localtime::Bool=false)
+    return (value(dt) - (localtime ? localepoch() : UNIXEPOCH)) / 1000.0
 end
 
 """
