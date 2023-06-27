@@ -2414,20 +2414,20 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             throw(ArgumentError("argument count $(len) does not match specified shape $(size(A))"))
         end
         k = 1
-        @inbounds for d ∈ 1:na
+        for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
                 for j ∈ 1:nc
-                    A[Ai] = xs[k]
+                    @inbounds A[Ai] = xs[k]
                     k += 1
                     Ai += nr
                 end
             end
         end
     else
-        @inbounds for k ∈ eachindex(xs)
-            A[k] = xs[k]
+        for k ∈ eachindex(xs)
+            @inbounds A[k] = xs[k]
         end
     end
 end
