@@ -75,7 +75,7 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
         package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
         isdir(package_root_dir) || error("Missing stdlib: $(package_root_dir)")
         package_root_dir => (remote, package_sha)
-    end
+    end |> Dict
 end
 @show documenter_stdlib_remotes
 
