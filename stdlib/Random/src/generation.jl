@@ -170,7 +170,7 @@ end
 ### random tuples
 
 function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:Tuple}
-    ntuple(i -> rand(r, T.parameters[i]), length(T.parameters))
+    ntuple(i -> rand(r, T.parameters[i]), Val(length(T.parameters)))
 end
 
 ## Generate random integer within a range

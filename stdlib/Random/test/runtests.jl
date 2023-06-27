@@ -336,6 +336,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
+
+    randwidetup = Tuple{Bool, Char, Vararg{Tuple{Int, Float64}, 14}}
+    @inferred rand(rng..., randwidetup)
+
     collections = [BitSet(rand(1:100, 20))          => Int,
                    randset                          => Int,
                    GenericSet(randset)              => Int,
