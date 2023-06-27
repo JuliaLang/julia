@@ -2977,7 +2977,7 @@ int flush_pages_lazily_uring(void) {
     struct io_uring_sqe *sqe;
 	struct io_uring_cqe *cqe;
 
-    int QueueDepth = 4;
+    int QueueDepth = 64;
     int ret;
     int pending = 0;
     size_t decommit_size;
