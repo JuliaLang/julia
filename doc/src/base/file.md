@@ -15,8 +15,10 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.stat!
 Base.Filesystem.diskstat
 Base.Filesystem.lstat
+Base.Filesystem.get_stat_buf
 Base.Filesystem.ctime
 Base.Filesystem.mtime
 Base.Filesystem.filemode

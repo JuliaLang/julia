@@ -23,6 +23,7 @@ export
     mtime,
     operm,
     stat,
+    stat!,
     uperm
 
 struct StatStruct
