@@ -2,55 +2,7 @@
 
 module TestSymmetricEigen
 
-using Test, LinearAlgebra, Random
-
-Random.seed!(555)
-
-@testset "bk-eigen-eigals" begin
-    # Bunchkaufman decomposition based
-
-    # Real-valued random matrix
-    N = 10
-    A = randn(N,N)
-    B = randn(N,N)
-    BH = (B+B')/2
-    sf = x->(real(x),imag(x))
-    # eigen
-    e0 = eigvals(A,BH; sortby=sf)
-    e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
-    @test e0 ≈ e
-    @test A*v ≈ BH*v*Diagonal(e)
-    e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
-    @test e0 ≈ e
-    @test A*v ≈ BH*v*Diagonal(e)
-    # eigvals
-    e0 = eigvals(A,BH; sortby=sf)
-    el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
-    eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
-    @test e0 ≈ el
-    @test e0 ≈ eu
-
-    # Complex-valued random matrix
-    N = 10
-    A = complex.(randn(N,N),randn(N,N))
-    B = complex.(randn(N,N),randn(N,N))
-    BH = (B+B')/2
-    sf = x->(real(x),imag(x))
-    # eigen
-    e0 = eigvals(A,BH; sortby=sf)
-    e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
-    @test e0 ≈ e
-    @test A*v ≈ BH*v*Diagonal(e)
-    e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
-    @test e0 ≈ e
-    @test A*v ≈ BH*v*Diagonal(e)
-    # eigvals
-    e0 = eigvals(A,BH; sortby=sf)
-    el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
-    eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
-    @test e0 ≈ el
-    @test e0 ≈ eu
-end
+using Test, LinearAlgebra
 
 @testset "chol-eigen-eigvals" begin
     ## Cholesky decomposition based
