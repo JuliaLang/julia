@@ -665,7 +665,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     return new_linfo;
 }
 
-static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;

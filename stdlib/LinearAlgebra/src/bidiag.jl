@@ -183,8 +183,9 @@ end
 #Converting from Bidiagonal to dense Matrix
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
     n == 0 && return B
+    n > 1 && fill!(B, zero(T))
     @inbounds for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'

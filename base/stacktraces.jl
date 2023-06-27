@@ -20,9 +20,10 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, Module, Core.CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
 
 - `file::Symbol`
 

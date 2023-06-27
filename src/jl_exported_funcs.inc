@@ -558,6 +558,7 @@
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_add_optimization_passes) \
+    YY(jl_build_newpm_pipeline) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \
     YY(LLVMExtraAddPropagateJuliaAddrspaces) \
@@ -573,5 +574,33 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddRemoveNIPass) \
+    YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
+    YY(LLVMExtraMPMAddFinalLowerGCPass) \
+    YY(LLVMExtraMPMAddMultiVersioningPass) \
+    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
+    YY(LLVMExtraMPMAddLowerPTLSPass) \
+    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
+    YY(LLVMExtraFPMAddCombineMulAddPass) \
+    YY(LLVMExtraFPMAddLateLowerGCPass) \
+    YY(LLVMExtraFPMAddAllocOptPass) \
+    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
+    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
+    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraLPMAddJuliaLICMPass) \
+    YY(JLJITGetLLVMOrcExecutionSession) \
+    YY(JLJITGetJuliaOJIT) \
+    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITAddObjectFile) \
+    YY(JLJITAddLLVMIRModule) \
+    YY(JLJITLookup) \
+    YY(JLJITMangleAndIntern) \
+    YY(JLJITGetTripleString) \
+    YY(JLJITGetGlobalPrefix) \
+    YY(JLJITGetDataLayoutString) \
+    YY(JLJITGetIRCompileLayer) \
+
 
 // end of file

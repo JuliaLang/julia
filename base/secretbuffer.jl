@@ -179,6 +179,21 @@ function final_shred!(s::SecretBuffer)
     shred!(s)
 end
 
+"""
+    shred!(s::SecretBuffer)
+
+Shreds the contents of a `SecretBuffer` by securely zeroing its data and
+resetting its pointer and size.
+This function is used to securely erase the sensitive data held in the buffer,
+reducing the potential for information leaks.
+
+# Example
+```julia
+s = SecretBuffer()
+write(s, 's', 'e', 'c', 'r', 'e', 't')
+shred!(s)  # s is now empty
+```
+"""
 function shred!(s::SecretBuffer)
     securezero!(s.data)
     s.ptr = 1
@@ -188,6 +203,13 @@ end
 
 isshredded(s::SecretBuffer) = all(iszero, s.data)
 
+"""
+    shred!(f::Function, x)
+
+Applies function `f` to the argument `x` and then shreds `x`.
+This function is useful when you need to perform some operations on e.g. a
+`SecretBuffer` and then want to ensure that it is securely shredded afterwards.
+"""
 function shred!(f::Function, x)
     try
         f(x)

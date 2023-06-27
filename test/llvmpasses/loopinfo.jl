@@ -64,10 +64,10 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO3:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
 # FINAL: br
     end
 end
@@ -90,17 +90,17 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO4:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
     end
 end
 
@@ -111,8 +111,8 @@ end
             1 <= j <= I && continue
             @show (i,j)
             iteration(i)
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
         end
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end

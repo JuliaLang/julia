@@ -755,6 +755,12 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    M = [1 2; 3 4]
+    for n in 0:1
+        D = Diagonal(fill(M, n))
+        @test D == Matrix{eltype(D)}(D)
+    end
 end
 
 @testset "linear solve for block diagonal matrices" begin

@@ -171,7 +171,7 @@ include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
 include("compiler/parsing.jl")
-Core.eval(Core, :(_parse = Compiler.fl_parse))
+Core._setparser!(fl_parse)
 
 end # baremodule Compiler
 ))

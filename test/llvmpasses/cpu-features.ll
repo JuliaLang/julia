@@ -1,7 +1,10 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -CPUFeatures -simplifycfg -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='CPUFeatures,simplifycfg' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -CPUFeatures -simplifycfg -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='CPUFeatures,simplifycfg' -S %s | FileCheck %s
+
+; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -CPUFeatures -simplifycfg -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='CPUFeatures,simplifycfg' -S %s | FileCheck %s
 
 declare i1 @julia.cpu.have_fma.f64()
 declare double @with_fma(double %0, double %1, double %2)

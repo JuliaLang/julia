@@ -109,7 +109,7 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
     return modified;
 }
 
-PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
+PreservedAnalyses CombineMulAddPass::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
 {
     if (combineMulAdd(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

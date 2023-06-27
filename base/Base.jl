@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 1)
 function include(mod::Module, path::String)
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
     Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
@@ -489,6 +489,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+
 end_base_include = time_ns()
 
 const _sysimage_modules = PkgId[]
@@ -597,8 +601,12 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_NEW_PARSER", true) === true
+        JuliaSyntax.enable_in_core!()
+    end
     nothing
 end
 
@@ -607,5 +615,8 @@ end
 
 end
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))
 
 end # baremodule Base
