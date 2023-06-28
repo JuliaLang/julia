@@ -68,6 +68,16 @@ Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
 MCPU=armv8-a
 ```
 
+Starting from Julia v1.10, [JITLink](https://llvm.org/docs/JITLink.html) is automatically enabled on this architecture for all operating systems when linking to LLVM 15 or later versions.
+Due to a [bug in LLVM memory manager](https://github.com/llvm/llvm-project/issues/63236), non-trivial workloads may generate too many memory mappings that on Linux can exceed the limit of memory mappings (`mmap`) set in the file `/proc/sys/vm/max_map_count`, resulting in an error like
+```
+JIT session error: Cannot allocate memory
+```
+Should this happen, ask your system administrator to increase the limit of memory mappings for example with the command
+```
+sysctl -w vm.max_map_count=262144
+```
+
 ### nVidia Jetson TX2
 
 Julia builds and runs on the [nVidia Jetson TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)

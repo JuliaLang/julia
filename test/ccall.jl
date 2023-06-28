@@ -802,7 +802,7 @@ if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
-# with cfucntion and that object identity is preserved
+# with cfunction and that object identity is preserved
 mutable struct IdentityTestKV{K, V}
     (T::Type{<:IdentityTestKV})(S) = (@test T === S; T)
 end
@@ -1516,6 +1516,12 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
+fn45187() = nothing
+
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1751,37 +1757,11 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
-        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
-        $(Expr(:foreigncall,
-               :($(Expr(:escape, :((:func, libstring))))),
-               :($(Expr(:escape, :Cstring))),
-               :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
-               0,
-               :(:ccall),
-               :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
-    # pointer interpolation
-    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
-    @test Base.remove_linenums!(call) == Base.remove_linenums!(
-    quote
-        func = $(Expr(:escape, :fptr))
-        begin
-            if !(func isa Ptr{Cvoid})
-                name = :fptr
-                throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
-            end
-        end
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
-    end)
-
+    local fptr = :x
+    @test_throws ArgumentError("interpolated function `fptr` was not a Ptr{Cvoid}, but Symbol") @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin
@@ -1910,6 +1890,12 @@ end
     function cglobal33413_literal_notype()
         return cglobal(:sin)
     end
+    function cglobal49142_nothing()
+        return cglobal(nothing)
+    end
+    function cglobal45187fn()
+        return cglobal((:fn, fn45187))
+    end
     @test unsafe_load(cglobal33413_ptrvar()) == 1
     @test unsafe_load(cglobal33413_ptrinline()) == 1
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
@@ -1918,6 +1904,10 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+    @test_throws(TypeError, cglobal49142_nothing())
+    @test_throws(TypeError, cglobal45187fn())
+    @test_throws(TypeError, @eval cglobal(nothing))
+    @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
 end
 
 @testset "ccall_effects" begin

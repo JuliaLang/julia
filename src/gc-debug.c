@@ -27,19 +27,16 @@ jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 // the end of the page.
 JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
-    if (!page_metadata(p))
+    if (!gc_alloc_map_is_set(p))
         // Not in the pool
         return NULL;
-    struct jl_gc_metadata_ext info = page_metadata_ext(p);
+    jl_gc_pagemeta_t *meta = page_metadata(p);
     char *page_begin = gc_page_data(p) + GC_PAGE_OFFSET;
     // In the page header
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    // Check if this is a free page
-    if (!(info.pagetable0->allocmap[info.pagetable0_i32] & (uint32_t)(1 << info.pagetable0_i)))
-        return NULL;
-    int osize = info.meta->osize;
+    int osize = meta->osize;
     // Shouldn't be needed, just in case
     if (osize == 0)
         return NULL;
@@ -111,44 +108,14 @@ static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
     }
 }
 
-static void gc_clear_mark_pagetable0(pagetable0_t *pagetable0, int bits)
+static void gc_clear_mark_outer(int bits)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_page(pagetable0->meta[pg_i * 32 + j], bits);
-                }
-            }
-        }
-    }
-}
-
-static void gc_clear_mark_pagetable1(pagetable1_t *pagetable1, int bits)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable0(pagetable1->meta0[pg_i * 32 + j], bits);
-                }
-            }
-        }
-    }
-}
-
-static void gc_clear_mark_pagetable(int bits)
-{
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable1(memory_map.meta1[pg_i * 32 + j], bits);
-                }
-            }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        while (pg != NULL) {
+            gc_clear_mark_page(pg, bits);
+            pg = pg->next;
         }
     }
 }
@@ -184,7 +151,7 @@ static void clear_mark(int bits)
         v = v->next;
     }
 
-    gc_clear_mark_pagetable(bits);
+    gc_clear_mark_outer(bits);
 }
 
 static void restore(void)
@@ -198,12 +165,21 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
+    // `gc_verify_track` is limited to single-threaded GC
+    if (jl_n_gcthreads != 0)
+        return;
     do {
         jl_gc_markqueue_t mq;
-        mq.current = mq.start = ptls->mark_queue.start;
-        mq.end = ptls->mark_queue.end;
-        mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
-        mq.chunk_end = ptls->mark_queue.chunk_end;
+        jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+        ws_queue_t *cq = &mq.chunk_queue;
+        ws_queue_t *q = &mq.ptr_queue;
+        jl_atomic_store_relaxed(&cq->top, 0);
+        jl_atomic_store_relaxed(&cq->bottom, 0);
+        jl_atomic_store_relaxed(&cq->array, jl_atomic_load_relaxed(&mq2->chunk_queue.array));
+        jl_atomic_store_relaxed(&q->top, 0);
+        jl_atomic_store_relaxed(&q->bottom, 0);
+        jl_atomic_store_relaxed(&q->array, jl_atomic_load_relaxed(&mq2->ptr_queue.array));
+        arraylist_new(&mq.reclaim_set, 32);
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
@@ -214,7 +190,7 @@ static void gc_verify_track(jl_ptls_t ptls)
             gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
         gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-        gc_mark_loop_(ptls, &mq);
+        gc_mark_loop_serial_(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -248,11 +224,22 @@ static void gc_verify_track(jl_ptls_t ptls)
 
 void gc_verify(jl_ptls_t ptls)
 {
+    // `gc_verify` is limited to single-threaded GC
+    if (jl_n_gcthreads != 0) {
+        jl_safe_printf("Warn. GC verify disabled in multi-threaded GC\n");
+        return;
+    }
     jl_gc_markqueue_t mq;
-    mq.current = mq.start = ptls->mark_queue.start;
-    mq.end = ptls->mark_queue.end;
-    mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
-    mq.chunk_end = ptls->mark_queue.chunk_end;
+    jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+    ws_queue_t *cq = &mq.chunk_queue;
+    ws_queue_t *q = &mq.ptr_queue;
+    jl_atomic_store_relaxed(&cq->top, 0);
+    jl_atomic_store_relaxed(&cq->bottom, 0);
+    jl_atomic_store_relaxed(&cq->array, jl_atomic_load_relaxed(&mq2->chunk_queue.array));
+    jl_atomic_store_relaxed(&q->top, 0);
+    jl_atomic_store_relaxed(&q->bottom, 0);
+    jl_atomic_store_relaxed(&q->array, jl_atomic_load_relaxed(&mq2->ptr_queue.array));
+    arraylist_new(&mq.reclaim_set, 32);
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
@@ -265,7 +252,7 @@ void gc_verify(jl_ptls_t ptls)
         gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-    gc_mark_loop_(ptls, &mq);
+    gc_mark_loop_serial_(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -349,10 +336,10 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         if (!in_freelist) {
             jl_value_t *dt = jl_typeof(jl_valueof(v));
             if (dt != (jl_value_t*)jl_buff_tag &&
-                    // the following are used by the deserializer to invalidate objects
-                    v->header != 0x10 && v->header != 0x20 &&
-                    v->header != 0x30 && v->header != 0x40 &&
-                    v->header != 0x50 && v->header != 0x60) {
+                    // the following may be use (by the deserializer) to invalidate objects
+                    v->header != 0xf10 && v->header != 0xf20 &&
+                    v->header != 0xf30 && v->header != 0xf40 &&
+                    v->header != 0xf50 && v->header != 0xf60) {
                 assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
             }
         }
@@ -541,7 +528,6 @@ void gc_scrub_record_task(jl_task_t *t)
 
 JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     if (jl_setjmp(buf, 0)) {
@@ -560,14 +546,6 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         // Make sure the sweep rebuild the freelist
         pg->has_marked = 1;
         pg->has_young = 1;
-        // Find the age bit
-        char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
-        int obj_id = (((char*)tag) - page_begin) / osize;
-        uint8_t *ages = pg->ages + obj_id / 8;
-        // Force this to be a young object to save some memory
-        // (especially on 32bit where it's more likely to have pointer-like
-        //  bit patterns)
-        *ages &= ~(1 << (obj_id % 8));
         memset(tag, 0xff, osize);
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;
@@ -976,7 +954,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
                    jl_ns2ms(sweep_pause), live_bytes / 1024,
                    gc_num.freed / 1024, estimate_freed / 1024,
-                   gc_num.freed - estimate_freed, pct, gc_num.since_sweep / 1024,
+                   gc_num.freed - estimate_freed, pct, gc_num.allocd / 1024,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
@@ -1156,7 +1134,7 @@ void gc_stats_big_obj(void)
 static int64_t poolobj_sizes[4];
 static int64_t empty_pages;
 
-static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
+static void gc_count_pool_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int osize = pg->osize;
     char *data = pg->data;
@@ -1175,44 +1153,16 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_count_pool_pagetable0(pagetable0_t *pagetable0)
-{
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_page(pagetable0->meta[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_count_pool_pagetable1(pagetable1_t *pagetable1)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
 static void gc_count_pool_pagetable(void)
 {
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_pagetable1(memory_map.meta1[pg_i * 32 + j]);
-                }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        while (pg != NULL) {
+            if (gc_alloc_map_is_set(pg->data)) {
+                gc_count_pool_page(pg);
             }
+            pg = pg->next;
         }
     }
 }
@@ -1266,30 +1216,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
-}
-
-// Print a backtrace from the `mq->start` of the mark queue up to `mq->current`
-// `offset` will be added to `mq->current` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset)
-{
-    jl_jmp_buf *old_buf = jl_get_safe_restore();
-    jl_jmp_buf buf;
-    jl_set_safe_restore(&buf);
-    if (jl_setjmp(buf, 0) != 0) {
-        jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
-        jl_set_safe_restore(old_buf);
-        return;
-    }
-    jl_value_t **start = mq->start;
-    jl_value_t **end = mq->current + offset;
-    for (; start < end; start++) {
-        jl_value_t *obj = *start;
-        jl_taggedvalue_t *o = jl_astaggedvalue(obj);
-        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj,
-                       (uintptr_t)o->header, ((uintptr_t)o->header & 3));
-        jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
-    }
-    jl_set_safe_restore(old_buf);
 }
 
 static int gc_logging_enabled = 0;

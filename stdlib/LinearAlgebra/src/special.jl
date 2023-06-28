@@ -107,6 +107,14 @@ for op in (:+, :-)
     end
 end
 
+# disambiguation between triangular and banded matrices, banded ones "dominate"
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)
@@ -335,9 +343,7 @@ const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpo
 promote_to_array_type(::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 
 Base._cat(dims, xs::_DenseConcatGroup...) = Base._cat_t(dims, promote_eltype(xs...), xs...)
-vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
 vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype

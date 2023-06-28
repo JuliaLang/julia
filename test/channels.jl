@@ -311,6 +311,7 @@ end
 
 @testset "timedwait on multiple channels" begin
     Experimental.@sync begin
+        sync = Channel(1)
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)
@@ -320,20 +321,17 @@ end
         @test !callback()
         @test timedwait(callback, 0) === :timed_out
 
-        @async begin sleep(0.5); put!(rr1, :ok) end
+        @async begin put!(sync, :ready); sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
-        @async begin sleep(2.0); put!(rr3, :ok) end
+        @async begin @test take!(rr3) == :done end
 
+        @test take!(sync) == :ready
         et = @elapsed timedwait(callback, 1)
 
-        # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-        try
-            @assert (et >= 1.0) && (et <= 1.5)
-            @assert !isready(rr3)
-        catch
-            @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
-        end
+        @test et >= 1.0
+
         @test isready(rr1)
+        put!(rr3, :done)
     end
 end
 

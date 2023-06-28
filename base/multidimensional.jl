@@ -2,8 +2,8 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import .Base: eltype, length, size, first, last, in, getindex, setindex!, IndexStyle,
-                  min, max, zero, oneunit, isless, eachindex, ndims, IteratorSize,
+    import .Base: eltype, length, size, first, last, in, getindex, setindex!,
+                  min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule
 
     import .Base: +, -, *, (:)
@@ -342,8 +342,14 @@ module IteratorsMD
 
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
-    Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
     Base.has_offset_axes(iter::CartesianIndices) = Base.has_offset_axes(iter.indices...)
+    @propagate_inbounds function isassigned(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
+        for i in 1:N
+            isassigned(iter.indices[i], I[i]) || return false
+        end
+        return true
+    end
+
     # getindex for a 0D CartesianIndices is necessary for disambiguation
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
         CartesianIndex()
@@ -383,10 +389,6 @@ module IteratorsMD
         getindex(c, C)
     end
 
-    ndims(R::CartesianIndices) = ndims(typeof(R))
-    ndims(::Type{CartesianIndices{N}}) where {N} = N
-    ndims(::Type{CartesianIndices{N,TT}}) where {N,TT} = N
-
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianIndices(axes(A))
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
@@ -394,10 +396,6 @@ module IteratorsMD
         Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
         CartesianIndices(axsA)
     end
-
-    eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
-    eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
-    IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
     @inline function iterate(iter::CartesianIndices)
         iterfirst = first(iter)
@@ -509,8 +507,30 @@ module IteratorsMD
     end
 
     # reversed CartesianIndices iteration
+    @inline function Base._reverse(iter::CartesianIndices, ::Colon)
+        CartesianIndices(reverse.(iter.indices))
+    end
 
-    Base.reverse(iter::CartesianIndices) = CartesianIndices(reverse.(iter.indices))
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dim::Integer)
+        1 <= dim <= ndims(iter) || throw(ArgumentError(Base.LazyString("invalid dimension ", dim, " in reverse")))
+        ndims(iter) == 1 && return Base._reverse(iter, :)
+        indices = iter.indices
+        return CartesianIndices(Base.setindex(indices, reverse(indices[dim]), dim))
+    end
+
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dims::Tuple{Vararg{Integer}})
+        indices = iter.indices
+        # use `sum` to force const fold
+        dimrev = ntuple(i -> sum(==(i), dims; init = 0) == 1, Val(length(indices)))
+        length(dims) == sum(dimrev) || throw(ArgumentError(Base.LazyString("invalid dimensions ", dims, " in reverse")))
+        length(dims) == length(indices) && return Base._reverse(iter, :)
+        indices′ = map((i, f) -> f ? (@noinline reverse(i)) : i, indices, dimrev)
+        return CartesianIndices(indices′)
+    end
+
+    # fix ambiguity with array.jl:
+    Base._reverse(iter::CartesianIndices{1}, dims::Tuple{Integer}) =
+        Base._reverse(iter, first(dims))
 
     @inline function iterate(r::Reverse{<:CartesianIndices})
         iterfirst = last(r.itr)
@@ -1543,7 +1563,28 @@ end
 end
 
 isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
-isassigned(a::AbstractArray, i::Union{Integer, CartesianIndex}...) = isassigned(a, CartesianIndex(i))
+function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
+    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(i...))
+    @boundscheck checkbounds(Bool, A, i...) || return false
+    S = IndexStyle(A)
+    ninds = length(i)
+    if (isa(S, IndexLinear) && ninds != 1)
+        return @inbounds isassigned(A, _to_linear_index(A, i...))
+    elseif (!isa(S, IndexLinear) && ninds != ndims(A))
+        return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
+    else
+       try
+            A[i...]
+            true
+        catch e
+            if isa(e, BoundsError) || isa(e, UndefRefError)
+                return false
+            else
+                rethrow()
+            end
+        end
+    end
+end
 
 ## permutedims
 

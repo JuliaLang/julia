@@ -56,6 +56,23 @@ function artifacts_dirs(args...)
     end
 end
 
+# Recursive function, let's not make this a closure because it then has to
+# be boxed.
+function parse_mapping(mapping::String, name::String, override_file::String)
+    if !isabspath(mapping) && !isempty(mapping)
+        mapping = tryparse(Base.SHA1, mapping)
+        if mapping === nothing
+            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
+        end
+    end
+    return mapping
+end
+function parse_mapping(mapping::Dict, name::String, override_file::String)
+    return Dict(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
+end
+# Fallthrough for invalid Overrides.toml files
+parse_mapping(mapping, name::String, override_file::String) = nothing
+
 """
     ARTIFACT_OVERRIDES
 
@@ -103,24 +120,9 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         # Load the toml file
         depot_override_dict = parse_toml(override_file)
 
-        function parse_mapping(mapping::String, name::String)
-            if !isabspath(mapping) && !isempty(mapping)
-                mapping = tryparse(Base.SHA1, mapping)
-                if mapping === nothing
-                    @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
-                end
-            end
-            return mapping
-        end
-        function parse_mapping(mapping::Dict, name::String)
-            return Dict(k => parse_mapping(v, name) for (k, v) in mapping)
-        end
-        # Fallthrough for invalid Overrides.toml files
-        parse_mapping(mapping, name::String) = nothing
-
         for (k, mapping) in depot_override_dict
             # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
-            mapping = parse_mapping(mapping, k)
+            mapping = parse_mapping(mapping, k, override_file)
             if mapping === nothing
                 @error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
                 continue
@@ -652,18 +654,13 @@ access a single file/directory within an artifact.  Example:
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
 """
-macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
+macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
-    # Sometimes we know the exact path to the Artifacts.toml file, so we can save some lookups
-    local artifacts_toml = if artifacts_toml_path === nothing || artifacts_toml_path == :(nothing)
-        find_artifacts_toml(srcfile)
-    else
-        eval(artifacts_toml_path)
-    end
+    local artifacts_toml = find_artifacts_toml(srcfile)
     if artifacts_toml === nothing
         error(string(
             "Cannot locate '(Julia)Artifacts.toml' file when attempting to use artifact '",
@@ -693,7 +690,7 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && (platform === nothing || platform == :(nothing))
+    if isa(name, AbstractString) && platform === nothing
         # To support slash-indexing, we need to split the artifact name from the path tail:
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
@@ -743,5 +740,8 @@ artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml:
 precompile(load_artifacts_toml, (String,))
 precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
+precompile(parse_mapping, (String, String, String))
+precompile(parse_mapping, (Dict{String, Any}, String, String))
+
 
 end # module Artifacts

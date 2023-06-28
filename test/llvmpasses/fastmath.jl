@@ -14,7 +14,7 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 import Base.FastMath
 
-# CHECK: call fast float @llvm.sqrt.f32(float %0)
+# CHECK: call fast float @llvm.sqrt.f32(float %{{[0-9]+}})
 emit(FastMath.sqrt_fast, Float32)
 
 

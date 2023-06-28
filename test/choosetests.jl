@@ -21,7 +21,7 @@ const TESTNAMES = [
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "client",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
-        "some", "meta", "stacktraces", "docs",
+        "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile",
@@ -157,8 +157,8 @@ function choosetests(choices = [])
         "compiler/datastructures", "compiler/inference", "compiler/effects",
         "compiler/validation", "compiler/ssair", "compiler/irpasses",
         "compiler/codegen", "compiler/inline", "compiler/contextual",
-        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/local",
-        "compiler/EscapeAnalysis/interprocedural"])
+        "compiler/invalidation", "compiler/AbstractInterpreter",
+        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "stdlib", STDLIBS)

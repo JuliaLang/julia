@@ -26,7 +26,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     global reinterpret
 
-    """
+    @doc """
         reinterpret(T::DataType, A::AbstractArray)
 
     Construct a view of the array with the same binary data as the given
@@ -38,13 +38,13 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     ```jldoctest
     julia> reinterpret(Float32, UInt32[1 2 3 4 5])
     1×5 reinterpret(Float32, ::Matrix{UInt32}):
-    1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
+     1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 
     julia> reinterpret(Complex{Int}, 1:6)
     3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
-    1 + 2im
-    3 + 4im
-    5 + 6im
+     1 + 2im
+     3 + 4im
+     5 + 6im
     ```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
@@ -387,8 +387,6 @@ end
     end
 end
 
-@inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
-
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -434,7 +432,7 @@ end
                 while nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                    memcpy(tptr + nbytes_copied, sptr + sidx, nb)
                     nbytes_copied += nb
                     sidx = 0
                     i += 1
@@ -574,7 +572,7 @@ end
                 if sidx != 0
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
-                    _memcpy!(sptr + sidx, tptr, nb)
+                    memcpy(sptr + sidx, tptr, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -583,7 +581,7 @@ end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -592,7 +590,7 @@ end
                 if nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
             end
