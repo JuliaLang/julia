@@ -119,10 +119,11 @@ const JULIANEPOCH = value(DateTime(-4713, 11, 24, 12))
 localjulianepoch() = JULIANEPOCH + (localepoch() - UNIXEPOCH)
 
 """
-    julian2datetime(julian_days) -> DateTime
+    julian2datetime(julian_days::Real; localtime::Bool=false) -> DateTime
 
 Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and return the
-corresponding `DateTime`.
+corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
+time zone, otherwise it is in UTC/GMT
 """
 function julian2datetime(f::Real; localtime::Bool=false)
     rata = (localtime ? localjulianepoch() : JULIANEPOCH) + round(Int64, Int64(86400000) * f)
@@ -130,10 +131,13 @@ function julian2datetime(f::Real; localtime::Bool=false)
 end
 
 """
-    datetime2julian(dt::DateTime) -> Float64
+    datetime2julian(dt::DateTime; localtime::Bool=false) -> Float64
 
 Take the given `DateTime` and return the number of Julian calendar days since the julian
 epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
+
+If `localtime` is `true`, then the number of seconds since the local epoch
+corresponding to julian epoch `-4713-11-24T12:00:00` is returned.
 """
 function datetime2julian(dt::DateTime; localtime::Bool=false)
     return (value(dt) - (localtime ? localjulianepoch() : JULIANEPOCH)) / 86400000.0
