@@ -133,7 +133,7 @@ end
     # warmup
     wrapper(a)
 
-    @eval Allocs.@profile sample_rate=1 wrapper(a)
+    @eval Allocs.@profile sample_rate=1 wrapper($a)
 
     prof = Allocs.fetch()
     Allocs.clear()

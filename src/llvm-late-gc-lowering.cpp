@@ -2415,7 +2415,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                             CI->getArgOperand(1),
                             recordAllocIntrinsic->getFunctionType()->getParamType(1),
                             false),
-                        tag
+                        builder.CreatePtrToInt(tag, T_size),
                     });
                 // TODO: is this needed? What is it?
                 //record_alloc->setOrdering(AtomicOrdering::Unordered);
