@@ -201,22 +201,22 @@ julia> rng = MersenneTwister(1234);
 
 julia> shuffle!(rng, Vector(1:16))
 16-element Vector{Int64}:
-  2
- 15
-  5
- 14
+ 16
   1
-  9
+ 14
+ 12
+  5
  10
+  4
+ 15
+ 13
+  3
+  7
+  9
   6
  11
-  3
- 16
-  7
-  4
- 12
   8
- 13
+  2
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
@@ -249,16 +249,16 @@ julia> rng = MersenneTwister(1234);
 
 julia> shuffle(rng, Vector(1:10))
 10-element Vector{Int64}:
-  6
-  1
- 10
   2
-  3
+  1
+  7
   9
   5
-  7
+ 10
   4
   8
+  6
+  3
 ```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
