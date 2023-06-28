@@ -1167,6 +1167,60 @@ static void gc_count_pool_pagetable(void)
     }
 }
 
+extern int jl_n_sweepthreads;
+
+size_t gc_count_allocd_pages_in_allocd_map(void)
+{
+    if (jl_n_sweepthreads > 0) {
+        return 0;
+    }
+    size_t count = 0;
+    for (int i = 0; i < REGION2_PG_COUNT; i++) {
+        pagetable1_t *meta1 = alloc_map.meta1[i];
+        if (meta1 == NULL) {
+            continue;
+        }
+        for (int j = 0; j < REGION1_PG_COUNT; j++) {
+            pagetable0_t *meta0 = meta1->meta0[j];
+            if (meta0 == NULL) {
+                continue;
+            }
+            for (int k = 0; k < REGION0_PG_COUNT; k++) {
+                uint8_t bit = meta0->meta[k];
+                assert(bit == 0 || bit == 1);
+                if (bit != 0) {
+                    count++;
+                }
+            }
+        }
+    }
+    return count;
+}
+
+size_t gc_count_allocd_pages_in_allocd_lists(void)
+{
+    if (jl_n_sweepthreads > 0) {
+        return 0;
+    }
+    size_t count = 0;
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 != NULL) {
+            jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+            while (pg != NULL) {
+                pg = pg->next;
+                count++;
+            }
+            pg = ptls2->page_metadata_lazily_freed;
+            while (pg != NULL) {
+                pg = pg->next;
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 void gc_count_pool(void)
 {
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));

@@ -848,6 +848,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 #ifdef MEMDEBUG
     gc_setmark_big(ptls, o, mark_mode);
 #else
+    assert(page != NULL);
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
@@ -1452,6 +1453,7 @@ done:
             push_lf_page_metadata_back(&global_page_pool_freed, pg);
         }
         else {
+            gc_alloc_map_set(pg->data, 0);
             push_lf_page_metadata_back(&global_page_pool_lazily_freed, pg);
         }
     #else
@@ -1502,6 +1504,7 @@ static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_
 // setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(int sweep_full)
 {
+    assert(gc_count_allocd_pages_in_allocd_map() == gc_count_allocd_pages_in_allocd_lists());
     gc_time_pool_start();
     lazy_freed_pages = 0;
 
