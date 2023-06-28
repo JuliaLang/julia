@@ -32,6 +32,7 @@ STATISTIC(ErasedPreserveEnd, "Number of gc_preserve_end instructions removed fro
 STATISTIC(HoistedWriteBarrier, "Number of write barriers hoisted out of a loop");
 STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 STATISTIC(HoistedTypeof, "Number of typeofs hoisted out of a loop");
+STATISTIC(HoistedPointerFromObjref, "Number of pointer_from_objref hoisted out of a loop");
 
 /*
  * Julia LICM pass.
@@ -160,7 +161,7 @@ struct JuliaLICM : public JuliaPassContext {
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
         if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
+            !alloc_obj_func && !typeof_func && !pointer_from_objref_func) {
             LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
         }
@@ -183,6 +184,22 @@ struct JuliaLICM : public JuliaPassContext {
             }
             return _exit_pts;
         };
+
+        SmallPtrSet<Value *, 4> preserved_values;
+        if (pointer_from_objref_func) {
+            for (auto &I : *preheader) {
+                auto call = dyn_cast<CallInst>(&I);
+                if (!call)
+                    continue;
+                Value *callee = call->getCalledOperand();
+                assert(callee != nullptr);
+                if (callee == gc_preserve_begin_func) {
+                    for (auto &op : call->args()) {
+                        preserved_values.insert(op);
+                    }
+                }
+            }
+        }
 
         bool changed = false;
         // Scan in the right order so that we'll hoist the `begin`
@@ -220,6 +237,9 @@ struct JuliaLICM : public JuliaPassContext {
                         return OptimizationRemark(DEBUG_TYPE, "Hoisted", call)
                             << "hoisting preserve begin " << ore::NV("PreserveBegin", call);
                     });
+                    for (auto &op : call->args()) {
+                        preserved_values.insert(op);
+                    }
                     changed = true;
                 }
                 else if (callee == gc_preserve_end_func) {
@@ -357,6 +377,23 @@ struct JuliaLICM : public JuliaPassContext {
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting typeof " << ore::NV("typeof", call);
+                    });
+                } else if (callee == pointer_from_objref_func) {
+                    assert(call->arg_size() == 1);
+                    if (!L->isLoopInvariant(call->getArgOperand(0))) {
+                        dbgs() << "Failed to hoist pointer_from_objref because object is not loop invariant: " << *call->getArgOperand(0) << "\n";
+                        continue;
+                    }
+                    if (!preserved_values.contains(call->getArgOperand(0))) {
+                        dbgs() << "Failed to hoist pointer_from_objref because object could not be proven to be preserved through the lifetime of the loop: " << *call->getArgOperand(0) << "\n";
+                        continue;
+                    }
+                    ++HoistedPointerFromObjref;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
+                    REMARK([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting pointer_from_objref " << ore::NV("pointer_from_objref", call);
                     });
                 }
             }
