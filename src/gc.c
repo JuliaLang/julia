@@ -21,6 +21,9 @@ _Atomic(int) gc_n_threads_marking;
 _Atomic(int) gc_master_tid;
 // `tid` of first GC thread
 int gc_first_tid;
+// Mutex/cond used to synchronize wakeup of GC threads on parallel marking
+uv_mutex_t gc_threads_lock;
+uv_cond_t gc_threads_cond;
 // To indicate whether concurrent sweeping should run
 uv_sem_t gc_sweep_assists_needed;
 
@@ -2770,13 +2773,10 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
     if (master) {
         jl_atomic_store(&gc_master_tid, ptls->tid);
         // Wake threads up and try to do some work
+        uv_mutex_lock(&gc_threads_lock);
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
-            jl_ptls_t ptls2 = gc_all_tls_states[i];
-            uv_mutex_lock(&ptls2->sleep_lock);
-            uv_cond_signal(&ptls2->wake_signal);
-            uv_mutex_unlock(&ptls2->sleep_lock);
-        }
+        uv_cond_signal(&gc_threads_cond);
+        uv_mutex_unlock(&gc_threads_lock);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
@@ -3536,6 +3536,8 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
+    uv_mutex_init(&gc_threads_lock);
+    uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
 
     jl_gc_init_page();
