@@ -149,7 +149,8 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
             return OptimizationRemark(DEBUG_TYPE, "MarkedUnsafeAlgebra", *K)
                    << "marked unsafe algebra on " << ore::NV("Instruction", *K);
         });
-        (*K)->setFast(true);
+        (*K)->setHasAllowReassoc(true);
+        (*K)->setHasAllowContract(true);
         ++length;
     }
     ReductionChainLength += length;
