@@ -169,6 +169,7 @@ ifeq ($(WITH_ITTAPI),1)
 DEP_LIBS += ittapi
 endif
 
+DEP_LIBS += liburing
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
@@ -192,7 +193,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax
+	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax liburing
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -252,6 +253,7 @@ include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
+include $(SRCDIR)/liburing.mk
 
 # vendored Julia libs
 include $(SRCDIR)/JuliaSyntax.mk

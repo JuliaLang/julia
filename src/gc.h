@@ -445,6 +445,8 @@ void jl_gc_debug_init(void);
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
+void* jl_gc_free_page_prequel(jl_gc_pagemeta_t *pg, size_t *decommit_size); JL_NOTSAFEPOINT
+
 
 // GC debug
 
