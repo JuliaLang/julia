@@ -316,8 +316,7 @@ function NewInstruction(inst::Instruction;
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-effect_free(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE))
-non_effect_free(newinst::NewInstruction) = NewInstruction(newinst; flag=sub_flag(newinst, IR_FLAG_EFFECT_FREE))
+effect_free_and_nothrow(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
 with_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=add_flag(newinst, flags))
 without_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
 function add_flag(newinst::NewInstruction, newflag::UInt8)
@@ -1677,7 +1676,7 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:inst]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    effect_free = (inst[:flag] & IR_FLAG_EFFECT_FREE) ≠ 0
+    effect_free = (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     effect_free || return false
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
