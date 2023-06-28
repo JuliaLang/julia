@@ -2349,22 +2349,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
 
-                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
-                // `julia.gc_alloc_obj` except it doesn't set the tag.
-                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
-                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
-                auto newI = builder.CreateCall(
-                    allocBytesIntrinsic,
-                    {
-                        ptls,
-                        builder.CreateIntCast(
-                            CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
-                            false)
-                    });
-                newI->takeName(CI);
-
                 // LLVM alignment/bit check is not happy about addrspacecast and refuse
                 // to remove write barrier because of it.
                 // We pretty much only load using `T_size` so try our best to strip
@@ -2403,12 +2387,24 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                         builder.CreateAlignmentAssumption(DL, tag, 16);
                     }
                 }
-                // Set the tag.
-                auto &M = *builder.GetInsertBlock()->getModule();
-                StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
-                store->setOrdering(AtomicOrdering::Unordered);
-                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+
+                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
+                // `julia.gc_alloc_obj` except it specializes the call based on the constant
+                // size of the object to allocate, to save one indirection.
+                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
+                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
+                auto newI = builder.CreateCall(
+                    allocBytesIntrinsic,
+                    {
+                        ptls,
+                        builder.CreateIntCast(
+                            CI->getArgOperand(1),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false),
+                        builder.CreatePtrToInt(tag, T_size),
+                    });
+                newI->takeName(CI);
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
