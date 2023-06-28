@@ -222,13 +222,13 @@ julia> shuffle!(rng, Vector(1:16))
 function shuffle!(r::AbstractRNG, a::AbstractArray)
     require_one_based_indexing(a)
     n = length(a)
-    n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
-    mask = nextpow(2, n) - 1
-    for i = n:-1:2
-        (mask >> 1) == i && (mask >>= 1)
+    n == 0 && return a
+    mask = 3
+    @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i, mask))
         a[i], a[j] = a[j], a[i]
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
@@ -326,7 +326,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
             a[i] = a[j]
         end
         a[j] = i
-        i == 1+mask && (mask = 2mask + 1)
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
