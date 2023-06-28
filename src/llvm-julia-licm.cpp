@@ -31,6 +31,7 @@ STATISTIC(SunkPreserveEnd, "Number of gc_preserve_end instructions sunk out of a
 STATISTIC(ErasedPreserveEnd, "Number of gc_preserve_end instructions removed from nonterminating loops");
 STATISTIC(HoistedWriteBarrier, "Number of write barriers hoisted out of a loop");
 STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
+STATISTIC(HoistedTypeof, "Number of typeofs hoisted out of a loop");
 
 /*
  * Julia LICM pass.
@@ -345,6 +346,18 @@ struct JuliaLICM : public JuliaPassContext {
                         MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
+                } else if (callee == typeof_func) {
+                    assert(call->arg_size() == 1);
+                    if (!L->isLoopInvariant(call->getArgOperand(0))) {
+                        dbgs() << "Failed to hoist typeof because object is not loop invariant: " << *call->getArgOperand(0) << "\n";
+                    }
+                    ++HoistedTypeof;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
+                    REMARK([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting typeof " << ore::NV("typeof", call);
+                    });
                 }
             }
         }
