@@ -512,7 +512,6 @@ function run_passes(
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

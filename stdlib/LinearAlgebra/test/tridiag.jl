@@ -458,7 +458,7 @@ end
     end
 end
 
-@testset "SymTridiagonal block matrix" begin
+@testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
@@ -472,6 +472,27 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
+    @test @inferred A[1,1] == M
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == M
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(M, n)
+    @test @inferred diag(A, -1) == fill(M, n-1)
+    @test_throws MethodError diag(A, -2)
+    @test_throws MethodError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
+
+    for n in 0:2
+        dv, ev = fill(M, n), fill(M, max(n-1,0))
+        A = SymTridiagonal(dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+
+        A = Tridiagonal(ev, dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+    end
 end
 
 @testset "Issue 12068" begin

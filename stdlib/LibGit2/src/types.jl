@@ -904,12 +904,13 @@ end
 
 Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
-@kwdef struct ConfigEntry
-    name::Cstring       = Cstring(C_NULL)
-    value::Cstring      = Cstring(C_NULL)
-    level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Cvoid}    = C_NULL
-    payload::Any        = nothing
+struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    include_depth::Cuint
+    level::GIT_CONFIG
+    free::Ptr{Cvoid}
+    payload::Ptr{Cvoid} # User is not permitted to read or write this field
 end
 @assert Base.allocatedinline(ConfigEntry)
 

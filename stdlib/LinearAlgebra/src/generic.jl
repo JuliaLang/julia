@@ -1591,7 +1591,11 @@ end
     ξ1/ν
 end
 
-# apply reflector from left
+"""
+    reflectorApply!(x, τ, A)
+
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+"""
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)

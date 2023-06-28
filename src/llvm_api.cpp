@@ -9,7 +9,8 @@
 #define __STDC_CONSTANT_MACROS
 #endif
 
-#include <jitlayers.h>
+#include "jitlayers.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Error.h>
@@ -50,6 +51,15 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::OrcV2CAPIHelper::PoolEntry,
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::IRCompileLayer, LLVMOrcIRCompileLayerRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
                                    LLVMOrcMaterializationResponsibilityRef)
+
+typedef struct LLVMOpaqueModulePassManager *LLVMModulePassManagerRef;
+typedef struct LLVMOpaqueFunctionPassManager *LLVMFunctionPassManagerRef;
+typedef struct LLVMOpaqueLoopPassManager *LLVMLoopPassManagerRef;
+
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::ModulePassManager, LLVMModulePassManagerRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::FunctionPassManager, LLVMFunctionPassManagerRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::LoopPassManager, LLVMLoopPassManagerRef)
+
 extern "C" {
 
 JL_DLLEXPORT_CODEGEN JuliaOJITRef JLJITGetJuliaOJIT_impl(void)
@@ -129,5 +139,28 @@ JLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
 {
     return wrap(&unwrap(JIT)->getIRCompileLayer());
 }
+
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT_CODEGEN void LLVMExtraMPMAdd##CLASS##_impl(LLVMModulePassManagerRef PM) \
+    { \
+        unwrap(PM)->addPass(CREATE_PASS); \
+    }
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT_CODEGEN void LLVMExtraFPMAdd##CLASS##_impl(LLVMFunctionPassManagerRef PM) \
+    { \
+        unwrap(PM)->addPass(CREATE_PASS); \
+    }
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT_CODEGEN void LLVMExtraLPMAdd##CLASS##_impl(LLVMLoopPassManagerRef PM) \
+    { \
+        unwrap(PM)->addPass(CREATE_PASS); \
+    }
+
+#include "llvm-julia-passes.inc"
+
+#undef MODULE_PASS
+#undef CGSCC_PASS
+#undef FUNCTION_PASS
+#undef LOOP_PASS
 
 } // extern "C"

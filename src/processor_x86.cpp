@@ -227,8 +227,11 @@ constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
 constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);
 
+// technically xsaves is part of znver1, znver2, and znver3
+// Disabled due to Erratum 1386
+// See: https://github.com/JuliaLang/julia/issues/50102
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
-                                                    rdseed, sha, sse4a, xsavec, xsaves);
+                                                    rdseed, sha, sse4a, xsavec);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 
