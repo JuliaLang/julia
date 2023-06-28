@@ -369,11 +369,13 @@ struct JuliaLICM : public JuliaPassContext {
                 } else if (callee == typeof_func) {
                     assert(call->arg_size() == 1);
                     if (!L->isLoopInvariant(call->getArgOperand(0))) {
-                        dbgs() << "Failed to hoist typeof because object is not loop invariant: " << *call->getArgOperand(0) << "\n";
+                        LLVM_DEBUG(dbgs() << "Failed to hoist typeof because object is not loop invariant: " << *call->getArgOperand(0) << "\n");
+                        continue;
                     }
                     ++HoistedTypeof;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
+                    LLVM_DEBUG(dbgs() << "Hoisted typeof " << *call << "\n");
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting typeof " << ore::NV("typeof", call);
@@ -381,16 +383,17 @@ struct JuliaLICM : public JuliaPassContext {
                 } else if (callee == pointer_from_objref_func) {
                     assert(call->arg_size() == 1);
                     if (!L->isLoopInvariant(call->getArgOperand(0))) {
-                        dbgs() << "Failed to hoist pointer_from_objref because object is not loop invariant: " << *call->getArgOperand(0) << "\n";
+                        LLVM_DEBUG(dbgs() << "Failed to hoist pointer_from_objref because object is not loop invariant: " << *call->getArgOperand(0) << "\n");
                         continue;
                     }
                     if (!preserved_values.contains(call->getArgOperand(0))) {
-                        dbgs() << "Failed to hoist pointer_from_objref because object could not be proven to be preserved through the lifetime of the loop: " << *call->getArgOperand(0) << "\n";
+                        LLVM_DEBUG(dbgs() << "Failed to hoist pointer_from_objref because object could not be proven to be preserved through the lifetime of the loop: " << *call->getArgOperand(0) << "\n");
                         continue;
                     }
                     ++HoistedPointerFromObjref;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
+                    LLVM_DEBUG(dbgs() << "Hoisted pointer_from_objref " << *call << "\n");
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting pointer_from_objref " << ore::NV("pointer_from_objref", call);
