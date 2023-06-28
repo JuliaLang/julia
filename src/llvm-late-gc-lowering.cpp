@@ -2404,6 +2404,24 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
+                auto recordAllocIntrinsic = getOrDeclare(jl_well_known::GCRecordAllocToProfile);
+                auto value = newI;
+                //auto record_alloc =
+                builder.CreateCall(
+                    recordAllocIntrinsic,
+                    {
+                        value,
+                        builder.CreateIntCast(
+                            CI->getArgOperand(1),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false),
+                        tag
+                    });
+                // TODO: is this needed? What is it?
+                //record_alloc->setOrdering(AtomicOrdering::Unordered);
+                //record_alloc->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+
+
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);

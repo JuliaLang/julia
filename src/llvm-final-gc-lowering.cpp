@@ -48,6 +48,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
+    Function *recordAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
     Type *T_size;
@@ -253,10 +254,11 @@ bool FinalLowerGC::doInitialization(Module &M) {
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    recordAllocFunc = getOrDeclare(jl_well_known::GCRecordAllocToProfile);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = M.getDataLayout().getIntPtrType(M.getContext());
 
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, recordAllocFunc, allocTypedFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -272,8 +274,8 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
-    queueRootFunc = poolAllocFunc = bigAllocFunc = allocTypedFunc = nullptr;
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, recordAllocFunc, allocTypedFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = recordAllocFunc = allocTypedFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;

@@ -147,6 +147,9 @@ namespace jl_well_known {
     // `jl_gc_pool_alloc`: allocates bytes.
     extern const WellKnownFunctionDescription GCPoolAlloc;
 
+    // `jl_maybe_record_alloc_to_profile`: records an allocation to the alloc profile.
+    extern const WellKnownFunctionDescription GCRecordAllocToProfile;
+
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
 
