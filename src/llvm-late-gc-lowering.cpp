@@ -2413,7 +2413,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                         value,
                         builder.CreateIntCast(
                             CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            recordAllocIntrinsic->getFunctionType()->getParamType(1),
                             false),
                         tag
                     });

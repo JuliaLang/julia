@@ -1316,7 +1316,7 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
 }
 
 // Record an allocation, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_maybe_record_alloc_to_profile(jl_value_t* val, int osize,
+JL_DLLEXPORT void jl_maybe_record_alloc_to_profile(jl_value_t* val, int osize,
                                         jl_value_t* type)
 {
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);

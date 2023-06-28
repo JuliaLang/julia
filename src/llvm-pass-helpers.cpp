@@ -281,10 +281,12 @@ namespace jl_well_known {
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
             auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto T_void = Type::getVoidTy(ctx);
             auto recordAllocFunc = Function::Create(
                 FunctionType::get(
-                    T_prjlvalue,
+                    T_void,
                     {
+                        //T_prjlvalue,
                         T_size,
                         Type::getInt32Ty(ctx),
                         T_size,
@@ -292,8 +294,9 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_RECORD_ALLOC_TO_PROFILE_NAME);
-            recordAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
-            return addGCAllocAttributes(recordAllocFunc);
+            // TODO: what is this?
+            //recordAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return recordAllocFunc;
         });
 
     const WellKnownFunctionDescription GCQueueRoot(
