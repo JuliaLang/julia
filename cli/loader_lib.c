@@ -227,13 +227,13 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     size_t have_read = 0;
     while (1) {
         ssize_t n = read(fd, buf + have_read, len - have_read);
-        have_read += n;
         if (n == 0) break;
         if (n == -1 && errno != EINTR) {
             perror("(julia) libstdcxxprobe read");
             exit(1);
         }
         if (n == -1 && errno == EINTR) continue;
+        have_read += n;
         if (have_read == len) {
             buf = (char *)realloc(buf, 1 + (len *= 2));
             if (!buf) {
@@ -345,6 +345,8 @@ static char *libstdcxxprobe(void)
             free(path);
             return NULL;
         }
+        // Ensure that `path` is zero-terminated.
+        path[pathlen] = '\0';
         return path;
     }
 }
@@ -525,8 +527,13 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr != NULL && key != NULL)
-        jl_pgcstack_setkey(fptr, key);
+    _Atomic(char) *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
+    if (fptr != NULL && key != NULL && semaphore != NULL) {
+        char already_used = 0;
+        atomic_compare_exchange_strong(semaphore, &already_used, 1);
+        if (already_used == 0) // RMW succeeded - we have exclusive access
+            jl_pgcstack_setkey(fptr, key);
+    }
 #endif
 
     // jl_options must be initialized very early, in case an embedder sets some

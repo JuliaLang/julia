@@ -32,6 +32,10 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 const IR_FLAG_NOTHROW     = 0x01 << 5
 # This is :consistent
 const IR_FLAG_CONSISTENT  = 0x01 << 6
+# An optimization pass has updated this statement in a way that may
+# have exposed information that inference did not see. Re-running
+# inference on this statement may be profitable.
+const IR_FLAG_REFINED     = 0x01 << 7
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -39,7 +43,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 const InlineCostType = UInt16
 const MAX_INLINE_COST = typemax(InlineCostType)
 const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, Vector{UInt8}}
+const MaybeCompressed = Union{CodeInfo, String}
 
 is_inlineable(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
@@ -61,26 +65,6 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 #####################
 # OptimizationState #
 #####################
-
-struct EdgeTracker
-    edges::Vector{Any}
-    valid_worlds::RefValue{WorldRange}
-    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
-        new(edges, RefValue{WorldRange}(range))
-end
-EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
-
-intersect!(et::EdgeTracker, range::WorldRange) =
-    et.valid_worlds[] = intersect(et.valid_worlds[], range)
-
-function add_backedge!(et::EdgeTracker, mi::MethodInstance)
-    push!(et.edges, mi)
-    return nothing
-end
-function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    push!(et.edges, invokesig, mi)
-    return nothing
-end
 
 is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
@@ -121,16 +105,16 @@ function inlining_policy(interp::AbstractInterpreter,
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
-    et::Union{EdgeTracker,Nothing}
+    edges::Vector{Any}
     world::UInt
     interp::Interp
 end
-function InliningState(frame::InferenceState, interp::AbstractInterpreter)
-    et = EdgeTracker(frame.stmt_edges[1]::Vector{Any}, frame.valid_worlds)
-    return InliningState(et, frame.world, interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter)
+    edges = sv.stmt_edges[1]::Vector{Any}
+    return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
-    return InliningState(nothing, get_world_counter(interp), interp)
+    return InliningState(Any[], get_world_counter(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -150,12 +134,12 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     cfg::Union{Nothing,CFG}
     insert_coverage::Bool
 end
-function OptimizationState(frame::InferenceState, interp::AbstractInterpreter,
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
                            recompute_cfg::Bool=true)
-    inlining = InliningState(frame, interp)
-    cfg = recompute_cfg ? nothing : frame.cfg
-    return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-               frame.sptypes, frame.slottypes, inlining, cfg, frame.insert_coverage)
+    inlining = InliningState(sv, interp)
+    cfg = recompute_cfg ? nothing : sv.cfg
+    return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
+                             sv.sptypes, sv.slottypes, inlining, cfg, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -181,20 +165,24 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
-    src = retrieve_code_info(linfo)
+    world = get_world_counter(interp)
+    src = retrieve_code_info(linfo, world)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
-    optdef = linfo.def
-    replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
+    src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
+    validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
+end
+
+function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
+    replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
     src.inferred = true
-    # finish updating the result struct
-    validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
 
@@ -364,7 +352,9 @@ function argextype(
         elseif x.head === :copyast
             return argextype(x.args[1], src, sptypes, slottypes)
         end
-        @assert false "argextype only works on argument-position values"
+        Core.println("argextype called on Expr with head ", x.head,
+                     " which is not valid for IR in argument-position.")
+        @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
     elseif isa(x, TypedSlot)
@@ -385,8 +375,8 @@ function argextype(
         return Const(x)
     end
 end
+abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
-
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
@@ -522,7 +512,6 @@ function run_passes(
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
@@ -612,7 +601,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     if cfg === nothing
         cfg = compute_basic_blocks(code)
     end
-    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
+    # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
+    # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
+    # and eliminates slots (see below)
+    argtypes = sv.slottypes
+    return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -631,6 +624,9 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    # NOTE now we have converted `ir` to the SSA form and eliminated slots
+    # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
+    resize!(ir.argtypes, nargs)
     return ir
 end
 

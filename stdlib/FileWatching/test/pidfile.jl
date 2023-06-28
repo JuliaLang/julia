@@ -180,14 +180,14 @@ end
         Base.errormonitor(rmtask)
 
         t1 = time()
-        @test_throws ErrorException open_exclusive("pidfile", wait=false)
+        @test_throws Pidfile.PidlockedError open_exclusive("pidfile", wait=false)
         @test time()-t1 ≈ 0 atol=1
 
         sleep(1)
         @test !deleted
 
         t1 = time()
-        @test_throws ErrorException open_exclusive("pidfile", wait=false)
+        @test_throws Pidfile.PidlockedError open_exclusive("pidfile", wait=false)
         @test time()-t1 ≈ 0 atol=1
 
         wait(rmtask)
@@ -246,7 +246,7 @@ end
     Base.errormonitor(waittask)
 
     # mkpidlock with no waiting
-    t = @elapsed @test_throws ErrorException mkpidlock("pidfile", wait=false)
+    t = @elapsed @test_throws Pidfile.PidlockedError mkpidlock("pidfile", wait=false)
     @test t ≈ 0 atol=1
 
     t = @elapsed lockf1 = mkpidlock(joinpath(dir, "pidfile"))
@@ -354,7 +354,7 @@ end
     @test lockf.update === nothing
 
     sleep(1)
-    t = @elapsed @test_throws ErrorException mkpidlock("pidfile-2", wait=false, stale_age=1, poll_interval=1, refresh=0)
+    t = @elapsed @test_throws Pidfile.PidlockedError mkpidlock("pidfile-2", wait=false, stale_age=1, poll_interval=1, refresh=0)
     @test t ≈ 0 atol=1
 
     sleep(5)

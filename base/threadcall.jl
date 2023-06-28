@@ -47,7 +47,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
-    wrapper = Expr(Symbol("hygienic-scope"), wrapper, @__MODULE__)
+    wrapper = Expr(:var"hygienic-scope", wrapper, @__MODULE__, __source__)
     return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}))
         # use cglobal to look up the function on the calling thread
         do_threadcall(fun_ptr, cglobal($f), $rettype, Any[$(argtypes...)], Any[$(argvals...)])

@@ -72,6 +72,15 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
+### Multiple GC Threads
+
+The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
+of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+[`JULIA_NUM_GC_THREADS`](@ref env-gc-threads) environment variable.
+
+!!! compat "Julia 1.10"
+    The `--gcthreads` command line argument requires at least Julia 1.10.
+
 ## [Threadpools](@id man-threadpools)
 
 When a program's threads are busy with many tasks to run, tasks may experience
@@ -378,6 +387,18 @@ threads in Julia:
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
     can be widely adopted with confidence. See the next section for further details.
+
+## [Task Migration](@id man-task-migration)
+
+After a task starts running on a certain thread (e.g. via [`@spawn`](@ref Threads.@spawn) or
+[`@threads`](@ref Threads.@threads)), it may move to a different thread if the task yields.
+
+This means that [`threadid()`](@ref Threads.threadid) should not be treated as constant within a task, and therefore
+should not be used to index into a vector of buffers or stateful objects.
+
+!!! compat "Julia 1.7"
+    Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
+    started on.
 
 ## Safe use of Finalizers
 

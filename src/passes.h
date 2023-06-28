@@ -10,16 +10,16 @@
 using namespace llvm;
 
 // Function Passes
-struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
+struct DemoteFloat16Pass : PassInfoMixin<DemoteFloat16Pass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
 
-struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
+struct CombineMulAddPass : PassInfoMixin<CombineMulAddPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct LateLowerGC : PassInfoMixin<LateLowerGC> {
+struct LateLowerGCPass : PassInfoMixin<LateLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -33,7 +33,7 @@ struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass
     static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
+struct LowerExcHandlersPass : PassInfoMixin<LowerExcHandlersPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -47,17 +47,19 @@ struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
 };
 
 // Module Passes
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
+struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
 
-struct RemoveNI : PassInfoMixin<RemoveNI> {
+struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
 };
 
-struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
+struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
 };
 
 struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
@@ -65,9 +67,9 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
-struct MultiVersioning : PassInfoMixin<MultiVersioning> {
+struct MultiVersioningPass : PassInfoMixin<MultiVersioningPass> {
     bool external_use;
-    MultiVersioning(bool external_use = false) : external_use(external_use) {}
+    MultiVersioningPass(bool external_use = false) : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -100,5 +102,48 @@ struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
     PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
 };
+
+#define MODULE_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+        static bool isRequired() { return true; } \
+    };
+
+#define FUNCTION_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+        static bool isRequired() { return true; } \
+    };
+
+#define LOOP_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM, \
+                              LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT { \
+            return PreservedAnalyses::all(); \
+        } \
+        static bool isRequired() { return true; } \
+    };
+
+// These are useful for debugging with --print-before/after
+MODULE_MARKER_PASS(BeforeOptimization)
+MODULE_MARKER_PASS(BeforeEarlySimplification)
+MODULE_MARKER_PASS(AfterEarlySimplification)
+MODULE_MARKER_PASS(BeforeEarlyOptimization)
+MODULE_MARKER_PASS(AfterEarlyOptimization)
+FUNCTION_MARKER_PASS(BeforeLoopOptimization)
+LOOP_MARKER_PASS(BeforeLICM)
+LOOP_MARKER_PASS(AfterLICM)
+LOOP_MARKER_PASS(BeforeLoopSimplification)
+LOOP_MARKER_PASS(AfterLoopSimplification)
+FUNCTION_MARKER_PASS(AfterLoopOptimization)
+FUNCTION_MARKER_PASS(BeforeScalarOptimization)
+FUNCTION_MARKER_PASS(AfterScalarOptimization)
+FUNCTION_MARKER_PASS(BeforeVectorization)
+FUNCTION_MARKER_PASS(AfterVectorization)
+MODULE_MARKER_PASS(BeforeIntrinsicLowering)
+MODULE_MARKER_PASS(AfterIntrinsicLowering)
+MODULE_MARKER_PASS(BeforeCleanup)
+MODULE_MARKER_PASS(AfterCleanup)
+MODULE_MARKER_PASS(AfterOptimization)
 
 #endif

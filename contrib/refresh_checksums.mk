@@ -28,7 +28,7 @@ BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwi
 BB_GCC_EXPANDED_PROJECTS=openblas csl
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld
 # These are non-BB source-only deps
-NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc
+NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc ittapi
 
 ifneq ($(VERBOSE),1)
 QUIET_MAKE := -s

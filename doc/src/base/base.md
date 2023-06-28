@@ -141,10 +141,16 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.replaceproperty!
+Base.swapproperty!
+Base.modifyproperty!
 Base.propertynames
 Base.hasproperty
 Core.getfield
 Core.setfield!
+Core.modifyfield!
+Core.replacefield!
+Core.swapfield!
 Core.isdefined
 Core.getglobal
 Core.setglobal!
@@ -234,6 +240,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -285,6 +292,8 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@nospecializeinfer
+Base.@constprop
 Base.gensym
 Base.@gensym
 var"name"

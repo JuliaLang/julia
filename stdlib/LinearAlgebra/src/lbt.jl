@@ -83,11 +83,17 @@ struct lbt_config_t
     exported_symbols::Ptr{Cstring}
     num_exported_symbols::UInt32
 end
-const LBT_BUILDFLAGS_DEEPBINDLESS = 0x01
-const LBT_BUILDFLAGS_F2C_CAPABLE  = 0x02
+const LBT_BUILDFLAGS_DEEPBINDLESS     = 0x01
+const LBT_BUILDFLAGS_F2C_CAPABLE      = 0x02
+const LBT_BUILDFLAGS_CBLAS_DIVERGENCE = 0x04
+const LBT_BUILDFLAGS_COMPLEX_RETSTYLE = 0x08
+const LBT_BUILDFLAGS_SYMBOL_TRIMMING  = 0x10
 const LBT_BUILDFLAGS_MAP = Dict(
     LBT_BUILDFLAGS_DEEPBINDLESS => :deepbindless,
     LBT_BUILDFLAGS_F2C_CAPABLE => :f2c_capable,
+    LBT_BUILDFLAGS_CBLAS_DIVERGENCE => :cblas_divergence,
+    LBT_BUILDFLAGS_COMPLEX_RETSTYLE => :complex_retstyle,
+    LBT_BUILDFLAGS_SYMBOL_TRIMMING  => :symbol_trimming,
 )
 
 struct LBTConfig

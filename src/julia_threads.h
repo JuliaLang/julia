@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include "work-stealing-queue.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
@@ -79,6 +80,7 @@ typedef struct {
     void *stacktop;
 } _jl_ucontext_t;
 #endif
+#pragma GCC visibility push(default)
 #if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -88,6 +90,7 @@ typedef unw_context_t _jl_ucontext_t;
 #include <ucontext.h>
 typedef ucontext_t _jl_ucontext_t;
 #endif
+#pragma GCC visibility pop
 #endif
 
 typedef struct {
@@ -171,12 +174,9 @@ typedef struct {
 } jl_thread_heap_t;
 
 typedef struct {
-    struct _jl_gc_chunk_t *chunk_start;
-    struct _jl_gc_chunk_t *current_chunk;
-    struct _jl_gc_chunk_t *chunk_end;
-    struct _jl_value_t **start;
-    struct _jl_value_t **current;
-    struct _jl_value_t **end;
+    ws_queue_t chunk_queue;
+    ws_queue_t ptr_queue;
+    arraylist_t reclaim_set;
 } jl_gc_markqueue_t;
 
 typedef struct {
@@ -198,6 +198,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+struct _jl_gc_pagemeta_t;
 
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
@@ -260,6 +261,8 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    struct _jl_gc_pagemeta_t *page_metadata_allocd;
+    struct _jl_gc_pagemeta_t *page_metadata_lazily_freed;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
@@ -278,13 +281,13 @@ typedef struct _jl_tls_states_t {
     )
 
     // some hidden state (usually just because we don't have the type's size declaration)
-#ifdef LIBRARY_EXPORTS
+#ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
 #endif
 } jl_tls_states_t;
 
-#ifndef LIBRARY_EXPORTS
+#ifndef JL_LIBRARY_EXPORTS
 // deprecated (only for external consumers)
 JL_DLLEXPORT void *jl_get_ptls_states(void);
 #endif
@@ -292,23 +295,28 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
+#  define jl_cpu_suspend() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
 #  define jl_cpu_pause() _mm_pause()
+#  define jl_cpu_suspend() _mm_pause()
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-#  define jl_cpu_pause() __asm__ volatile ("wfe" ::: "memory")
+#  define jl_cpu_pause() __asm__ volatile ("isb" ::: "memory")
+#  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
 #else
 #  define jl_cpu_pause() ((void)0)
+#  define jl_cpu_suspend() ((void)0)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #endif
 
 JL_DLLEXPORT void (jl_cpu_pause)(void);
+JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 #ifdef __clang_gcanalyzer__

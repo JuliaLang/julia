@@ -701,6 +701,19 @@ wp = CachingPool(workers())
 clear!(wp)
 @test length(wp.map_obj2ref) == 0
 
+# default_worker_pool! tests
+wp_default = Distributed.default_worker_pool()
+try
+    local wp = CachingPool(workers())
+    Distributed.default_worker_pool!(wp)
+    @test [1:100...] == pmap(x->x, wp, 1:100)
+    @test !isempty(wp.map_obj2ref)
+    clear!(wp)
+    @test isempty(wp.map_obj2ref)
+finally
+    Distributed.default_worker_pool!(wp_default)
+end
+
 # The below block of tests are usually run only on local development systems, since:
 # - tests which print errors
 # - addprocs tests are memory intensive
@@ -1861,7 +1874,7 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     using Distributed
     project = mktempdir()
     env = Dict(
-        "JULIA_LOAD_PATH" => LOAD_PATH[1],
+        "JULIA_LOAD_PATH" => string(LOAD_PATH[1], $(repr(pathsep)), "@stdlib"),
         "JULIA_DEPOT_PATH" => DEPOT_PATH[1],
         "TMPDIR" => ENV["TMPDIR"],
     )
@@ -1871,7 +1884,7 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     """ * setupcode * """
     for w in workers()
         @test remotecall_fetch(depot_path, w)          == [DEPOT_PATH[1]]
-        @test remotecall_fetch(load_path, w)           == [LOAD_PATH[1]]
+        @test remotecall_fetch(load_path, w)           == [LOAD_PATH[1], "@stdlib"]
         @test remotecall_fetch(active_project, w)      == project
         @test remotecall_fetch(Base.active_project, w) == joinpath(project, "Project.toml")
     end
