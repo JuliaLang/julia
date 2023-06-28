@@ -22,7 +22,7 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
+The only interfaces that are stable with respect to [SemVer](https://semver.org/) of Julia
 version are the Julia `Base` and standard libraries interfaces described in
 [the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
 experimental and internal).  Functions, types, and constants are not part of the public
@@ -36,8 +36,8 @@ a complex non-public API, especially when using it from a stable package, it is 
 to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
 into a public API.  However, we do not discourage the attempt to create packages that expose
-stable public interfaces while relying on non-public implementation details of `julia` and
-buffering the differences across different `julia` versions.
+stable public interfaces while relying on non-public implementation details of Julia and
+buffering the differences across different Julia versions.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 
