@@ -22,10 +22,10 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-Julia `Base` and standard library functionality described in the 
+Julia `Base` and standard library functionality described in the
 [the documentation](https://docs.julialang.org/) that is not marked as unstable
 (e.g. experimental and internal) is covered by [SemVer](https://semver.org/).
-Functions, types, and constants are not part of the public API if they are not 
+Functions, types, and constants are not part of the public API if they are not
 included in the documentation, _even if they have docstrings_.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
