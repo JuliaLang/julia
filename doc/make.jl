@@ -43,6 +43,14 @@ cd(joinpath(@__DIR__, "src")) do
     end
 end
 
+# Because we have standard libraries that are hosted outside of the julia repo,
+# but their docs are included in the manual, we need to populate the remotes argument
+# of makedocs(), to make sure that Documenter knows how to resolve the directories
+# in stdlib/ to the correct remote Git repositories (for source and edit links).
+#
+# This function parses the *.version files in stdlib/, returning a dictionary with
+# all the key-value pairs from those files. *_GIT_URL and *_SHA1 fields are the ones
+# we will actually be interested in.
 function parse_stdlib_version_file(path)
     values = Dict{String,String}()
     for line in readlines(path)
@@ -55,13 +63,24 @@ function parse_stdlib_version_file(path)
     end
     return values
 end
+# This generates the value that will be passed to the `remotes` argument of makedocs(),
+# by looking through all *.version files in stdlib/.
 documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib"))
+    # Get a list of all *.version files in stdlib/..
     version_files = filter(readdir(stdlib_dir)) do fname
-        endswith(fname, ".version") && isfile(joinpath(stdlib_dir, fname))
+        isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
     end
-    map(version_files) do version_fname
+    # .. and then parse them, each becoming an entry for makedocs's remotes.
+    # The values for each are of the form path => (remote, sha1), where
+    #  - path: the path to the stdlib package's root directory, i.e. "stdlib/$PACKAGE"
+    #  - remote: a Documenter.Remote object, pointing to the Git repository where package is hosted
+    #  - sha1: the SHA1 of the commit that is included with the current Julia version
+    remotes_list = map(version_files) do version_fname
         package = match(r"(.+)\.version", version_fname)[1]
         versionfile = parse_stdlib_version_file(joinpath(stdlib_dir, version_fname))
+        # From the (all uppercase) $(package)_GIT_URL and $(package)_SHA1 fields, we'll determine
+        # the necessary information. If this logic happens to fail for some reason for any of the
+        # standard libraries, we'll crash the documentation build, so that it could be fixed.
         remote = let git_url_key = "$(uppercase(package))_GIT_URL"
             haskey(versionfile, git_url_key) || error("Missing $(git_url_key) in $version_fname")
             m = match(LibGit2.GITHUB_REGEX, versionfile[git_url_key])
@@ -72,12 +91,13 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
             haskey(versionfile, sha_key) || error("Missing $(sha_key) in $version_fname")
             versionfile[sha_key]
         end
+        # Construct the absolute (local) path to the stdlib package's root directory
         package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
         isdir(package_root_dir) || error("Missing stdlib: $(package_root_dir)")
         package_root_dir => (remote, package_sha)
-    end |> Dict
+    end
+    Dict(remotes_list)
 end
-@show documenter_stdlib_remotes
 
 # Check if we are building a PDF
 const render_pdf = "pdf" in ARGS
