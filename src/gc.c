@@ -2972,23 +2972,36 @@ static void sweep_finalizer_list(arraylist_t *list)
 }
 
 #ifdef USE_LIBURING
+
+
 int flush_pages_lazily_uring(void) {
-    struct io_uring ring;
-    struct io_uring_sqe *sqe;
-	struct io_uring_cqe *cqe;
+    static struct io_uring *ring = NULL;
+    static int functional = -1;
 
     int QueueDepth = 64;
     int ret;
+    if (!ring && functional == -1) {
+        ring = (struct io_uring*) malloc_s(sizeof(struct io_uring));
+
+        ret = io_uring_queue_init(QueueDepth, ring, 0);
+        io_uring_register_ring_fd(ring);
+        io_uring_ring_dontfork(ring);
+        if (ret < 0) {
+            functional = 0;
+            free(ring);
+            return 0;
+        }
+        functional = 1;
+    }
+    if (functional != 1) {
+        return 0;
+    }
+
+    struct io_uring_sqe *sqe;
+	struct io_uring_cqe *cqe;
+
     int pending = 0;
     size_t decommit_size;
-
-    ret = io_uring_queue_init(QueueDepth, &ring, 0);
-
-    if (ret < 0) {
-        // io_uring not supported under rr...
-        fprintf(stderr, "Queue not available");
-        return 0;
-	}
 
     while (1) {
         jl_gc_pagemeta_t *pg = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
@@ -2999,14 +3012,14 @@ int flush_pages_lazily_uring(void) {
         if (!p)
             continue;
 
-        sqe = io_uring_get_sqe(&ring);
+        sqe = io_uring_get_sqe(ring);
         if (!sqe) {
             // Queue is full, submit
-            ret = io_uring_submit(&ring);
+            ret = io_uring_submit(ring);
             if (ret < 0)
                 fprintf(stderr, "Failed to submit");
             pending += ret;
-            sqe = io_uring_get_sqe(&ring);
+            sqe = io_uring_get_sqe(ring);
             if (!sqe)
                 fprintf(stderr, "SQE still not availble");
         }
@@ -3015,18 +3028,18 @@ int flush_pages_lazily_uring(void) {
         io_uring_prep_madvise(sqe, p, decommit_size, MADV_FREE);
         msan_unpoison(p, decommit_size);
     }
-    ret = io_uring_submit(&ring);
+    ret = io_uring_submit(ring);
     if (ret < 0){
         fprintf(stderr, "Failed to submit");
     }
     pending += ret;
     // drain CQE
     for (int i = 0; i < pending; i++) {
-        ret = io_uring_wait_cqe(&ring, &cqe);
+        ret = io_uring_wait_cqe(ring, &cqe);
         // todo check for failure
-        io_uring_cqe_seen(&ring, cqe);
+        io_uring_cqe_seen(ring, cqe);
     }
-    io_uring_queue_exit(&ring);
+    // io_uring_queue_exit(&ring); // TODO atexit?
     return 1;
 }
 #endif
