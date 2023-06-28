@@ -122,7 +122,7 @@ Standard library changes
 
 #### Dates
 
-* The functions `unix2datetime`, `datetime2unix`, `julian2datetime` and `datetime2julian` now support an additional boolean argument `localtime` that makes the functions return the output value in correspondence to the local time zone of the system. ([#50296])
+* `unix2datetime`, `datetime2unix`, `julian2datetime`, and `datetime2julian` now accept a keyword argument `localtime=true` to use the local time zone instead of UTC ([#50296]).
 
 
 #### Distributed

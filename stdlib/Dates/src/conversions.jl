@@ -43,7 +43,7 @@ localepoch() = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at UTC
 """
     unix2datetime(x::Real; localtime::Bool=false) -> DateTime
 
-Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to the
+Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and convert to the
 corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
 time zone, otherwise it is in UTC/GMT.
 """
@@ -57,10 +57,10 @@ end
     datetime2unix(dt::DateTime; localtime::Bool=false) -> Float64
 
 Take the given `DateTime` and return the number of seconds
-since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
+since the unix epoch `1970-01-01T00:00:00` (UTC) as a [`Float64`](@ref).
 
-If `localtime` is `true`, then the number of seconds since the local epoch
-corresponding to unix epoch `1970-01-01T00:00:00` is returned.
+If `localtime` is `true`, then `dt` is interpreted as being in the local time zone,
+and is otherwise interpreted as being UTC/GMT.
 """
 function datetime2unix(dt::DateTime; localtime::Bool=false)
     return (value(dt) - (localtime ? localepoch() : UNIXEPOCH)) / 1000.0
@@ -121,7 +121,7 @@ localjulianepoch() = JULIANEPOCH + (localepoch() - UNIXEPOCH)
 """
     julian2datetime(julian_days::Real; localtime::Bool=false) -> DateTime
 
-Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and return the
+Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` (UTC) and return the
 corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
 time zone, otherwise it is in UTC/GMT
 """
@@ -134,10 +134,10 @@ end
     datetime2julian(dt::DateTime; localtime::Bool=false) -> Float64
 
 Take the given `DateTime` and return the number of Julian calendar days since the julian
-epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
+epoch `-4713-11-24T12:00:00` (UTC) as a [`Float64`](@ref).
 
-If `localtime` is `true`, then the number of seconds since the local epoch
-corresponding to julian epoch `-4713-11-24T12:00:00` is returned.
+If `localtime` is `true`, then `dt` is interpreted as being in the local time zone,
+and is otherwise interpreted as being UTC/GMT.
 """
 function datetime2julian(dt::DateTime; localtime::Bool=false)
     return (value(dt) - (localtime ? localjulianepoch() : JULIANEPOCH)) / 86400000.0
