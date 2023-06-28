@@ -118,7 +118,7 @@ These passes are used to perform transformations on LLVM IR that LLVM will not p
 * Class Name: `CombineMulAddPass`
 * Opt Name: `function(CombineMulAdd)`
 
-This pass serves to optimize the particular combination of a regular `fmul` with a fast `fadd` into a contract `fmul` with a fast `fadd`. This is later optimized by the backend to a [fused multiply-add](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation#Fused_multiply%E2%80%93add) instruction, which can provide significantly faster operations at the cost of IEEE-754 semantics.
+This pass serves to optimize the particular combination of a regular `fmul` with a fast `fadd` into a contract `fmul` with a fast `fadd`. This is later optimized by the backend to a [fused multiply-add](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation#Fused_multiply%E2%80%93add) instruction, which can provide significantly faster operations at the cost of more [unpredictable semantics](https://simonbyrne.github.io/notes/fastmath/).
 
 !!! note
 
@@ -156,10 +156,4 @@ This pass is used to hoist Julia-specific intrinsics out of loops. Specifically,
 
 !!!note
 
-    This pass is required to preserve LLVM's [MemorySSA](https://llvm.org/docs/MemorySSA.html) [^fivemin] [^depzoo] and [ScalarEvolution](https://baziotis.cs.illinois.edu/compilers/introduction-to-scalar-evolution.html) [^armdevmtg] [^olddevmtg] analyses.
-
-[^fivemin]: https://www.youtube.com/watch?v=bdxWmryoHak
-[^depzoo]: https://www.youtube.com/watch?v=1e5y6WDbXCQ
-
-[^armdevmtg]: https://llvm.org/devmtg/2018-04/slides/Absar-ScalarEvolution.pdf
-[^olddevmtg]: https://llvm.org/devmtg/2009-10/ScalarEvolutionAndLoopOptimization.pdf
+    This pass is required to preserve LLVM's [MemorySSA](https://llvm.org/docs/MemorySSA.html) ([Short Video](https://www.youtube.com/watch?v=bdxWmryoHak), [Longer Video](https://www.youtube.com/watch?v=1e5y6WDbXCQ)) and [ScalarEvolution](https://baziotis.cs.illinois.edu/compilers/introduction-to-scalar-evolution.html) ([Newer Slides](https://llvm.org/devmtg/2018-04/slides/Absar-ScalarEvolution.pdf) [Older Slides](https://llvm.org/devmtg/2009-10/ScalarEvolutionAndLoopOptimization.pdf)) analyses.
