@@ -2775,7 +2775,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         // Wake threads up and try to do some work
         uv_mutex_lock(&gc_threads_lock);
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        uv_cond_signal(&gc_threads_cond);
+        uv_cond_broadcast(&gc_threads_cond);
         uv_mutex_unlock(&gc_threads_lock);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
