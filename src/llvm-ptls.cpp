@@ -96,7 +96,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false),
                                      const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
                                      false);
-            tls = builder.CreateCall(tp, {offset}, "tls_pgcstack");
+            tls = builder.CreateCall(tp, {}, "tls_pgcstack");
         }
     } else {
         // AArch64/ARM doesn't seem to have this issue.
@@ -224,9 +224,13 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
                 *CFGModified = true;
 
             auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
+            // refresh the basic block in the builder
+            builder.SetInsertPoint(pgcstack);
             auto phi = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
             pgcstack->replaceAllUsesWith(phi);
             pgcstack->moveBefore(slowTerm);
+            // refresh the basic block in the builder
+            builder.SetInsertPoint(pgcstack);
             auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
