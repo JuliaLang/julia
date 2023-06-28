@@ -41,10 +41,10 @@ const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00
 localepoch() = value(DateTime(Libc.TmStruct(0))) #Rata Die for local time at UTC 1970-01-01T00:00:00
 
 """
-    unix2datetime(x::Real; local_time::Bool=false) -> DateTime
+    unix2datetime(x::Real; localtime::Bool=false) -> DateTime
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to the
-corresponding `DateTime`. If `local_time` is `true`, then the output is in the local
+corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
 time zone, otherwise it is in UTC/GMT.
 """
 function unix2datetime(x::Real; localtime::Bool=false)
@@ -54,12 +54,12 @@ function unix2datetime(x::Real; localtime::Bool=false)
 end
 
 """
-    datetime2unix(dt::DateTime; local_time::Bool=false) -> Float64
+    datetime2unix(dt::DateTime; localtime::Bool=false) -> Float64
 
 Take the given `DateTime` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 
-If `local_time` is `true`, then the number of seconds since the local epoch
+If `localtime` is `true`, then the number of seconds since the local epoch
 corresponding to unix epoch `1970-01-01T00:00:00` is returned.
 """
 function datetime2unix(dt::DateTime; localtime::Bool=false)
@@ -116,6 +116,7 @@ datetime2rata(dt::TimeType) = days(dt)
 
 # Julian conversions
 const JULIANEPOCH = value(DateTime(-4713, 11, 24, 12))
+localjulianepoch() = JULIANEPOCH + (localepoch() - UNIXEPOCH)
 
 """
     julian2datetime(julian_days) -> DateTime
@@ -123,8 +124,8 @@ const JULIANEPOCH = value(DateTime(-4713, 11, 24, 12))
 Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and return the
 corresponding `DateTime`.
 """
-function julian2datetime(f)
-    rata = JULIANEPOCH + round(Int64, Int64(86400000) * f)
+function julian2datetime(f::Real; localtime::Bool=false)
+    rata = (localtime ? localjulianepoch() : JULIANEPOCH) + round(Int64, Int64(86400000) * f)
     return DateTime(UTM(rata))
 end
 
@@ -134,4 +135,6 @@ end
 Take the given `DateTime` and return the number of Julian calendar days since the julian
 epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
 """
-datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH) / 86400000.0
+function datetime2julian(dt::DateTime; localtime::Bool=false)
+    return (value(dt) - (localtime ? localjulianepoch() : JULIANEPOCH)) / 86400000.0
+end

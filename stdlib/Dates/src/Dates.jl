@@ -70,7 +70,7 @@ export Period, DatePeriod, TimePeriod,
        July, August, September, October, November, December,
        Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec,
        # conversions.jl
-       unix2datetime, unix2datetime_local, datetime2unix, now, today,
+       unix2datetime, datetime2unix, now, today,
        rata2datetime, datetime2rata, julian2datetime, datetime2julian,
        # adjusters.jl
        firstdayofweek, lastdayofweek,
