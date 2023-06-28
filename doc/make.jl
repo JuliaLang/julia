@@ -143,6 +143,7 @@ DevDocs = [
         "devdocs/isbitsunionarrays.md",
         "devdocs/sysimg.md",
         "devdocs/pkgimg.md",
+        "devdocs/llvm-passes.md",
         "devdocs/llvm.md",
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
