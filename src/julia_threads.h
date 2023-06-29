@@ -181,7 +181,8 @@ typedef struct {
     size_t enqueued;
     size_t dequeued;
     struct _jl_value_t **prefetch_buffer;
-    uint8_t push_remset;
+    uint8_t push_remset:1;
+    uint8_t disable_push:1;
 } jl_prequeue_t;
 
 typedef struct {

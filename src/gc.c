@@ -22,8 +22,6 @@ int jl_n_sweepthreads;
 _Atomic(int) gc_n_threads_marking;
 // `tid` of mutator thread that triggered GC
 _Atomic(int) gc_master_tid;
-// Number of threads that entered the GC
-_Atomic(int) gc_n_threads_entered;
 // `tid` of first GC thread
 int gc_first_tid;
 // To indicate whether concurrent sweeping should run
@@ -1747,6 +1745,9 @@ STATIC_INLINE size_t gc_prequeue_size(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
 }
 
 STATIC_INLINE size_t gc_prequeue_free_space(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
+    if (__unlikely(mq->prequeue.disable_push == 1)) {
+        return 0;
+    }
     return PREFETCH_BUFFER_SIZE - gc_prequeue_size(mq) - 1;
 }
 
@@ -2755,6 +2756,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     int master_tid = jl_atomic_load(&gc_master_tid);
     if (master_tid != -1)
         mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    mq->prequeue.disable_push=0;
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
@@ -2827,15 +2829,13 @@ void gc_mark_and_steal(jl_ptls_t ptls)
                 goto mark;
         }
     }
+    mq->prequeue.disable_push=1;
 }
 
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
     int backoff = GC_BACKOFF_MIN;
-    int entered = 0;
     if (master) {
-        jl_atomic_fetch_add(&gc_n_threads_entered, 1);
-        entered = 1;
         jl_atomic_store(&gc_master_tid, ptls->tid);
         // Wake threads up and try to do some work
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
@@ -2846,19 +2846,12 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
             uv_mutex_unlock(&ptls2->sleep_lock);
         }
         gc_mark_and_steal(ptls);
-        while(jl_atomic_load_acquire(&gc_n_threads_entered) < (jl_n_gcthreads + 1)){
-            jl_cpu_pause();
-        }
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (jl_atomic_load(&gc_n_threads_marking) > 0) {
         // Try to become a thief while other threads are marking
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         if (jl_atomic_load(&gc_master_tid) != -1) {
-            if(!entered) {
-                jl_atomic_fetch_add(&gc_n_threads_entered, 1);
-                entered = 1;
-            }
             gc_mark_and_steal(ptls);
         }
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
@@ -3492,7 +3485,6 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
-    jl_atomic_store_release(&gc_n_threads_entered, 0);
     jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
     JL_PROBE_GC_STOP_THE_WORLD();
 
@@ -3602,6 +3594,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(&mq->reclaim_set, 32);
     mq->prequeue.prefetch_buffer = (jl_value_t **)malloc_s(sizeof(jl_value_t *) * PREFETCH_BUFFER_SIZE);
     mq->prequeue.push_remset = 0;
+    mq->prequeue.disable_push = 1;
     mq->prequeue.enqueued = 0;
     mq->prequeue.dequeued = 0;
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
