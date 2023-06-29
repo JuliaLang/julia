@@ -14,11 +14,13 @@
 #include <llvm/Pass.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
@@ -495,14 +497,16 @@ void CloneCtx::prepare_slots()
     for (auto &F : orig_funcs) {
         if (F->hasFnAttribute("julia.mv.reloc")) {
             assert(F->hasFnAttribute("julia.mv.clones"));
+            GlobalVariable *GV = new GlobalVariable(M, F->getType(), false, GlobalValue::ExternalLinkage, nullptr, F->getName() + ".reloc_slot");
+            GV->setVisibility(GlobalValue::HiddenVisibility);
+            GV->setDSOLocal(true);
             if (F->isDeclaration()) {
-                auto GV = new GlobalVariable(M, F->getType(), false, GlobalValue::ExternalLinkage, nullptr, F->getName() + ".reloc_slot");
                 extern_relocs[F] = GV;
-            } else {
+            }
+            else {
                 auto id = get_func_id(F);
-                auto GV = new GlobalVariable(M, F->getType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(F->getType()), F->getName() + ".reloc_slot");
-                GV->setVisibility(GlobalValue::HiddenVisibility);
                 const_relocs[id] = GV;
+                GV->setInitializer(Constant::getNullValue(F->getType()));
             }
         }
     }
@@ -525,6 +529,7 @@ void CloneCtx::clone_decls()
             auto new_F = Function::Create(F->getFunctionType(), F->getLinkage(), F->getName() + suffixes[i], &M);
             new_F->copyAttributesFrom(F);
             new_F->setVisibility(F->getVisibility());
+            new_F->setDSOLocal(true);
             auto base_func = F;
             if (specs[i].flags & JL_TARGET_CLONE_ALL)
                 base_func = static_cast<Group*>(linearized[specs[i].base])->base_func(F);
@@ -541,12 +546,8 @@ static void clone_function(Function *F, Function *new_f, ValueToValueMapTy &vmap
         vmap[&*J] = &*DestI++;
     }
     SmallVector<ReturnInst*,8> Returns;
-#if JL_LLVM_VERSION >= 130000
     // We are cloning into the same module
     CloneFunctionInto(new_f, F, vmap, CloneFunctionChangeType::GlobalChanges, Returns);
-#else
-    CloneFunctionInto(new_f, F, vmap, true, Returns);
-#endif
 }
 
 static void add_features(Function *F, TargetSpec &spec)
@@ -668,6 +669,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     trampoline->copyAttributesFrom(F);
     trampoline->takeName(alias);
     trampoline->setVisibility(alias->getVisibility());
+    trampoline->setDSOLocal(alias->isDSOLocal());
     // drop multiversioning attributes, add alias attribute for testing purposes
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
@@ -754,7 +756,8 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
         auto extern_decl = extern_relocs.find(F);
         assert(extern_decl != extern_relocs.end() && "Missing extern relocation slot!");
         return {(uint32_t)-1, extern_decl->second};
-    } else {
+    }
+    else {
         auto id = get_func_id(F);
         auto slot = const_relocs.find(id);
         assert(slot != const_relocs.end() && "Missing relocation slot!");
@@ -779,6 +782,7 @@ static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace,
             replace = inst;
             continue;
         }
+        assert(val);
         unsigned nargs = val->getNumOperands();
         args.resize(nargs);
         for (unsigned j = 0; j < nargs; j++) {
@@ -886,9 +890,11 @@ static Constant *emit_offset_table(Module &M, Type *T_size, const std::vector<T*
                                        name + "_base" + suffix,
                                        base, &M);
         ga->setVisibility(GlobalValue::HiddenVisibility);
+        ga->setDSOLocal(true);
     } else {
         auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), name + "_base" + suffix);
         gv->setVisibility(GlobalValue::HiddenVisibility);
+        gv->setDSOLocal(true);
         base = gv;
     }
     auto vbase = ConstantExpr::getPtrToInt(base, T_size);
@@ -905,6 +911,7 @@ static Constant *emit_offset_table(Module &M, Type *T_size, const std::vector<T*
                                   ConstantArray::get(vars_type, offsets),
                                   name + "_offsets" + suffix);
     gv->setVisibility(GlobalValue::HiddenVisibility);
+    gv->setDSOLocal(true);
     return vbase;
 }
 
@@ -966,6 +973,7 @@ void CloneCtx::emit_metadata()
                                       ConstantArray::get(vars_type, values),
                                       "jl_clone_slots" + suffix);
         gv->setVisibility(GlobalValue::HiddenVisibility);
+        gv->setDSOLocal(true);
     }
 
     // Generate `jl_dispatch_fvars_idxs` and `jl_dispatch_fvars_offsets`
@@ -1017,12 +1025,14 @@ void CloneCtx::emit_metadata()
                                       GlobalVariable::ExternalLinkage,
                                       idxval, "jl_clone_idxs" + suffix);
         gv1->setVisibility(GlobalValue::HiddenVisibility);
+        gv1->setDSOLocal(true);
         ArrayType *offsets_type = ArrayType::get(Type::getInt32Ty(M.getContext()), offsets.size());
         auto gv2 = new GlobalVariable(M, offsets_type, true,
                                       GlobalVariable::ExternalLinkage,
                                       ConstantArray::get(offsets_type, offsets),
                                       "jl_clone_offsets" + suffix);
         gv2->setVisibility(GlobalValue::HiddenVisibility);
+        gv2->setDSOLocal(true);
     }
 }
 
@@ -1130,7 +1140,7 @@ void multiversioning_preannotate(Module &M)
     M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);
 }
 
-PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses MultiVersioningPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (runMultiVersioning(M, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -1145,7 +1155,8 @@ Pass *createMultiVersioningPass(bool allow_bad_fvars)
     return new MultiVersioningLegacy(allow_bad_fvars);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createMultiVersioningPass(false));
 }

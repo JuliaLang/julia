@@ -404,7 +404,11 @@ struct UnitRange{T<:Real} <: AbstractUnitRange{T}
 end
 UnitRange{T}(start, stop) where {T<:Real} = UnitRange{T}(convert(T, start), convert(T, stop))
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
-UnitRange(start, stop) = UnitRange(promote(start, stop)...)
+function UnitRange(start, stop)
+    startstop_promoted = promote(start, stop)
+    not_sametype((start, stop), startstop_promoted)
+    UnitRange(startstop_promoted...)
+end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
@@ -478,8 +482,6 @@ value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. The syntax `a:b`
 or `a:b:c`, where any of `a`, `b`, or `c` are floating-point numbers, creates a
 `StepRangeLen`.
-In conjunction with `TwicePrecision` this can be used to implement ranges that
-are free of roundoff error.
 
 !!! compat "Julia 1.7"
     The 4th type parameter `L` requires at least Julia 1.7.
@@ -902,6 +904,8 @@ function iterate(r::OrdinalRange{T}, i) where {T}
 end
 
 ## indexing
+
+isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
 
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 

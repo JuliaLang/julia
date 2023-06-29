@@ -79,7 +79,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal

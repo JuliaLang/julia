@@ -370,7 +370,7 @@ FooExt = "ExtDep"
 ...
 ```
 
-The keys under `extensions` are the name of the extensions.
+The keys under `extensions` are the names of the extensions.
 They are loaded when all the packages on the right hand side (the extension dependencies) of that extension are loaded.
 If an extension only has one extension dependency the list of extension dependencies can be written as just a string for brevity.
 The location for the entry point of the extension is either in `ext/FooExt.jl` or `ext/FooExt/FooExt.jl` for

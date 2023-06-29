@@ -604,20 +604,6 @@ end
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
-
-function isassigned(a::AbstractArray, i::Integer...)
-    try
-        a[i...]
-        true
-    catch e
-        if isa(e, BoundsError) || isa(e, UndefRefError)
-            return false
-        else
-            rethrow()
-        end
-    end
-end
-
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)
     return true
@@ -1442,7 +1428,7 @@ end
 """
     parent(A)
 
-Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+Return the underlying parent object of the view. This parent of objects of types `SubArray`, `SubString`, `ReshapedArray`
 or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
 during object creation. If the input is not a wrapped object, return the input itself. If the input is
 wrapped multiple times, only the outermost wrapper will be removed.
@@ -1465,6 +1451,8 @@ julia> parent(V)
  3  4
 ```
 """
+function parent end
+
 parent(a::AbstractArray) = a
 
 ## rudimentary aliasing detection ##
@@ -1643,6 +1631,14 @@ function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector
 end
 
 typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
+
+# Catch indexing errors like v[i +1] (instead of v[i+1] or v[i + 1]), where indexing is
+# interpreted as a typed concatenation. (issue #49676)
+typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear whether you \
+    intend to perform an indexing operation or typed concatenation. If you intend to \
+    perform indexing (v[1 + 2]), adjust spacing or insert missing operator to clarify. \
+    If you intend to perform typed concatenation (T[1 2]), ensure that T is a type."))
+
 
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
@@ -3273,7 +3269,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
-apply `f` elementwise, and stop when when any of them is exhausted.
+apply `f` elementwise, and stop when any of them is exhausted.
 
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 

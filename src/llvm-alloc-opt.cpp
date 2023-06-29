@@ -433,36 +433,45 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
         abort();
     }
 #endif
-    // Record extra BBs that contain invisible uses.
+
+    // Record extra BBs that contain invisible uses with gc_preserve_{begin,end}.
+    // We traverse the dominator tree starting at each `gc_preserve_begin` and marking blocks
+    // as users until a corresponding `gc_preserve_end` is found. Blocks containing
+    // the `gc_preserve_end` have already been marked in the previous step.
     SmallSet<BasicBlock*, 8> extra_use;
     SmallVector<DomTreeNodeBase<BasicBlock>*, 8> dominated;
     for (auto preserve: use_info.preserves) {
-        for (auto RN = DT.getNode(preserve->getParent()); RN;
-             RN = dominated.empty() ? nullptr : dominated.pop_back_val()) {
-            for (auto N: *RN) {
-                auto bb = N->getBlock();
-                if (extra_use.count(bb))
-                    continue;
-                bool ended = false;
-                for (auto end: preserve->users()) {
-                    auto end_bb = cast<Instruction>(end)->getParent();
-                    auto end_node = DT.getNode(end_bb);
-                    if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
-                        ended = true;
-                        break;
-                    }
-                }
-                if (ended)
-                    continue;
-                bbs.insert(bb);
-                extra_use.insert(bb);
-                dominated.push_back(N);
-            }
-        }
         assert(dominated.empty());
+        dominated.push_back(DT.getNode(preserve->getParent()));
+        while (!dominated.empty()) {
+            auto N = dominated.pop_back_val();
+            if (!N) {
+                dominated.clear();
+                break;
+            }
+            auto bb = N->getBlock();
+            if (extra_use.count(bb))
+                continue;
+            bool ended = false;
+            for (auto end: preserve->users()) {
+                auto end_bb = cast<Instruction>(end)->getParent();
+                auto end_node = DT.getNode(end_bb);
+                if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
+                    ended = true;
+                    break;
+                }
+            }
+            if (ended)
+                continue;
+            bbs.insert(bb);
+            extra_use.insert(bb);
+            dominated.append(N->begin(), N->end());
+        }
     }
+
     // For each BB, find the first instruction(s) where the allocation is possibly dead.
     // If all successors are live, then there isn't one.
+    // If the BB has "invisible" uses, then there isn't one.
     // If all successors are dead, then it's the first instruction after the last use
     // within the BB.
     // If some successors are live and others are dead, it's the first instruction in
@@ -1138,9 +1147,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
+#ifndef __clang_analyzer__
+                // FIXME: SA finds "Called C++ object pointer is null" inside the LLVM code.
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 call->replaceAllUsesWith(new_call);
+#endif
                 call->eraseFromParent();
                 return;
             }
@@ -1286,7 +1298,8 @@ PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

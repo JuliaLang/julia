@@ -107,6 +107,14 @@ for op in (:+, :-)
     end
 end
 
+# disambiguation between triangular and banded matrices, banded ones "dominate"
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)

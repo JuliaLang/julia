@@ -119,6 +119,10 @@ with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref))
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
 
+Functions related to IO or making use of random number generators (RNG) are notable exceptions:
+Since these functions almost invariably must mutate the IO or RNG, functions ending with `!` are used to signify a mutation _other_ than mutating the IO or advancing the RNG state.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates both the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
+
 ## Avoid strange type `Union`s
 
 Types such as `Union{Function,AbstractString}` are often a sign that some design could be cleaner.

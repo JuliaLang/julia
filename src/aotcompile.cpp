@@ -9,11 +9,7 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/DataLayout.h>
-#if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
-#else
-#include <llvm/Support/TargetRegistry.h>
-#endif
 #include <llvm/Target/TargetMachine.h>
 
 // analysis passes
@@ -96,7 +92,7 @@ typedef struct {
     std::vector<jl_code_instance_t*> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
         int32_t *func_idx, int32_t *specfunc_idx)
 {
@@ -110,7 +106,7 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
     }
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
 {
     // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
@@ -119,7 +115,7 @@ void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
     memcpy(gvs->items, data->jl_value_to_llvm.data(), gvs->len * sizeof(void*));
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -128,7 +124,7 @@ void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
         external_fns->len * sizeof(jl_code_instance_t*));
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -138,7 +134,7 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
         return NULL;
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -160,10 +156,12 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
         addrs[i] = ConstantExpr::getBitCast(var, T_psize);
     }
     ArrayType *vars_type = ArrayType::get(T_psize, nvars);
-    new GlobalVariable(mod, vars_type, true,
+    auto GV = new GlobalVariable(mod, vars_type, true,
                        GlobalVariable::ExternalLinkage,
                        ConstantArray::get(vars_type, addrs),
                        name);
+    GV->setVisibility(GlobalValue::HiddenVisibility);
+    GV->setDSOLocal(true);
 }
 
 static bool is_safe_char(unsigned char c)
@@ -238,10 +236,10 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
         if (*src_out && jl_is_method(def))
-            *src_out = jl_uncompress_ir(def, codeinst, (jl_array_t*)*src_out);
+            *src_out = jl_uncompress_ir(def, codeinst, (jl_value_t*)*src_out);
     }
     if (*src_out == NULL || !jl_is_code_info(*src_out)) {
-        if (cgparams.lookup != jl_rettype_inferred) {
+        if (cgparams.lookup != jl_rettype_inferred_addr) {
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
@@ -265,7 +263,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // The `policy` flag switches between the default mode `0` and the extern mode `1` used by GPUCompiler.
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
@@ -307,6 +305,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging = imaging;
+    params.debug_level = jl_options.debug_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
@@ -432,6 +431,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
         G->setLinkage(GlobalValue::ExternalLinkage);
         G->setVisibility(GlobalValue::HiddenVisibility);
+        G->setDSOLocal(true);
         data->jl_sysimg_gvars.push_back(G);
     }
     CreateNativeGlobals += gvars.size();
@@ -456,6 +456,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (!G.isDeclaration()) {
                 G.setLinkage(GlobalValue::ExternalLinkage);
                 G.setVisibility(GlobalValue::HiddenVisibility);
+                G.setDSOLocal(true);
                 makeSafeName(G);
                 if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
                     // Add unwind exception personalities to functions to handle async exceptions
@@ -523,6 +524,7 @@ static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, 
             auto gv = new GlobalVariable(M, T_size, constant,
                                          GlobalValue::ExternalLinkage, nullptr, name + suffix);
             gv->setVisibility(GlobalValue::HiddenVisibility);
+            gv->setDSOLocal(true);
             return gv;
         };
         auto table = tables.data() + i * sizeof(jl_image_shard_t) / sizeof(void *);
@@ -540,6 +542,7 @@ static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, 
     auto tables_gv = new GlobalVariable(M, tables_arr->getType(), false,
                                         GlobalValue::ExternalLinkage, tables_arr, "jl_shard_tables");
     tables_gv->setVisibility(GlobalValue::HiddenVisibility);
+    tables_gv->setDSOLocal(true);
     return tables_gv;
 }
 
@@ -550,12 +553,15 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_tls_offset"),
     };
-    for (auto &gv : ptls_table)
+    for (auto &gv : ptls_table) {
         cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);
+        cast<GlobalVariable>(gv)->setDSOLocal(true);
+    }
     auto ptls_table_arr = ConstantArray::get(ArrayType::get(T_psize, ptls_table.size()), ptls_table);
     auto ptls_table_gv = new GlobalVariable(M, ptls_table_arr->getType(), false,
                                             GlobalValue::ExternalLinkage, ptls_table_arr, "jl_ptls_table");
     ptls_table_gv->setVisibility(GlobalValue::HiddenVisibility);
+    ptls_table_gv->setDSOLocal(true);
     return ptls_table_gv;
 }
 
@@ -946,10 +952,15 @@ struct ShardTimers {
 
 void emitFloat16Wrappers(Module &M, bool external);
 
+struct AOTOutputs {
+    SmallVector<char, 0> unopt, opt, obj, asm_;
+};
+
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
-                    NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
-                    ShardTimers &timers, unsigned shardidx) {
+static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
+        bool unopt, bool opt, bool obj, bool asm_) {
+    assert((unopt || opt || obj || asm_) && "no output requested");
+    AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -962,17 +973,16 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     if (unopt) {
         timers.unopt.startTimer();
-        raw_string_ostream OS(*outputs);
+        raw_svector_ostream OS(out.unopt);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
         MPM.run(M, AM.MAM);
-        *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
-        return;
+        return out;
     }
     assert(!verifyModule(M, &errs()));
 
@@ -1031,43 +1041,38 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     if (opt) {
         timers.opt.startTimer();
-        raw_string_ostream OS(*outputs);
+        raw_svector_ostream OS(out.opt);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
         MPM.run(M, AM.MAM);
-        *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
 
     if (obj) {
         timers.obj.startTimer();
-        SmallVector<char, 0> Buffer;
-        raw_svector_ostream OS(Buffer);
+        raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
         emitter.run(M);
-        *outputs = { Buffer.data(), Buffer.size() };
-        *obj = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.obj.stopTimer();
     }
 
     if (asm_) {
         timers.asm_.startTimer();
-        SmallVector<char, 0> Buffer;
-        raw_svector_ostream OS(Buffer);
+        raw_svector_ostream OS(out.asm_);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
-        *outputs = { Buffer.data(), Buffer.size() };
-        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.asm_.stopTimer();
     }
+
+    return out;
 }
 
 // serialize module to bitcode
@@ -1101,6 +1106,8 @@ static void materializePreserved(Module &M, Partition &partition) {
             if (!Preserve.contains(&F)) {
                 F.deleteBody();
                 F.setLinkage(GlobalValue::ExternalLinkage);
+                F.setVisibility(GlobalValue::HiddenVisibility);
+                F.setDSOLocal(true);
             }
         }
     }
@@ -1109,6 +1116,8 @@ static void materializePreserved(Module &M, Partition &partition) {
             if (!Preserve.contains(&GV)) {
                 GV.setInitializer(nullptr);
                 GV.setLinkage(GlobalValue::ExternalLinkage);
+                GV.setVisibility(GlobalValue::HiddenVisibility);
+                GV.setDSOLocal(true);
             }
         }
     }
@@ -1130,7 +1139,8 @@ static void materializePreserved(Module &M, Partition &partition) {
                     GA.setAliasee(F);
 
                     DeletedAliases.push_back({ &GA, F });
-                } else {
+                }
+                else {
                     auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
                     DeletedAliases.push_back({ &GA, GV });
                 }
@@ -1197,26 +1207,24 @@ static void construct_vars(Module &M, Partition &partition) {
                                         GlobalVariable::ExternalLinkage,
                                         fidxs, "jl_fvar_idxs");
     fidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+    fidxs_var->setDSOLocal(true);
     auto gidxs = ConstantDataArray::get(M.getContext(), gvar_idxs);
     auto gidxs_var = new GlobalVariable(M, gidxs->getType(), true,
                                         GlobalVariable::ExternalLinkage,
                                         gidxs, "jl_gvar_idxs");
     gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+    gidxs_var->setDSOLocal(true);
 }
 
 // Materialization will leave many unused declarations, which multiversioning would otherwise clone.
 // This function removes them to avoid unnecessary cloning of declarations.
-static void dropUnusedDeclarations(Module &M) {
-    SmallVector<GlobalValue *> unused;
+// The GlobalDCEPass is much better at this, but we only care about removing unused
+// declarations, not actually about seeing if code is dead (codegen knows it is live, by construction).
+static void dropUnusedGlobals(Module &M) {
+    std::vector<GlobalValue *> unused;
     for (auto &G : M.global_values()) {
-        if (G.isDeclaration()) {
-            if (G.use_empty()) {
-                unused.push_back(&G);
-            } else {
-                G.setDSOLocal(false); // These are never going to be seen in the same module again
-                G.setVisibility(GlobalValue::DefaultVisibility);
-            }
-        }
+        if (G.isDeclaration() && G.use_empty())
+            unused.push_back(&G);
     }
     for (auto &G : unused)
         G->eraseFromParent();
@@ -1224,20 +1232,12 @@ static void dropUnusedDeclarations(Module &M) {
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
-static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, StringRef name,
-                std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
-                std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
-                bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
-                unsigned threads, ModuleInfo module_info) {
-    unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
-    assert(outcount);
-    outputs.resize(outputs.size() + outcount * threads * 2);
-    auto names_start = outputs.data() + outputs.size() - outcount * threads * 2;
-    auto outputs_start = names_start + outcount * threads;
-    unopt.resize(unopt.size() + unopt_out * threads);
-    opt.resize(opt.size() + opt_out * threads);
-    obj.resize(obj.size() + obj_out * threads);
-    asm_.resize(asm_.size() + asm_out * threads);
+template<typename ModuleReleasedFunc>
+static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
+                bool unopt_out, bool opt_out, bool obj_out, bool asm_out, ModuleReleasedFunc module_released) {
+    SmallVector<AOTOutputs, 16> outputs(threads);
+    assert(threads);
+    assert(unopt_out || opt_out || obj_out || asm_out);
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
@@ -1273,28 +1273,13 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
-    for (unsigned i = 0; i < threads; ++i) {
-        auto start = names_start + i * outcount;
-        auto istr = std::to_string(i);
-        if (unopt_out)
-            *start++ = (name + "_unopt#" + istr + ".bc").str();
-        if (opt_out)
-            *start++ = (name + "_opt#" + istr + ".bc").str();
-        if (obj_out)
-            *start++ = (name + "#" + istr + ".o").str();
-        if (asm_out)
-            *start++ = (name + "#" + istr + ".s").str();
-    }
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        add_output_impl(M, TM, outputs_start, names_start,
-                        unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
-                        opt_out ? opt.data() + opt.size() - 1 : nullptr,
-                        obj_out ? obj.data() + obj.size() - 1 : nullptr,
-                        asm_out ? asm_.data() + asm_.size() - 1 : nullptr,
-                        timers[0], 0);
+        outputs[0] = add_output_impl(M, TM, timers[0], unopt_out, opt_out, obj_out, asm_out);
         output_timer.stopTimer();
+        // Don't need M anymore
+        module_released(M);
 
         if (!report_timings) {
             timer_group.clear();
@@ -1304,7 +1289,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 t.print(dbgs(), true);
             }
         }
-        return;
+        return outputs;
     }
 
     partition_timer.startTimer();
@@ -1323,17 +1308,15 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     auto serialized = serializeModule(M);
     serialize_timer.stopTimer();
 
-    output_timer.startTimer();
+    // Don't need M anymore, since we'll only read from serialized from now on
+    module_released(M);
 
-    auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
-    auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
-    auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
-    auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
+    output_timer.startTimer();
 
     // Start all of the worker threads
     std::vector<std::thread> workers(threads);
     for (unsigned i = 0; i < threads; i++) {
-        workers[i] = std::thread([&, i](){
+        workers[i] = std::thread([&, i]() {
             LLVMContext ctx;
             // Lazily deserialize the entire module
             timers[i].deserialize.startTimer();
@@ -1355,15 +1338,10 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             timers[i].construct.stopTimer();
 
             timers[i].deletion.startTimer();
-            dropUnusedDeclarations(*M);
+            dropUnusedGlobals(*M);
             timers[i].deletion.stopTimer();
 
-            add_output_impl(*M, TM, outputs_start + i * outcount, names_start + i * outcount,
-                            unoptstart ? unoptstart + i : nullptr,
-                            optstart ? optstart + i : nullptr,
-                            objstart ? objstart + i : nullptr,
-                            asmstart ? asmstart + i : nullptr,
-                            timers[i], i);
+            outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
         });
     }
 
@@ -1391,6 +1369,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
         dbgs() << "]\n";
     }
+    return outputs;
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
@@ -1450,11 +1429,11 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len, ios_t *s)
+        ios_t *z, ios_t *s)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -1463,14 +1442,11 @@ void jl_dump_native_impl(void *native_code,
         delete data;
         return;
     }
-    auto TSCtx = data->M.getContext();
-    auto lock = TSCtx.getLock();
-    LLVMContext &Context = *TSCtx.getContext();
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
-    Triple TheTriple(data->M.getModuleUnlocked()->getTargetTriple());
+    Triple TheTriple(data->M.withModuleDo([](Module &M) { return M.getTargetTriple(); }));
     if (TheTriple.isOSWindows()) {
         TheTriple.setObjectFormat(Triple::COFF);
     } else if (TheTriple.isOSDarwin()) {
@@ -1496,21 +1472,48 @@ void jl_dump_native_impl(void *native_code,
             CMModel,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
+    auto DL = jl_create_datalayout(*SourceTM);
+    std::string StackProtectorGuard;
+    unsigned OverrideStackAlignment;
+    data->M.withModuleDo([&](Module &M) {
+        StackProtectorGuard = M.getStackProtectorGuard().str();
+        OverrideStackAlignment = M.getOverrideStackAlignment();
+    });
 
+    auto compile = [&](Module &M, StringRef name, unsigned threads, auto module_released) {
+        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, module_released);
+    };
 
-    std::vector<NewArchiveMember> bc_Archive;
-    std::vector<NewArchiveMember> obj_Archive;
-    std::vector<NewArchiveMember> asm_Archive;
-    std::vector<NewArchiveMember> unopt_bc_Archive;
-    std::vector<std::string> outputs;
-
-    // Reset the target triple to make sure it matches the new target machine
-    auto dataM = data->M.getModuleUnlocked();
-    dataM->setTargetTriple(SourceTM->getTargetTriple().str());
-    dataM->setDataLayout(jl_create_datalayout(*SourceTM));
-
-    Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
-    Type *T_psize = T_size->getPointerTo();
+    SmallVector<AOTOutputs, 16> sysimg_outputs;
+    SmallVector<AOTOutputs, 16> data_outputs;
+    SmallVector<AOTOutputs, 16> metadata_outputs;
+    if (z) {
+        LLVMContext Context;
+        Module sysimgM("sysimg", Context);
+        sysimgM.setTargetTriple(TheTriple.str());
+        sysimgM.setDataLayout(DL);
+        sysimgM.setStackProtectorGuard(StackProtectorGuard);
+        sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
+        Constant *data = ConstantDataArray::get(Context,
+            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
+        auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
+                                     GlobalVariable::ExternalLinkage,
+                                     data, "jl_system_image_data");
+        sysdata->setAlignment(Align(64));
+        addComdat(sysdata, TheTriple);
+        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
+        addComdat(new GlobalVariable(sysimgM, len->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     len, "jl_system_image_size"), TheTriple);
+        // Free z here, since we've copied out everything into data
+        // Results in serious memory savings
+        ios_close(z);
+        free(z);
+        // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
+        // to function as expected
+        // no need to free the module/context, destructor handles that
+        sysimg_outputs = compile(sysimgM, "sysimg", 1, [](Module &) {});
+    }
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
 
@@ -1518,173 +1521,201 @@ void jl_dump_native_impl(void *native_code,
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
-    ModuleInfo module_info = compute_module_info(*dataM);
-    LLVM_DEBUG(dbgs()
-        << "Dumping module with stats:\n"
-        << "    globals: " << module_info.globals << "\n"
-        << "    functions: " << module_info.funcs << "\n"
-        << "    basic blocks: " << module_info.bbs << "\n"
-        << "    instructions: " << module_info.insts << "\n"
-        << "    clones: " << module_info.clones << "\n"
-        << "    weight: " << module_info.weight << "\n"
-    );
+    // Reset the target triple to make sure it matches the new target machine
 
-    // add metadata information
-    if (imaging_mode) {
-        multiversioning_preannotate(*dataM);
-        {
-            DenseSet<GlobalValue *> fvars(data->jl_sysimg_fvars.begin(), data->jl_sysimg_fvars.end());
-            for (auto &F : *dataM) {
-                if (F.hasFnAttribute("julia.mv.reloc") || F.hasFnAttribute("julia.mv.fvar")) {
-                    if (fvars.insert(&F).second) {
-                        data->jl_sysimg_fvars.push_back(&F);
+    bool has_veccall = false;
+
+    data->M.withModuleDo([&](Module &dataM) {
+        dataM.setTargetTriple(TheTriple.str());
+        dataM.setDataLayout(DL);
+        auto &Context = dataM.getContext();
+
+        Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
+
+        // add metadata information
+        if (imaging_mode) {
+            multiversioning_preannotate(dataM);
+            {
+                DenseSet<GlobalValue *> fvars(data->jl_sysimg_fvars.begin(), data->jl_sysimg_fvars.end());
+                for (auto &F : dataM) {
+                    if (F.hasFnAttribute("julia.mv.reloc") || F.hasFnAttribute("julia.mv.fvar")) {
+                        if (fvars.insert(&F).second) {
+                            data->jl_sysimg_fvars.push_back(&F);
+                        }
                     }
                 }
             }
+
+            ModuleInfo module_info = compute_module_info(dataM);
+            LLVM_DEBUG(dbgs()
+                << "Dumping module with stats:\n"
+                << "    globals: " << module_info.globals << "\n"
+                << "    functions: " << module_info.funcs << "\n"
+                << "    basic blocks: " << module_info.bbs << "\n"
+                << "    instructions: " << module_info.insts << "\n"
+                << "    clones: " << module_info.clones << "\n"
+                << "    weight: " << module_info.weight << "\n"
+            );
+            threads = compute_image_thread_count(module_info);
+            LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
+            nfvars = data->jl_sysimg_fvars.size();
+            ngvars = data->jl_sysimg_gvars.size();
+            emit_offset_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
+            emit_offset_table(dataM, data->jl_sysimg_fvars, "jl_fvars", T_psize);
+            std::vector<uint32_t> idxs;
+            idxs.resize(data->jl_sysimg_gvars.size());
+            std::iota(idxs.begin(), idxs.end(), 0);
+            auto gidxs = ConstantDataArray::get(Context, idxs);
+            auto gidxs_var = new GlobalVariable(dataM, gidxs->getType(), true,
+                                                GlobalVariable::ExternalLinkage,
+                                                gidxs, "jl_gvar_idxs");
+            gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+            gidxs_var->setDSOLocal(true);
+            idxs.clear();
+            idxs.resize(data->jl_sysimg_fvars.size());
+            std::iota(idxs.begin(), idxs.end(), 0);
+            auto fidxs = ConstantDataArray::get(Context, idxs);
+            auto fidxs_var = new GlobalVariable(dataM, fidxs->getType(), true,
+                                                GlobalVariable::ExternalLinkage,
+                                                fidxs, "jl_fvar_idxs");
+            fidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+            fidxs_var->setDSOLocal(true);
+            dataM.addModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(Context, "_0"));
+
+            // reflect the address of the jl_RTLD_DEFAULT_handle variable
+            // back to the caller, so that we can check for consistency issues
+            GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&dataM);
+            addComdat(new GlobalVariable(dataM,
+                                        jlRTLD_DEFAULT_var->getType(),
+                                        true,
+                                        GlobalVariable::ExternalLinkage,
+                                        jlRTLD_DEFAULT_var,
+                                        "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
+
+            // let the compiler know we are going to internalize a copy of this,
+            // if it has a current usage with ExternalLinkage
+            auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
+            if (small_typeof_copy) {
+                small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+                small_typeof_copy->setDSOLocal(true);
+            }
         }
-        threads = compute_image_thread_count(module_info);
-        LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
-        nfvars = data->jl_sysimg_fvars.size();
-        ngvars = data->jl_sysimg_gvars.size();
-        emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
-        emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_fvars", T_psize);
-        std::vector<uint32_t> idxs;
-        idxs.resize(data->jl_sysimg_gvars.size());
-        std::iota(idxs.begin(), idxs.end(), 0);
-        auto gidxs = ConstantDataArray::get(Context, idxs);
-        auto gidxs_var = new GlobalVariable(*dataM, gidxs->getType(), true,
+
+        has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
+    });
+
+    {
+        // Don't use withModuleDo here since we delete the TSM midway through
+        auto TSCtx = data->M.getContext();
+        auto lock = TSCtx.getLock();
+        auto dataM = data->M.getModuleUnlocked();
+
+        // Delete data when add_output thinks it's done with it
+        // Saves memory for use when multithreading
+        data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
+    }
+
+    {
+        LLVMContext Context;
+        Module metadataM("metadata", Context);
+        metadataM.setTargetTriple(TheTriple.str());
+        metadataM.setDataLayout(DL);
+        metadataM.setStackProtectorGuard(StackProtectorGuard);
+        metadataM.setOverrideStackAlignment(OverrideStackAlignment);
+
+        Type *T_size = DL.getIntPtrType(Context);
+        Type *T_psize = T_size->getPointerTo();
+
+        if (TheTriple.isOSWindows()) {
+            // Windows expect that the function `_DllMainStartup` is present in an dll.
+            // Normal compilers use something like Zig's crtdll.c instead we provide a
+            // a stub implementation.
+            auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
+            auto T_int32 = Type::getInt32Ty(Context);
+            auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
+            auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", metadataM);
+            F->setCallingConv(CallingConv::X86_StdCall);
+
+            llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
+            builder.CreateRet(ConstantInt::get(T_int32, 1));
+        }
+        if (imaging_mode) {
+            auto specs = jl_get_llvm_clone_targets();
+            const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
+            std::vector<uint8_t> data;
+            auto push_i32 = [&] (uint32_t v) {
+                uint8_t buff[4];
+                memcpy(buff, &v, 4);
+                data.insert(data.end(), buff, buff + 4);
+            };
+            push_i32(specs.size());
+            for (uint32_t i = 0; i < specs.size(); i++) {
+                push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+                auto &specdata = specs[i].data;
+                data.insert(data.end(), specdata.begin(), specdata.end());
+            }
+            auto value = ConstantDataArray::get(Context, data);
+            auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
+                                        GlobalVariable::InternalLinkage,
+                                        value, "jl_dispatch_target_ids");
+            auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
+            auto ptls = emit_ptls_table(metadataM, T_size, T_psize);
+            auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
+            auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
+            auto small_typeof_copy = new GlobalVariable(metadataM, AT, false,
+                                                        GlobalVariable::ExternalLinkage,
+                                                        Constant::getNullValue(AT),
+                                                        "small_typeof");
+            small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+            small_typeof_copy->setDSOLocal(true);
+            AT = ArrayType::get(T_psize, 5);
+            auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
-                                            gidxs, "jl_gvar_idxs");
-        gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
-        idxs.clear();
-        idxs.resize(data->jl_sysimg_fvars.size());
-        std::iota(idxs.begin(), idxs.end(), 0);
-        auto fidxs = ConstantDataArray::get(Context, idxs);
-        auto fidxs_var = new GlobalVariable(*dataM, fidxs->getType(), true,
-                                            GlobalVariable::ExternalLinkage,
-                                            fidxs, "jl_fvar_idxs");
-        fidxs_var->setVisibility(GlobalValue::HiddenVisibility);
-        dataM->addModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(Context, "_0"));
-
-        // reflect the address of the jl_RTLD_DEFAULT_handle variable
-        // back to the caller, so that we can check for consistency issues
-        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(dataM);
-        addComdat(new GlobalVariable(*dataM,
-                                     jlRTLD_DEFAULT_var->getType(),
-                                     true,
-                                     GlobalVariable::ExternalLinkage,
-                                     jlRTLD_DEFAULT_var,
-                                     "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
-    }
-
-    // Reserve space for the output files and names
-    // DO NOT DELETE, this is necessary to ensure memorybuffers
-    // have a stable backing store for both their object files and
-    // their names
-    outputs.reserve((threads + 1) * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2);
-
-    auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
-            M, *SourceTM, outputs, name,
-            unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
-            !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
-            threads, module_info
-    ); };
-
-    compile(*dataM, "text", threads);
-
-    auto sysimageM = std::make_unique<Module>("sysimage", Context);
-    sysimageM->setTargetTriple(dataM->getTargetTriple());
-    sysimageM->setDataLayout(dataM->getDataLayout());
-#if JL_LLVM_VERSION >= 130000
-    sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
-    sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
-#endif
-
-    if (TheTriple.isOSWindows()) {
-        // Windows expect that the function `_DllMainStartup` is present in an dll.
-        // Normal compilers use something like Zig's crtdll.c instead we provide a
-        // a stub implementation.
-        auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
-        auto T_int32 = Type::getInt32Ty(Context);
-        auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
-        auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", *sysimageM);
-        F->setCallingConv(CallingConv::X86_StdCall);
-
-        llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
-        builder.CreateRet(ConstantInt::get(T_int32, 1));
-    }
-    bool has_veccall = dataM->getModuleFlag("julia.mv.veccall");
-    data->M = orc::ThreadSafeModule(); // free memory for data->M
-
-    if (sysimg_data) {
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        auto sysdata = new GlobalVariable(*sysimageM, data->getType(), false,
-                                     GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
-        addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*sysimageM, len->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"), TheTriple);
-    }
-    if (imaging_mode) {
-        auto specs = jl_get_llvm_clone_targets();
-        const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-        std::vector<uint8_t> data;
-        auto push_i32 = [&] (uint32_t v) {
-            uint8_t buff[4];
-            memcpy(buff, &v, 4);
-            data.insert(data.end(), buff, buff + 4);
-        };
-        push_i32(specs.size());
-        for (uint32_t i = 0; i < specs.size(); i++) {
-            push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
-            auto &specdata = specs[i].data;
-            data.insert(data.end(), specdata.begin(), specdata.end());
+                                            ConstantArray::get(AT, {
+                                                    ConstantExpr::getBitCast(header, T_psize),
+                                                    ConstantExpr::getBitCast(shards, T_psize),
+                                                    ConstantExpr::getBitCast(ptls, T_psize),
+                                                    ConstantExpr::getBitCast(small_typeof_copy, T_psize),
+                                                    ConstantExpr::getBitCast(target_ids, T_psize)
+                                            }),
+                                            "jl_image_pointers");
+            addComdat(pointers, TheTriple);
+            if (s) {
+                write_int32(s, data.size());
+                ios_write(s, (const char *)data.data(), data.size());
+            }
         }
-        auto value = ConstantDataArray::get(Context, data);
-        auto target_ids = new GlobalVariable(*sysimageM, value->getType(), true,
-                                      GlobalVariable::InternalLinkage,
-                                      value, "jl_dispatch_target_ids");
-        auto shards = emit_shard_table(*sysimageM, T_size, T_psize, threads);
-        auto ptls = emit_ptls_table(*sysimageM, T_size, T_psize);
-        auto header = emit_image_header(*sysimageM, threads, nfvars, ngvars);
-        auto AT = ArrayType::get(T_psize, 4);
-        auto pointers = new GlobalVariable(*sysimageM, AT, false,
-                                           GlobalVariable::ExternalLinkage,
-                                           ConstantArray::get(AT, {
-                                                ConstantExpr::getBitCast(header, T_psize),
-                                                ConstantExpr::getBitCast(shards, T_psize),
-                                                ConstantExpr::getBitCast(ptls, T_psize),
-                                                ConstantExpr::getBitCast(target_ids, T_psize)
-                                           }),
-                                           "jl_image_pointers");
-        addComdat(pointers, TheTriple);
-        if (s) {
-            write_int32(s, data.size());
-            ios_write(s, (const char *)data.data(), data.size());
-        }
-    }
 
-    compile(*sysimageM, "data", 1);
+        // no need to free module/context, destructor handles that
+        metadata_outputs = compile(metadataM, "data", 1, [](Module &) {});
+    }
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-    if (unopt_bc_fname)
-        handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
-                    Kind, true, false), reportWriterError);
-    if (bc_fname)
-        handleAllErrors(writeArchive(bc_fname, bc_Archive, true,
-                    Kind, true, false), reportWriterError);
-    if (obj_fname)
-        handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
-                    Kind, true, false), reportWriterError);
-    if (asm_fname)
-        handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
-                    Kind, true, false), reportWriterError);
+#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
+    if (fname) {\
+        std::vector<NewArchiveMember> archive; \
+        SmallVector<std::string, 16> filenames; \
+        SmallVector<StringRef, 16> buffers; \
+        for (size_t i = 0; i < threads; i++) { \
+            filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
+            buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
+        } \
+        filenames.push_back("metadata" prefix suffix); \
+        buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+        if (z) { \
+            filenames.push_back("sysimg" prefix suffix); \
+            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
+        } \
+        for (size_t i = 0; i < filenames.size(); i++) { \
+            archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
+        } \
+        handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
+    }
 
-    delete data;
+    WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
+    WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
+    WRITE_ARCHIVE(obj_fname, obj, "", ".o");
+    WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
 }
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
@@ -1988,7 +2019,7 @@ static RegisterPass<JuliaPipeline<0,true>> XS("juliaO0-sysimg", "Runs the entire
 static RegisterPass<JuliaPipeline<2,true>> YS("julia-sysimg", "Runs the entire julia pipeline (at -O2/sysimg mode)", false, false);
 static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire julia pipeline (at -O3/sysimg mode)", false, false);
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
@@ -1998,7 +2029,7 @@ void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int l
 // for use in reflection from Julia.
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
@@ -2011,19 +2042,22 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     // get the source code for this function
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
-    JL_GC_PUSH2(&src, &jlrettype);
-    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+    jl_code_instance_t *codeinst = NULL;
+    JL_GC_PUSH3(&src, &jlrettype, &codeinst);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && mi->def.method->source != jl_nothing && jl_ir_flag_inferred(mi->def.method->source)) {
         src = (jl_code_info_t*)mi->def.method->source;
         if (src && !jl_is_code_info(src))
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
-    } else {
-        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+    }
+    else {
+        jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
         if (ci != jl_nothing) {
-            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            codeinst = (jl_code_instance_t*)ci;
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
             if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
             jlrettype = codeinst->rettype;
+            codeinst = NULL; // not needed outside of this branch
         }
         if (!src || (jl_value_t*)src == jl_nothing) {
             src = jl_type_infer(mi, world, 0);
@@ -2031,8 +2065,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                 jlrettype = src->rettype;
             else if (jl_is_method(mi->def.method)) {
                 src = mi->def.method->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)mi->def.method->source;
-                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+                if (src && (jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
             }
             // TODO: use mi->uninferred
         }
@@ -2053,6 +2087,16 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
+        output.imaging = imaging_default();
+        // This would be nice, but currently it causes some assembly regressions that make printed output
+        // differ very significantly from the actual non-imaging mode code.
+        // // Force imaging mode for names of pointers
+        // output.imaging = true;
+        // This would also be nice, but it seems to cause OOMs on the windows32 builder
+        // // Force at least medium debug info for introspection
+        // No debug info = no variable names,
+        // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
+        output.debug_level = jl_options.debug_level;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 

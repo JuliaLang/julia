@@ -4,6 +4,9 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
+* JuliaSyntax.jl is now used as the default parser, providing better diagnostics and faster
+  parsing. Set environment variable `JULIA_USE_NEW_PARSER` to `0` to switch back to the old
+  parser if necessary (and if you find this necessary, please file an issue) ([#46372]).
 * `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
   may now be used as binary operators with arrow precedence. ([#45962])
 
@@ -11,19 +14,28 @@ Language changes
 ----------------
 
 * When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
-* A new morespecific rule for methods resolves ambiguities containing Union{} in favor of
+* A new more-specific rule for methods resolves ambiguities containing Union{} in favor of
   the method defined explicitly to handle the Union{} argument. This makes it possible to
   define methods to explicitly handle Union{} without the ambiguities that commonly would
   result previously. This also lets the runtime optimize certain method lookups in a way
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* The `@simd` macro now has a more limited and clearer semantics, it only enables reordering and contraction
+  of floating-point operations, instead of turning on all "fastmath" optimizations.
+  If you observe performance regressions due to this change, you can recover previous behavior with `@fastmath @simd`,
+  if you are OK with all the optimizations enabled by the `@fastmath` macro. ([#49405])
+* When a method with keyword arguments is displayed in the stack trace view, the textual
+  representation of the keyword arguments' types is simplified using the new
+  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
 Compiler/Runtime improvements
 -----------------------------
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
+* [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
+  This should resolve many segmentation faults previously observed on this platform.
 
 Command-line option changes
 ---------------------------
@@ -44,6 +56,7 @@ New library functions
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
 
 New library features
 --------------------
@@ -52,6 +65,7 @@ New library features
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
+* `parent` and `parentindices` support `SubString`s
 
 Standard library changes
 ------------------------
@@ -61,10 +75,6 @@ Standard library changes
 
 #### Package Manager
 
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
 * `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
 
 #### LinearAlgebra
@@ -86,6 +96,11 @@ Standard library changes
   (real symmetric) part of a matrix ([#31836]).
 * The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
   parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
+* `eigen(A, B)` and `eigvals(A, B)`, where one of `A` or `B` is symmetric or Hermitian,
+  are now fully supported ([#49533])
+* `eigvals/eigen(A, cholesky(B))` now computes the generalized eigenvalues (`eigen`: and eigenvectors)
+  of `A` and `B` via Cholesky decomposition for positive definite `B`. Note: The second argument is
+  the output of `cholesky`.
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
@@ -98,6 +113,8 @@ Standard library changes
 
 #### REPL
 
+* When stack traces are printed, the printed depth of types in function signatures will be limited
+  to avoid overly verbose output ([#49795]).
 
 #### SuiteSparse
 

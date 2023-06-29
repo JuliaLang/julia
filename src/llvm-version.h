@@ -10,11 +10,11 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 120000
-    #error Only LLVM versions >= 12.0.0 are supported by Julia
+#if JL_LLVM_VERSION < 140000
+    #error Only LLVM versions >= 14.0.0 are supported by Julia
 #endif
 
-#if JL_LLVM_VERSION >= 150000
+#if JL_LLVM_VERSION >= 160000
 #define JL_LLVM_OPAQUE_POINTERS 1
 #endif
 

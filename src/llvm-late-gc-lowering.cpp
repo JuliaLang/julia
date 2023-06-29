@@ -1262,6 +1262,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen)
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    assert(load_base); // Static analyzer
     auto gv = dyn_cast<GlobalVariable>(load_base);
     if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa),
                {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
@@ -2224,10 +2225,10 @@ Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
     auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is larger than page size.
+    // We can be sure that the tag is at least 16 (1<<4)
     // Hopefully this is enough to convince LLVM that the value is still not NULL
     // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 4096));
+    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
     load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
     return load;
 }
@@ -2763,7 +2764,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     return modified;
 }
 
-PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     auto GetDT = [&AM, &F]() -> DominatorTree & {
         return AM.getResult<DominatorTreeAnalysis>(F);
@@ -2792,7 +2793,8 @@ Pass *createLateLowerGCFramePass() {
     return new LateLowerGCFrameLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLateLowerGCFramePass());
 }

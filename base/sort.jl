@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
+    IteratorSize, HasShape, IsInfinite, tail
 
 import Base:
     sort,
@@ -43,6 +44,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -435,7 +437,7 @@ for (sym, exp, type) in [
         (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, true, Bool)]
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
@@ -498,8 +500,6 @@ internal or recursive calls.
 """
 function _sort! end
 
-abstract type Algorithm end
-
 
 """
     MissingOptimization(next) <: Algorithm
@@ -523,12 +523,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
     v.data[i] = x
     v
 end
@@ -589,8 +589,9 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for i in eachindex(o.data) # equal to copy(v)
-            x = o.data[i]
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
             if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
@@ -1383,6 +1384,11 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+Uses `Base.copymutable` to support immutable collections and iterables.
+
+!!! compat "Julia 1.10"
+    `sort` of arbitrary iterables requires at least Julia 1.10.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1400,7 +1406,39 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+function sort(v; kws...)
+    size = IteratorSize(v)
+    size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
+    size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
+    sort!(copymutable(v); kws...)
+end
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
+sort(::AbstractString; kws...) =
+    throw(ArgumentError("sort(::AbstractString) is not supported"))
+sort(::Tuple; kws...) =
+    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
+
+function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
+              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
+    o = ord(lt,by,rev,order)
+    if N > 9
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        tuple((v[i] for i in 1:N)...)
+    else
+        _sort(x, o)
+    end
+end
+_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _sort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_sort(a, o), _sort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
+
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
@@ -1771,7 +1809,7 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
+               scratch::Union{Vector{T}, Nothing}=Vector{T}(undef, size(A, dims))) where T
     __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
@@ -2111,25 +2149,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
         sort!(v, lo, hi, a, o)
         scratch
-    else
-        # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
     end
 end
 

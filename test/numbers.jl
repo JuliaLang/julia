@@ -2216,13 +2216,11 @@ end
     @test round(Int16, -32768.1) === Int16(-32768)
 end
 # issue #7508
-@test_throws ErrorException reinterpret(Int, 0x01)
+@test_throws ArgumentError reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
-    @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
-    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
-    @test_throws ErrorException reinterpret(Int32, false)
+    @test_throws ArgumentError reinterpret(Float64, Complex{Int64}(1))
+    @test_throws ArgumentError reinterpret(Int32, false)
 end
 # issue #41
 ndigf(n) = Float64(log(Float32(n)))
@@ -2263,6 +2261,17 @@ end
 @test_throws InexactError convert(Int, big(2)^100)
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
+
+@testset "infinity to integer conversion" begin
+    for T in (
+        UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt
+    )
+        for S in (Float16, Float32, Float64, BigFloat)
+            @test_throws InexactError convert(T, typemin(S))
+            @test_throws InexactError convert(T, typemax(S))
+        end
+    end
+end
 
 @testset "issue #9789" begin
     @test_throws InexactError convert(Int8, typemax(UInt64))

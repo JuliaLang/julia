@@ -40,7 +40,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // cpu_target ("native", "core2", etc...)
                         0,    // nthreadpools
                         0,    // nthreads
-                        0,    // ngcthreads
+                        0,    // nmarkthreads
+                        0,    // nsweepthreads
                         NULL, // nthreads_per_pool
                         0,    // nprocs
                         NULL, // machine_file
@@ -87,6 +88,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // rr-detach
                         0, // strip-metadata
                         0, // strip-ir
+                        0, // permalloc_pkgimg
                         0, // heap-size-hint
     };
     jl_options_initialized = 1;
@@ -129,7 +131,8 @@ static const char opts[]  =
     "                           interface if supported (Linux and Windows) or to the number of CPU\n"
     "                           threads if not supported (MacOS) or if process affinity is not\n"
     "                           configured, and sets M to 1.\n"
-    " --gcthreads=N             Use N threads for GC, set to half of the number of compute threads if unspecified.\n"
+    " --gcthreads=M[,N]         Use M threads for the mark phase of GC and N (0 or 1) threads for the concurrent sweeping phase of GC.\n"
+    "                           M is set to half of the number of compute threads and N is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -209,6 +212,7 @@ static const char opts_hidden[]  =
     " --trace-compile={stderr,name}\n"
     "                          Print precompile statements for methods compiled during execution or save to a path\n"
     " --image-codegen          Force generate code in imaging mode\n"
+    " --permalloc-pkgimg={yes|no*} Copy the data section of package images into memory\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -254,6 +258,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
+           opt_permalloc_pkgimg
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -313,6 +318,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "rr-detach",       no_argument,       0, opt_rr_detach },
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { "strip-ir",        no_argument,       0, opt_strip_ir },
+        { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { 0, 0, 0, 0 }
     };
@@ -822,10 +828,27 @@ restart_switch:
             break;
         case opt_gc_threads:
             errno = 0;
-            long ngcthreads = strtol(optarg, &endptr, 10);
-            if (errno != 0 || optarg == endptr || *endptr != 0 || ngcthreads < 1 || ngcthreads >= INT16_MAX)
-                jl_errorf("julia: --gcthreads=<n>; n must be an integer >= 1");
-            jl_options.ngcthreads = (int16_t)ngcthreads;
+            long nmarkthreads = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
+                jl_errorf("julia: --gcthreads=<n>[,<m>]; n must be an integer >= 1");
+            }
+            jl_options.nmarkthreads = (int16_t)nmarkthreads;
+            if (*endptr == ',') {
+                errno = 0;
+                char *endptri;
+                long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; n must be 0 or 1");
+                jl_options.nsweepthreads = (int8_t)nsweepthreads;
+            }
+            break;
+        case opt_permalloc_pkgimg:
+            if (!strcmp(optarg,"yes"))
+                jl_options.permalloc_pkgimg = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.permalloc_pkgimg = 0;
+            else
+                jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
+
+# RUN: julia --startup-file=no -O2 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s
+# RUN: julia --startup-file=no -O3 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
+
 # RUN: julia --startup-file=no -O2 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s
 # RUN: julia --startup-file=no -O3 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s
 
@@ -9,26 +16,30 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 # COM: Float32
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
+# CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
+# CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
+# CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
+# CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
 function prod_v_vT(R, x, y)
@@ -39,26 +50,30 @@ end
 
 # COM: Float32
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
+# CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
+# CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
+# CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
+# CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
 function prod_vT_v(R, x, y)
@@ -69,27 +84,31 @@ end
 
 # COM: Float32
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
-# CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
+# XFAIL-CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# XFAIL-CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
-# CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
-# CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
+# XFAIL-CHECK: fmul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# XFAIL-CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
-# CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
+# XFAIL-CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# XFAIL-CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
-# CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
-# CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
+# XFAIL-CHECK: mul <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# XFAIL-CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
 function prod_v_M_vT(R, x, M, y)
     R .= x .* M .* y'

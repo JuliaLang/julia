@@ -87,7 +87,7 @@ end
 
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
-                   𝕃ₒ::AbstractLattice = OptimizerLattice())
+                   𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -174,25 +174,43 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     isa(stmt, PhiNode) || break
                 end
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error("")
+                termidx = last(block.stmts)
+                stmttyp = ir.stmts[termidx][:type]
+                if isempty(block.succs) && stmttyp == Union{}
+                    # Allow fallthrough terminators that are known to error to
+                    # be removed from the CFG. Ideally we'd add an unreachable
+                    # here, but that isn't always possible.
+                else
+                    @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
+                    error("")
+                end
             end
         end
     end
+    lastbb = 0
+    is_phinode_block = false
     for (bb, idx) in bbidxiter(ir)
+        if bb != lastbb
+            is_phinode_block = true
+            lastbb = bb
+        end
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
         bb_unreachable(domtree, bb) && continue
         stmt = ir.stmts[idx][:inst]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
+            if !is_phinode_block
+                @verify_error "φ node $idx is not at the beginning of the basic block $bb"
+                error("")
+            end
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
                 for j = (i+1):length(stmt.edges)
                     edge′ = stmt.edges[j]
                     if edge == edge′
-                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is
+                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is always unique.
                         @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
                         error("")
                     end
@@ -225,7 +243,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 end
                 check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i, allow_frontend_forms)
             end
-        elseif isa(stmt, PhiCNode)
+            continue
+        elseif stmt === nothing
+            # Nothing to do
+            continue
+        end
+
+        is_phinode_block = false
+        if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
                 val = stmt.values[i]
                 if !isa(val, SSAValue)

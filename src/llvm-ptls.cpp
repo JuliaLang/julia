@@ -9,6 +9,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -57,7 +58,7 @@ private:
     void set_pgcstack_attrs(CallInst *pgcstack) const;
     Instruction *emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
-    GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
+    GlobalVariable *create_hidden_global(Type *T, StringRef name) const;
     void fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified);
 };
 
@@ -125,14 +126,12 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
     return new LoadInst(T_pppjlvalue, tls, "pgcstack", false, insertBefore);
 }
 
-GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
+GlobalVariable *LowerPTLS::create_hidden_global(Type *T, StringRef name) const
 {
-    // Create a static global variable and points a global alias to it so that
-    // the address is visible externally but LLVM can still assume that the
-    // address of this variable doesn't need dynamic relocation
-    // (can be accessed with a single PC-rel load).
     auto GV = new GlobalVariable(*M, T, false, GlobalVariable::ExternalLinkage,
                                  nullptr, name);
+    GV->setVisibility(GlobalValue::HiddenVisibility);
+    GV->setDSOLocal(true);
     return GV;
 }
 
@@ -161,6 +160,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         SmallVector<uint32_t, 2> Weights{9, 1};
         TerminatorInst *fastTerm;
         TerminatorInst *slowTerm;
+        assert(pgcstack->getType()); // Static analyzer
         auto cmp = new ICmpInst(phi, CmpInst::ICMP_NE, pgcstack, Constant::getNullValue(pgcstack->getType()));
         SplitBlockAndInsertIfThenElse(cmp, phi, &fastTerm, &slowTerm,
                                       MDB.createBranchWeights(Weights));
@@ -304,9 +304,9 @@ bool LowerPTLS::run(bool *CFGModified)
             T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
             if (imaging_mode) {
-                pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
-                pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_aliased_global(T_size, "jl_tls_offset");
+                pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
+                pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
+                pgcstack_offset = create_hidden_global(T_size, "jl_tls_offset");
             }
             need_init = false;
         }
@@ -314,6 +314,19 @@ bool LowerPTLS::run(bool *CFGModified)
         for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
             auto call = cast<CallInst>(*it);
             ++it;
+            auto f = call->getCaller();
+            Value *pgcstack = NULL;
+            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end();++arg) {
+                if (arg->hasSwiftSelfAttr()){
+                    pgcstack = &*arg;
+                    break;
+                }
+            }
+            if (pgcstack) {
+                call->replaceAllUsesWith(pgcstack);
+                call->eraseFromParent();
+                continue;
+            }
             assert(call->getCalledOperand() == pgcstack_getter);
             fix_pgcstack_use(call, pgcstack_getter, or_new, CFGModified);
         }
@@ -372,7 +385,8 @@ Pass *createLowerPTLSPass(bool imaging_mode)
     return new LowerPTLSLegacy(imaging_mode);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)
 {
     unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

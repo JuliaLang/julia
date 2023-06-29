@@ -17,6 +17,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     const jl_uuid_t uuid_zero = {0, 0};
     jl_module_t *m = (jl_module_t*)jl_gc_alloc(ct->ptls, sizeof(jl_module_t),
                                                jl_module_type);
+    jl_set_typetagof(m, jl_module_tag, 0);
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = parent;
@@ -238,7 +239,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         }
         // TODO: we might want to require explicitly importing types to add constructors
         //       or we might want to drop this error entirely
-        if (!b->imported && (!b2->constp || !jl_is_type(f))) {
+        if (!b->imported && !(b2->constp && jl_is_type(f) && strcmp(jl_symbol_name(var), "=>") != 0)) {
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
                       jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
         }

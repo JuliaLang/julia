@@ -20,9 +20,10 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, Module, Core.CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
 
 - `file::Symbol`
 
@@ -319,37 +320,45 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         print(io, "top-level scope")
     elseif linfo isa Module
         Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+    elseif linfo isa MethodInstance
+        def = linfo.def
+        if def isa Module
+            Base.show_mi(io, linfo, #=from_stackframe=#true)
+        else
+            show_spec_sig(io, def, linfo.specTypes)
+        end
     else
-        def, sig = if linfo isa MethodInstance
-             linfo.def, linfo.specTypes
-        else
-            linfo, linfo.sig
+        m = linfo::Method
+        show_spec_sig(io, m, m.sig)
+    end
+end
+
+function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
+    if get(io, :limit, :false)::Bool
+        if !haskey(io, :displaysize)
+            io = IOContext(io, :displaysize => displaysize(io))
         end
-        if def isa Method
-            argnames = Base.method_argnames(def)
-            argnames = replace(argnames, :var"#unused#" => :var"")
-            if def.nkw > 0
-                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
-                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)::DataType
-                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = argnames[2:(def.nkw+1)]
-                for i = 1:length(kwnames)
-                    str = string(kwnames[i])::String
-                    if endswith(str, "...")
-                        kwnames[i] = Symbol(str[1:end-3])
-                    end
-                end
-                Base.show_tuple_as_call(io, def.name, pos_sig;
-                                        demangle=true,
-                                        kwargs=zip(kwnames, kwarg_types),
-                                        argnames=argnames[def.nkw+2:end])
-            else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+    end
+    argnames = Base.method_argnames(m)
+    argnames = replace(argnames, :var"#unused#" => :var"")
+    if m.nkw > 0
+        # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...; kw_args)
+        kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+m.nkw) ]
+        uw = Base.unwrap_unionall(sig)::DataType
+        pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(m.nkw+2):end]...}, sig)
+        kwnames = argnames[2:(m.nkw+1)]
+        for i = 1:length(kwnames)
+            str = string(kwnames[i])::String
+            if endswith(str, "...")
+                kwnames[i] = Symbol(str[1:end-3])
             end
-        else
-            Base.show_mi(io, linfo, true)
         end
+        Base.show_tuple_as_call(io, m.name, pos_sig;
+                                demangle=true,
+                                kwargs=zip(kwnames, kwarg_types),
+                                argnames=argnames[m.nkw+2:end])
+    else
+        Base.show_tuple_as_call(io, m.name, sig; demangle=true, argnames)
     end
 end
 
