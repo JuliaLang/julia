@@ -1348,8 +1348,8 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 int64_t lazy_freed_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allocd,
-                                        jl_gc_pagemeta_t **lazily_freed, jl_gc_pagemeta_t *pg, jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
+static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allocd, jl_gc_pagemeta_t **lazily_freed,
+                                        jl_gc_pagemeta_t *pg, jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
@@ -1467,8 +1467,8 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(jl_taggedvalue_t ***pfl, jl_gc_pagemeta_t **allocd,
-                                      jl_gc_pagemeta_t **lazily_freed, jl_gc_pagemeta_t *pg, int sweep_full) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_sweep_pool_page(jl_taggedvalue_t ***pfl, jl_gc_pagemeta_t **allocd, jl_gc_pagemeta_t **lazily_freed,
+                                      jl_gc_pagemeta_t *pg, int sweep_full) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
@@ -1504,7 +1504,10 @@ static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_
 // setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(int sweep_full)
 {
+    // run a few sanity checks before actually sweeping
     assert(gc_count_allocd_pages_in_allocd_map() == gc_count_allocd_pages_in_allocd_lists());
+    assert(gc_count_mapped_pages() == gc_mapped_pages);
+
     gc_time_pool_start();
     lazy_freed_pages = 0;
 
@@ -1586,6 +1589,10 @@ static void gc_sweep_pool(int sweep_full)
         uv_sem_post(&gc_sweep_assists_needed);
     }
 #endif
+
+    // run a few sanity after sweeping as well
+    assert(gc_count_allocd_pages_in_allocd_map() == gc_count_allocd_pages_in_allocd_lists());
+    assert(gc_count_mapped_pages() == gc_mapped_pages);
 
     gc_time_pool_end(sweep_full);
 }

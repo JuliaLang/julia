@@ -625,9 +625,11 @@ void gc_stats_big_obj(void);
 #endif
 
 // For debugging
+extern size_t gc_mapped_pages;
 void gc_count_pool(void);
 size_t gc_count_allocd_pages_in_allocd_map(void);
 size_t gc_count_allocd_pages_in_allocd_lists(void);
+size_t gc_count_mapped_pages(void);
 
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 

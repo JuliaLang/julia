@@ -19,6 +19,7 @@ extern "C" {
 #define MIN_BLOCK_PG_ALLOC (1) // 16 KB
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
+size_t gc_mapped_pages;
 
 void jl_gc_init_page(void)
 {
@@ -129,6 +130,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     }
     // must map a new set of pages
     char *data = jl_gc_try_alloc_pages();
+    gc_mapped_pages += block_pg_cnt;
     meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
     for (int i = 0; i < block_pg_cnt; i++) {
         jl_gc_pagemeta_t *pg = &meta[i];

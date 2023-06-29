@@ -1171,6 +1171,8 @@ extern int jl_n_sweepthreads;
 
 size_t gc_count_allocd_pages_in_allocd_map(void)
 {
+    // `alloc_map` may be concurrently modified by
+    // the sweeping thread
     if (jl_n_sweepthreads > 0) {
         return 0;
     }
@@ -1199,6 +1201,9 @@ size_t gc_count_allocd_pages_in_allocd_map(void)
 
 size_t gc_count_allocd_pages_in_allocd_lists(void)
 {
+    // to keep things consistent with `gc_count_allocd_pages_in_allocd_map`
+    // in the case of concurrent modification of `alloc_map` by a sweeping
+    // thread
     if (jl_n_sweepthreads > 0) {
         return 0;
     }
@@ -1217,6 +1222,33 @@ size_t gc_count_allocd_pages_in_allocd_lists(void)
                 count++;
             }
         }
+    }
+    return count;
+}
+
+size_t gc_count_mapped_pages(void)
+{
+    // to keep things consistent with `gc_count_allocd_pages_in_alloc_lists`
+    // in the case of concurrent modification of `alloc_map` by a sweeping
+    // thread
+    if (jl_n_sweepthreads > 0) {
+        return 0;
+    }
+    size_t count = gc_count_allocd_pages_in_allocd_lists();
+    jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&global_page_pool_lazily_freed.page_metadata_back);
+    while (pg != NULL) {
+        pg = pg->next;
+        count++;
+    }
+    pg = jl_atomic_load_relaxed(&global_page_pool_clean.page_metadata_back);
+    while (pg != NULL) {
+        pg = pg->next;
+        count++;
+    }
+    pg = jl_atomic_load_relaxed(&global_page_pool_freed.page_metadata_back);
+    while (pg != NULL) {
+        pg = pg->next;
+        count++;
     }
     return count;
 }
