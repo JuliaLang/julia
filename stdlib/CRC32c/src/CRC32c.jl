@@ -59,20 +59,22 @@ crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 
 const POLY = 0x82f63b78 # CRC-32C (iSCSI) polynomial in reversed bit order.
 
-# reversed CRC32c table: Algorithm 5 from Stigge et al.
-const REVTABLE = let table = Vector{UInt32}(undef, 256)
+# reversed CRC table: Algorithm 5 from Stigge et al.
+function gen_revtable(poly::UInt32)
+    table = Vector{UInt32}(undef, 256)
     for index = UInt32(0):UInt32(255)
         crc = index << 24;
         for i = 1:8
-            crc = !iszero(crc & 0x80000000) ? ((crc ⊻ POLY) << 1) + 0x01 : crc << 1;
+            crc = !iszero(crc & 0x80000000) ? ((crc ⊻ poly) << 1) + 0x01 : crc << 1;
         end
         table[index+1] = crc;
     end
-    table
+    return table
 end
+const REVTABLE = gen_revtable(POLY) # reversed CRC-32C table
 
 # Table-driven "backwards" calculation of CRC: Algorithm 6 from Stigge et al.
-function bwcrc32c(a::AbstractVector{UInt8}, crc::UInt32)
+function bwcrc32c(a::AbstractVector{UInt8}, crc::UInt32, revtable::AbstractVector{UInt32}=REVTABLE)
     crc = crc ⊻ 0xffffffff
     for i = reverse(eachindex(a))
         crc = (crc << 8) ⊻ REVTABLE[(crc >> 24) + 1] ⊻ a[i]
