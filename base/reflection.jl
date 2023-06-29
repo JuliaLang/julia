@@ -2164,8 +2164,8 @@ Provides a convenient way to call [`Base.invokelatest`](@ref).
 It also supports the following syntax:
 - `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
 - `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
-- `@invokelatest xs[i]` expands to `invokelatest(getindex, xs, i)`
-- `@invokelatest xs[i] = v` expands to `invokelatest(setindex!, xs, v, i)`
+- `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
 ```jldoctest
 julia> @macroexpand @invokelatest f(x; kw=kwv)
