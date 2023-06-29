@@ -1228,7 +1228,7 @@ size_t gc_count_allocd_pages_in_allocd_lists(void)
 
 size_t gc_count_mapped_pages(void)
 {
-    // to keep things consistent with `gc_count_allocd_pages_in_alloc_lists`
+    // to keep things consistent with `gc_count_allocd_pages_in_allocd_lists`
     // in the case of concurrent modification of `alloc_map` by a sweeping
     // thread
     if (jl_n_sweepthreads > 0) {
