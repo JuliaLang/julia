@@ -1368,14 +1368,20 @@ end
 const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
 
 """
-    Base.isprecompiled(pkg::PkgId)
+    Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
 
 Returns whether a given PkgId within the active project is precompiled.
+
+By default this check observes the same approach that code loading takes
+with respect to when different versions of dependencies are currently loaded
+to that which is expected. To ignore loaded modules and answer as if in a
+fresh julia session specify `ignore_loaded=true`.
 
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
 """
 function isprecompiled(pkg::PkgId;
+        ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg)
@@ -1395,7 +1401,7 @@ function isprecompiled(pkg::PkgId;
             modpaths = find_all_in_cache_path(modkey)
             for modpath_to_try in modpaths::Vector{String}
                 stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
-                if get!(() -> stale_cachefile(stale_cache_key..., ignore_loaded=true) === true,
+                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded) === true,
                         stale_cache, stale_cache_key)
                     continue
                 end
