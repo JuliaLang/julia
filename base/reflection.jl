@@ -2159,11 +2159,11 @@ end
 
 Provides a convenient way to call [`invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
-`invokelatest(f, args...; kwargs...)`.
+`Base.invokelatest(f, args...; kwargs...)`.
 
 It also supports the following syntax:
-- `@invokelatest x.f` expands to `invokelatest(getproperty, x, :f)`
-- `@invokelatest x.f = v` expands to `invokelatest(setproperty!, x, :f, v)`
+- `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
+- `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
 - `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
 - `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
 
