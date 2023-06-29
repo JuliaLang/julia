@@ -655,7 +655,10 @@ precompile_test_harness("code caching") do dir
               precompile(getelsize, (Vector{Int32},))
           end
           """)
-    Base.compilecache(Base.PkgId(string(Cache_module)))
+    pkgid = Base.PkgId(string(Cache_module))
+    @test !Base.isprecompiled(pkgid)
+    Base.compilecache(pkgid)
+    @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
     M = getfield(@__MODULE__, Cache_module)
     # Test that this cache file "owns" all the roots
