@@ -40,7 +40,7 @@ loop:
 ; CHECK: llvm.mem.parallel_loop_access
   %aval = load double, double *%aptr
   %nextv = fsub double %v, %aval
-; CHECK: fsub fast double %v, %aval
+; CHECK: fsub reassoc contract double %v, %aval
   %nexti = add i64 %i, 1
   call void @julia.loopinfo_marker(), !julia.loopinfo !3
   %done = icmp sgt i64 %nexti, 500
@@ -59,7 +59,7 @@ loop:
   %aptr = getelementptr double, double *%a, i64 %i
   %aval = load double, double *%aptr
   %nextv = fsub double %v, %aval
-; CHECK: fsub fast double %v, %aval
+; CHECK: fsub reassoc contract double %v, %aval
   %nexti = add i64 %i, 1
   call void @julia.loopinfo_marker(), !julia.loopinfo !2
   %done = icmp sgt i64 %nexti, 500

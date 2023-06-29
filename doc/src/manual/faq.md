@@ -61,8 +61,8 @@ a complex non-public API, especially when using it from a stable package, it is 
 to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
 into a public API.  However, we do not discourage the attempt to create packages that expose
-stable public interfaces while relying on non-public implementation details of `julia` and
-buffering the differences across different `julia` versions.
+stable public interfaces while relying on non-public implementation details of Julia and
+buffering the differences across different Julia versions.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 

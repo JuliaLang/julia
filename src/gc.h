@@ -182,6 +182,7 @@ typedef struct {
     _Atomic(jl_gc_pagemeta_t *) page_metadata_back;
 } jl_gc_global_page_pool_t;
 
+extern jl_gc_global_page_pool_t global_page_pool_lazily_freed;
 extern jl_gc_global_page_pool_t global_page_pool_clean;
 extern jl_gc_global_page_pool_t global_page_pool_freed;
 
@@ -428,6 +429,7 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;

@@ -599,6 +599,8 @@ static void jl_check_tls(void)
 JL_DLLEXPORT const int jl_tls_elf_support = 0;
 #endif
 
+extern int jl_n_markthreads;
+extern int jl_n_sweepthreads;
 extern int gc_first_tid;
 
 // interface to Julia; sets up to make the runtime thread-safe
@@ -653,22 +655,37 @@ void jl_init_threading(void)
         }
     }
 
-    int16_t ngcthreads = jl_options.ngcthreads - 1;
-    if (ngcthreads == -1 &&
-        (cp = getenv(NUM_GC_THREADS_NAME))) { // ENV[NUM_GC_THREADS_NAME] specified
-
-        ngcthreads = (uint64_t)strtol(cp, NULL, 10) - 1;
-    }
-    if (ngcthreads == -1) {
-        // if `--gcthreads` was not specified, set the number of GC threads
-        // to half of compute threads
-        if (nthreads <= 1) {
-            ngcthreads = 0;
+    jl_n_markthreads = jl_options.nmarkthreads - 1;
+    jl_n_sweepthreads = jl_options.nsweepthreads;
+    if (jl_n_markthreads == -1) { // --gcthreads not specified
+        if ((cp = getenv(NUM_GC_THREADS_NAME))) { // ENV[NUM_GC_THREADS_NAME] specified
+            errno = 0;
+            jl_n_markthreads = (uint64_t)strtol(cp, &endptr, 10) - 1;
+            if (errno != 0 || endptr == cp || nthreads <= 0)
+                jl_n_markthreads = 0;
+            cp = endptr;
+            if (*cp == ',') {
+                cp++;
+                errno = 0;
+                jl_n_sweepthreads = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || jl_n_sweepthreads < 0) {
+                    jl_n_sweepthreads = 0;
+                }
+            }
         }
         else {
-            ngcthreads = (nthreads / 2) - 1;
+            // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
+            // set the number of mark threads to half of compute threads
+            // and number of sweep threads to 0
+            if (nthreads <= 1) {
+                jl_n_markthreads = 0;
+            }
+            else {
+                jl_n_markthreads = (nthreads / 2) - 1;
+            }
         }
     }
+    int16_t ngcthreads = jl_n_markthreads + jl_n_sweepthreads;
 
     jl_all_tls_states_size = nthreads + nthreadsi + ngcthreads;
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
@@ -734,8 +751,11 @@ void jl_start_threads(void)
                 mask[i] = 0;
             }
         }
+        else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
+            uv_thread_create(&uvtid, jl_gc_sweep_threadfun, t);
+        }
         else {
-            uv_thread_create(&uvtid, jl_gc_threadfun, t);
+            uv_thread_create(&uvtid, jl_gc_mark_threadfun, t);
         }
         uv_thread_detach(&uvtid);
     }
