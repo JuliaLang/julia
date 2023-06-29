@@ -97,10 +97,14 @@ Standard library changes
 * The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
   parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
 * `eigen(A, B)` and `eigvals(A, B)`, where one of `A` or `B` is symmetric or Hermitian,
-  are now fully supported ([#49533])
+  are now fully supported ([#49533]).
 * `eigvals/eigen(A, cholesky(B))` now computes the generalized eigenvalues (`eigen`: and eigenvectors)
   of `A` and `B` via Cholesky decomposition for positive definite `B`. Note: The second argument is
-  the output of `cholesky`.
+  the output of `cholesky` ([#49533]).
+* The abstract type `AbstractTriangular` now only has one type parameter `T`, indicating its
+  `eltype`. The second parameter `S<:AbstractMatrix` used to encode the type information on
+  the data container. To refer to the union of `[Unit][Upper/Lower]Triangular` types,
+  use `LinearAlgebra.UpperOrLowerTriangular` ([#26307]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
