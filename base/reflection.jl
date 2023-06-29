@@ -2157,7 +2157,7 @@ end
 """
     @invokelatest f(args...; kwargs...)
 
-Provides a convenient way to call [`Base.invokelatest`](@ref).
+Provides a convenient way to call [`invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
 
@@ -2186,6 +2186,9 @@ julia> @macroexpand @invokelatest xs[i] = v
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.9"
+    Prior to Julia 1.9, this macro was not exported, and was called as `Base.@invokelatest`.
 
 !!! compat "Julia 1.10"
     The additional syntax is supported as of Julia 1.10.
