@@ -1506,8 +1506,9 @@ static void gc_sweep_pool(int sweep_full)
 {
     // run a few sanity checks before actually sweeping
     assert(gc_count_allocd_pages_in_allocd_map() == gc_count_allocd_pages_in_allocd_lists());
-    assert(gc_count_mapped_pages() == gc_mapped_pages);
-
+    // `jl_n_sweepthreads` is 0 or 1, and gc_count_mapped_pages in `src/gc-debug.c` returns 0
+    // if `jl_n_sweepthreads` is 1
+    assert(gc_count_mapped_pages() == jl_n_sweepthreads == 0 ? gc_mapped_pages : 0);
     gc_time_pool_start();
     lazy_freed_pages = 0;
 
@@ -1589,10 +1590,6 @@ static void gc_sweep_pool(int sweep_full)
         uv_sem_post(&gc_sweep_assists_needed);
     }
 #endif
-
-    // run a few sanity after sweeping as well
-    assert(gc_count_allocd_pages_in_allocd_map() == gc_count_allocd_pages_in_allocd_lists());
-    assert(gc_count_mapped_pages() == gc_mapped_pages);
 
     gc_time_pool_end(sweep_full);
 }
