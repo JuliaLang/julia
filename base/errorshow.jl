@@ -35,6 +35,13 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+function showerror(io::IO, ex::Meta.ParseError)
+    if isnothing(ex.detail)
+        print(io, "ParseError(", repr(ex.msg), ")")
+    else
+        showerror(io, ex.detail)
+    end
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -181,6 +188,7 @@ function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b:
     if a.name === b.name
         Base.show_type_name(io, a.name)
         n = length(a.parameters)
+        n > 0 || return
         print(io, '{')
         for i = 1:n
             if i > length(b.parameters)
@@ -242,7 +250,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int])
+        ex = MethodError(f, ex.args[3:end::Int], ex.world)
     end
     name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -416,17 +424,17 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]
-            sig = sig0.parameters[2:end]
-            print(iob, "  ")
-            if !isa(func, rewrap_unionall(s1, method.sig))
-                # function itself doesn't match
+            if sig0 === Tuple || !isa(func, rewrap_unionall(s1, method.sig))
+                # function itself doesn't match or is a builtin
                 continue
             else
+                print(iob, "  ")
                 show_signature_function(iob, s1)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
+            sig = sig0.parameters[2:end]
             for i = 1 : min(length(t_i), length(sig))
                 i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
@@ -489,7 +497,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)::Bool
+                        if k == 1 && Base.isvarargtype(sigtype)
+                            # There wasn't actually a mismatch - the method match failed for
+                            # some other reason, e.g. world age. Just print the sigstr.
+                            print(iob, sigstr...)
+                        elseif get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -760,6 +772,9 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    io = IOContext(io, :stacktrace_types_limited => limitflag)
 
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
@@ -780,12 +795,15 @@ function show_backtrace(io::IO, t::Vector)
     if length(filtered) > BIG_STACKTRACE_SIZE
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
+    else
+        try invokelatest(update_stackframes_callback[], filtered) catch end
+        # process_backtrace returns a Vector{Tuple{Frame, Int}}
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
-
-    try invokelatest(update_stackframes_callback[], filtered) catch end
-    # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
-    return
+    if limitflag[]
+        print(io, "\nSome type information was truncated. Use `show(err)` to see complete types.")
+    end
+    nothing
 end
 
 
@@ -823,6 +841,72 @@ function _simplify_include_frames(trace)
     return trace[kept_frames]
 end
 
+# Collapse frames that have the same location (in some cases)
+function _collapse_repeated_frames(trace)
+    kept_frames = trues(length(trace))
+    last_frame = nothing
+    for i in 1:length(trace)
+        frame::StackFrame, _ = trace[i]
+        if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
+            #=
+            Handles this case:
+
+            f(g, a; kw...) = error();
+            @inline f(a; kw...) = f(identity, a; kw...);
+            f(1)
+
+            which otherwise ends up as:
+
+            [4] #f#4 <-- useless
+            @ ./REPL[2]:1 [inlined]
+            [5] f(a::Int64)
+            @ Main ./REPL[2]:1
+            =#
+            if startswith(sprint(show, last_frame), "#")
+                kept_frames[i-1] = false
+            end
+
+            #= Handles this case
+            g(x, y=1, z=2) = error();
+            g(1)
+
+            which otherwise ends up as:
+
+            [2] g(x::Int64, y::Int64, z::Int64)
+            @ Main ./REPL[1]:1
+            [3] g(x::Int64) <-- useless
+            @ Main ./REPL[1]:1
+            =#
+            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
+                frame.linfo.def isa Method && last_frame.linfo.def isa Method
+                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
+                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+                if last_m.nkw != 0
+                    pos_sig_params = last_params[(last_m.nkw+2):end]
+                    issame = true
+                    if pos_sig_params == params
+                        kept_frames[i] = false
+                    end
+                end
+                if length(last_params) > length(params)
+                    issame = true
+                    for i = 1:length(params)
+                        issame &= params[i] == last_params[i]
+                    end
+                    if issame
+                        kept_frames[i] = false
+                    end
+                end
+            end
+
+            # TODO: Detect more cases that can be collapsed
+        end
+        last_frame = frame
+    end
+    return trace[kept_frames]
+end
+
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -846,7 +930,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             code = lkup.linfo
             if code isa MethodInstance
                 def = code.def
-                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),Any,Any,Vararg}
+                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
                     # hide kwcall() methods, which are probably internal keyword sorter methods
                     # (we print the internal method instead, after demangling
                     # the argument list, since it has the right line number info)
@@ -875,7 +959,9 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     if n > 0
         push!(ret, (last_frame, n))
     end
-    return _simplify_include_frames(ret)
+    trace = _simplify_include_frames(ret)
+    trace = _collapse_repeated_frames(trace)
+    return trace
 end
 
 function show_exception_stack(io::IO, stack)
@@ -921,7 +1007,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+    if (ex.f === +) && all(i -> i <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")

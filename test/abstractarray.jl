@@ -236,6 +236,19 @@ end
     end
 end
 
+@testset "AbstractArray fallbacks for CartesianIndices" begin
+    @test ndims(CartesianIndices{3}) == 3
+    @test eltype(CartesianIndices{3}) == CartesianIndex{3}
+    for t in ((1:2, 1:2), (3:4,), ())
+        C2 = CartesianIndices(t)
+        @test ndims(C2) == length(t)
+        @test ndims(typeof(C2)) == length(t)
+        @test IndexStyle(C2) == IndexCartesian()
+        @test eltype(C2) == CartesianIndex{length(t)}
+        @test Base.IteratorSize(C2) isa Base.HasShape{length(t)}
+    end
+end
+
 @testset "LinearIndices" begin
     @testset "constructors" begin
         for oinds in [
@@ -520,9 +533,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
-
-    # convert(::Type{Union{}}, A::AbstractMatrix)
-    @test_throws MethodError convert(Union{}, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
@@ -684,6 +694,14 @@ function test_cat(::Type{TestAbstractArray})
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
+
+    @testset "issue #49676, bad error message on v[1 +1]" begin
+        # This is here because all these expressions are handled by Base.typed_hcat
+        v = [1 2 3]
+        @test_throws ArgumentError v[1 +1]
+        @test_throws ArgumentError v[1 1]
+        @test_throws ArgumentError v[[1 2] [2 3]]
+    end
 
     @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])
@@ -1160,8 +1178,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
             @test pointer(Ap) == pointer(Sp) == pointer(Ps)
             for i in 1:length(Ap)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`.
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
                 @test P[i] == Ap[i] == Sp[i] == Ps[i]
             end
             Pv = view(P, idxs[collect(perm)]...)
@@ -1180,8 +1199,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Svp = Base.PermutedDimsArray(Sv, perm)
             @test pointer(Avp) == pointer(Svp)
             for i in 1:length(Avp)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Avp, i) == pointer(Svp, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i)
                 @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
             end
         end
@@ -1220,8 +1240,9 @@ end
         Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
         @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
         for i in 1:length(Ap)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
         end
@@ -1247,8 +1268,9 @@ end
         Svp = Base.PermutedDimsArray(Sv, perm)
         @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
         for i in 1:length(Avp)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
         end

@@ -102,7 +102,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typeis(fname, jl_methtable_type)) {
+    if (jl_typetagis(fname, jl_methtable_type)) {
         mt = (jl_methtable_t*)fname;
     }
     atypes = eval_value(args[1], s);
@@ -184,7 +184,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e) || jl_is_argument(e)) {
+    if (jl_is_slotnumber(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -230,7 +230,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym) || jl_is_argument(sym)) {
+        if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -472,7 +472,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             if (head == jl_assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
-                if (jl_is_slot(lhs)) {
+                if (jl_is_slotnumber(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n - 1] = rhs;
@@ -608,7 +608,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         }
         else if (jl_is_newvarnode(stmt)) {
             jl_value_t *var = jl_fieldref(stmt, 0);
-            assert(jl_is_slot(var));
+            assert(jl_is_slotnumber(var));
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_source_nslots(s->src) && n > 0);
             s->locals[n - 1] = NULL;
@@ -626,7 +626,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 {
     jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
@@ -636,12 +636,12 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
             }
             else {
                 assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi);
+                src = jl_code_for_staged(mi, world);
             }
         }
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
             jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
@@ -659,9 +659,11 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 {
     interpreter_state *s;
     jl_method_instance_t *mi = codeinst->def;
-    jl_code_info_t *src = jl_code_for_interpreter(mi);
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
+    jl_code_info_t *src = jl_code_for_interpreter(mi, world);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
@@ -696,12 +698,12 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;
@@ -734,8 +736,8 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     jl_value_t *r = eval_body(code->code, s, 0, 0);
     locals[0] = r; // GC root
     JL_GC_PROMISE_ROOTED(r);
-    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     ct->world_age = last_age;
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     JL_GC_POP();
     return r;
 }
@@ -746,7 +748,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
     JL_GC_PUSHFRAME(s, s->locals, nroots);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     s->src = src;
     s->module = m;
     s->sparam_vals = jl_emptysvec;

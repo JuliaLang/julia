@@ -85,7 +85,8 @@ f(y) = [x for x in y]
 !!! note
     `@nospecialize` affects code generation but not inference: it limits the diversity
     of the resulting native code, but it does not impose any limitations (beyond the
-    standard ones) on type-inference.
+    standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
+    `@nospecialize` to additionally suppress inference.
 
 # Example
 
@@ -177,6 +178,19 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
        nameof(__module__) === :Base
@@ -185,10 +199,6 @@ function _is_internal(__module__)
     return false
 end
 
-# can be used in place of `@pure` (supposed to be used for bootstrapping)
-macro _pure_meta()
-    return _is_internal(__module__) && Expr(:meta, :pure)
-end
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -210,6 +220,39 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#true))
+end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _nothrow_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#true,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
+macro _terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
+macro _effect_free_terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -268,13 +311,8 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-# make convert(::Type{<:Union{}}, x::T) intentionally ambiguous for all T
-# so it will never get called or invalidated by loading packages
-# with carefully chosen types that won't have any other convert methods defined
-convert(T::Type{<:Core.IntrinsicFunction}, x) = throw(MethodError(convert, (T, x)))
-convert(T::Type{<:Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{T}, x::T) where {T<:Core.IntrinsicFunction} = x
-convert(::Type{T}, x::T) where {T<:Nothing} = x
+# ensure this is never ambiguous, and therefore fast for lookup
+convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -300,7 +338,7 @@ end
 @eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
-    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(convert(A, data)), :(convert(I, itr))))
+    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
     Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
@@ -367,13 +405,8 @@ function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    body = rename_unionall(u.body)
-    if body === u.body
-        body = u
-    else
-        body = UnionAll(u.var, body)
-    end
     var = u.var::TypeVar
+    body = UnionAll(var, rename_unionall(u.body))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
 end
@@ -422,7 +455,13 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    function cvt1(n)
+        @inline
+        Tn = fieldtype(T, n)
+        xn = getfield(x, n, #=boundscheck=#false)
+        xn isa Tn && return xn
+        return convert(Tn, xn)
+    end
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -475,7 +514,7 @@ julia> oftype(y, x)
 4.0
 ```
 """
-oftype(x, y) = convert(typeof(x), y)
+oftype(x, y) = y isa typeof(x) ? y : convert(typeof(x), y)::typeof(x)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
@@ -496,18 +535,19 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
+cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 """
-    reinterpret(type, A)
+    reinterpret(type, x)
 
-Change the type-interpretation of the binary data in the primitive type `A`
+Change the type-interpretation of the binary data in the primitive value `x`
 to that of the primitive type `type`.
-The size of `type` has to be the same as that of the type of `A`.
+The size of `type` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 
@@ -701,8 +741,9 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
+@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
 function length(v::SimpleVector)
+    @_total_meta
     t = @_gc_preserve_begin v
     len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
     @_gc_preserve_end t
@@ -946,7 +987,7 @@ function popfirst! end
     peek(stream[, T=UInt8])
 
 Read and return a value of type `T` from a stream without advancing the current position
-in the stream.
+in the stream.   See also [`startswith(stream, char_or_string)`](@ref).
 
 # Examples
 

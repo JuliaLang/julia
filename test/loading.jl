@@ -42,6 +42,7 @@ thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
 @test include_string(@__MODULE__, "Base.source_path()", thefname) == Base.source_path()
+@test isdir(Base.source_dir())
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
@@ -691,7 +692,9 @@ mktempdir() do dir
     mkpath(vpath)
     script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
-    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => dir)
+    cmd = addenv(cmd,
+        "JULIA_DEPOT_PATH" => dir,
+        "JULIA_LOAD_PATH" => Sys.iswindows() ? ";" : ":")
     cmd = pipeline(cmd; stdout, stderr)
     @test success(cmd)
 end
@@ -982,6 +985,8 @@ end
             # Package in manifest in current env not present in depot
             @test Base.locate_package(pkg) !== nothing
 
+            @test Base.find_package("Baz") !== nothing  # coverage
+
             pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
 
             @test Base.locate_package(pkg) === nothing
@@ -1003,23 +1008,29 @@ end
     try
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
 
-        function gen_extension_cmd(compile)
-            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
-                begin
-                    push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
-                    using HasExtensions
-                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                    HasExtensions.ext_loaded && error("ext_loaded set")
-                    using HasDepWithExtensions
-                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                    HasExtensions.ext_loaded || error("ext_loaded not set")
-                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                    HasDepWithExtensions.do_something() || error("do_something errored")
-                    using ExtDep2
-                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
-                end
-                '
-            ```
+        function gen_extension_cmd(compile, distr=false)
+            load_distr = distr ? "using Distributed; addprocs(1)" : ""
+            ew = distr ? "@everywhere" : ""
+            cmd = """
+            $load_distr
+            begin
+                $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
+                using HasExtensions
+                $ew using HasExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                $ew HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                $ew using HasDepWithExtensions
+                $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                $ew HasExtensions.ext_loaded || error("ext_loaded not set")
+                $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                $ew HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                $ew using ExtDep2
+                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+            end
+            """
+            return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
         end
 
         for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
@@ -1029,12 +1040,49 @@ end
             @test success(cmd)
         end
 
-        # 48351
         sep = Sys.iswindows() ? ';' : ':'
+
+        cmd = gen_extension_cmd(``, true)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        str = read(cmd, String)
+        @test !occursin("Error during loading of extension", str)
+        @test !occursin("ConcurrencyViolationError", str)
+
+        # 48351
         cmd = gen_extension_cmd(``)
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
         cmd = pipeline(cmd; stdout, stderr)
         @test success(cmd)
+
+        # Only load env from where package is loaded
+        envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
+        cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
+        begin
+            push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly loaded ext from other env")
+            Base.get_extension(HasExtensions, :Extension2) === nothing && error("did not load ext from active env")
+        end
+        '
+        ```, "JULIA_LOAD_PATH" => join(envs, sep))
+        @test success(cmd)
+
+        test_ext_proj = """
+        begin
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            using ExtDep2
+            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+        end
+        """
+        for compile in (`--compiled-modules=no`, ``)
+            cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
+            proj = joinpath(@__DIR__, "project", "Extensions")
+            cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
+            run(cmd_proj_ext)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1069,21 +1117,69 @@ end
     for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
-        using Test
         let
             cf = Base.CacheFlags()
             opts = Base.JLOptions()
-            @test cf.use_pkgimages == opts.use_pkgimages == $P
-            @test cf.debug_level == opts.debug_level == $D
-            @test cf.check_bounds == opts.check_bounds == $C
-            @test cf.inline == opts.can_inline == $I
-            @test cf.opt_level == opts.opt_level == $O
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stdout, stderr))
     end
+
+    cf = Base.CacheFlags(255)
+    @test cf.use_pkgimages
+    @test cf.debug_level == 3
+    @test cf.check_bounds == 3
+    @test cf.inline
+    @test cf.opt_level == 3
+
+    io = PipeBuffer()
+    show(io, cf)
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
 end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+
+@testset "loading deadlock detector" begin
+    pkid1 = Base.PkgId("pkgid1")
+    pkid2 = Base.PkgId("pkgid2")
+    pkid3 = Base.PkgId("pkgid3")
+    pkid4 = Base.PkgId("pkgid4")
+    e = Base.Event()
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid4)     # module pkgid4
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid1)     # module pkgid1
+    t1 = @async begin
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid2) # @async module pkgid2; using pkgid1; end
+        notify(e)
+        @test "loaded_pkgid1" == @lock Base.require_lock Base.start_loading(pkid1)
+        @lock Base.require_lock Base.end_loading(pkid2, "loaded_pkgid2")
+    end
+    wait(e)
+    reset(e)
+    t2 = @async begin
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid3) # @async module pkgid3; using pkgid2; end
+        notify(e)
+        @test "loaded_pkgid2" == @lock Base.require_lock Base.start_loading(pkid2)
+        @lock Base.require_lock Base.end_loading(pkid3, "loaded_pkgid3")
+    end
+    wait(e)
+    reset(e)
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
+        @lock Base.require_lock Base.start_loading(pkid3)).value            # try using pkgid3
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
+        @lock Base.require_lock Base.start_loading(pkid4)).value            # try using pkgid4
+    @lock Base.require_lock Base.end_loading(pkid1, "loaded_pkgid1")        # end
+    @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
+    wait(t2)
+    wait(t1)
+end
+
+@testset "Upgradable stdlibs" begin
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+end

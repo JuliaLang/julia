@@ -81,7 +81,7 @@ parentindices(V::SubArray) = V.indices
 """
     parentindices(A)
 
-Return the indices in the [`parent`](@ref) which correspond to the array view `A`.
+Return the indices in the [`parent`](@ref) which correspond to the view `A`.
 
 # Examples
 ```jldoctest
@@ -96,6 +96,8 @@ julia> parentindices(V)
 (1, Base.Slice(Base.OneTo(2)))
 ```
 """
+function parentindices end
+
 parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
@@ -350,6 +352,37 @@ function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + i] = x
     V
+end
+
+function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
+    @inline
+    @boundscheck checkbounds(Bool, V, I...) || return false
+    @inbounds r = isassigned(V.parent, reindex(V.indices, I)...)
+    r
+end
+function isassigned(V::FastSubArray, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
+    r
+end
+function isassigned(V::FastContiguousSubArray, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    r
+end
+function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
+    r
+end
+function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    r
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()

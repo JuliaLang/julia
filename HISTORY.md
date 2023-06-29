@@ -135,8 +135,9 @@ Standard library changes
 * The contextual module which is active in the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
-* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
-  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup ([#46474]).
+* A "numbered prompt" mode which prints numbers for each input and output and stores evaluated results in `Out` can be
+  activated with `REPL.numbered_prompt!()`. See the manual for how to enable this at startup ([#46474]).
+* Tab completion displays available keyword arguments ([#43536])
 
 #### SuiteSparse
 
@@ -176,7 +177,7 @@ Standard library changes
 
 #### DelimitedFiles
 
-* DelimitedFiles has been moved out as a separate package. It now has to be explicitly installed to be used.
+* DelimitedFiles has been moved out as a separate package.
 
 Deprecated or removed
 ---------------------
@@ -5563,18 +5564,18 @@ Deprecated or removed
 
   * several syntax whitespace insensitivities have been deprecated ([#11891]).
     ```julia
-     # function call
-     f (x)
+    # function call
+    f (x)
 
-     # getindex
-     x [17]
-     rand(2) [1]
+    # getindex
+    x [17]
+    rand(2) [1]
 
-     # function definition
-     f (x) = x^2
-     function foo (x)
-	x^2
-     end
+    # function definition
+    f (x) = x^2
+    function foo (x)
+        x^2
+    end
     ```
 
   * indexing with `Real`s that are not subtypes of `Integer` (`Rational`, `AbstractFloat`, etc.) has been deprecated ([#10458]).

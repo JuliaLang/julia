@@ -20,6 +20,8 @@ The `Base` module currently provides an implementation for the types
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
 
+See also [`randn!`](@ref) to act in-place.
+
 # Examples
 ```jldoctest
 julia> using Random

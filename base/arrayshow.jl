@@ -202,7 +202,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     if n > maxpossiblecols
         colsA = [colsA[(0:maxpossiblecols-1) .+ firstindex(colsA)]; colsA[(end-maxpossiblecols+1):end]]
     else
-	    colsA = [colsA;]
+        colsA = [colsA;]
     end
     A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize, ncols)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
@@ -462,8 +462,10 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
 end
 
 
-_show_nonempty(io::IO, X::AbstractArray, prefix::String) =
+function _show_nonempty(io::IO, X::AbstractArray, prefix::String)
+    print(io, prefix)
     show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
+end
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
@@ -538,9 +540,11 @@ end
 # returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
 # because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
 typeinfo_eltype(typeinfo) = nothing # element type not precisely known
+typeinfo_eltype(typeinfo::Type{Union{}}, slurp...) = nothing
 typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
+
 
 # types that can be parsed back accurately from their un-decorated representations
 function typeinfo_implicit(@nospecialize(T))

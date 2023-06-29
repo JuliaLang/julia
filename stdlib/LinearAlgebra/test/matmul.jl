@@ -655,10 +655,10 @@ Transpose(x::RootInt) = x
 
 @testset "#14293" begin
     a = [RootInt(3)]
-    C = [0]
+    C = [0;;]
     mul!(C, a, transpose(a))
     @test C[1] == 9
-    C = [1]
+    C = [1;;]
     mul!(C, a, transpose(a), 2, 3)
     @test C[1] == 21
     a = [RootInt(2), RootInt(10)]
@@ -976,6 +976,19 @@ end
         # _tri_matmul(A,B,B,δ)
         @test *(11.1, b, c, d) ≈ (11.1 * b) * (c * d)
         @test *(a, b, c, 99.9) ≈ (a * b) * (c * 99.9)
+    end
+end
+
+@testset "Issue #46865: mul!() with non-const alpha, beta" begin
+    f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
+    alphas = [1.0]
+    betas = [0.5]
+    for d in [2,3,4]  # test native small-matrix cases as well as BLAS
+        A = rand(d,d)
+        B = copy(A)
+        C = copy(A)
+        f!(C, A, B, alphas, betas)
+        @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
     end
 end
 

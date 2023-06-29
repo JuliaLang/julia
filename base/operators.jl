@@ -79,7 +79,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -177,6 +177,13 @@ function isless end
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
 
 """
     isgreater(x, y)
@@ -881,6 +888,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 

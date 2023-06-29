@@ -118,7 +118,7 @@ Other signals (`SIGINFO, SIGBUS, SIGILL, SIGTERM, SIGABRT, SIGQUIT, SIGSYS` and 
 hooked up to [`sigdie_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
 which prints a backtrace.
 
-[`jl_init_restored_modules()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) calls
+[`jl_init_restored_module()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) calls
 [`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/module.c) for
 each deserialized module to run the `__init__()` function.
 
