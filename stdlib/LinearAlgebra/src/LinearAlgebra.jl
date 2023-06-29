@@ -9,14 +9,14 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
-    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
-    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
-    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
+    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
+    kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
+    power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
     vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted

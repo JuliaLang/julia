@@ -1588,7 +1588,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         call = abstract_call(interp, ArgInfo(nothing, ct), si, sv, max_methods)
         seen += 1
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
-        res = tmerge(res, call.rt)
+        res = tmerge(typeinf_lattice(interp), res, call.rt)
         effects = merge_effects(effects, call.effects)
         if bail_out_apply(interp, InferenceLoopState(ct, res, effects), sv)
             add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information. Bailing on.")
@@ -2280,17 +2280,33 @@ struct RTEffects
     RTEffects(@nospecialize(rt), effects::Effects) = new(rt, effects)
 end
 
+function mark_curr_effect_flags!(sv::AbsIntState, effects::Effects)
+    if isa(sv, InferenceState)
+        if is_effect_free(effects)
+            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+        else
+            sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+        end
+        if is_nothrow(effects)
+            add_curr_ssaflag!(sv, IR_FLAG_NOTHROW)
+        else
+            sub_curr_ssaflag!(sv, IR_FLAG_NOTHROW)
+        end
+        if is_consistent(effects)
+            add_curr_ssaflag!(sv, IR_FLAG_CONSISTENT)
+        else
+            sub_curr_ssaflag!(sv, IR_FLAG_CONSISTENT)
+        end
+    end
+end
+
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
     si = StmtInfo(!call_result_unused(sv, sv.currpc))
     (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
     sv.stmt_info[sv.currpc] = info
     # mark this call statement as DCE-elgible
     # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
-    if is_removable_if_unused(effects)
-        add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-    else
-        sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-    end
+    mark_curr_effect_flags!(sv, effects)
     return RTEffects(rt, effects)
 end
 
@@ -2429,14 +2445,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :foreigncall
         (; rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv)
         t = rt
-        if isa(sv, InferenceState)
-            # mark this call statement as DCE-elgible
-            if is_removable_if_unused(effects)
-                add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-            else
-                sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-            end
-        end
+        mark_curr_effect_flags!(sv, effects)
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
         t = e.args[1]
@@ -2558,7 +2567,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
-            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
             return abstract_eval_phi(interp, e, vtypes, sv)
         end
         return abstract_eval_special_value(interp, e, vtypes, sv)

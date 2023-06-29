@@ -122,7 +122,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     rt = nothing
     if isa(inst, Expr)
         head = inst.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew
+        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, irsv)
             ir.stmts[idx][:flag] |= flags_for_effects(effects)
         elseif head === :invoke
@@ -130,8 +130,16 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
             if nothrow
                 ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
             end
-        elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
-               head === :gc_preserve_begin ||
+        elseif head === :throw_undef_if_not
+            condval = maybe_extract_const_bool(argextype(inst.args[2], ir))
+            condval isa Bool || return false
+            if condval
+                ir.stmts[idx][:inst] = nothing
+                # We simplified the IR, but we did not update the type
+                return false
+            end
+            rt = Union{}
+        elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
         else
@@ -149,12 +157,12 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     elseif isa(inst, GlobalRef)
         # GlobalRef is not refinable
     else
-        error("reprocess_instruction!: unhandled instruction found")
+        rt = argextype(inst, irsv.ir)
     end
     if rt !== nothing
         if isa(rt, Const)
             ir.stmts[idx][:type] = rt
-            if is_inlineable_constant(rt.val) && (ir.stmts[idx][:flag] & IR_FLAG_EFFECT_FREE) != 0
+            if is_inlineable_constant(rt.val) && (ir.stmts[idx][:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
                 ir.stmts[idx][:inst] = quoted(rt.val)
             end
             return true

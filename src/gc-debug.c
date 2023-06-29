@@ -27,19 +27,16 @@ jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 // the end of the page.
 JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
-    if (!page_metadata(p))
+    if (!gc_alloc_map_is_set(p))
         // Not in the pool
         return NULL;
-    struct jl_gc_metadata_ext info = page_metadata_ext(p);
+    jl_gc_pagemeta_t *meta = page_metadata(p);
     char *page_begin = gc_page_data(p) + GC_PAGE_OFFSET;
     // In the page header
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    // Check if this is a free page
-    if (!(info.pagetable0->allocmap[info.pagetable0_i32] & (uint32_t)(1 << info.pagetable0_i)))
-        return NULL;
-    int osize = info.meta->osize;
+    int osize = meta->osize;
     // Shouldn't be needed, just in case
     if (osize == 0)
         return NULL;
@@ -111,44 +108,14 @@ static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
     }
 }
 
-static void gc_clear_mark_pagetable0(pagetable0_t *pagetable0, int bits)
+static void gc_clear_mark_outer(int bits)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_page(pagetable0->meta[pg_i * 32 + j], bits);
-                }
-            }
-        }
-    }
-}
-
-static void gc_clear_mark_pagetable1(pagetable1_t *pagetable1, int bits)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable0(pagetable1->meta0[pg_i * 32 + j], bits);
-                }
-            }
-        }
-    }
-}
-
-static void gc_clear_mark_pagetable(int bits)
-{
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable1(memory_map.meta1[pg_i * 32 + j], bits);
-                }
-            }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        while (pg != NULL) {
+            gc_clear_mark_page(pg, bits);
+            pg = pg->next;
         }
     }
 }
@@ -184,7 +151,7 @@ static void clear_mark(int bits)
         v = v->next;
     }
 
-    gc_clear_mark_pagetable(bits);
+    gc_clear_mark_outer(bits);
 }
 
 static void restore(void)
@@ -561,7 +528,6 @@ void gc_scrub_record_task(jl_task_t *t)
 
 JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     if (jl_setjmp(buf, 0)) {
@@ -1168,7 +1134,7 @@ void gc_stats_big_obj(void)
 static int64_t poolobj_sizes[4];
 static int64_t empty_pages;
 
-static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
+static void gc_count_pool_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int osize = pg->osize;
     char *data = pg->data;
@@ -1187,44 +1153,16 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_count_pool_pagetable0(pagetable0_t *pagetable0)
-{
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_page(pagetable0->meta[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_count_pool_pagetable1(pagetable1_t *pagetable1)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
 static void gc_count_pool_pagetable(void)
 {
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_count_pool_pagetable1(memory_map.meta1[pg_i * 32 + j]);
-                }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        while (pg != NULL) {
+            if (gc_alloc_map_is_set(pg->data)) {
+                gc_count_pool_page(pg);
             }
+            pg = pg->next;
         }
     }
 }

@@ -35,6 +35,13 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+function showerror(io::IO, ex::Meta.ParseError)
+    if isnothing(ex.detail)
+        print(io, "ParseError(", repr(ex.msg), ")")
+    else
+        showerror(io, ex.detail)
+    end
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")

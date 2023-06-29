@@ -134,6 +134,7 @@ end
     Threads.ngcthreads() -> Int
 
 Returns the number of GC threads currently configured.
+This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 

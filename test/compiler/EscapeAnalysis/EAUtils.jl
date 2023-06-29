@@ -64,7 +64,7 @@ import Core:
 import .CC:
     InferenceResult, OptimizationState, IRCode, copy as cccopy,
     @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, sroa_pass!,
-    adce_pass!, type_lift_pass!, JLOptions, verify_ir, verify_linetable
+    adce_pass!, JLOptions, verify_ir, verify_linetable
 import .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState, is_ipo_profitable
 
 # when working outside of Core.Compiler,
@@ -224,7 +224,6 @@ function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::Optimizati
     end
     @timeit "SROA"      ir = sroa_pass!(ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
-    @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

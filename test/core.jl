@@ -1897,7 +1897,7 @@ function f4528(A, B)
     end
 end
 @test f4528(false, Int32(12)) === nothing
-@test_throws ErrorException f4528(true, Int32(12))
+@test_throws ArgumentError f4528(true, Int32(12))
 
 # issue #4518
 f4518(x, y::Union{Int32,Int64}) = 0
@@ -8010,3 +8010,33 @@ end
 # donotdelete should not taint consistency of the containing function
 f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
 @test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))
+
+# Test conditional UndefRefError (#50250)
+struct Foo50250
+    a::Int
+    x
+    Foo50250(a) = new()
+    Foo50250(a, x) = new(x)
+end
+
+struct Bar50250
+    a::Int
+    x
+    Bar50250(a) = new(a)
+    Bar50250(a, x) = new(a, x)
+end
+
+foo50250(b, y) = (b ? Foo50250(y, y) : Foo50250(y)).x
+bar50250(b, y) = (b ? Bar50250(y, y) : Bar50250(y)).x
+
+@test_throws UndefRefError foo50250(true, 1)
+@test_throws UndefRefError foo50250(false, 1)
+@test bar50250(true, 1) === 1
+@test_throws UndefRefError bar50250(false, 1)
+
+# Test that Type{typeof(Union{})} doesn't get codegen'ed as a constant (#50293)
+baz50293(x::Union{Type, Core.Const}) = Base.issingletontype(x)
+bar50293(@nospecialize(u)) = (Base.issingletontype(u.a), baz50293(u.a))
+let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
+    @test ab[1] == ab[2] == false
+end

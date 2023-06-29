@@ -376,6 +376,53 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
+## System and Package Image Building
+
+### `JULIA_CPU_TARGET`
+
+Modify the target machine architecture for (pre)compiling
+[system](@ref sysimg-multi-versioning) and [package images](@ref pkgimgs-multi-versioning).
+`JULIA_CPU_TARGET` only affects machine code image generation being output to a disk cache.
+Unlike the `--cpu-target`, or `-C`, [command line option](@ref cli), it does not influence
+just-in-time (JIT) code generation within a Julia session where machine code is only
+stored in memory.
+
+Valid values for `JULIA_CPU_TARGET` can be obtained by executing `julia -C help`.
+
+Setting `JULIA_CPU_TARGET` is important for heterogeneous compute systems where processors of
+distinct types or features may be present. This is commonly encountered in high performance
+computing (HPC) clusters since the component nodes may be using distinct processors.
+
+The CPU target string is a list of strings separated by `;` each string starts with a CPU
+or architecture name and followed by an optional list of features separated by `,`.
+A `generic` or empty CPU name means the basic required feature set of the target ISA
+which is at least the architecture the C/C++ runtime is compiled with. Each string
+is interpreted by LLVM.
+
+A few special features are supported:
+1. `clone_all`
+
+     This forces the target to have all functions in sysimg cloned.
+     When used in negative form (i.e. `-clone_all`), this disables full clone that's
+     enabled by default for certain targets.
+
+2. `base([0-9]*)`
+
+     This specifies the (0-based) base target index. The base target is the target
+     that the current target is based on, i.e. the functions that are not being cloned
+     will use the version in the base target. This option causes the base target to be
+     fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
+     The index can only be smaller than the current index.
+
+3. `opt_size`
+
+     Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
+
+4. `min_size`
+
+     Optimize only for size. Clang's `-Oz`.
+
+
 ## Debugging and profiling
 
 ### `JULIA_DEBUG`
