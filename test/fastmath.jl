@@ -284,3 +284,12 @@ end
         end
     end
 end
+
+@testset "+= with indexing (#47241)" begin
+    i = 0
+    x = zeros(2)
+    @fastmath x[i += 1] += 1
+    @fastmath x[end] += 1
+    @test x == [1, 1]
+    @test i == 1
+end
