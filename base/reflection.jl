@@ -2164,8 +2164,8 @@ Provides a convenient way to call [`invokelatest`](@ref).
 It also supports the following syntax:
 - `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
 - `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
-- `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
-- `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
+- `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
 ```jldoctest
 julia> @macroexpand @invokelatest f(x; kw=kwv)
@@ -2191,7 +2191,7 @@ julia> @macroexpand @invokelatest xs[i] = v
     Prior to Julia 1.9, this macro was not exported, and was called as `Base.@invokelatest`.
 
 !!! compat "Julia 1.10"
-    The additional syntax is supported as of Julia 1.10.
+    The additional `x.f` and `xs[i]` syntax requires Julia 1.10.
 """
 macro invokelatest(ex)
     topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
