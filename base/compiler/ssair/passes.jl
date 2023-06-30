@@ -1525,8 +1525,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 idx == newidx && continue # this is allocation
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 ssa = SSAValue(idx)
-                is_nothrow(ir, ssa) || continue
-                ir[ssa][:inst] = nothing
+                if is_nothrow(ir, ssa)
+                    ir[ssa][:inst] = nothing
+                else
+                    # We can't eliminate this statement, because it might still
+                    # throw an error, but we can mark it as effect-free since we
+                    # know we have removed all uses of the mutable allocation.
+                    # As a result, if we ever do prove nothrow, we can delete
+                    # this statement then.
+                    ir[ssa][:flag] |= IR_FLAG_EFFECT_FREE
+                end
             end
         end
         preserve_uses === nothing && continue
