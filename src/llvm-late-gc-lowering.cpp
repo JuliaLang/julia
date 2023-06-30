@@ -2390,7 +2390,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it specializes the call based on the constant
-                // size of the object to allocate, to save one indirection.
+                // size of the object to allocate, to save one indirection, and doesn't set
+                // the type tag. (Note that if the size is not a constant, it will call
+                // gc_alloc_obj, and will redundantly set the tag.)
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
                 auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
@@ -2405,6 +2407,20 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                         builder.CreatePtrToInt(tag, T_size),
                     });
                 newI->takeName(CI);
+
+                // Now, finally, set the tag. We do this in IR instead of in the C alloc
+                // function, to provide possible optimization opportunities. (I think? TBH
+                // the most recent editor of this code is not entirely clear on why we
+                // prefer to set the tag in the generated code. Providing optimziation
+                // opportunities is the most likely reason; the tradeoff is slightly
+                // larger code size and increased compilation time, compiling this
+                // instruction at every allocation site, rather than once in the C alloc
+                // function.)
+                auto &M = *builder.GetInsertBlock()->getModule();
+                StoreInst *store = builder.CreateAlignedStore(
+                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
+                store->setOrdering(AtomicOrdering::Unordered);
+                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.

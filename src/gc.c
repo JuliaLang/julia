@@ -1048,10 +1048,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     return val;
 }
 // Instrumented version of jl_gc_big_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_typed(jl_ptls_t ptls, size_t sz, jl_value_t *type)
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_instrumented(jl_ptls_t ptls, size_t sz, jl_value_t *type)
 {
     jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
-    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
     return val;
 }
@@ -1374,11 +1373,10 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     return val;
 }
 // Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_typed(jl_ptls_t ptls, int pool_offset,
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_instrumented(jl_ptls_t ptls, int pool_offset,
                                         int osize, jl_value_t* type)
 {
     jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
-    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
