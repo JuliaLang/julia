@@ -345,11 +345,6 @@ end
 *(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
 *(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
 
-*(Q::Transpose{<:AbstractFloat, <:AbstractQ}, B::AbstractQ) = parent(Q)' * B
-*(Q::AbstractQ, B::Transpose{<:AbstractFloat,<:AbstractQ}) = Q * parent(B)'
-*(Q::Transpose{<:AbstractFloat,<:AbstractQ}, B::Transpose{<:AbstractFloat,<:AbstractQ}) = parent(Q)' * parent(B)'
-
-
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
 fillstored!(A::Bidiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
