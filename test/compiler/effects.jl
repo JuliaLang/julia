@@ -993,3 +993,8 @@ end
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
 @test fully_eliminated(f50198)
+
+# Effects properly applied to flags by irinterp (#50311)
+f50311(x, s) = Symbol(s)
+g50311(x) = Val{f50311((1.0, x), "foo")}()
+@test fully_eliminated(g50311, Tuple{Float64})

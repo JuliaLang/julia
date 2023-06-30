@@ -314,8 +314,7 @@ julia> a = [1. 2.; 3. 4.]
 
 julia> qr!(a)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -3.16228  -4.42719
@@ -379,7 +378,7 @@ Multiplication with respect to either full/square or non-full/square `Q` is allo
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`Matrix`](@ref). This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
 `Matrix(F.Q)` yields an `m`×`n` matrix with orthonormal columns.  To retrieve the "full" Q factor, an
-`m`×`m` orthogonal matrix, use `F.Q*I`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
+`m`×`m` orthogonal matrix, use `F.Q*I` or `collect(F.Q)`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
@@ -399,8 +398,7 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
 
 julia> F = qr(A)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -5.0  10.0
@@ -452,7 +450,7 @@ Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
     summary(io, F); println(io)
-    println(io, "Q factor:")
+    print(io, "Q factor: ")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
     show(io, mime, F.R)

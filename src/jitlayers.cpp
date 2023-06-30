@@ -547,21 +547,18 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         jl_method_t *def = unspec->def->def.method;
         if (jl_is_method(def)) {
             src = (jl_code_info_t*)def->source;
-            if (src == NULL) {
-                // TODO: this is wrong
-                assert(def->generator);
-                // TODO: jl_code_for_staged can throw
-                src = jl_code_for_staged(unspec->def, ~(size_t)0);
-            }
             if (src && (jl_value_t*)src != jl_nothing)
                 src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
         }
         else {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
+            assert(src);
         }
-        assert(src && jl_is_code_info(src));
-        ++UnspecFPtrCount;
-        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+        if (src) {
+            assert(jl_is_code_info(src));
+            ++UnspecFPtrCount;
+            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+        }
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
         jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);

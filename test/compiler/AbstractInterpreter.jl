@@ -125,7 +125,7 @@ end
 using Core: SlotNumber, Argument
 using Core.Compiler: slot_id, tmerge_fast_path
 import .CC:
-    AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice, OptimizerLattice,
+    AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice,
     widenlattice, is_valid_lattice_norec, typeinf_lattice, ipo_lattice, optimizer_lattice,
     widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn
 
@@ -146,7 +146,7 @@ const AnyTaintLattice{L} = Union{TaintLattice{L},InterTaintLattice{L}}
 
 CC.typeinf_lattice(::TaintInterpreter) = InferenceLattice(TaintLattice(BaseInferenceLattice.instance))
 CC.ipo_lattice(::TaintInterpreter) = InferenceLattice(InterTaintLattice(IPOResultLattice.instance))
-CC.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(OptimizerLattice())
+CC.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(SimpleInferenceLattice.instance)
 
 struct Taint
     typ
@@ -246,13 +246,13 @@ end
 # External lattice without `Conditional`
 
 import .CC:
-    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice,
     typeinf_lattice, ipo_lattice, optimizer_lattice
 
 @newinterp NonconditionalInterpreter
 CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
 CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
-CC.optimizer_lattice(::NonconditionalInterpreter) = OptimizerLattice(PartialsLattice(ConstsLattice()))
+CC.optimizer_lattice(::NonconditionalInterpreter) = PartialsLattice(ConstsLattice())
 
 @test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
     c = isa(x, Int) || isa(x, Float64)
@@ -279,9 +279,9 @@ CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
-    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
-        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
         return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
     end

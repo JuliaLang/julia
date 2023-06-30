@@ -158,7 +158,7 @@ let n = 10
         hessstring = sprint((t, s) -> show(t, "text/plain", s), H)
         qstring = sprint((t, s) -> show(t, "text/plain", s), H.Q)
         hstring = sprint((t, s) -> show(t, "text/plain", s), H.H)
-        @test hessstring == "$(summary(H))\nQ factor:\n$qstring\nH factor:\n$hstring"
+        @test hessstring == "$(summary(H))\nQ factor: $qstring\nH factor:\n$hstring"
 
         #iterate
         q,h = H

@@ -362,10 +362,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => nt) do
             @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
         end
+        withenv("JULIA_NUM_GC_THREADS" => nt) do
+            @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+        end
     end
 
     withenv("JULIA_NUM_GC_THREADS" => 2) do
         @test read(`$exename -e $code`, String) == "2"
+    end
+
+    withenv("JULIA_NUM_GC_THREADS" => "2,1") do
+        @test read(`$exename -e $code`, String) == "3"
     end
 
     # --machine-file

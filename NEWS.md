@@ -21,6 +21,10 @@ Language changes
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* The `@simd` macro now has a more limited and clearer semantics, it only enables reordering and contraction
+  of floating-point operations, instead of turning on all "fastmath" optimizations.
+  If you observe performance regressions due to this change, you can recover previous behavior with `@fastmath @simd`,
+  if you are OK with all the optimizations enabled by the `@fastmath` macro. ([#49405])
 * When a method with keyword arguments is displayed in the stack trace view, the textual
   representation of the keyword arguments' types is simplified using the new
   `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
@@ -53,6 +57,7 @@ New library functions
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
 * `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
+* `Base.isprecompiled(pkg::PkgId)` to identify whether a package has already been precompiled ([#50218]).
 
 New library features
 --------------------
@@ -92,6 +97,11 @@ Standard library changes
   (real symmetric) part of a matrix ([#31836]).
 * The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
   parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
+* `eigen(A, B)` and `eigvals(A, B)`, where one of `A` or `B` is symmetric or Hermitian,
+  are now fully supported ([#49533])
+* `eigvals/eigen(A, cholesky(B))` now computes the generalized eigenvalues (`eigen`: and eigenvectors)
+  of `A` and `B` via Cholesky decomposition for positive definite `B`. Note: The second argument is
+  the output of `cholesky`.
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).

@@ -370,7 +370,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     if !validate_sparams(sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
         sp_ssa = insert_node!(
-            effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
+            effect_free_and_nothrow(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
@@ -426,7 +426,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 inline_compact.result[idx′][:type] =
                     argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
                 # Everything legal in value position is guaranteed to be effect free in stmt position
-                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE
+                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
                 break
             end
             inline_compact[idx′] = stmt′
@@ -488,7 +488,7 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
         push!(tuple_call.args, arg)
         push!(tuple_typs, argextype(arg, inline_target))
     end
-    tuple_typ = tuple_tfunc(OptimizerLattice(), tuple_typs)
+    tuple_typ = tuple_tfunc(SimpleInferenceLattice.instance, tuple_typs)
     tuple_inst = NewInstruction(tuple_call, tuple_typ, line_idx)
     push!(newargexprs, insert_node!(tuple_inst))
     return newargexprs
@@ -702,7 +702,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
                     if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
-                        ninst = effect_free(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
+                        ninst = effect_free_and_nothrow(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
                         argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
@@ -992,9 +992,10 @@ function flags_for_effects(effects::Effects)
     if is_consistent(effects)
         flags |= IR_FLAG_CONSISTENT
     end
-    if is_removable_if_unused(effects)
-        flags |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-    elseif is_nothrow(effects)
+    if is_effect_free(effects)
+        flags |= IR_FLAG_EFFECT_FREE
+    end
+    if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
     end
     return flags
@@ -1650,7 +1651,7 @@ function inline_const_if_inlineable!(inst::Instruction)
         inst[:inst] = quoted(rt.val)
         return true
     end
-    inst[:flag] |= IR_FLAG_EFFECT_FREE
+    inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     return false
 end
 
@@ -1773,7 +1774,7 @@ function late_inline_special_case!(
             return SomeCase(quoted(type.val))
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
-        cmp_call_ssa = insert_node!(ir, idx, effect_free(NewInstruction(cmp_call, Bool)))
+        cmp_call_ssa = insert_node!(ir, idx, effect_free_and_nothrow(NewInstruction(cmp_call, Bool)))
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         return SomeCase(not_call)
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
@@ -1816,13 +1817,13 @@ end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
     ret = insert_node!(
-        effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
+        effect_free_and_nothrow(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
         tcheck = insert_node!(
-            effect_free(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+            effect_free_and_nothrow(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
         tcheck_not = insert_node!(
-            effect_free(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
+            effect_free_and_nothrow(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
     return (ret, tcheck_not)
 end
@@ -1849,7 +1850,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
                 (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
-                        non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
+                        NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing))
                 end
                 return ret
             end

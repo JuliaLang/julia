@@ -169,7 +169,10 @@ typedef Instruction TerminatorInst;
 
 void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 {
-    if (params.debug_level) {
+    // we do the constant check again later, duplicating it here just makes sure the assertion
+    // fires on debug builds even if debug info is not enabled
+    assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
+    if (params.debug_level && !isa<Constant>(V)) {
         V->setName(Name);
     }
 }
@@ -1859,6 +1862,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         typ = (jl_value_t*)jl_typeofbottom_type->super;
     }
     if (jl_is_type_type(typ)) {
+        assert(is_uniquerep_Type(typ));
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ));
         constant.constant = jl_tparam0(typ);
@@ -1930,16 +1934,14 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
-    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
-        // no need to explicitly load/store a constant/ghost value
-        return ghostValue(ctx, typ);
-    }
     if (jl_is_type_type(typ)) {
-        jl_value_t *tp0 = jl_tparam0(typ);
-        if (jl_is_concrete_type(tp0) || tp0 == jl_bottom_type) {
+        if (is_uniquerep_Type(typ)) {
             // replace T::Type{T} with T
             return ghostValue(ctx, typ);
         }
+    } else if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
+        // no need to explicitly load/store a constant/ghost value
+        return ghostValue(ctx, typ);
     }
     Type *T = julia_type_to_llvm(ctx, typ);
     if (type_is_ghost(T)) {
@@ -2354,17 +2356,17 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 
 static void jl_name_jlfunc_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 3);
-    setName(params, F->getArg(0), "function");
-    setName(params, F->getArg(1), "args");
-    setName(params, F->getArg(2), "nargs");
+    F->getArg(0)->setName("function");
+    F->getArg(1)->setName("args");
+    F->getArg(2)->setName("nargs");
 }
 
 static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 4);
-    setName(params, F->getArg(0), "function");
-    setName(params, F->getArg(1), "args");
-    setName(params, F->getArg(2), "nargs");
-    setName(params, F->getArg(3), "sparams");
+    F->getArg(0)->setName("function");
+    F->getArg(1)->setName("args");
+    F->getArg(2)->setName("nargs");
+    F->getArg(3)->setName("sparams");
 }
 
 static void jl_init_function(Function *F, const Triple &TT)

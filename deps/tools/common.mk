@@ -15,11 +15,12 @@ CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLA
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LD="$(LD)"
 
-CMAKE_CC_ARG := $(CC_ARG)
-CMAKE_CXX_ARG := $(CXX_ARG)
-
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifneq ($(OS),WINNT)
+CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
+endif
+
 ifeq ($(OS), Darwin)
 CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
 endif
@@ -27,12 +28,27 @@ endif
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
-# The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
-CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
+
+# The calls to `which` are to work around https://cmake.org/Bug/view.php?id=14366
+ifeq ($(USECCACHE), 1)
+# `ccache` must be used as compiler launcher, not compiler itself.
+CMAKE_COMMON += -DCMAKE_C_COMPILER_LAUNCHER=ccache
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+CMAKE_CC := "$$(which $(shell echo $(CC_ARG) | cut -d' ' -f1))"
+CMAKE_CXX := "$$(which $(shell echo $(CXX_ARG) | cut -d' ' -f1))"
+CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -d' ' -f2-)
+CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -d' ' -f2-)
+else
+CMAKE_CC := "$$(which $(CC_BASE))"
+CMAKE_CXX := "$$(which $(CXX_BASE))"
+CMAKE_CC_ARG := $(CC_ARG)
+CMAKE_CXX_ARG := $(CXX_ARG)
+endif
+CMAKE_COMMON += -DCMAKE_C_COMPILER=$(CMAKE_CC)
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG) $(SANITIZE_OPTS)"
 endif
-CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER=$(CMAKE_CXX)
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG) $(SANITIZE_OPTS)"
 endif

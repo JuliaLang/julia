@@ -1086,13 +1086,6 @@ end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
 
-@nospecs function _getfield_tfunc(𝕃::OptimizerLattice, s00, name, setfield::Bool)
-    # If undef, that's a Union, but that doesn't affect the rt when tmerged
-    # into the unwrapped result.
-    isa(s00, MaybeUndef) && (s00 = s00.typ)
-    return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
-end
-
 @nospecs function _getfield_tfunc(𝕃::AnyConditionalsLattice, s00, name, setfield::Bool)
     if isa(s00, AnyConditional)
         return Bottom # Bool has no fields
@@ -1389,7 +1382,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         op = unwrapva(argtypes[4])
         v = unwrapva(argtypes[5])
         TF = getfield_tfunc(𝕃ᵢ, o, f)
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=# 1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=#1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
@@ -2647,10 +2640,10 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     if isa(sv, InferenceState)
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
         sv.restrict_abstract_call_sites = old_restrict
     else
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     end
     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
     rt = widenslotwrapper(call.rt)

@@ -64,6 +64,9 @@ end
                 @test_throws ArgumentError Symmetric(asym, :R)
                 @test_throws ArgumentError Hermitian(asym, :R)
 
+                @test_throws MethodError Symmetric{eltya,typeof(asym)}(asym, :L)
+                @test_throws MethodError Hermitian{eltya,typeof(aherm)}(aherm, :L)
+
                 # mixed cases with Hermitian/Symmetric
                 if eltya <: Real
                     @test Symmetric(Hermitian(aherm, :U))     === Symmetric(aherm, :U)

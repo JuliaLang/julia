@@ -491,12 +491,12 @@ end
 """
     pkgdir(m::Module[, paths::String...])
 
-Return the root directory of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package. Optionally further
+Return the root directory of the package that declared module `m`,
+or `nothing` if `m` was not declared in a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
-To get the root directory of the package that imported the current module
+To get the root directory of the package that implements the current module
 the form `pkgdir(@__MODULE__)` can be used.
 
 ```julia-repl
@@ -1364,6 +1364,65 @@ end
 
 # End extensions
 
+# should sync with the types of arguments of `stale_cachefile`
+const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
+
+"""
+    Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+
+Returns whether a given PkgId within the active project is precompiled.
+
+By default this check observes the same approach that code loading takes
+with respect to when different versions of dependencies are currently loaded
+to that which is expected. To ignore loaded modules and answer as if in a
+fresh julia session specify `ignore_loaded=true`.
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+"""
+function isprecompiled(pkg::PkgId;
+        ignore_loaded::Bool=false,
+        stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
+        cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
+        sourcepath::Union{String,Nothing}=Base.locate_package(pkg)
+    )
+    isnothing(sourcepath) && error("Cannot locate source for $(repr(pkg))")
+    for path_to_try in cachepaths
+        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true)
+        if staledeps === true
+            continue
+        end
+        staledeps, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}}
+        # finish checking staledeps module graph
+        for i in 1:length(staledeps)
+            dep = staledeps[i]
+            dep isa Module && continue
+            modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+            modpaths = find_all_in_cache_path(modkey)
+            for modpath_to_try in modpaths::Vector{String}
+                stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
+                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded) === true,
+                        stale_cache, stale_cache_key)
+                    continue
+                end
+                @goto check_next_dep
+            end
+            @goto check_next_path
+            @label check_next_dep
+        end
+        try
+            # update timestamp of precompilation file so that it is the first to be tried by code loading
+            touch(path_to_try)
+        catch ex
+            # file might be read-only and then we fail to update timestamp, which is fine
+            ex isa IOError || rethrow()
+        end
+        return true
+        @label check_next_path
+    end
+    return false
+end
+
 # loads a precompile cache file, after checking stale_cachefile tests
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
@@ -2226,14 +2285,14 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
+function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=something(Base.active_project(), ""))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
@@ -2823,17 +2882,17 @@ global mkpidlock_hook
 global trymkpidlock_hook
 global parse_pidfile_hook
 
-# The preferences hash is only known after precompilation so just assume no preferences
-# meaning that if all other conditions are equal, the same package cannot be precompiled
-# with different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0)) * ".pidfile"
+# The preferences hash is only known after precompilation so just assume no preferences.
+# Also ignore the active project, which means that if all other conditions are equal,
+# the same package cannot be precompiled from different projects and/or different preferences at the same time.
+compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
 # Allows processes to wait if another process is precompiling a given source already.
 # The lock file is deleted and precompilation will proceed after `stale_age` seconds if
 #  - the locking process no longer exists
 #  - the lock is held by another host, since processes cannot be checked remotely
-# or after `stale_age * 25` seconds if it does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=60)
+# or after `stale_age * 25` seconds if the process does still exist.
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
