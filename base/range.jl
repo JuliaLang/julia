@@ -440,13 +440,21 @@ if isdefined(Main, :Base)
 end
 
 """
+    Base.AbstractOneTo{T}
+
+Abstract type for axes that begin at `1`.
+Custom axis types that seek to guarantee 1-based indexing may
+choose to be a subtype of `AbstractOneTo`.
+"""
+abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
+"""
     Base.OneTo(n)
 
 Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-struct OneTo{T<:Integer} <: AbstractUnitRange{T}
+struct OneTo{T<:Integer} <: AbstractOneTo{T}
     stop::T
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
