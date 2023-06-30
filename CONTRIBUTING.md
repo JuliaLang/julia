@@ -188,7 +188,7 @@ At the moment, this should always be done with the following `compat` admonition
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
 
 Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
-i.e. `Add feature x`, `Fix feature x`, `Add feature x (#12345) - fixup` are good, `Fixup #12345` is bad.
+i.e. `Add feature x` and `Fix issue x` are good, `Fix #12345. Corrects the bug.` is bad.
 
 You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
 the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
