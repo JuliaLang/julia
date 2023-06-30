@@ -744,7 +744,7 @@ void gc_final_pause_end(int64_t t0, int64_t tend)
 
 static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT; pg_i++) {
         uint8_t meta = pagetable0->meta[pg_i];
         assert(meta == GC_PAGE_UNMAPPED || meta == GC_PAGE_ALLOCATED ||
                meta == GC_PAGE_LAZILY_FREED || meta == GC_PAGE_FREED);
@@ -756,7 +756,7 @@ static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
 
 static void gc_stats_pagetable1(pagetable1_t *pagetable1, unsigned *p1, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT; pg_i++) {
         pagetable0_t *pagetable0 = pagetable1->meta0[pg_i];
         if (pagetable0 == NULL) {
             continue;
@@ -768,7 +768,7 @@ static void gc_stats_pagetable1(pagetable1_t *pagetable1, unsigned *p1, unsigned
 
 static void gc_stats_pagetable(unsigned *p2, unsigned *p1, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
+    for (int pg_i = 0; pg_i < REGION2_PG_COUNT; pg_i++) {
         pagetable1_t *pagetable1 = alloc_map.meta1[pg_i];
         if (pagetable1 == NULL) {
             continue;
