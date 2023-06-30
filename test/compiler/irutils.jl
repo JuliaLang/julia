@@ -1,9 +1,13 @@
 import Core: CodeInfo, ReturnNode, MethodInstance
 import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
 import Base.Meta: isexpr
+using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
 argextype(@nospecialize args...) = argextype(args..., Any[])
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
+macro code_typed1(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :code_typed1, ex0)
+end
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a statement with a given `head`

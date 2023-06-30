@@ -57,6 +57,7 @@ typedef struct {
     int8_t rr_detach;
     int8_t strip_metadata;
     int8_t strip_ir;
+    int8_t permalloc_pkgimg;
     uint64_t heap_size_hint;
 } jl_options_t;
 

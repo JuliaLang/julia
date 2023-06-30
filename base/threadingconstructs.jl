@@ -8,6 +8,25 @@ export threadid, nthreads, @threads, @spawn,
 
 Get the ID number of the current thread of execution. The master thread has
 ID `1`.
+
+# Examples
+```julia-repl
+julia> Threads.threadid()
+1
+
+julia> Threads.@threads for i in 1:4
+          println(Threads.threadid())
+       end
+4
+2
+5
+4
+```
+
+!!! note
+    The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
+    For this reason in most cases it is not safe to use `threadid()` to index into, say, a vector of buffer or stateful objects.
+
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -40,11 +59,23 @@ function _nthreads_in_pool(tpid::Int8)
 end
 
 function _tpid_to_sym(tpid::Int8)
-    return tpid == 0 ? :interactive : :default
+    if tpid == 0
+        return :interactive
+    elseif tpid == 1
+        return :default
+    else
+        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+    end
 end
 
 function _sym_to_tpid(tp::Symbol)
-    return tp === :interactive ? Int8(0) : Int8(1)
+    if tp === :interactive
+        return Int8(0)
+    elseif tp === :default
+        return Int8(1)
+    else
+        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+    end
 end
 
 """
@@ -207,8 +238,8 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
-- The value of [`threadid()`](@ref Threads.threadid) may change even within a single
-  iteration.
+- Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
+  may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
 
 ## Schedulers
 
@@ -334,8 +365,10 @@ the _value_ of a variable, isolating the asynchronous code from changes to
 the variable's value in the current task.
 
 !!! note
-    See the manual chapter on [multi-threading](@ref man-multithreading)
-    for important caveats. See also the chapter on [threadpools](@ref man-threadpools).
+    The thread that the task runs on may change if the task yields, therefore `threadid()` should not
+    be treated as constant for a task. See [`Task Migration`](@ref man-task-migration), and the broader
+    [multi-threading](@ref man-multithreading) manual for further important caveats.
+    See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
@@ -347,20 +380,18 @@ the variable's value in the current task.
     A threadpool may be specified as of Julia 1.9.
 """
 macro spawn(args...)
-    tp = :default
+    tp = QuoteNode(:default)
     na = length(args)
     if na == 2
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-        elseif ttype isa Symbol
-            # TODO: allow unquoted symbols
-            ttype = nothing
-        end
-        if ttype === :interactive || ttype === :default
-            tp = ttype
+            if ttype !== :interactive && ttype !== :default
+                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            end
+            tp = QuoteNode(ttype)
         else
-            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            tp = ttype
         end
     elseif na == 1
         ex = args[1]
@@ -376,7 +407,7 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(QuoteNode(tp)))
+            _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

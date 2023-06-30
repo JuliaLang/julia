@@ -1488,7 +1488,7 @@ function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Vec
                 end
             else
                 istype || return false
-                if !(T <: u.var.ub)
+                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
                     return false
                 end
                 if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)

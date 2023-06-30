@@ -43,6 +43,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -414,19 +415,18 @@ macro getkw(syms...)
     Expr(:block, (:($(esc(:((kw, $sym) = $getter(v, o, kw))))) for (sym, getter) in zip(syms, getters))...)
 end
 
-for (sym, deps, exp, type) in [
-        (:lo, (), :(firstindex(v)), Integer),
-        (:hi, (), :(lastindex(v)),  Integer),
-        (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
-        (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
-        (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, (), true, Bool)]
+for (sym, exp, type) in [
+        (:lo, :(firstindex(v)), Integer),
+        (:hi, :(lastindex(v)),  Integer),
+        (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
+        (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
+        (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
         res = get(kw, $(Expr(:quote, sym)), missing)
         res !== missing && return kw, res::$type
-        @getkw $(deps...)
         $sym = $exp
         (;kw..., $sym), $sym::$type
     end
@@ -484,8 +484,6 @@ internal or recursive calls.
 """
 function _sort! end
 
-abstract type Algorithm end
-
 
 """
     MissingOptimization(next) <: Algorithm
@@ -509,12 +507,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
     v.data[i] = x
     v
 end
@@ -575,8 +573,10 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for (i,x) in zip(eachindex(o.data), o.data)
-            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
+            if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
             else
@@ -2120,25 +2120,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
         sort!(v, lo, hi, a, o)
         scratch
-    else
-        # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
     end
 end
 

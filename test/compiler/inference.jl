@@ -4329,3 +4329,17 @@ bar47688() = foo47688()
 @test it_count47688 == 7
 @test isa(foo47688(), NTuple{6, Int})
 @test it_count47688 == 14
+
+struct Issue49785{S, T<:S} end
+let 𝕃 = Core.Compiler.OptimizerLattice()
+    argtypes = Any[Core.Compiler.Const(Issue49785),
+        Union{Type{String},Type{Int}},
+        Union{Type{String},Type{Int}}]
+    rt = Type{Issue49785{<:Any, Int}}
+    # the following should not throw
+    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test code_typed() do
+        S = Union{Type{String},Type{Int}}[Int][1]
+        map(T -> Issue49785{S,T}, (a = S,))
+    end isa Vector
+end

@@ -20,6 +20,10 @@ CMAKE_CXX_ARG := $(CXX_ARG)
 
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifneq ($(OS),WINNT)
+CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
+endif
+
 ifeq ($(OS), Darwin)
 CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
 endif
