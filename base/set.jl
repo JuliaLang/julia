@@ -476,7 +476,15 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+function allunique(A::StridedArray)
+    if length(A) < 32
+        _indexed_allunique(A)
+    elseif issorted(A)
+        all(i -> A[i] != A[i+1], 1:length(A)-1)
+    else
+        _hashed_allunique(A)
+    end
+end
 
 function _indexed_allunique(A)
     length(A) < 2 && return true
