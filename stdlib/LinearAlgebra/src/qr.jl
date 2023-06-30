@@ -519,6 +519,7 @@ adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
 inv(Q::AbstractQ) = Q'
+transpose(Q::AbstractQ{<:Real}) = adjoint(Q)
 
 """
     QRPackedQ <: AbstractMatrix

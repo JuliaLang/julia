@@ -238,6 +238,9 @@ end
         @test size(Q*Q') == (m, m)
         @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
         @test size(Q'Q') == (m, m)
+        @test transpose(Q) * Q ≈ Q'Q
+        @test Q*transpose(Q) ≈ Q*Q'
+        @test transpose(Q) * transpose(Q) ≈ Q'Q'
     end
 end
 
