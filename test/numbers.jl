@@ -2219,7 +2219,7 @@ end
 @test_throws ErrorException reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
-    @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
+    @test_throws ArgumentError reinterpret(Float64, Complex{Int64}(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
