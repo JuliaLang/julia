@@ -128,6 +128,16 @@ end
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
 _ord(lt::typeof(isless), by,                   order::Ordering) = By(by, order)
 
+function _ord(lt, by::typeof(identity), order::ForwardOrdering)
+    if order === Forward
+        return Lt(lt)
+    elseif order === Reverse
+        return reverse(Lt(lt))
+    else
+        error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
+    end
+end
+
 function _ord(lt, by, order::Ordering)
     if order === Forward
         return Lt((x, y) -> lt(by(x), by(y)))
