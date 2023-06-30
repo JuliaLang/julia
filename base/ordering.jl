@@ -128,7 +128,7 @@ end
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
 _ord(lt::typeof(isless), by,                   order::Ordering) = By(by, order)
 
-function _ord(lt, by::typeof(identity), order::ForwardOrdering)
+function _ord(lt, by::typeof(identity), order::Ordering)
     if order === Forward
         return Lt(lt)
     elseif order === Reverse
