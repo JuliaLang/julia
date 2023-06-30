@@ -745,13 +745,11 @@ void gc_final_pause_end(int64_t t0, int64_t tend)
 static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
 {
     for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i] | pagetable0->freemap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p0)++;
-                }
-            }
+        uint8_t meta = pagetable0->meta[pg_i];
+        assert(meta == GC_PAGE_UNMAPPED || meta == GC_PAGE_ALLOCATED ||
+               meta == GC_PAGE_LAZILY_FREED || meta == GC_PAGE_FREED);
+        if (meta != GC_PAGE_UNMAPPED) {
+            (*p0)++;
         }
     }
 }
@@ -759,30 +757,24 @@ static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
 static void gc_stats_pagetable1(pagetable1_t *pagetable1, unsigned *p1, unsigned *p0)
 {
     for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i] | pagetable1->freemap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p1)++;
-                    gc_stats_pagetable0(pagetable1->meta0[pg_i * 32 + j], p0);
-                }
-            }
+        pagetable0_t *pagetable0 = pagetable1->meta0[pg_i];
+        if (pagetable0 == NULL) {
+            continue;
         }
+        (*p1)++;
+        gc_stats_pagetable0(pagetable0, p0);
     }
 }
 
 static void gc_stats_pagetable(unsigned *p2, unsigned *p1, unsigned *p0)
 {
     for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i] | memory_map.freemap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p2)++;
-                    gc_stats_pagetable1(memory_map.meta1[pg_i * 32 + j], p1, p0);
-                }
-            }
+        pagetable1_t *pagetable1 = alloc_map.meta1[pg_i];
+        if (pagetable1 == NULL) {
+            continue;
         }
+        (*p2)++;
+        gc_stats_pagetable1(pagetable1, p1, p0);
     }
 }
 
@@ -791,7 +783,7 @@ void jl_print_gc_stats(JL_STREAM *s)
 #ifdef _OS_LINUX_
     malloc_stats();
 #endif
-    double ptime = jl_clock_now() - process_t0;
+    double ptime = jl_hrtime() - process_t0;
     jl_safe_printf("exec time\t%.5f sec\n", ptime);
     if (gc_num.pause > 0) {
         jl_safe_printf("gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
@@ -1012,7 +1004,7 @@ void jl_gc_debug_init(void)
 #endif
 
 #ifdef GC_FINAL_STATS
-    process_t0 = jl_clock_now();
+    process_t0 = jl_hrtime();
 #endif
 }
 
