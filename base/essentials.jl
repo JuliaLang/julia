@@ -546,8 +546,8 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
     reinterpret(::Type{Out}, x::In)
 
 Change the type-interpretation of the binary data in the isbits value `x`
-to that of the isbits type `type`.
-The size (ignoring padding) of `type` has to be the same as that of the type of `x`.
+to that of the isbits type `Out`.
+The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 
