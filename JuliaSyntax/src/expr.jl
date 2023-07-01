@@ -395,8 +395,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             # as inert QuoteNode rather than in `Expr(:quote)` quasiquote
             return QuoteNode(a1)
         end
-    elseif k == K"do"
-        @check length(args) == 3
+    elseif k == K"do" && length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
     elseif k == K"let"
         a1 = args[1]
@@ -439,6 +438,10 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
                 args[i] = ai.value
             end
         end
+    elseif k == K"wrapper"
+        # This should only happen for errors wrapped next to what should have
+        # been single statements or atoms - represent these as blocks.
+        headsym = :block
     end
 
     return Expr(headsym, args...)

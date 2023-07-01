@@ -700,6 +700,8 @@
                  LineNumberNode(1), Expr(:error, :b))
         @test parsestmt("(x", ignore_errors=true) ==
             Expr(:block, :x, Expr(:error))
+        @test parsestmt("x do", ignore_errors=true) ==
+            Expr(:block, :x, Expr(:error, Expr(:do)))
     end
 
     @testset "import" begin
