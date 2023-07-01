@@ -819,7 +819,7 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
 // NOTE: Instead of exporting all the constructors in passes.h we could
 // forward the callbacks to the respective passes. LLVM seems to prefer this,
 // and when we add the full pass builder having them directly will be helpful.
-void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
+static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     auto PIC = PB.getPassInstrumentationCallbacks();
     if (PIC) {
         adjustPIC(*PIC);
@@ -897,6 +897,11 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
 #undef LOOP_PASS
             return false;
         });
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_register_passbuilder_callbacks_impl(void *PB) JL_NOTSAFEPOINT {
+    registerCallbacks(*static_cast<PassBuilder*>(PB));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN

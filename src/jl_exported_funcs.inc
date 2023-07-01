@@ -559,6 +559,7 @@
     YY(jl_get_libllvm) \
     YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
+    YY(jl_register_passbuilder_callbacks) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \
     YY(LLVMExtraAddPropagateJuliaAddrspaces) \
