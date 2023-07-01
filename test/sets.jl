@@ -549,6 +549,7 @@ end
     @test !allunique([:a,:b,:c,:a])
     @test allunique(unique(randn(100)))  # longer than 32
     @test allunique(collect(1:100)) # sorted/unique && longer than 32
+    @test allunique(collect(100:-1:1)) # sorted/unique && longer than 32
     @test !allunique(fill(1,100)) # sorted/repeating && longer than 32
     @test allunique(collect('A':'z')) # 58-element Vector{Char}
     @test !allunique(repeat(1:99, 1, 2))
