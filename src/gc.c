@@ -1541,7 +1541,6 @@ static void gc_sweep_pool(int sweep_full)
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
             }
-            p->newpages = NULL;
         }
         jl_gc_pagemeta_t *pg = ptls2->page_metadata_lazily_freed;
         while (pg != NULL) {
@@ -1563,6 +1562,10 @@ static void gc_sweep_pool(int sweep_full)
                 pg = pg2;
             }
             ptls2->page_metadata_allocd = allocd;
+            for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
+                p->newpages = NULL;
+            }
         }
     }
 
