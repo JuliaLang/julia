@@ -112,6 +112,8 @@ JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, i
 JL_DLLEXPORT void jl_build_newpm_pipeline_fallback(void *MPM, void *PB, int Speedup, int Size,
     int lower_intrinsics, int dump_native, int external_use, int llvm_only) UNAVAILABLE
 
+JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
+
 JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_fallback(void *PM) UNAVAILABLE
