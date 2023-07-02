@@ -1451,6 +1451,7 @@ done:
             push_lf_page_metadata_back(&global_page_pool_freed, pg);
         }
         else {
+            gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
             push_lf_page_metadata_back(&global_page_pool_lazily_freed, pg);
         }
     #else
