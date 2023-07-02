@@ -67,6 +67,8 @@ New library features
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
 * `parent` and `parentindices` support `SubString`s
+* `Iterators.unfold` creates an iterator from a transition function and an initial state
+  ([#44873], [#43203]).
 
 Standard library changes
 ------------------------

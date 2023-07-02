@@ -35,7 +35,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, unfold
 
 if Base !== Core.Compiler
 export partition
@@ -1542,5 +1542,98 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    unfold(f, initialstate, [eltype])
+
+Iterable object that generates values from an initial state and a transition
+function `f(state)`. The function must follow the same rules as `iterate`.
+It returns either `(newvalue, newstate)` or `nothing`, in which case the
+sequence ends.
+
+The optional parameter `eltype` can specify the type of the generated values.
+
+See also: [`iterate`](@ref), [the iteration interface](@ref man-interface-iteration)
+
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
+# Examples
+
+```jldoctest
+julia> fib = Iterators.unfold((1,1)) do (a,b)
+           a, (b, a+b)
+       end;
+
+julia> reduce(hcat, Iterators.take(fib, 7))
+1×7 Matrix{Int64}:
+ 1  1  2  3  5  8  13
+
+julia> frac(c, z=0.0im) = Iterators.unfold((c, z), eltype=ComplexF64) do (c, z)
+           if real(z * z') < 4
+               z, (c, z^2 + c)
+           else
+               nothing
+           end
+       end;
+
+julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k in -8:8]
+9×17 Matrix{Int64}:
+  2   2   2   3   3   3   5  41   8   4   3   3   2   2   2   2   1
+  2   3   5   4   5   8  20  11  17  23   4   3   3   3   2   2   2
+  4  10  17  12   7  56  18  58  33  22   6   5   4   5   4   3   2
+ 26  56  15  13  18  23  13  14  27  46   8   9  16  12   8   4   3
+ 10   7  62  17  16  23  11  12  39  12  11  23  16  17  62   7  10
+  3   4   8  12  16   9   8  46  27  14  13  23  18  13  15  56  26
+  2   3   4   5   4   5   6  22  33  58  18  56   7  12  17  10   4
+  2   2   2   3   3   3   4  23  17  11  20   8   5   4   5   3   2
+  1   2   2   2   2   3   3   4   8  41   5   3   3   3   2   2   2
+```
+
+# Extended help
+
+The interface for `f` is very similar to the interface required by `iterate`, but `unfold` is simpler to use because it does not require you to define a type. You can use this to your advantage when prototyping or writing one-off iterators.
+
+You may want to define an iterator type instead either for readability, for defining `IteratorSize`, or to dispatch on the type of your iterator.
+
+`unfold` is related to a `while` loop because:
+```julia
+collect(unfold(f, initialstate))
+```
+is roughly the same as:
+```julia
+acc = []
+state = initialstate
+while true
+    x = f(state)
+    isnothing(x) && break
+    element, state = x
+    push!(acc, element)
+end
+```
+But the `unfold` version may produce a more strictly typed vector and can be easily modified to return a lazy collection by removing `collect()`.
+
+In Haskell and some other functional programming environments, this function is known as `unfoldr`.
+"""
+function unfold(f, initialstate; eltype::Type{Eltype}) where {Eltype}
+    Iterators.rest(Unfold{Eltype}(f), initialstate)
+end
+function unfold(f, initialstate)
+    Iterators.rest(Unfold{nothing}(f), initialstate)
+end
+struct Unfold{Eltype, FuncType}
+    f::FuncType
+
+    Unfold{Eltype}(f) where {Eltype} = new{Eltype, typeof(f)}(f)
+end
+Unfold(f) = Unfold{nothing}(f)
+
+Base.eltype(::Type{Unfold{Eltype, F}}) where {Eltype, F} = Eltype
+Base.eltype(::Type{<:Unfold{nothing}}) = Any
+Base.IteratorEltype(::Type{<:Unfold{nothing}}) = EltypeUnknown()
+Base.IteratorEltype(::Type{<:Unfold}) = HasEltype()
+Base.IteratorSize(::Type{<:Unfold}) = SizeUnknown()
+
+Base.iterate(it::Unfold, state) = it.f(state)
 
 end
