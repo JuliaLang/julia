@@ -691,7 +691,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
                 AA.registerFunctionAnalysis<ScopedNoAliasAA>();
                 AA.registerFunctionAnalysis<TypeBasedAA>();
             }
-            // TM->registerDefaultAliasAnalyses(AA);
+            TM->registerDefaultAliasAnalyses(AA);
             return AA;
         });
         // Register our TargetLibraryInfoImpl.
