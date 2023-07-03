@@ -126,12 +126,14 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 end
 
 
-_ord(lt::typeof(isless), by, order::Ordering)        = _by(by, order)
-_ord(lt,                 by, order::ForwardOrdering) = _by(by, Lt(lt))
+_ord(lt::typeof(isless), by, order::Ordering)                         = _by(by, order)
+_ord(lt::typeof(isless), by, order::ForwardOrdering)                  = _by(by, order)  # disambiguation
+_ord(lt::typeof(isless), by, order::ReverseOrdering{ForwardOrdering}) = _by(by, order)  # disambiguation
+_ord(lt,                 by, order::ForwardOrdering)                  = _by(by, Lt(lt))
 _ord(lt,                 by, order::ReverseOrdering{ForwardOrdering}) = reverse(_by(by, Lt(lt)))
 _ord(lt,                 by, order::Ordering) = error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
 _by(by, order::Ordering) = By(by, order)
-_by(::typeof(identity), order) = order
+_by(::typeof(identity), order::Ordering) = order
 
 """
     ord(lt, by, rev::Union{Bool, Nothing}, order::Ordering=Forward)
