@@ -67,6 +67,8 @@ New library features
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
 * `parent` and `parentindices` support `SubString`s
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
 
 Standard library changes
 ------------------------
