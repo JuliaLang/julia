@@ -24,6 +24,7 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 
 * Time to first execution (TTFX, sometimes called time to first plot) is greatly reduced. Package precompilation now
   saves native code into a "pkgimage", meaning that code generated during the precompilation process will not

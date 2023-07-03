@@ -1,7 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 // re-include assert.h without NDEBUG,
@@ -1403,14 +1406,26 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;
 }
 
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
     if (!gc_logging_enabled) {
         return;
     }
     jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/1e6,
+        pause/1e6, freed/(double)(1<<20),
         full ? "full" : "incr",
         recollect ? "recollect" : ""
+    );
+
+    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_allocd %.2f MB\nbytes_freed %.2f MB, bytes_mallocd %.1f, malloc_bytes_freed %.2f MB\npages_perm_allocd %zu, heap_size %.2f MB, heap_target %.2f MB, live_bytes %.2f MB\n",
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_allocd)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_freed)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mallocd)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.malloc_bytes_freed)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.pages_perm_allocd),
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
+        live_bytes/(double)(1<<20)
     );
 }
 

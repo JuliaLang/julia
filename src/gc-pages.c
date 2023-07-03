@@ -53,6 +53,7 @@ static char *jl_gc_try_alloc_pages(int pg_cnt) JL_NOTSAFEPOINT
         // round data pointer up to the nearest gc_page_data-aligned
         // boundary if mmap didn't already do so.
         mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, pages_sz);
     return mem;
 }
 
@@ -330,6 +331,8 @@ no_decommit:
     if (info.pagetable0->lb > info.pagetable0_i32)
         info.pagetable0->lb = info.pagetable0_i32;
     current_pg_count--;
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_freed, GC_PAGE_SZ);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
 }
 
 #ifdef __cplusplus
