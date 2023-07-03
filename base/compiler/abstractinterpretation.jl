@@ -1684,7 +1684,7 @@ end
 end
 
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs, argtypes)::ArgInfo,
-                               sv::AbsIntState, max_methods::Int)
+                               sv::AbsIntState)
     @nospecialize f
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -1976,7 +1976,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === applicable
             return abstract_applicable(interp, argtypes, sv, max_methods)
         end
-        rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
+        rt = abstract_call_builtin(interp, f, arginfo, sv)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
         if f === getfield && (fargs !== nothing && isexpr(fargs[end], :boundscheck)) && !is_nothrow(effects) && isa(sv, InferenceState)
             # As a special case, we delayed tainting `noinbounds` for getfield calls in case we can prove
@@ -2096,35 +2096,41 @@ function most_general_argtypes(closure::PartialOpaque)
     return Any[argt.parameters...]
 end
 
+function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
+                               arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
+                               max_methods::Int)
+    if isa(ft, PartialOpaque)
+        newargtypes = copy(arginfo.argtypes)
+        newargtypes[1] = ft.env
+        return abstract_call_opaque_closure(interp,
+            ft, ArgInfo(arginfo.fargs, newargtypes), si, sv, #=check=#true)
+    end
+    wft = widenconst(ft)
+    if hasintersect(wft, Builtin)
+        add_remark!(interp, sv, "Could not identify method table for call")
+        return CallMeta(Any, Effects(), NoCallInfo())
+    elseif hasintersect(wft, Core.OpaqueClosure)
+        uft = unwrap_unionall(wft)
+        if isa(uft, DataType)
+            return CallMeta(rewrap_unionall(uft.parameters[2], wft), Effects(), NoCallInfo())
+        end
+        return CallMeta(Any, Effects(), NoCallInfo())
+    end
+    # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
+    atype = argtypes_to_type(arginfo.argtypes)
+    return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, sv, max_methods)
+end
+
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
-                       sv::AbsIntState, max_methods::Union{Int, Nothing} = nothing)
-    argtypes = arginfo.argtypes
-    ft = widenslotwrapper(argtypes[1])
+                       sv::AbsIntState, max_methods::Int=typemin(Int))
+    ft = widenslotwrapper(arginfo.argtypes[1])
     f = singleton_type(ft)
     if f === nothing
-        if isa(ft, PartialOpaque)
-            newargtypes = copy(argtypes)
-            newargtypes[1] = ft.env
-            return abstract_call_opaque_closure(interp,
-                ft, ArgInfo(arginfo.fargs, newargtypes), si, sv, #=check=#true)
-        end
-        wft = widenconst(ft)
-        if hasintersect(wft, Builtin)
-            add_remark!(interp, sv, "Could not identify method table for call")
-            return CallMeta(Any, Effects(), NoCallInfo())
-        elseif hasintersect(wft, Core.OpaqueClosure)
-            uft = unwrap_unionall(wft)
-            if isa(uft, DataType)
-                return CallMeta(rewrap_unionall(uft.parameters[2], wft), Effects(), NoCallInfo())
-            end
-            return CallMeta(Any, Effects(), NoCallInfo())
-        end
-        # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
-        max_methods = max_methods === nothing ? get_max_methods(interp, sv) : max_methods
-        return abstract_call_gf_by_type(interp, nothing, arginfo, si, argtypes_to_type(argtypes), sv, max_methods)
+        max_methods = max_methods == typemin(Int) ? get_max_methods(interp, sv) : max_methods
+        return abstract_call_unknown(interp, ft, arginfo, si, sv, max_methods)
     end
-    max_methods = max_methods === nothing ? get_max_methods(interp, f, sv) : max_methods
+    max_methods = max_methods == typemin(Int) ? get_max_methods(interp, f, sv) : max_methods
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 

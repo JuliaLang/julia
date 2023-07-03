@@ -130,11 +130,11 @@ void jl_gc_mark_threadfun(void *arg)
     free(targ);
 
     while (1) {
-        uv_mutex_lock(&ptls->sleep_lock);
+        uv_mutex_lock(&gc_threads_lock);
         while (!may_mark()) {
-            uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
-        uv_mutex_unlock(&ptls->sleep_lock);
+        uv_mutex_unlock(&gc_threads_lock);
         gc_mark_loop_parallel(ptls, 0);
     }
 }

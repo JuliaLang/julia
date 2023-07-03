@@ -104,14 +104,18 @@ julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
+ifneq (,$(filter $(OS), Linux FreeBSD))
+VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
+endif
+
 ifeq ($(OS),WINNT)
 # On Windows we need to strip out exported functions from the generated import library.
 STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h)
 endif
 
-$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
@@ -120,9 +124,9 @@ ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
 endif
 
-$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
@@ -144,8 +148,12 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
+$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
+	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
+
 clean: | $(CLEAN_TARGETS)
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
+	rm -f $(BUILDDIR)/julia.expmap
 
 .PHONY: clean release debug julia-release julia-debug
