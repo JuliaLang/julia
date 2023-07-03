@@ -40,7 +40,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // cpu_target ("native", "core2", etc...)
                         0,    // nthreadpools
                         0,    // nthreads
-                        0,    // ngcthreads
+                        0,    // nmarkthreads
+                        0,    // nsweepthreads
                         NULL, // nthreads_per_pool
                         0,    // nprocs
                         NULL, // machine_file
@@ -130,7 +131,8 @@ static const char opts[]  =
     "                           interface if supported (Linux and Windows) or to the number of CPU\n"
     "                           threads if not supported (MacOS) or if process affinity is not\n"
     "                           configured, and sets M to 1.\n"
-    " --gcthreads=N             Use N threads for GC, set to half of the number of compute threads if unspecified.\n"
+    " --gcthreads=M[,N]         Use M threads for the mark phase of GC and N (0 or 1) threads for the concurrent sweeping phase of GC.\n"
+    "                           M is set to half of the number of compute threads and N is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -826,10 +828,19 @@ restart_switch:
             break;
         case opt_gc_threads:
             errno = 0;
-            long ngcthreads = strtol(optarg, &endptr, 10);
-            if (errno != 0 || optarg == endptr || *endptr != 0 || ngcthreads < 1 || ngcthreads >= INT16_MAX)
-                jl_errorf("julia: --gcthreads=<n>; n must be an integer >= 1");
-            jl_options.ngcthreads = (int16_t)ngcthreads;
+            long nmarkthreads = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
+                jl_errorf("julia: --gcthreads=<n>[,<m>]; n must be an integer >= 1");
+            }
+            jl_options.nmarkthreads = (int16_t)nmarkthreads;
+            if (*endptr == ',') {
+                errno = 0;
+                char *endptri;
+                long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; n must be 0 or 1");
+                jl_options.nsweepthreads = (int8_t)nsweepthreads;
+            }
             break;
         case opt_permalloc_pkgimg:
             if (!strcmp(optarg,"yes"))

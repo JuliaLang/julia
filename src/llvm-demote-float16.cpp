@@ -66,6 +66,9 @@ static bool have_fp16(Function &caller, const Triple &TT) {
             return true;
         }
     }
+    if (caller.hasFnAttribute("julia.hasfp16")) {
+        return true;
+    }
     return false;
 }
 
