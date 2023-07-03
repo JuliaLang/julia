@@ -178,6 +178,8 @@ jl_gc_num_t gc_num = {0};
 static size_t last_long_collect_interval;
 int gc_n_threads;
 jl_ptls_t* gc_all_tls_states;
+gc_heapstatus_t gc_heap_stats = {0};
+int next_sweep_full = 0;
 const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void)
 {
@@ -665,19 +667,26 @@ static int64_t last_gc_total_bytes = 0;
 #ifdef _P64
 typedef uint64_t memsize_t;
 static const size_t default_collect_interval = 5600 * 1024 * sizeof(void*);
-static const size_t max_collect_interval = 1250000000UL;
 static size_t total_mem;
 // We expose this to the user/ci as jl_gc_set_max_memory
 static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
 typedef uint32_t memsize_t;
 static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
-static const size_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
-static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
+#define MAX32HEAP 1536 * 1024 * 1024
+static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
+// heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
+static uint64_t old_pause_time = 0;
+static uint64_t old_mut_time = 0;
+static uint64_t old_heap_size = 0;
+static uint64_t old_alloc_diff = 0;
+static uint64_t old_freed_diff = 0;
+static uint64_t gc_end_time = 0;
+
 
 // global variables for GC stats
 
@@ -912,7 +921,7 @@ void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz) JL
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 {
-    if (jl_atomic_load_relaxed(&ptls->gc_num.allocd) >= 0 || jl_gc_debug_check_other()) {
+    if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
     }
     else {
@@ -1001,6 +1010,8 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + allocsz);
     jl_atomic_store_relaxed(&ptls->gc_num.bigalloc,
         jl_atomic_load_relaxed(&ptls->gc_num.bigalloc) + 1);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, allocsz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, allocsz);
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
 #endif
@@ -1046,6 +1057,8 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
             if (nxt)
                 nxt->prev = pv;
             gc_num.freed += v->sz&~3;
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, v->sz&~3);
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(v->sz&~3));
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
@@ -1105,6 +1118,8 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_atomic_store_relaxed(&ptls->gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, sz);
 }
 
 static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
@@ -1179,6 +1194,8 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, jl_array_nbytes(a));
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -jl_array_nbytes(a));
         gc_num.freed += jl_array_nbytes(a);
         gc_num.freecall++;
     }
@@ -1250,6 +1267,8 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     set_page_metadata(pg);
     push_page_metadata_back(&ptls->page_metadata_allocd, pg);
     jl_taggedvalue_t *fl = gc_reset_page(ptls, p, pg);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_allocd, GC_PAGE_SZ);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, GC_PAGE_SZ);
     p->newpages = fl;
     return fl;
 }
@@ -1443,8 +1462,12 @@ done:
     }
     else if (freed_lazily) {
         push_page_metadata_back(lazily_freed, pg);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_freed, GC_PAGE_SZ);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
     }
     else {
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_freed, GC_PAGE_SZ);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
     #ifdef _P64 // only enable concurrent sweeping on 64bit
         if (jl_n_sweepthreads == 0) {
             jl_gc_free_page(pg);
@@ -3056,6 +3079,11 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
+double jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
+{
+    return factor * old_val + (1.0-factor) * new_val;
+}
+
 size_t jl_maxrss(void);
 
 // Only one thread should be running in this function
@@ -3070,6 +3098,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
+    uint64_t mutator_time = gc_start_time - gc_end_time;
+    uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
@@ -3160,19 +3190,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t mark_time = end_mark_time - start_mark_time;
     gc_num.mark_time = mark_time;
     gc_num.total_mark_time += mark_time;
-    int64_t allocd = gc_num.allocd;
     gc_settime_postmark_end();
     // marking is over
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);
 
-    int64_t live_sz_ub = live_bytes + allocd;
-    int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
-    int64_t estimate_freed = live_sz_ub - live_sz_est;
 
     gc_verify(ptls);
-
     gc_stats_all_pool();
     gc_stats_big_obj();
     objprofile_printall();
@@ -3181,42 +3206,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
-    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(allocd/10));
-    int nptr = 0;
+    int remset_nptr = 0;
+    int sweep_full = next_sweep_full;
+    int recollect = 0;
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL)
-            nptr += ptls2->heap.remset_nptr;
+            remset_nptr += ptls2->heap.remset_nptr;
     }
+    (void)remset_nptr; //Use this information for something?
 
-    // many pointers in the intergen frontier => "quick" mark is not quick
-    int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
-    int sweep_full = 0;
-    int recollect = 0;
-
-    // update heuristics only if this GC was automatically triggered
-    if (collection == JL_GC_AUTO) {
-        if (large_frontier) {
-            sweep_full = 1;
-            gc_num.interval = last_long_collect_interval;
-        }
-        if (not_freed_enough || large_frontier) {
-            gc_num.interval = gc_num.interval * 2;
-        }
-
-        size_t maxmem = 0;
-#ifdef _P64
-        // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
-        maxmem = total_mem / (gc_n_threads - jl_n_gcthreads) / 2;
-#endif
-        if (maxmem < max_collect_interval)
-            maxmem = max_collect_interval;
-        if (gc_num.interval > maxmem) {
-            sweep_full = 1;
-            gc_num.interval = maxmem;
-        }
-    }
 
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
@@ -3236,7 +3236,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
-        last_long_collect_interval = gc_num.interval;
     }
     scanned_bytes = 0;
     // 6. start sweeping
@@ -3261,9 +3260,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         if (sweep_full)
             gc_sweep_perm_alloc();
     }
+
     JL_PROBE_GC_SWEEP_END();
 
-    uint64_t gc_end_time = jl_hrtime();
+    gc_end_time = jl_hrtime();
     uint64_t pause = gc_end_time - gc_start_time;
     uint64_t sweep_time = gc_end_time - start_sweep_time;
     gc_num.total_sweep_time += sweep_time;
@@ -3272,6 +3272,44 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.last_full_sweep = gc_end_time;
     }
 
+    size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+    uint64_t alloc_diff = before_free_heap_size - old_heap_size;
+    uint64_t freed_diff = before_free_heap_size - heap_size;
+
+    double alloc_smooth_factor = 0.95;
+    double collec_smooth_factor = 0.5;
+    double tuning_factor = 0.03;
+    double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
+    double alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor);
+    double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collec_smooth_factor);
+    double gc_time = jl_gc_smooth(old_pause_time, pause, collec_smooth_factor);
+    old_alloc_diff = alloc_diff;
+    old_mut_time = mutator_time;
+    old_freed_diff = freed_diff;
+    old_pause_time = pause;
+    old_heap_size = heap_size;
+    double min_interval = default_collect_interval;
+    double target_allocs;
+    if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0) {
+        double alloc_rate = alloc_mem/alloc_time;
+        double gc_rate = gc_mem/gc_time;
+        target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
+    }
+    else
+        target_allocs = 2*sqrt((double)heap_size/min_interval);
+
+    uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
+    if (target_heap > max_total_memory)
+        target_heap = max_total_memory;
+    else if (target_heap < default_collect_interval)
+        target_heap = default_collect_interval;
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+
+    double old_ratio = (double)promoted_bytes/(double)heap_size;
+    if (heap_size > max_total_memory * 0.8 || old_ratio > 0.15)
+        next_sweep_full = 1;
+    else
+        next_sweep_full = 0;
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3303,54 +3341,18 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 #endif
 
-    _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
-
-    gc_final_pause_end(gc_start_time, gc_end_time);
-    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
-                        estimate_freed, sweep_full);
-    gc_num.full_sweep += sweep_full;
+    _report_gc_finished(pause, gc_num.freed, sweep_full, recollect, live_bytes);
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
     if (max_memory > gc_num.max_memory) {
         gc_num.max_memory = max_memory;
     }
-
+    gc_final_pause_end(gc_start_time, gc_end_time);
+    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
+                        estimate_freed, sweep_full);
+    gc_num.full_sweep += sweep_full;
     last_live_bytes = live_bytes;
-    // Can't call inc_live_bytes here because we already added allocd
-    // to the graph earlier
     live_bytes += -gc_num.freed + gc_num.allocd;
     jl_timing_counter_dec(JL_TIMING_COUNTER_HeapSize, gc_num.freed);
-
-    if (collection == JL_GC_AUTO) {
-        //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
-        if (!not_freed_enough || large_frontier) {
-            int64_t tot = 2 * (live_bytes + gc_num.allocd) / 3;
-            if (gc_num.interval > tot) {
-                gc_num.interval = tot;
-                last_long_collect_interval = tot;
-            }
-        // If the current interval is larger than half the live data decrease the interval
-        }
-        else {
-            int64_t half = (live_bytes / 2);
-            if (gc_num.interval > half)
-                gc_num.interval = half;
-        }
-
-        // But never go below default
-        if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
-    }
-
-    if (gc_num.interval + live_bytes > max_total_memory) {
-        if (live_bytes < max_total_memory) {
-            gc_num.interval = max_total_memory - live_bytes;
-            last_long_collect_interval = max_total_memory - live_bytes;
-        }
-        else {
-            // We can't stay under our goal so let's go back to
-            // the minimum interval and hope things get better
-            gc_num.interval = default_collect_interval;
-        }
-    }
 
     gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
                     live_bytes, gc_num.interval, pause,
@@ -3542,7 +3544,7 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
-
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
@@ -3558,7 +3560,7 @@ void jl_gc_init(void)
     if (total_mem < 128e9)
         percent = total_mem * 2.34375e-12 + 0.6; // 60% at 0 gigs and 90% at 128 to not
     else                                         // overcommit too much on memory contrained devices
-        percent = 0.9;
+        percent = 0.8;
     max_total_memory = total_mem * percent;
 #endif
     if (jl_options.heap_size_hint)
@@ -3571,7 +3573,11 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
 {
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
+        #ifdef _P64
         max_total_memory = max_mem;
+        #else
+        max_total_memory = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;
+        #endif
     }
 }
 
@@ -3599,6 +3605,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, sz);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, sz);
     }
     return malloc(sz);
 }
@@ -3614,6 +3622,8 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + nm*sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, nm*sz);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, nm*sz);
     }
     return calloc(nm, sz);
 }
@@ -3629,6 +3639,8 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.freed) + sz);
         jl_atomic_store_relaxed(&ptls->gc_num.freecall,
             jl_atomic_load_relaxed(&ptls->gc_num.freecall) + 1);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, sz);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -sz);
     }
 }
 
@@ -3647,6 +3659,9 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
             jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, sz);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, old);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, sz-old);
     }
     return realloc(p, sz);
 }
@@ -3721,6 +3736,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + allocsz);
     jl_atomic_store_relaxed(&ptls->gc_num.malloc,
         jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, allocsz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, allocsz);
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -3759,7 +3776,9 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (allocsz - oldsz));
     jl_atomic_store_relaxed(&ptls->gc_num.realloc,
         jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
-
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mallocd, allocsz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, oldsz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, allocsz-oldsz);
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -3848,6 +3867,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_allocd,sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size,sz);
     errno = last_errno;
     jl_may_leak(base);
     assert(align > 0);
@@ -3891,6 +3912,7 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offs
     errno = last_errno;
     if (__unlikely(pool == MAP_FAILED))
         return NULL;
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.pages_perm_allocd, 1);
 #endif
     gc_perm_pool = (uintptr_t)pool;
     gc_perm_end = gc_perm_pool + GC_PERM_POOL_SIZE;

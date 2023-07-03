@@ -9,6 +9,7 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 
 Command-line option changes
 ---------------------------
