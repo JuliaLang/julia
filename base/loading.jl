@@ -1903,7 +1903,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
 end
 
 # A hook to allow code load to use Pkg.precompile
-const PKG_PRECOMPILE_HOOK = Ref{Function}()
+const PKG_PRECOMPILE_HOOK = Ref{Union{Nothing,Function}}(nothing)
 
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
@@ -1950,7 +1950,7 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
-                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
+                if !pkg_precompile_attempted && isinteractive() && PKG_PRECOMPILE_HOOK[] !== nothing
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
