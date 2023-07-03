@@ -313,12 +313,26 @@ include("XoshiroSimd.jl")
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
 
-* an indexable collection (for example `1:9` or `('x', "y", :z)`),
-* an `AbstractDict` or `AbstractSet` object,
+* an indexable collection (for example `1:9` or `('x', "y", :z)`)
+
+* an `AbstractDict` or `AbstractSet` object
+
 * a string (considered as a collection of characters), or
-* a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
-  point numbers and to ``[0, 1)+i[0, 1)`` for complex floating point numbers;
+
+* a supported type: the set of values to pick from is then equivalent to
+
+  + `typemin(S):typemax(S)` for concrete integer types (excepting [`BigInt`](@ref) which is not supported)
+
+  + ``[0, 1)`` for concrete floating point types
+
+  + `rand(T) + rand(T) * im` for concrete complex types `Complex{T}`
+
+  + `rand(T) // rand(T)` for concrete rational types `Rational{T}`
+
+  + a valid Unicode scalar for any `<:AbstractChar` type
+
+* a Tuple type of supported types
+
 
 `S` defaults to [`Float64`](@ref).
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
@@ -329,6 +343,9 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
 
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
+
+!!! compat "Julia 1.11"
+    Support for `S` as a `Rational` or `Tuple` type requires at least Julia 1.11.
 
 # Examples
 ```julia-repl

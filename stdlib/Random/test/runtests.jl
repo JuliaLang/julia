@@ -333,7 +333,8 @@ end
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., ftypes...]
+    ritypes = [Rational{T} for T in Base.BitInteger_types]
+    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., ritypes..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
 
