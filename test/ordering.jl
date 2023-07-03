@@ -13,10 +13,12 @@ for (s1, rev) in enumerate([true, false])
             for (s4, order) in enumerate([Reverse, Forward])
                 is_fwd = iseven(s1 + s2 + s3 + s4)
                 target = is_fwd ? 1:3 : 3:-1:1
-                # arrays and ranges sometimes have different code paths
+                # arrays, integer and float ranges sometimes have different code paths
                 @test target == sort([2, 3, 1], rev=rev, lt=lt, by=by, order=order)
                 @test target === sort(1:3, rev=rev, lt=lt, by=by, order=order)
                 @test target === sort(3:-1:1, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) === sort(1.0:3, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) === sort(3.0:-1:1, rev=rev, lt=lt, by=by, order=order)
             end
         end
     end
