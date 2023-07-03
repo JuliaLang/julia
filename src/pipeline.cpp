@@ -680,7 +680,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         return PIC;
     }
 
-    FunctionAnalysisManager createFAM(OptimizationLevel O, TargetIRAnalysis analysis, const Triple &triple) JL_NOTSAFEPOINT {
+    FunctionAnalysisManager createFAM(OptimizationLevel O, TargetMachine &TM) JL_NOTSAFEPOINT {
 
         FunctionAnalysisManager FAM;
         // Register the AA manager first so that our version is the one used.
@@ -691,12 +691,12 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
                 AA.registerFunctionAnalysis<ScopedNoAliasAA>();
                 AA.registerFunctionAnalysis<TypeBasedAA>();
             }
-            // TM->registerDefaultAliasAnalyses(AA);
+            TM.registerDefaultAliasAnalyses(AA);
             return AA;
         });
         // Register our TargetLibraryInfoImpl.
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(analysis); });
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(triple)); });
+        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
+        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
         return FAM;
     }
 
@@ -714,7 +714,7 @@ NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, Optimizatio
 
 NewPM::~NewPM() = default;
 
-AnalysisManagers::AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O) : LAM(), FAM(createFAM(O, TM.getTargetIRAnalysis(), TM.getTargetTriple())), CGAM(), MAM() {
+AnalysisManagers::AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O) : LAM(), FAM(createFAM(O, TM)), CGAM(), MAM() {
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
     PB.registerCGSCCAnalyses(CGAM);
@@ -819,7 +819,7 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
 // NOTE: Instead of exporting all the constructors in passes.h we could
 // forward the callbacks to the respective passes. LLVM seems to prefer this,
 // and when we add the full pass builder having them directly will be helpful.
-void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
+static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     auto PIC = PB.getPassInstrumentationCallbacks();
     if (PIC) {
         adjustPIC(*PIC);
@@ -830,6 +830,19 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
 #define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef FUNCTION_PASS
+            if (Name.consume_front("GCInvariantVerifier")) {
+                if (Name.consume_front("<") && Name.consume_back(">")) {
+                    bool strong = true;
+                    if (Name.consume_front("no-")) {
+                        strong = false;
+                    }
+                    if (Name == "strong") {
+                        PM.addPass(GCInvariantVerifierPass(strong));
+                        return true;
+                    }
+                }
+                return false;
+            }
             return false;
         });
 
@@ -839,6 +852,32 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
 #define MODULE_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef MODULE_PASS
+            if (Name.consume_front("LowerPTLSPass")) {
+                if (Name.consume_front("<") && Name.consume_back(">")) {
+                    bool imaging_mode = true;
+                    if (Name.consume_front("no-")) {
+                        imaging_mode = false;
+                    }
+                    if (Name == "imaging") {
+                        PM.addPass(LowerPTLSPass(imaging_mode));
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (Name.consume_front("JuliaMultiVersioning")) {
+                if (Name.consume_front("<") && Name.consume_back(">")) {
+                    bool external_use = true;
+                    if (Name.consume_front("no-")) {
+                        external_use = false;
+                    }
+                    if (Name == "external") {
+                        PM.addPass(MultiVersioningPass(external_use));
+                        return true;
+                    }
+                }
+                return false;
+            }
             //Add full pipelines here
             auto julia_options = parseJuliaPipelineOptions(Name);
             if (julia_options) {
@@ -858,6 +897,11 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
 #undef LOOP_PASS
             return false;
         });
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_register_passbuilder_callbacks_impl(void *PB) JL_NOTSAFEPOINT {
+    registerCallbacks(*static_cast<PassBuilder*>(PB));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN

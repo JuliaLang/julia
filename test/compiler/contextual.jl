@@ -201,3 +201,22 @@ finally
         @show err
     end
 end
+
+# Test that writing a bad cassette-style pass gives the expected error (#49715)
+function generator49715(world, source, self, f, tt)
+    tt = tt.parameters[1]
+    sig = Tuple{f, tt.parameters...}
+    mi = Base._which(sig; world)
+
+    error("oh no")
+
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :ctx, :x, :f), Core.svec())
+    stub(world, source, :(nothing))
+end
+
+@eval function doit49715(f, tt)
+  $(Expr(:meta, :generated, generator49715))
+  $(Expr(:meta, :generated_only))
+end
+
+@test_throws "oh no" doit49715(sin, Tuple{Int})

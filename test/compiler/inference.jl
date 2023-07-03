@@ -3499,8 +3499,15 @@ end
               Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
 # Test that these don't throw
 @test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Char}}, 0) == Tuple{Vararg{Int}}
+@test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Int}, Tuple{String,Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Vararg{Int}}, Tuple{String,Int}, 0) == Tuple{String,Vararg{Int}}
 @test Core.Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
 @test Core.Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
+
+@test Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Int}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Int})
 
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 

@@ -1862,6 +1862,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         typ = (jl_value_t*)jl_typeofbottom_type->super;
     }
     if (jl_is_type_type(typ)) {
+        assert(is_uniquerep_Type(typ));
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ));
         constant.constant = jl_tparam0(typ);
@@ -1933,16 +1934,14 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
-    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
-        // no need to explicitly load/store a constant/ghost value
-        return ghostValue(ctx, typ);
-    }
     if (jl_is_type_type(typ)) {
-        jl_value_t *tp0 = jl_tparam0(typ);
-        if (jl_is_concrete_type(tp0) || tp0 == jl_bottom_type) {
+        if (is_uniquerep_Type(typ)) {
             // replace T::Type{T} with T
             return ghostValue(ctx, typ);
         }
+    } else if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
+        // no need to explicitly load/store a constant/ghost value
+        return ghostValue(ctx, typ);
     }
     Type *T = julia_type_to_llvm(ctx, typ);
     if (type_is_ghost(T)) {
@@ -7272,6 +7271,7 @@ static jl_llvm_functions_t
     // allocate Function declarations and wrapper objects
     //Safe because params holds ctx lock
     Module *M = TSM.getModuleUnlocked();
+    M->addModuleFlag(Module::Warning, "julia.debug_level", ctx.emission_context.debug_level);
     jl_debugcache_t debuginfo;
     debuginfo.initialize(M);
     jl_returninfo_t returninfo = {};
