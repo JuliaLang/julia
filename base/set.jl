@@ -480,11 +480,32 @@ function allunique(A::StridedArray)
     if length(A) < 32
         _indexed_allunique(A)
     elseif OrderStyle(eltype(A)) === Ordered()
-        if issorted(A) || issorted(A, rev=true)
-            all(i -> A[i] != A[i+1], 1:length(A)-1)
-        else
-            _hashed_allunique(A)
+        a1, rest1 = Iterators.peel(A)
+        a2, rest = Iterators.peel(rest1)
+        if isless(a1, a2)
+            for a in rest
+                if isless(a2, a)
+                    a2 = a
+                elseif isequal(a2, a)
+                    return false
+                else
+                    return _hashed_allunique(A)
+                end
+            end
+        elseif isless(a2, a1)
+            for a in rest
+                if isless(a, a2)
+                    a2 = a
+                elseif isequal(a2, a)
+                    return false
+                else
+                    return _hashed_allunique(A)
+                end
+            end
+        else # isequal(a1, a2)
+            return false
         end
+        return true
     else
         _hashed_allunique(A)
     end
