@@ -12,7 +12,7 @@
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len, ios_t *s) UNAVAILABLE
+        ios_t *z, ios_t *s) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 
@@ -111,6 +111,8 @@ JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, i
 
 JL_DLLEXPORT void jl_build_newpm_pipeline_fallback(void *MPM, void *PB, int Speedup, int Size,
     int lower_intrinsics, int dump_native, int external_use, int llvm_only) UNAVAILABLE
+
+JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 
 JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
 

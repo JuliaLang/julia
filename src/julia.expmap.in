@@ -1,4 +1,4 @@
-{
+@JULIA_SHLIB_SYMBOL_VERSION@ {
   global:
     pthread*;
     __stack_chk_guard;
@@ -35,13 +35,16 @@
     JLJIT*;
     llvmGetPassPluginInfo;
 
-    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
-    _ZN4llvm3Any6TypeId*;
-
     /* freebsd */
     environ;
     __progname;
 
   local:
     *;
+};
+
+@LLVM_SHLIB_SYMBOL_VERSION@ {
+  global:
+    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
+    _ZN4llvm3Any6TypeId*;
 };

@@ -796,12 +796,11 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
         return eigen(Diagonal(A), D; sortby)
-    elseif ishermitian(A)
+    elseif all(isposdef, D.diag)
         S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+        return eigen(A, cholesky(Diagonal{S}(D)); sortby)
     else
-        S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+        return eigen!(D \ A; sortby)
     end
 end
 

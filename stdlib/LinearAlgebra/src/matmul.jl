@@ -1008,18 +1008,18 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         # TODO making these lazy could improve perf
         B11 = copy(B[1,1]'); B12 = copy(B[2,1]')
         B21 = copy(B[1,2]'); B22 = copy(B[2,2]')
-    elseif tA == 'S'
-        B11 = symmetric(A[1,1], :U); B12 = A[1,2]
-        B21 = copy(transpose(A[1,2])); B22 = symmetric(A[2,2], :U)
-    elseif tA == 's'
-        B11 = symmetric(A[1,1], :L); B12 = copy(transpose(A[2,1]))
-        B21 = A[2,1]; B22 = symmetric(A[2,2], :L)
-    elseif tA == 'H'
-        B11 = hermitian(A[1,1], :U); B12 = A[1,2]
-        B21 = copy(adjoint(A[1,2])); B22 = hermitian(A[2,2], :U)
-    else # if tA == 'h'
-        B11 = hermitian(A[1,1], :L); B12 = copy(adjoint(A[2,1]))
-        B21 = A[2,1]; B22 = hermitian(A[2,2], :L)
+    elseif tB == 'S'
+        B11 = symmetric(B[1,1], :U); B12 = B[1,2]
+        B21 = copy(transpose(B[1,2])); B22 = symmetric(B[2,2], :U)
+    elseif tB == 's'
+        B11 = symmetric(B[1,1], :L); B12 = copy(transpose(B[2,1]))
+        B21 = B[2,1]; B22 = symmetric(B[2,2], :L)
+    elseif tB == 'H'
+        B11 = hermitian(B[1,1], :U); B12 = B[1,2]
+        B21 = copy(adjoint(B[1,2])); B22 = hermitian(B[2,2], :U)
+    else # if tB == 'h'
+        B11 = hermitian(B[1,1], :L); B12 = copy(adjoint(B[2,1]))
+        B21 = B[2,1]; B22 = hermitian(B[2,2], :L)
     end
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
     _modify!(_add, A11*B12 + A12*B22, C, (1,2))

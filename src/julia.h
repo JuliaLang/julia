@@ -1766,6 +1766,8 @@ JL_DLLIMPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
 extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT _Atomic(int) jl_n_threads;
 extern JL_DLLIMPORT int jl_n_gcthreads;
+extern int jl_n_markthreads;
+extern int jl_n_sweepthreads;
 extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries

@@ -4,7 +4,8 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of available packages.
+languages.  Additional functionality is available from a growing collection of
+[available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
 Some general notes:
@@ -462,6 +463,7 @@ Base.identify_package
 Base.locate_package
 Base.require
 Base.compilecache
+Base.isprecompiled
 ```
 
 ## Internals
