@@ -1225,6 +1225,16 @@ end
             @test searchsorted(v, 0.1, rev=true) === 4:3
         end
     end
+
+    @testset "ranges issue #44102, PR #50365" begin
+        # range sorting test for different Ordering parameter combinations
+        @test searchsorted(-1000.0:1:1000, -0.0) === 1001:1000
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<) === 1001:1001
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<, by=x->x) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, by=-) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
+    end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
 
