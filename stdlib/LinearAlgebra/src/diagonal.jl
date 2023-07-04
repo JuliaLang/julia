@@ -685,13 +685,23 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
+filldiagzero!(v, D::Diagonal{<:Number}, k) = fill!(v, zero(T))
+
+function filldiagzero!(v, D::Diagonal, k)
+    for (i,di) in zip(eachindex(v), diagind(D,k))
+        v[i] = D[di]
+    end
+    v
+end
+
 function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
     if k == 0
         return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
-        return fill!(similar(D.diag, size(D,1)-abs(k)), zero(T))
+        v = similar(D.diag, size(D,1)-abs(k))
+        return filldiagzero!(v, D, k)
     else
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))

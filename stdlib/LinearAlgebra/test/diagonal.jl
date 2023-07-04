@@ -727,6 +727,9 @@ end
 
 @testset "block diagonal matrices" begin
     D = Diagonal([[1 2; 3 4], [1 2; 3 4]])
+    @test diag(D,1) == [zeros(Int,2,2)]
+    @test diag(D) == [[1 2; 3 4], [1 2; 3 4]]
+    @test diag(D,-1) == [zeros(Int,2,2)]
     Dherm = Diagonal([[1 1+im; 1-im 1], [1 1+im; 1-im 1]])
     Dsym = Diagonal([[1 1+im; 1+im 1], [1 1+im; 1+im 1]])
     @test adjoint(D) == Diagonal([[1 3; 2 4], [1 3; 2 4]])
@@ -761,6 +764,11 @@ end
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
     end
+
+    D = Diagonal([[1 2 3; 4 5 6], [1 2; 4 5]])
+    @test (@inferred diag(D,1)) == [zeros(Int,2,2)]
+    @test (@inferred diag(D,-1)) == [zeros(Int,2,3)]
+    @test (@inferred diag(D,2)) == Vector{Matrix{Int}}[]
 end
 
 @testset "linear solve for block diagonal matrices" begin
