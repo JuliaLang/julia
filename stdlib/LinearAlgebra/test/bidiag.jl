@@ -776,9 +776,9 @@ using .Main.ImmutableArrays
 end
 
 @testset "block-bidiagonal matrix indexing" begin
-    dv = [ones(4,3), ones(2,2).*2, ones(2,3).*3, ones(4,4).*4]
-    evu = [ones(4,2), ones(2,3).*2, ones(2,4).*3]
-    evl = [ones(2,3), ones(2,2).*2, ones(4,3).*3]
+    dv = [ones(4,3), fill(2.0,2,2), fill(3.0,2,3), fill(4.0,4,4)]
+    evu = [ones(4,2), fill(2.0,2,3), fill(3.0,2,4)]
+    evl = [ones(2,3), fill(3.0,2,2), fill(3.0,4,3)]
     BU = Bidiagonal(dv, evu, :U)
     BL = Bidiagonal(dv, evl, :L)
     # check that all the matrices along a column have the same number of columns,
@@ -797,6 +797,12 @@ end
             @test iszero(BL[i,j])
         end
     end
+
+    @test diag(BU, -3) == [zeros(4,3)]
+    @test diag(BU, -2) == [zeros(2,3), zeros(4,2)]
+    @test diag(BU, -1) == [zeros(2,3), zeros(2,2), zeros(4,3)]
+    @test diag(BU, 2) == [zeros(4,3), zeros(2,4)]
+    @test diag(BU, 3) == [zeros(4,4)]
 
     M = ones(2,2)
     for n in 0:1

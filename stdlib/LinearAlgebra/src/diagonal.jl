@@ -685,9 +685,9 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
-filldiagzero!(v, D::Diagonal{<:Number}, k) = fill!(v, zero(eltype(D)))
+filldiagzero!(v, D::AbstractMatrix{<:Number}, k) = fill!(v, zero(eltype(D)))
 
-function filldiagzero!(v, D::Diagonal, k)
+function filldiagzero!(v, D::AbstractMatrix, k)
     dinds = diagind(D,k)
     for i in eachindex(v)
         v[i] = D[dinds[i]]
