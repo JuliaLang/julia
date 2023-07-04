@@ -118,8 +118,8 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
-function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
+diagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
+function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     Tel = eltype(eltype(A.dv))
     if i < j && A.uplo == 'U' #= top right zeros =#
         return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
@@ -152,7 +152,7 @@ end
     elseif A.uplo == 'L' && (i == j + 1)
         return @inbounds A.ev[j]
     else
-        return bidiagzero(A, i, j)
+        return diagzero(A, i, j)
     end
 end
 

@@ -689,8 +689,14 @@ filldiagzero!(v, D::AbstractMatrix{<:Number}, k) = fill!(v, zero(eltype(D)))
 
 function filldiagzero!(v, D::AbstractMatrix, k)
     dinds = diagind(D,k)
+    length(v) == length(dinds) ||
+        throw(ArgumentError("length of the destination is incompatible with the diagonal"))
+    isempty(dinds) && return v
+    CIstart = CartesianIndices(D)[first(dinds)]
+    Cstep = CartesianIndex(1,1)
     for i in eachindex(v)
-        v[i] = D[dinds[i]]
+        CI = CIstart + (i-firstindex(v)) * Cstep
+        v[i] = diagzero(D, Tuple(CI)...)
     end
     v
 end
