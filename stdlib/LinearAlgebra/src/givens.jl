@@ -417,7 +417,7 @@ function *(G1::Givens{S}, G2::Givens{T}) where {S,T}
     TS = promote_type(T, S)
     Rotation{TS}([convert(AbstractRotation{TS}, G2), convert(AbstractRotation{TS}, G1)])
 end
-function *(G::Givens, Gs::Givens...)
+function *(G::Givens{T}, Gs::Givens{T}...) where {T}
     return Rotation([reverse(Gs)..., G])
 end
 function *(G::Givens{S}, R::Rotation{T}) where {S,T}
