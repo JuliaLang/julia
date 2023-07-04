@@ -2329,8 +2329,8 @@ end
 end
 
 @testset "IdentityUnitRange" begin
-    @test parent(IdentityUnitRange(2:3)) === 2:3
-    @test parent(IdentityUnitRange(Base.OneTo(3))) === Base.OneTo(3)
+    @test parent(Base.IdentityUnitRange(2:3)) === 2:3
+    @test parent(Base.IdentityUnitRange(Base.OneTo(3))) === Base.OneTo(3)
 end
 
 @testset "Indexing OneTo with IdentityUnitRange" begin
