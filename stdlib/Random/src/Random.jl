@@ -327,8 +327,6 @@ Pick a random element or array of random elements from the set of values specifi
 
   + `rand(T) + rand(T) * im` for concrete complex types `Complex{T}`
 
-  + `rand(T) // rand(T)` for concrete rational types `Rational{T}`
-
   + a valid Unicode scalar for any `<:AbstractChar` type
 
 * a Tuple type of supported types
@@ -345,7 +343,7 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
     Support for `S` as a tuple requires at least Julia 1.1.
 
 !!! compat "Julia 1.11"
-    Support for `S` as a `Rational` or `Tuple` type requires at least Julia 1.11.
+    Support for `S` as a `Tuple` type requires at least Julia 1.11.
 
 # Examples
 ```julia-repl

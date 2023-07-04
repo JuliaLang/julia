@@ -46,7 +46,7 @@ Standard library changes
 #### Profile
 
 #### Random
-* `rand` now supports sampling over `Rational` types and `Tuple` types ([#50251]).
+* `rand` now supports sampling over `Tuple` types ([#50251]).
 
 #### REPL
 
