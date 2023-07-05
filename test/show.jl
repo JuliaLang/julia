@@ -2630,3 +2630,8 @@ end
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
 end
+
+let buf = IOBuffer()
+    Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
+    @test String(take!(buf)) == "(::Function)(::Any)"
+end
