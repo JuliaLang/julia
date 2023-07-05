@@ -523,6 +523,7 @@ end
     @test convert(Second, Minute(1) + Second(30)) === Second(90)
     @test convert(Minute, Minute(1) + Second(60)) === Minute(2)
     @test convert(Millisecond, Minute(1) + Second(30)) === Millisecond(90_000)
+    @test convert(Millisecond,  Dates.CompoundPeriod()) === Millisecond(0)
     @test_throws InexactError convert(Minute, Minute(1) + Second(30))
     @test_throws MethodError convert(Month, Minute(1) + Second(30))
     @test_throws MethodError convert(Second, Month(1) + Second(30))
