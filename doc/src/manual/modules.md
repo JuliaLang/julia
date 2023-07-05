@@ -363,7 +363,6 @@ Consider the following example, where the submodule `SubA` defines a function, w
 
 ```jldoctest module_manual
 julia> module ParentModule
-
          module SubA
             export add_D  # exported interface
             const D = 3
@@ -378,9 +377,7 @@ julia> module ParentModule
             struct Infinity end
             add_D(x::Infinity) = x
          end
-
        end;
-
 ```
 
 You may see code in packages, which, in a similar situation, uses
