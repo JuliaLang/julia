@@ -59,6 +59,7 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+precompile(Tuple{typeof(Base.Ryu.writefixed), Float64, Int64})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
