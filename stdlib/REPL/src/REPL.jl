@@ -1418,6 +1418,7 @@ function out_transform(@nospecialize(x), n::Ref{Int})
 end
 
 function get_usings!(usings, ex)
+    ex isa Expr || return usings
     # get all `using` and `import` statements which are at the top level
     for (i, arg) in enumerate(ex.args)
         if Base.isexpr(arg, :toplevel)
