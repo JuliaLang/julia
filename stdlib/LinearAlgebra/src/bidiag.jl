@@ -185,7 +185,7 @@ function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = Matrix{T}(undef, n, n)
     n == 0 && return B
-    n > 1 && fill!(B, zero(T))
+    n > 1 && fillzero!(B, A)
     @inbounds for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -207,8 +207,9 @@ promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
 function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
-    z = fill!(similar(ev), zero(T))
-    A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
+    isupper = A.uplo == 'U'
+    z = filldiagzero!(similar(ev), A, isupper ? -1 : 1)
+    isupper ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Tridiagonal{promote_type(T,S)} : Tridiagonal
@@ -340,15 +341,15 @@ function tril!(M::Bidiagonal{T}, k::Integer=0) where T
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
-        fill!(M.dv, zero(T))
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.dv, M, 0)
+        filldiagzero!(M.ev, M, 1)
     elseif k < -1
-        fill!(M.dv, zero(T))
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.dv, M, 0)
+        filldiagzero!(M.ev, M, -1)
     elseif M.uplo == 'U' && k == 0
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.ev, M, 1)
     elseif M.uplo == 'L' && k == -1
-        fill!(M.dv, zero(T))
+        filldiagzero!(M.dv, M, 0)
     end
     return M
 end
@@ -359,15 +360,15 @@ function triu!(M::Bidiagonal{T}, k::Integer=0) where T
         throw(ArgumentError(string("the requested diagonal, $k, must be at least",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
-        fill!(M.dv, zero(T))
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.dv, M, 0)
+        filldiagzero!(M.ev, M, -1)
     elseif k > 1
-        fill!(M.dv, zero(T))
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.dv, M, 0)
+        filldiagzero!(M.ev, M, 1)
     elseif M.uplo == 'L' && k == 0
-        fill!(M.ev, zero(T))
+        filldiagzero!(M.ev, M, -1)
     elseif M.uplo == 'U' && k == 1
-        fill!(M.dv, zero(T))
+        filldiagzero!(M.dv, M, 0)
     end
     return M
 end

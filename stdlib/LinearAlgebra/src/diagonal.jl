@@ -109,10 +109,20 @@ Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
+
+function fillzero!(B, D)
+    B .= zero.(D)
+    return B
+end
+function fillzero!(B, D::AbstractMatrix{<:Number})
+    B .= zero(eltype(D))
+    return B
+end
+
 function Matrix{T}(D::Diagonal) where {T}
     n = size(D, 1)
     B = Matrix{T}(undef, n, n)
-    n > 1 && fill!(B, zero(T))
+    n > 1 && fillzero!(B, D)
     @inbounds for i in 1:n
         B[i,i] = D.diag[i]
     end
@@ -159,6 +169,7 @@ end
     end
     r
 end
+diagzero(A::AbstractMatrix, ind::CartesianIndex{2}) = diagzero(A, Tuple(ind)...)
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
@@ -204,7 +215,7 @@ function triu!(D::Diagonal{T}, k::Integer=0) where T
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
-        fill!(D.diag, zero(T))
+        filldiagzero!(D.diag, D, 0)
     end
     return D
 end
@@ -215,7 +226,7 @@ function tril!(D::Diagonal{T}, k::Integer=0) where T
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
-        fill!(D.diag, zero(T))
+        filldiagzero!(D.diag, D, 0)
     end
     return D
 end
@@ -696,7 +707,7 @@ function filldiagzero!(v, D::AbstractMatrix, k)
     Cstep = CartesianIndex(1,1)
     for i in eachindex(v)
         CI = CIstart + (i-firstindex(v)) * Cstep
-        v[i] = diagzero(D, Tuple(CI)...)
+        v[i] = diagzero(D, CI)
     end
     v
 end

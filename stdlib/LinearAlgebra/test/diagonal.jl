@@ -769,6 +769,14 @@ end
     @test (@inferred diag(D,1)) == [zeros(Int,2,2)]
     @test (@inferred diag(D,-1)) == [zeros(Int,2,3)]
     @test (@inferred diag(D,2)) == Vector{Matrix{Int}}[]
+
+    @test tril!(D,0) == tril!(D,1) == D
+    @test triu!(D,0) == triu!(D,-1) == D
+    tril!(D,-1)
+    @test all(iszero, D)
+    D = Diagonal([[1 2 3; 4 5 6], [1 2; 4 5]])
+    triu!(D,1)
+    @test all(iszero, D)
 end
 
 @testset "linear solve for block diagonal matrices" begin

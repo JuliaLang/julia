@@ -15,9 +15,7 @@ Diagonal(A::Bidiagonal) = Diagonal(A.dv)
 SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-Tridiagonal(A::Bidiagonal) =
-    Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
-                A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
+Tridiagonal(A::Bidiagonal) = Tridiagonal{eltype(A)}(A)
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
