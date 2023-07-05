@@ -461,25 +461,40 @@ end
 @testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
+    TI = Union{Symmetric{Int64, Matrix{Int64}}, Matrix{Int64}}
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
-    @test @inferred A[1,1] == Symmetric(M)
-    @test @inferred A[1,2] == M
-    @test @inferred A[2,1] == transpose(M)
-    @test @inferred diag(A, 1) == fill(M, n-1)
-    @test @inferred diag(A, 0) == fill(Symmetric(M), n)
-    @test @inferred diag(A, -1) == fill(transpose(M), n-1)
+    @test (@inferred TI A[1,1]) == Symmetric(M)
+    @test (@inferred TI A[1,2]) == M
+    @test (@inferred TI A[2,1]) == transpose(M)
+    @test iszero(@inferred TI A[1,3])
+    @test (@inferred diag(A, 1)) == fill(M, n-1)
+    @test (@inferred diag(A, 0)) == fill(Symmetric(M), n)
+    @test (@inferred diag(A, -1)) == fill(transpose(M), n-1)
     @test_throws ArgumentError diag(A, -2)
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
 
+    U = UpperTriangular(M)
+    A = SymTridiagonal(fill(U, n), fill(U, n-1))
+    TI = Union{LowerTriangular{Int64, Matrix{Int64}},
+                Symmetric{Int64, UpperTriangular{Int64, Matrix{Int64}}},
+                UpperTriangular{Int64, Matrix{Int64}}}
+
+    @test (@inferred TI A[1,1]) == Symmetric(U)
+    @test (@inferred TI A[1,2]) == U
+    @test (@inferred TI A[2,1]) == transpose(U)
+    @test (@inferred TI A[1,3]) == zero(U)
+    @test (@inferred TI A[3,1]) == zero(transpose(U))
+
     A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
-    @test @inferred A[1,1] == M
-    @test @inferred A[1,2] == M
-    @test @inferred A[2,1] == M
-    @test @inferred diag(A, 1) == fill(M, n-1)
-    @test @inferred diag(A, 0) == fill(M, n)
-    @test @inferred diag(A, -1) == fill(M, n-1)
+    @test (@inferred A[1,1]) == M
+    @test (@inferred A[1,2]) == M
+    @test (@inferred A[2,1]) == M
+    @test iszero(@inferred TI A[1,3])
+    @test (@inferred diag(A, 1)) == fill(M, n-1)
+    @test (@inferred diag(A, 0)) == fill(M, n)
+    @test (@inferred diag(A, -1)) == fill(M, n-1)
     @test_throws MethodError diag(A, -2)
     @test_throws MethodError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
