@@ -493,8 +493,7 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-# duck-type s so that external UTF-8 string packages like StringViews can hook in
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s, i::Int, n::Int, c::Int)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true
