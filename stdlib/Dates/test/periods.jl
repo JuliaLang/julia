@@ -343,6 +343,15 @@ end
     @test Dates.days(Dates.Hour(24)) == 1
     @test Dates.days(d) == 1
     @test Dates.days(w) == 7
+
+    @test Dates.seconds(ns) == 0.000000001
+    @test Dates.seconds(us) == 0.000001
+    @test Dates.seconds(ms) == 0.001
+    @test Dates.seconds(s) == 1
+    @test Dates.seconds(mi) == 60
+    @test Dates.seconds(h) == 3600
+    @test Dates.seconds(d) == 86400
+    @test Dates.seconds(w) == 604800
 end
 @testset "issue #9214" begin
     @test 2s + (7ms + 1ms) == (2s + 7ms) + 1ms == 1ms + (2s + 7ms) == 1ms + (1s + 7ms) + 1s == 1ms + (2s + 3d + 7ms) + (-3d) == (1ms + (2s + 3d)) + (7ms - 3d) == (1ms + (2s + 3d)) - (3d - 7ms)
