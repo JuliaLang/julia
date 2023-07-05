@@ -1057,8 +1057,10 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
             if (nxt)
                 nxt->prev = pv;
             gc_num.freed += v->sz&~3;
-            jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, v->sz&~3);
-            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(v->sz&~3));
+            jl_atomic_store_relaxed(&gc_heap_stats.malloc_bytes_freed,
+                jl_atomic_load_relaxed(&gc_heap_stats.malloc_bytes_freed) + (v->sz&~3));
+            jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
+                jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - (v->sz&~3));
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
@@ -1194,6 +1196,10 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
+        jl_atomic_store_relaxed(&gc_heap_stats.malloc_bytes_freed,
+            jl_atomic_load_relaxed(&gc_heap_stats.malloc_bytes_freed) + jl_array_nbytes(a));
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
+            jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - jl_array_nbytes(a));
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.malloc_bytes_freed, jl_array_nbytes(a));
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -jl_array_nbytes(a));
         gc_num.freed += jl_array_nbytes(a);
