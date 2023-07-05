@@ -110,12 +110,12 @@ AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 
-function fillzero!(B, D)
+function fillzero!(B, D::AbstractMatrix{<:AbstractMatrix})
     B .= zero.(D)
     return B
 end
-function fillzero!(B, D::AbstractMatrix{<:Number})
-    B .= zero(eltype(D))
+function fillzero!(B, D)
+    fill!(B, zero(eltype(B)))
     return B
 end
 
@@ -696,9 +696,9 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
-filldiagzero!(v, D::AbstractMatrix{<:Number}, k) = fill!(v, zero(eltype(D)))
+filldiagzero!(v, D::AbstractMatrix, k) = fill!(v, zero(eltype(D)))
 
-function filldiagzero!(v, D::AbstractMatrix, k)
+function filldiagzero!(v, D::AbstractMatrix{<:AbstractMatrix}, k)
     dinds = diagind(D,k)
     length(v) == length(dinds) ||
         throw(ArgumentError("length of the destination is incompatible with the diagonal"))
