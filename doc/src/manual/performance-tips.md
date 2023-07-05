@@ -367,7 +367,7 @@ struct MyCallableWrapper
 end
 ```
 
-But since `Function` is an abstract type, every call to `wrapper.f` will be very inefficient.
+But since `Function` is an abstract type, every call to `wrapper.f` will require dynamic dispatch, due to the type instability of accessing the field `f`.
 Instead, you should write:
 
 ```julia
@@ -376,8 +376,8 @@ struct MyCallableWrapper{F<:Function}
 end
 ```
 
-which has nearly identical behavior but will be much faster.
-Note that the constraint `F<:Function` is not necessary, and prevents the user from providing a callable object that does not subtype `Function`.
+which has nearly identical behavior but will be much faster (because the type instability is eliminated).
+Note that the constraint `F<:Function` is not necessary, and even counterproductive: indeed, it prevents the user from providing a callable object that does not subtype `Function`.
 Therefore, the following pattern is probably the best:
 
 ```julia
