@@ -232,6 +232,15 @@ Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? isassigned(A.data, i, j) : true
 
+Base.isstored(A::UnitLowerTriangular, i::Int, j::Int) =
+    i > j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::LowerTriangular, i::Int, j::Int) =
+    i >= j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
+    i < j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::UpperTriangular, i::Int, j::Int) =
+    i <= j ? Base.isstored(A.data, i, j) : false
+
 getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::LowerTriangular, i::Integer, j::Integer) =
