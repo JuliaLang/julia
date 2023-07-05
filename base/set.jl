@@ -428,6 +428,8 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
+`allunique` is much more efficient when the input is sorted
+
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
