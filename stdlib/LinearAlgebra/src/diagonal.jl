@@ -150,6 +150,16 @@ end
     r
 end
 
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, D, i, j) || return false
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
+end
+
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
@@ -161,8 +171,6 @@ end
 end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
-
-Base.isstored(D::Diagonal, i::Int, j::Int) = i == j ? Base.isstored(D.diag,i) : false
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
