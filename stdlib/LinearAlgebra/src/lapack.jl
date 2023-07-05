@@ -6941,4 +6941,48 @@ Returns `X` (overwriting `C`) and `scale`.
 """
 trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
 
+# Routines for column permutation
+for (fn, elty) in ((:slapmt_, :Float32),
+                (:dlapmt_, :Float64),
+                (:clapmt_, :ComplexF32),
+                (:zlapmt_, :ComplexF64))
+    @eval begin
+        function lapmt!(A::AbstractMatrix{$elty}, p::AbstractVector{<:BlasInt}, fb::Bool)
+            require_one_based_indexing(A)
+            chkstride1(A)
+            m, n = size(A)
+            lda = max(1, stride(A, 2))
+            lp = length(p)
+            if n != lp
+                throw(DimensionMismatch("The second dimension of A, ($m,$n), and P, ($lp), must match"))
+            end
+            ccall((@blasfunc($fn), libblastrampoline), Cvoid,
+            (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{Float64}, Ref{BlasInt}, Ptr{BlasInt}),
+            fb, m, n, A, lda, p) ;
+        end
+    end
+end
+
+# Routines for row permutation
+for (fn, elty) in ((:slapmr_, :Float32),
+                (:dlapmr_, :Float64),
+                (:clapmr_, :ComplexF32),
+                (:zlapmr_, :ComplexF64))
+    @eval begin
+        function lapmr!(A::AbstractMatrix{$elty}, p::AbstractVector{<:BlasInt}, fb::Bool)
+            require_one_based_indexing(A)
+            chkstride1(A)
+            m, n = size(A)
+            lda = max(1, stride(A, 2))
+            lp = length(p)
+            if n != lp
+                throw(DimensionMismatch("The second dimension of A, ($m,$n), and P, ($lp), must match"))
+            end
+            ccall((@blasfunc($fn), libblastrampoline), Cvoid,
+            (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{Float64}, Ref{BlasInt}, Ptr{BlasInt}),
+            fb, m, n, A, lda, p) ;
+        end
+    end
+end
+
 end # module
