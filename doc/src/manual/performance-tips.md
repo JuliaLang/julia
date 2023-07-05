@@ -369,13 +369,15 @@ end
 
 But since `Function` is an abstract type, every call to `wrapper.f` will require dynamic dispatch, due to the type instability of accessing the field `f`.
 Instead, you should write something like:
+
 ```julia
 struct MyCallableWrapper{F}
     f::F
 end
 ```
+
 which has nearly identical behavior but will be much faster (because the type instability is eliminated).
-```
+Note that we do not impose `F<:Function`: this means callable objects which do not subtype `Function` are also allowed for the field `f`.
 
 ### Avoid fields with abstract containers
 
