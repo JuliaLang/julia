@@ -1355,3 +1355,14 @@ let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
     @test count(isnew, src.code) == 0
     @test count(iscall((src, typeassert)), src.code) == 0
 end
+
+# Test that we can eliminate new{typeof(x)}(x)
+struct TParamTypeofTest{T}
+    x::T
+    @eval TParamTypeofTest(x) = $(Expr(:new, :(TParamTypeofTest{typeof(x)}), :x))
+end
+function tparam_typeof_test_elim(x)
+    TParamTypeofTest(x).x
+end
+
+@test fully_eliminated(tparam_typeof_test_elim, Tuple{Any})
