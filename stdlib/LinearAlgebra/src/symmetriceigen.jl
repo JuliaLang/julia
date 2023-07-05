@@ -233,9 +233,26 @@ end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    eigvals!(copy(A), B; sortby)
+end
+function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal}
+    LAPACK.lapmt!(A, B.p, true)
+    LAPACK.lapmr!(A, B.p, true)
+    S = SymTridiagonal(B.D.d, B.D.du)
     if B.uplo == 'U'
-        return eigvals!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.U')); sortby)
+        return eigvals!(ldiv!(S, UtiAUi!(A, B.U')); sortby)
     else # B.uplo == 'L'
-        return eigvals!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.L')); sortby)
+        return eigvals!(ldiv!(S, UtiAUi!(A, B.L')); sortby)
+    end
+end
+function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex}
+    LAPACK.lapmt!(A, B.p, true)
+    LAPACK.lapmr!(A, B.p, true)
+    D = Diagonal(exp.(im*cumsum([0;angle.(B.D.du)])))
+    S = SymTridiagonal(real(B.D.d), abs.(B.D.du))
+    if B.uplo == 'U'
+        return eigvals!(ldiv!(S, UtiAUi!(A, D*B.U')); sortby)
+    else # B.uplo == 'L'
+        return eigvals!(ldiv!(S, UtiAUi!(A, D*B.L')); sortby)
     end
 end
