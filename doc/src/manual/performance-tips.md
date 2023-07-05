@@ -358,6 +358,34 @@ julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isc
 ```
 In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
 
+The previous advice is especially useful when the fields of a struct are meant to be functions, or more generally callable objects.
+It is very tempting to define a struct as follows:
+
+```julia
+struct MyCallableWrapper
+    f::Function
+end
+```
+
+But since `Function` is an abstract type, every call to `wrapper.f` will be very inefficient.
+Instead, you should write:
+
+```julia
+struct MyCallableWrapper{F<:Function}
+    f::F
+end
+```
+
+which has nearly identical behavior but will be much faster.
+Note that the constraint `F<:Function` is not necessary, and prevents the user from providing a callable object that does not subtype `Function`.
+Therefore, the following pattern is probably the best:
+
+```julia
+struct MyCallableWrapper{F}
+    f::F  # document somewhere that this needs to be callable
+end
+```
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
