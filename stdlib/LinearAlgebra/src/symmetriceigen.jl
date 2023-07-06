@@ -238,21 +238,20 @@ end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal}
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    S = SymTridiagonal(B.D.d, B.D.du)
-    if B.uplo == 'U'
-        return eigvals!(ldiv!(S, _UtiAUi!(A, B.U')); sortby)
-    else # B.uplo == 'L'
-        return eigvals!(ldiv!(S, _UtiAUi!(A, B.L')); sortby)
-    end
+    M = (B.uplo == 'U') ? B.U : B.L ;
+    LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    LAPACK.gtsv!(B.D.dl, B.D.d, B.D.dl, A)
+    return eigvals!(A; sortby)
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex}
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    D = Diagonal(exp.(im*cumsum([0;angle.(B.D.du)])))
-    S = SymTridiagonal(real(B.D.d), abs.(B.D.du))
-    if B.uplo == 'U'
-        return eigvals!(ldiv!(S, _UtiAUi!(A, D*B.U')); sortby)
-    else # B.uplo == 'L'
-        return eigvals!(ldiv!(S, _UtiAUi!(A, D*B.L')); sortby)
-    end
+    D = Diagonal(exp.(im*cumsum([0;angle.(B.D.dl)])))
+    M = (B.uplo == 'U') ? triu!(B.U) : tril!(B.L) ;
+    mul!(M, M, D)
+    LAPACK.trtrs!(B.uplo, 'N', 'N', M.data, A)
+    BLAS.trsm!('R', B.uplo , 'C', 'N', one(T), M.data, A)
+    LAPACK.gtsv!(complex.(abs.(B.D.dl)), B.D.d, complex.(abs.(B.D.dl)), A)
+    return eigvals!(A; sortby)
 end
