@@ -915,16 +915,18 @@ end
 (x::IsEgal)(@nospecialize(y)) = x.x === y
 
 # This tries to match patterns of the form
-#  %ft = typeof(x)
-#  %T = apply_type(Foo, ft)
-#  %x = new(%T, %x)
+#  %ft   = typeof(%farg)
+#  %Targ = apply_type(Foo, ft)
+#  %x    = new(%Targ, %farg)
 #
 # and if possible refines the nothrowness of the new expr based on it.
-function pattern_match_typeof(compact, typ, fidx, Targ, farg)
+function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
+                              @nospecialize(Targ), @nospecialize(farg))
     isa(Targ, SSAValue) || return false
 
     Tdef = compact[Targ][:inst]
     is_known_call(Tdef, Core.apply_type, compact) || return false
+    length(Tdef.args) ≥ 2 || return false
 
     applyT = argextype(Tdef.args[2], compact)
     isa(applyT, Const) || return false
@@ -937,10 +939,11 @@ function pattern_match_typeof(compact, typ, fidx, Targ, farg)
         push!(tvars, applyTvar)
     end
 
-    @assert applyT.name === typ.name
+    applyT.name === typ.name || return false
     fT = fieldtype(applyT, fidx)
     idx = findfirst(IsEgal(fT), tvars)
     idx === nothing && return false
+    checkbounds(Bool, Tdef.args, 2+idx) || return false
     valarg = Tdef.args[2+idx]
     isa(valarg, SSAValue) || return false
     valdef = compact[valarg][:inst]
@@ -949,7 +952,7 @@ function pattern_match_typeof(compact, typ, fidx, Targ, farg)
     return valdef.args[2] === farg
 end
 
-function nothrow_new_pattern_match!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
         compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
@@ -1091,7 +1094,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
-                nothrow_new_pattern_match!(𝕃ₒ, compact, idx, stmt)
+                refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
         end

@@ -235,12 +235,12 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     fcount = datatype_fieldcount(typ)
     fcount === nothing && return (false, false, false)
     fcount >= length(args) - 1 || return (false, false, false)
-    for fld_idx in 1:(length(args) - 1)
-        farg = args[fld_idx + 1]
+    for fidx in 1:(length(args) - 1)
+        farg = args[fidx + 1]
         eT = argextype(farg, src)
-        fT = fieldtype(typ, fld_idx)
+        fT = fieldtype(typ, fidx)
         if !isexact && has_free_typevars(fT)
-            if pattern_match !== nothing && pattern_match(src, typ, fld_idx, Targ, farg)
+            if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
                 continue
             end
             return (false, false, false)
