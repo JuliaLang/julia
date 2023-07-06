@@ -3,13 +3,12 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
-abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
+abstract type AbstractTriangular{T} <: AbstractMatrix{T} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
-for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
-          :UnitUpperTriangular)
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T}
             data::S
 
             function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
@@ -854,9 +853,9 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
     end
 end
 
-errorbounds(A::AbstractTriangular{T,<:AbstractMatrix}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
+errorbounds(A::AbstractTriangular{T}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
-function errorbounds(A::AbstractTriangular{TA,<:AbstractMatrix}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
+function errorbounds(A::AbstractTriangular{TA}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
