@@ -1357,12 +1357,17 @@ let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
 end
 
 # Test that we can eliminate new{typeof(x)}(x)
-struct TParamTypeofTest{T}
+struct TParamTypeofTest1{T}
     x::T
-    @eval TParamTypeofTest(x) = $(Expr(:new, :(TParamTypeofTest{typeof(x)}), :x))
+    @eval TParamTypeofTest1(x) = $(Expr(:new, :(TParamTypeofTest1{typeof(x)}), :x))
 end
-function tparam_typeof_test_elim(x)
-    TParamTypeofTest(x).x
-end
+tparam_typeof_test_elim1(x) = TParamTypeofTest1(x).x
+@test fully_eliminated(tparam_typeof_test_elim1, Tuple{Any})
 
-@test fully_eliminated(tparam_typeof_test_elim, Tuple{Any})
+struct TParamTypeofTest2{S,T}
+    x::S
+    y::T
+    @eval TParamTypeofTest2(x, y) = $(Expr(:new, :(TParamTypeofTest2{typeof(x),typeof(y)}), :x, :y))
+end
+tparam_typeof_test_elim2(x, y) = TParamTypeofTest2(x, y).x
+@test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any})
