@@ -461,7 +461,7 @@ end
 @testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
-    TI = Union{Symmetric{Int64, Matrix{Int64}}, Matrix{Int64}}
+    TI = Union{typeof(Symmetric(M)), typeof(M)}
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
     @test (@inferred TI A[1,1]) == Symmetric(M)
     @test (@inferred TI A[1,2]) == M
@@ -477,9 +477,7 @@ end
 
     U = UpperTriangular(M)
     A = SymTridiagonal(fill(U, n), fill(U, n-1))
-    TI = Union{LowerTriangular{Int64, Matrix{Int64}},
-                Symmetric{Int64, UpperTriangular{Int64, Matrix{Int64}}},
-                UpperTriangular{Int64, Matrix{Int64}}}
+    TI = Union{typeof(U), typeof(Symmetric(U)),typeof(LowerTriangular(M))}
 
     @test (@inferred TI A[1,1]) == Symmetric(U)
     @test (@inferred TI A[1,2]) == U
