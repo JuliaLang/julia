@@ -563,6 +563,12 @@ function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
+function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, PhiNode) && return def.values
+    is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
+    return nothing
+end
+
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
@@ -573,12 +579,8 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
 
-    predecessors = function (@nospecialize(def), compact::IncrementalCompact)
-        isa(def, PhiNode) && return def.values
-        is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
-        return nothing
-    end
-    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, predecessors)
+
+    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
@@ -730,7 +732,7 @@ function perform_lifting!(compact::IncrementalCompact,
             new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
             new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
 
-            ssa = insert_node!(compact, old_ssa, new_inst)
+            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
         end
         # lifting_cache[ckey] = ssa
@@ -766,6 +768,21 @@ function perform_lifting!(compact::IncrementalCompact,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
             else_result = lifted_value(compact, old_node_ssa, else_result,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
+
+            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
+            # to a PiNode from a guarding conditional, replace with the remaining branch.
+            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
+                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
+
+                # Replace Core.ifelse(%cond, %a, %b) with %a
+                compact[lf.ssa][:inst] = only_result
+                should_count && _count_added_node!(compact, only_result)
+
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # we have not deleted the preceding statement that this was derived from, this
+                # replacement is safe, i.e. it will not affect the effects observed.
+                continue
+            end
 
             @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
             @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
@@ -1078,11 +1095,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         # perform SROA on immutable structs here on
-
         field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
-        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
+        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
         isempty(leaves) && continue
 
         lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)
@@ -1510,8 +1526,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 idx == newidx && continue # this is allocation
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 ssa = SSAValue(idx)
-                is_nothrow(ir, ssa) || continue
-                ir[ssa][:inst] = nothing
+                if is_nothrow(ir, ssa)
+                    ir[ssa][:inst] = nothing
+                else
+                    # We can't eliminate this statement, because it might still
+                    # throw an error, but we can mark it as effect-free since we
+                    # know we have removed all uses of the mutable allocation.
+                    # As a result, if we ever do prove nothrow, we can delete
+                    # this statement then.
+                    ir[ssa][:flag] |= IR_FLAG_EFFECT_FREE
+                end
             end
         end
         preserve_uses === nothing && continue

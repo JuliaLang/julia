@@ -349,20 +349,34 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 {
     size_t from = s->ip;
     size_t ip = to;
-    unsigned nphi = 0;
+    unsigned nphiblockstmts = 0;
     for (ip = to; ip < ns; ip++) {
         jl_value_t *e = jl_array_ptr_ref(stmts, ip);
-        if (!jl_is_phinode(e))
-            break;
-        nphi += 1;
+        if (!jl_is_phinode(e)) {
+            if (jl_is_expr(e) || jl_is_returnnode(e) || jl_is_gotoifnot(e) ||
+                jl_is_gotonode(e) || jl_is_phicnode(e) || jl_is_upsilonnode(e) ||
+                jl_is_ssavalue(e)) {
+                break;
+            }
+            // Everything else is allowed in the phi-block for implementation
+            // convenience - fall through.
+        }
+        nphiblockstmts += 1;
     }
-    if (nphi) {
+    if (nphiblockstmts) {
         jl_value_t **dest = &s->locals[jl_source_nslots(s->src) + to];
-        jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphi);
-        JL_GC_PUSHARGS(phis, nphi);
-        for (unsigned i = 0; i < nphi; i++) {
+        jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphiblockstmts);
+        JL_GC_PUSHARGS(phis, nphiblockstmts);
+        for (unsigned i = 0; i < nphiblockstmts; i++) {
             jl_value_t *e = jl_array_ptr_ref(stmts, to + i);
-            assert(jl_is_phinode(e));
+            if (!jl_is_phinode(e)) {
+                // IR verification guarantees that the only thing that gets
+                // evaluated here are constants, so it doesn't matter if we
+                // update the locals or the phis, but let's be consistent
+                // for simplicity.
+                phis[i] = eval_value(e, s);
+                continue;
+            }
             jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
             ssize_t edge = -1;
             size_t closest = to; // implicit edge has `to <= edge - 1 < to + i`
@@ -405,7 +419,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
                 i -= n_oldphi;
                 dest += n_oldphi;
                 to += n_oldphi;
-                nphi -= n_oldphi;
+                nphiblockstmts -= n_oldphi;
             }
             if (edge != -1) {
                 // if edges list doesn't contain last branch, or the value is explicitly undefined
@@ -418,7 +432,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             phis[i] = val;
         }
         // now move all phi values to their position in edges
-        for (unsigned j = 0; j < nphi; j++) {
+        for (unsigned j = 0; j < nphiblockstmts; j++) {
             dest[j] = phis[j];
         }
         JL_GC_POP();

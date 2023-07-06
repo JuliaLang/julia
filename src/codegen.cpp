@@ -7271,6 +7271,7 @@ static jl_llvm_functions_t
     // allocate Function declarations and wrapper objects
     //Safe because params holds ctx lock
     Module *M = TSM.getModuleUnlocked();
+    M->addModuleFlag(Module::Warning, "julia.debug_level", ctx.emission_context.debug_level);
     jl_debugcache_t debuginfo;
     debuginfo.initialize(M);
     jl_returninfo_t returninfo = {};
