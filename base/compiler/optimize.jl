@@ -215,6 +215,41 @@ is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
 is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
+function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
+    Targ = args[1]
+    atyp = argextype(Targ, src)
+    # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    typ, isexact = instanceof_tfunc(atyp)
+    if !isexact
+        atyp = unwrap_unionall(widenconst(atyp))
+        if isType(atyp) && isTypeDataType(atyp.parameters[1])
+            typ = atyp.parameters[1]
+        else
+            return (false, false, false)
+        end
+        isabstracttype(typ) && return (false, false, false)
+    else
+        isconcretedispatch(typ) || return (false, false, false)
+    end
+    typ = typ::DataType
+    fcount = datatype_fieldcount(typ)
+    fcount === nothing && return (false, false, false)
+    fcount >= length(args) - 1 || return (false, false, false)
+    for fidx in 1:(length(args) - 1)
+        farg = args[fidx + 1]
+        eT = argextype(farg, src)
+        fT = fieldtype(typ, fidx)
+        if !isexact && has_free_typevars(fT)
+            if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
+                continue
+            end
+            return (false, false, false)
+        end
+        ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
+    end
+    return (false, true, true)
+end
+
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
         (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
@@ -264,36 +299,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            atyp = argextype(args[1], src)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(atyp)
-            if !isexact
-                atyp = unwrap_unionall(widenconst(atyp))
-                if isType(atyp) && isTypeDataType(atyp.parameters[1])
-                    typ = atyp.parameters[1]
-                else
-                    return (false, false, false)
-                end
-                isabstracttype(typ) && return (false, false, false)
-            else
-                isconcretedispatch(typ) || return (false, false, false)
-            end
-            typ = typ::DataType
-            fcount = datatype_fieldcount(typ)
-            fcount === nothing && return (false, false, false)
-            fcount >= length(args) - 1 || return (false, false, false)
-            for fld_idx in 1:(length(args) - 1)
-                eT = argextype(args[fld_idx + 1], src)
-                fT = fieldtype(typ, fld_idx)
-                # Currently, we cannot represent any type equality constraints
-                # in the lattice, so if we see any type of type parameter,
-                # there is very little we can say about it
-                if !isexact && has_free_typevars(fT)
-                    return (false, false, false)
-                end
-                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
-            end
-            return (false, true, true)
+            return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
             effects = foreigncall_effects(stmt) do @nospecialize x
                 argextype(x, src)
