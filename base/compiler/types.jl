@@ -300,7 +300,7 @@ function OptimizationParams(
         #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
-        #=trust_inference::Bool=# false,
+        #=trust_inference::Bool=# true,
         #=assume_fatal_throw::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
