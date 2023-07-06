@@ -184,15 +184,20 @@ function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
 function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    # Bunchkaufman decomposition based eigenvalues and eigenvectors
-    if B.uplo == 'U'
-        vals, w = eigen!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.U')); sortby)
-        vecs = (B.U' \ w)[invperm(B.p),:]
-    else # B.uplo == 'L'
-        vals, w = eigen!(ldiv(lu!(copy(B.D)), UtiAUi!(A[B.p,B.p], B.L')); sortby)
-        vecs = (B.L' \ w)[invperm(B.p),:]
-    end
+    eigen!(copy(A), B; sortby)
+end
+function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    LAPACK.lapmt!(A, B.p, true)
+    LAPACK.lapmr!(A, B.p, true)
+    M = (B.uplo == 'U') ? B.U : B.L ;
+    LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    LAPACK.gtsv!(B.D.dl, B.D.d, B.D.du, A)
+    vals, vecs = eigen!(A; sortby)
+    LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), M.data), vecs)
+    LAPACK.lapmr!(vecs, invperm(B.p), true)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
