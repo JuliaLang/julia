@@ -3819,6 +3819,18 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
         }
+        else if (fld.typ == (jl_value_t*)jl_symbol_type) {
+            if (jl_is_datatype(utt) && !jl_is_namedtuple_type(utt)) { // TODO: Look into this for NamedTuple
+                if (jl_struct_try_layout(utt) && (jl_datatype_nfields(utt) == 1)) {
+                    jl_svec_t *fn = jl_field_names(utt);
+                    assert(jl_svec_len(fn) == 1);
+                    Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
+                    error_unless(ctx, ctx.builder.CreateICmpEQ(decay_derived(ctx, typ_sym), decay_derived(ctx, fld.V)), "wrong field name ");
+                    *ret = emit_getfield_knownidx(ctx, obj, 0, utt, order);
+                    return true;
+                }
+            }
+        }
         // TODO: generic getfield func with more efficient calling convention
         return false;
     }
