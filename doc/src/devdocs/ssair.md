@@ -46,7 +46,7 @@ In this example, we can see all of these changes.
 └──      goto #3 if not %2
 ```
 2. The `if` statement is translated into `goto #3 if not %2` which goes to the 3rd basic block if `x>5` isn't met and otherwise goes to the second basic block.
-3. `%2` is a SSA value introduced to represent `x > 5`.
+3. `%2` is an SSA value introduced to represent `x > 5`.
 
 ## Background
 
