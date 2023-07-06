@@ -25,6 +25,7 @@ struct GC_Num
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
     last_full_sweep ::Int64
+    last_incremental_sweep ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
