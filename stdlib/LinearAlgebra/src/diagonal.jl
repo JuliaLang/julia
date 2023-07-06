@@ -151,7 +151,7 @@ end
 end
 
 @inline function Base.isstored(D::Diagonal, i::Int, j::Int)
-    @boundscheck checkbounds(A, i, j)
+    @boundscheck checkbounds(D, i, j)
     if i == j
         @inbounds r = Base.isstored(D.diag, i)
     else
