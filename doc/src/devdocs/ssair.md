@@ -3,7 +3,6 @@
 Julia uses a static single assignment intermediate representation ([SSA IR](https://en.wikipedia.org/wiki/Static_single-assignment_form)) to perform optimization.
 This IR is different from LLVM IR, and unique to Julia.
 It allows for Julia specific optimizations.
-The SSA part means that in the IR, every variable is assigned to exactly once and this definition occurs before all uses of the variable. The transformation to IR (SSA conversion only happens after inference) is performed by code lowering, and in this representation there are a few changes worth highlighting.
 
 1. Basic blocks (regions with no control flow) are explicitly annotated.
 2. if/else and loops are turned into `goto` statements.
