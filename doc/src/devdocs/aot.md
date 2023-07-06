@@ -11,7 +11,7 @@ Though Julia normally compiles code just-in-time (JIT), it is possible to compil
 
 ## High-Level Overview
 
-Due to Julia's dynamic nature, AOT compilation is more involved than in other languages.
+The following descriptions are a snapshot of the current implementation details of the end-to-end pipeline that happens internally when the user compiles a new AOT module, such as occurs when they type `using Foo`. These details are likely to change over time as we implement better ways to handle them, so current implementations may not exactly match the dataflow and functions described below.
 
 ### Compiling Code Images
 
@@ -21,9 +21,9 @@ Firstly, the methods that need to be compiled to native code must be identified.
 
     Currently when compiling images, Julia runs the trace generation in a different process than the process performing the AOT compilation. This can have impacts when attempting to use a debugger during precompilation. The best way to debug precompilation with a debugger is to use the rr debugger, record the entire process tree, use `rr ps` to identify the relevant failing process, and then use `rr replay -p PID` to replay just the failing process.
 
-Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods and merges them all into one large LLVM module. `jl_create_system_image` then records some useful information about what codegen produced from the module.
+Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
 
-The module is then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information is then written to a file as an archive.
+The module(s) are then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module(s) to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information is then written to a file as an archive.
 
 The final step is to run a system linker on the object files in the archive produced by `jl_dump_native`. Once this step is complete, a shared library containing the compiled code is produced.
 
@@ -43,7 +43,7 @@ Julia has a command-line flag to record all of the methods that are compiled by 
 
 ### `jl_create_system_image`
 
-`jl_create_system_image` saves all of the Julia-specific metadata necessary to later restore the state of the runtime. This includes data such as code instances, method instances, method tables, and type information. This function also sets up the data structures necessary to serialize the native code to a file. Finally, it calls `jl_create_native` to create an LLVM module containing the native code for the methods passed to it. `jl_create_native` is responsible for running codegen on the methods passed to it and merging the resulting LLVM modules into one large module. 
+`jl_create_system_image` saves all of the Julia-specific metadata necessary to later restore the state of the runtime. This includes data such as code instances, method instances, method tables, and type information. This function also sets up the data structures necessary to serialize the native code to a file. Finally, it calls `jl_create_native` to create one or more LLVM modules containing the native code for the methods passed to it. `jl_create_native` is responsible for running codegen on the methods passed to it.
 
 ### `jl_dump_native`
 
