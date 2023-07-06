@@ -8,7 +8,7 @@ using Test, LinearAlgebra
     ## Cholesky decomposition based
 
     # eigenvalue sorting
-    sf = x->(real(x),imag(x))
+    sf = x->(imag(x),real(x))
 
     ## Real valued
     A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4]
@@ -40,6 +40,9 @@ using Test, LinearAlgebra
 end
 
 @testset "issue #49533" begin
+    # eigenvalue sorting
+    sf = x->(imag(x),real(x))
+
     ## Real valued
     A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4]
     B = Matrix(Diagonal(Float64[1:4;]))
@@ -62,7 +65,6 @@ end
     B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im]
     BH = B'B
     # eigen
-    sf = x->(real(x),imag(x))
     e1,v1 = eigen(A, Hermitian(BH))
     @test A*v1 ≈ Hermitian(BH)*v1*Diagonal(e1)
     e2,v2 = eigen(Hermitian(AH), B)
@@ -79,7 +81,7 @@ end
     # Bunchkaufman decomposition based
 
     # eigenvalue sorting
-    sf = x->(real(x),imag(x))
+    sf = x->(imag(x),real(x))
 
     # Real-valued random matrix
     N = 10
