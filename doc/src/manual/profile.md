@@ -338,15 +338,77 @@ argument can be passed to speed it up by making it skip some allocations.
 Passing `sample_rate=1.0` will make it record everything (which is slow);
 `sample_rate=0.1` will record only 10% of the allocations (faster), etc.
 
-!!! note
+!!! compat "Julia 1.11"
 
-    The current implementation of the Allocations Profiler _does not
-    capture types for all allocations._ Allocations for which the profiler
-    could not capture the type are represented as having type
-    `Profile.Allocs.UnknownType`.
+    Older versions of Julia could not capture types in all cases. In older versions of
+    julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
+    the profiler doesn't know what type of object was allocated. This mainly happened when
+    the allocation was coming from generated code produced by the compiler. See
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688) for more info.
 
-    You can read more about the missing types and the plan to improve this, here:
-    [issue #43688](https://github.com/JuliaLang/julia/issues/43688).
+    In Julia 1.11+, all allocations should have a type reported.
+
+For more details on how to use this tool, please see the following talk from JuliaCon 2022:
+https://www.youtube.com/watch?v=BFvpwC8hEWQ
+
+##### Allocation Profiler Example
+
+Here is an example of how to invoke the Allocation profiler. A good number of samples to aim
+for is around 1 - 10 thousand. Too many, and the profile visualizer can get overwhelmed, and
+profiling will be slow. Too few, and you don't have a representative sample.
+```julia-repl
+julia> import Profile
+
+julia> @time my_function()  # Estimate allocations from a (second-run) of the function
+  0.110018 seconds (1.50 M allocations: 58.725 MiB, 17.17% gc time)
+500000
+
+julia> Profile.Allocs.clear()
+
+julia> Profile.Allocs.@profile sample_rate=0.001 begin   # 1.5 M * 0.001 = ~1.5K allocs.
+           my_function()
+       end
+500000
+
+julia> prof = Profile.Allocs.fetch();
+
+julia> length(prof.allocs)  # Confirm we have expected number of allocations.
+1410
+
+julia> using PProf  # Now, visualize with an external tool, like PProf or ProfileCanvas.
+
+julia> PProf.Allocs.pprof(prof; from_c=false)
+Analyzing 1410 allocation samples... 100%|████████████████████████████████| Time: 0:00:16
+"alloc-profile.pb.gz"
+
+Serving web UI on http://localhost:62261
+```
+
+##### Allocation Profiling Tips
+
+As stated above, aim for around 1-10 thousand samples in your profile.
+
+Note that we are uniformly sampling in the space of _all allocations_, and are not weighting
+our samples by the size of the allocation. So a given allocation profile may not give a
+representative profile of where most bytes are allocated in your program, unless you had set
+`sample_rate=1`.
+
+Allocations can come from users directly constructing objects, but can also come from inside
+the runtime or be inserted into compiled code to handle type instability. Looking at the
+"source code" view can be helpful to isolate them, and then other external tools such as
+[`Cthulhu.jl`](https://github.com/JuliaDebug/Cthulhu.jl) can be useful for identifying the
+cause of the allocation.
+
+##### Allocation Profile Visualization Tools
+
+There are several profiling visualization tools now that can all display Allocation
+Profiles. Here is a small list of some of the main ones we know about:
+- [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
+- [ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl)
+- VSCode's built-in profile visualizer (`@profview_allocs`) [docs needed]
+- Viewing the results directly in the REPL
+  - You can inspect the results in the REPL via [`Profile.Allocs.fetch()`](@ref), to view
+    the stacktrace and type of each allocation.
 
 #### Line-by-Line Allocation Tracking
 
