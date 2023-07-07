@@ -481,8 +481,8 @@ end
 """
     reset(::Event)
 
-Reset an Event back into an un-set state. Then any future calls to `wait` will
-block until `notify` is called again.
+Reset an [`Event`](@ref) back into an un-set state. Then any future calls to `wait` will
+block until [`notify`](@ref) is called again.
 """
 function reset(e::Event)
     @atomic e.set = false # full barrier

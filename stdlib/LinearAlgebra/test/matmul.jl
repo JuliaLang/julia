@@ -4,9 +4,18 @@ module TestMatmul
 
 using Base: rtoldefault
 using Test, LinearAlgebra, Random
-using LinearAlgebra: mul!
+using LinearAlgebra: mul!, Symmetric, Hermitian
 
 ## Test Julia fallbacks to BLAS routines
+
+mul_wrappers = [
+    m -> m,
+    m -> Symmetric(m, :U),
+    m -> Symmetric(m, :L),
+    m -> Hermitian(m, :U),
+    m -> Hermitian(m, :L),
+    m -> adjoint(m),
+    m -> transpose(m)]
 
 @testset "matrices with zero dimensions" begin
     for (dimsA, dimsB, dimsC) in (
@@ -42,6 +51,9 @@ end
         @test *(adjoint(Ai), adjoint(Bi)) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
         @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
     end
+    for wrapper_a in mul_wrappers, wrapper_b in mul_wrappers
+        @test wrapper_a(AA) * wrapper_b(BB) == Array(wrapper_a(AA)) * Array(wrapper_b(BB))
+    end
     @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 3), AA, BB)
 end
 @testset "3x3 matmul" begin
@@ -61,6 +73,9 @@ end
         @test *(Ai, adjoint(Bi)) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
         @test *(adjoint(Ai), adjoint(Bi)) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
         @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
+    end
+    for wrapper_a in mul_wrappers, wrapper_b in mul_wrappers
+        @test wrapper_a(AA) * wrapper_b(BB) == Array(wrapper_a(AA)) * Array(wrapper_b(BB))
     end
     @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 4, 4), AA, BB)
 end
@@ -655,10 +670,10 @@ Transpose(x::RootInt) = x
 
 @testset "#14293" begin
     a = [RootInt(3)]
-    C = [0]
+    C = [0;;]
     mul!(C, a, transpose(a))
     @test C[1] == 9
-    C = [1]
+    C = [1;;]
     mul!(C, a, transpose(a), 2, 3)
     @test C[1] == 21
     a = [RootInt(2), RootInt(10)]
@@ -976,6 +991,19 @@ end
         # _tri_matmul(A,B,B,δ)
         @test *(11.1, b, c, d) ≈ (11.1 * b) * (c * d)
         @test *(a, b, c, 99.9) ≈ (a * b) * (c * 99.9)
+    end
+end
+
+@testset "Issue #46865: mul!() with non-const alpha, beta" begin
+    f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
+    alphas = [1.0]
+    betas = [0.5]
+    for d in [2,3,4]  # test native small-matrix cases as well as BLAS
+        A = rand(d,d)
+        B = copy(A)
+        C = copy(A)
+        f!(C, A, B, alphas, betas)
+        @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
     end
 end
 

@@ -1,4 +1,4 @@
-Julia v1.10 Release Notes
+Julia v1.11 Release Notes
 ========================
 
 New language features
@@ -7,74 +7,53 @@ New language features
 Language changes
 ----------------
 
-
 Compiler/Runtime improvements
 -----------------------------
-
 
 Command-line option changes
 ---------------------------
 
-
 Multi-threading changes
 -----------------------
-
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
 --------------------
-The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
 
 Standard library changes
 ------------------------
 
-
 #### Package Manager
 
-- "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
 #### LinearAlgebra
-
 
 #### Printf
 
-
 #### Profile
-
 
 #### Random
 
-
 #### REPL
-
 
 #### SuiteSparse
 
 
 #### SparseArrays
 
-
 #### Test
-
-
-* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
-  non-boolean value in the same way as a non-broken test. ([#47804])
 
 #### Dates
 
 
 #### Distributed
-
 
 #### Unicode
 
@@ -84,15 +63,12 @@ Standard library changes
 
 #### InteractiveUtils
 
- * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
-
 Deprecated or removed
 ---------------------
 
 
 External dependencies
 ---------------------
-
 
 Tooling Improvements
 --------------------

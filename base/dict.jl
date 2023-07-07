@@ -147,8 +147,7 @@ end
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
-_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8 | 0x80
-_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8 | 0x80
+_shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
@@ -258,11 +257,12 @@ function empty!(h::Dict{K,V}) where V where K
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::Dict{K,V}, key) where V where K
+@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
+    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
@@ -351,23 +351,27 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
+    if (h.count + h.ndel)*3 > sz*2
+        # > 2/3 full (including tombstones)
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
     nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
-    key = convert(K, key0)
-    if !(isequal(key, key0)::Bool)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !(isequal(key, key0)::Bool)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     setindex!(h, v0, key)
 end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
-    v = convert(V, v0)
+    v = v0 isa V ? v0 : convert(V, v0)::V
     index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
@@ -424,7 +428,7 @@ Dict{String, Int64} with 4 entries:
 get!(collection, key, default)
 
 """
-    get!(f::Function, collection, key)
+    get!(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
@@ -450,12 +454,16 @@ Dict{Int64, Int64} with 1 entry:
   2 => 4
 ```
 """
-get!(f::Function, collection, key)
+get!(f::Callable, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
-    key = convert(K, key0)
-    if !isequal(key, key0)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !isequal(key, key0)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     return get!(default, h, key)
 end
@@ -466,7 +474,10 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index > 0 && return h.vals[index]
 
     age0 = h.age
-    v = convert(V, default())
+    v = default()
+    if !isa(v, V)
+        v = convert(V, v)::V
+    end
     if h.age != age0
         index, sh = ht_keyindex2_shorthash!(h, key)
     end
@@ -513,7 +524,7 @@ function get(h::Dict{K,V}, key, default) where V where K
 end
 
 """
-    get(f::Function, collection, key)
+    get(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, return
 `f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
@@ -527,7 +538,7 @@ get(dict, key) do
 end
 ```
 """
-get(::Function, collection, key)
+get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -756,10 +767,17 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
         else
-            if !isequal(k, convert(K, k))
-                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            if !(k isa K)
+                k1 = convert(K, k)::K
+                if !isequal(k, k1)
+                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                end
+                k = k1
             end
-            @inbounds _setindex!(d1, convert(V, v), k, -i, sh)
+            if !isa(v, V)
+                v = convert(V, v)::V
+            end
+            @inbounds _setindex!(d1, v, k, -i, sh)
         end
     end
     return d1

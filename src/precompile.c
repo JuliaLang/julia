@@ -99,7 +99,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                 // since it's a slightly duplication of effort
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
                 JL_GC_PUSH1(&tt);
-                tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
+                tt = jl_apply_tuple_type_v(&tt, 1);
                 jl_compile_hint((jl_tupletype_t*)tt);
                 JL_GC_POP();
             }
@@ -111,49 +111,51 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
 
-    bool_t emit_split = jl_options.outputji && emit_native;
+    const char *outputji = jl_options.outputji;
+
+    bool_t emit_split = outputji && emit_native;
 
     ios_t *s = NULL;
     ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    jl_create_system_image(&native_code, jl_options.incremental ? worklist : NULL, emit_split,
-                           &s, &z, &udeps, &srctextpos);
+    jl_create_system_image(emit_native ? &native_code : NULL,
+                           jl_options.incremental ? worklist : NULL,
+                           emit_split, &s, &z, &udeps, &srctextpos);
 
     if (!emit_split)
         z = s;
 
+    ios_t f;
+
+    if (outputji) {
+        if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
+            jl_errorf("cannot open system image file \"%s\" for writing", outputji);
+        ios_write(&f, (const char *)s->buf, (size_t)s->size);
+        ios_close(s);
+        free(s);
+    }
+
     // jl_dump_native writes the clone_targets into `s`
     // We need to postpone the srctext writing after that.
     if (native_code) {
+        ios_t *targets = outputji ? &f : NULL;
+        // jl_dump_native will close and free z when appropriate
+        // this is a horrible abstraction, but
+        // this helps reduce live memory significantly
         jl_dump_native(native_code,
                         jl_options.outputbc,
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        (const char*)z->buf, (size_t)z->size, s);
+                        z, targets);
         jl_postoutput_hook();
     }
 
-    if ((jl_options.outputji || emit_native) && jl_options.incremental) {
-        write_srctext(s, udeps, srctextpos);
-    }
-
-    if (jl_options.outputji) {
-        ios_t f;
-        if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-            jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
-        ios_write(&f, (const char*)s->buf, (size_t)s->size);
+    if (outputji) {
+        if (jl_options.incremental) {
+            write_srctext(&f, udeps, srctextpos);
+        }
         ios_close(&f);
-    }
-
-    if (s) {
-        ios_close(s);
-        free(s);
-    }
-
-    if (emit_split) {
-        ios_close(z);
-        free(z);
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {

@@ -149,12 +149,12 @@ By default, the `sort` family of functions uses stable sorting algorithms that a
 on most inputs. The exact algorithm choice is an implementation detail to allow for
 future performance improvements. Currently, a hybrid of `RadixSort`, `ScratchQuickSort`,
 `InsertionSort`, and `CountingSort` is used based on input type, size, and composition.
-Implementation details are subject to change but currently availible in the extended help
+Implementation details are subject to change but currently available in the extended help
 of `??Base.DEFAULT_STABLE` and the docstrings of internal sorting algorithms listed there.
 
 You can explicitly specify your preferred algorithm with the `alg` keyword
 (e.g. `sort!(v, alg=PartialQuickSort(10:20))`) or reconfigure the default sorting algorithm
-for a custom types by adding a specialized method to the `Base.Sort.defalg` function.
+for custom types by adding a specialized method to the `Base.Sort.defalg` function.
 For example, [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903)
 defines the following method:
 ```julia
@@ -162,15 +162,19 @@ Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = Inline
 ```
 
 !!! compat "Julia 1.9"
-    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed to be stable
-    since Julia 1.9. Previous versions had unstable edge cases when sorting numeric arrays.
+    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed to
+    be stable since Julia 1.9. Previous versions had unstable edge cases when
+    sorting numeric arrays.
 
-## Alternate orderings
+## Alternate Orderings
 
 By default, `sort`, `searchsorted`, and related functions use [`isless`](@ref) to compare
 two elements in order to determine which should come first. The
 [`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining alternate
-orderings on the same set of elements. Instances of `Ordering` define a
+orderings on the same set of elements: when calling a sorting function like
+`sort!`, an instance of `Ordering` can be provided with the keyword argument `order`.
+
+Instances of `Ordering` define a
 [strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings).
 To be a strict weak order, for any elements `a`, `b`, `c` the following hold:
 

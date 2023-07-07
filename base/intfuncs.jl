@@ -48,33 +48,46 @@ function gcd(a::T, b::T) where T<:Integer
 end
 
 function gcd(a::T, b::T) where T<:BitInteger
-    a == 0 && return checked_abs(b)
-    b == 0 && return checked_abs(a)
-    r = _gcd(a, b)
-    signbit(r) && __throw_gcd_overflow(a, b)
-    return r
+    a == 0 && return Base.checked_abs(b)
+    b == 0 && return Base.checked_abs(a)
+    if a isa Signed && a == typemin(T)
+        if a == b
+            Base.__throw_gcd_overflow(a, b)
+        else
+            a, b = b, a
+        end
+    end
+    return _gcd(a, b)
 end
 @noinline __throw_gcd_overflow(a, b) =
     throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
+function absdiff(x::T,y::T) where {T<:Unsigned}
+    d = max(x,y) - min(x,y)
+    d, d
+end
+function absdiff(x::T,y::T) where {T<:Signed}
+    d = x - y
+    abs(d), d
+end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
 # Since this is used in the Rational constructor, constant folding is something we do care about here.
-@assume_effects :terminates_locally function _gcd(a::T, b::T) where T<:BitInteger
-    za = trailing_zeros(a)
-    zb = trailing_zeros(b)
+@assume_effects :terminates_locally function _gcd(ain::T, bin::T) where T<:BitInteger
+    zb = trailing_zeros(bin)
+    za = trailing_zeros(ain)
+    a = abs(ain)
+    b = abs(bin >> zb)
     k = min(za, zb)
-    u = unsigned(abs(a >> za))
-    v = unsigned(abs(b >> zb))
-    while u != v
-        if u > v
-            u, v = v, u
-        end
-        v -= u
-        v >>= trailing_zeros(v)
+    while a != 0
+        a >>= za
+        absd, diff = absdiff(a, b)
+        za = trailing_zeros(diff)
+        b = min(a, b)
+        a = absd
     end
-    r = u << k
+    r = b << k
     return r % T
 end
 
@@ -375,18 +388,20 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     # but will work for integer types like `BigInt` that don't have `typemin` defined
     # It needs special handling otherwise will cause overflow problem.
     if p == -p
-        t = powermod(invmod(x, m), -(p÷2), m)
-        t = mod(widemul(t, t), m)
-        iseven(p) && return t
+        imod = invmod(x, m)
+        rhalf = powermod(imod, -(p÷2), m)
+        r::T = mod(widemul(rhalf, rhalf), m)
+        isodd(p) && (r = mod(widemul(r, imod), m))
         #else odd
-        return mod(widemul(t, invmod(x, m)), m)
+        return r
+    elseif p < 0
+        return powermod(invmod(x, m), -p, m)
     end
-    p < 0 && return powermod(invmod(x, m), -p, m)
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow(2, p)
-    r::T = 1
+    r = 1
     while true
         if p >= t
             r = mod(widemul(r,b),m)
@@ -1096,9 +1111,40 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
-        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, " overflows")))
+        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, ") overflows")))
         rr += one(T)
         nn += one(T)
     end
     copysign(x, sgn)
+end
+
+"""
+    binomial(x::Number, k::Integer)
+
+The generalized binomial coefficient, defined for `k ≥ 0` by
+the polynomial
+```math
+\\frac{1}{k!} \\prod_{j=0}^{k-1} (x - j)
+```
+When `k < 0` it returns zero.
+
+For the case of integer `x`, this is equivalent to the ordinary
+integer binomial coefficient
+```math
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
+```
+
+Further generalizations to non-integer `k` are mathematically possible, but
+involve the Gamma function and/or the beta function, which are
+not provided by the Julia standard library but are available
+in external packages such as [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).
+
+# External links
+* [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
+"""
+function binomial(x::Number, k::Integer)
+    k < 0 && return zero(x)/one(k)
+    # we don't use prod(i -> (x-i+1), 1:k) / factorial(k),
+    # and instead divide each term by i, to avoid spurious overflow.
+    return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end

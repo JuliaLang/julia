@@ -30,6 +30,8 @@ size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(Argumen
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+__inbounds_getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, false)
+__inbounds_getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), false)
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -311,6 +313,8 @@ function map(f, t::Any32)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
+map(f, t::Tuple,          s::Tuple{})        = ()
+map(f, t::Tuple{},        s::Tuple)          = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@inline; (f(t[1],s[1]),))
 map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@inline; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
@@ -318,7 +322,7 @@ function map(f, t::Tuple, s::Tuple)
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any32, s::Any32)
-    n = length(t)
+    n = min(length(t), length(s))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
@@ -329,12 +333,16 @@ end
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
 map(f, ::Tuple{}...) = ()
+anyempty(x::Tuple{}, xs...) = true
+anyempty(x::Tuple, xs...) = anyempty(xs...)
+anyempty() = false
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @inline
+    anyempty(t1, t2, ts...) && return ()
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
 function map(f, t1::Any32, t2::Any32, ts::Any32...)
-    n = length(t1)
+    n = min(length(t1), length(t2), minimum(length, ts))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
@@ -375,7 +383,7 @@ function tuple_type_tail(T::Type)
     end
 end
 
-(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+(::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
 
 Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
 Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
@@ -393,7 +401,9 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @inline
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    t1 = convert(fieldtype(T, 1), y[1])
+    T1 = fieldtype(T, 1)
+    y1 = y[1]
+    t1 = y1 isa T1 ? y1 : convert(T1, y1)::T1
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT

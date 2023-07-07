@@ -92,8 +92,15 @@ method_c2(x::Int32, y::Float64) = true
 method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
-Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test occursin( "\n\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ...\n", String(take!(buf)))
+let s
+    Base.show_method_candidates(buf, Base.MethodError(method_c2, (1., 1., 2)))
+    s = String(take!(buf))
+    @test occursin("\n\nClosest candidates are:\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  ", s)
+    @test occursin("\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ", s)
+    @test occursin("\n  ...\n", s)
+end
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -524,7 +531,7 @@ end
     ex = :(@nest2b 42)
     @test _macroexpand1(ex) != macroexpand(M,ex)
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
-    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
 
 foo_9965(x::Float64; w=false) = x
@@ -571,7 +578,7 @@ let
     end
 end
 
-@testset "show for manually thrown MethodError" begin
+@testset "show for MethodError with world age issue" begin
     global f21006
 
     f21006() = nothing
@@ -611,6 +618,32 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+end
+
+# Issue #50200
+using Base.Experimental: @opaque
+@testset "show for MethodError with world age issue (kwarg)" begin
+    test_no_error(f) = @test f() === nothing
+    function test_worldage_error(f)
+        ex = try; f(); error("Should not have been reached") catch ex; ex; end
+        @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
+        @test !occursin("!Matched::", sprint(Base.showerror, ex))
+    end
+
+    global callback50200
+
+    # First the no-kwargs version
+    callback50200 = (args...)->nothing
+    f = @opaque ()->callback50200()
+    test_no_error(f)
+    callback50200 = (args...)->nothing
+    test_worldage_error(f)
+
+    callback50200 = (args...; kwargs...)->nothing
+    f = @opaque ()->callback50200(;a=1)
+    test_no_error(f)
+    callback50200 = (args...; kwargs...)->nothing
+    test_worldage_error(f)
 end
 
 # Custom hints
@@ -932,4 +965,97 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+@testset "unused argument names" begin
+    g(::Int) = backtrace()
+    bt = g(1)
+    @test !contains(sprint(Base.show_backtrace, bt), "#unused#")
+end
+
+# issue #49002
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(typeof, (17,)), pairs((foo = :bar,)))
+    @test isempty(take!(buf))
+    Base.show_method_candidates(buf, Base.MethodError(isa, ()), pairs((a = 5,)))
+    @test isempty(take!(buf))
+end
+
+f_internal_wrap(g, a; kw...) = error();
+@inline f_internal_wrap(a; kw...) = f_internal_wrap(identity, a; kw...);
+let bt
+    @test try
+        f_internal_wrap(1)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
+end
+
+g_collapse_pos(x, y=1.0, z=2.0) = error()
+let bt
+    @test try
+        g_collapse_pos(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos(x::Float64)", bt_str)
+end
+
+g_collapse_kw(x; y=2.0) = error()
+let bt
+    @test try
+        g_collapse_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
+    @test !occursin("g_collapse_kw(x::Float64)", bt_str)
+end
+
+g_collapse_pos_kw(x, y=1.0; z=2.0) = error()
+let bt
+    @test try
+        g_collapse_pos_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
+end
+
+simplify_kwargs_type(pos; kws...) = (pos, sum(kws))
+let bt
+    res = try
+        simplify_kwargs_type(0; kw1=1.0, kw2="2.0")
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test res
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
+
+# Test Base.print_with_compare in convert MethodErrors
+struct TypeCompareError{A,B} <: Exception end
+let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}())
+    str = sprint(Base.showerror, e.value)
+    @test  occursin("TypeCompareError{Float64,2}", str)
+    @test  occursin("TypeCompareError{Float64,1}", str)
+    @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
 end
