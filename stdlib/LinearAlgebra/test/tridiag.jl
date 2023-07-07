@@ -477,13 +477,31 @@ end
 
     U = UpperTriangular(M)
     A = SymTridiagonal(fill(U, n), fill(U, n-1))
-    TI = Union{typeof(U), typeof(Symmetric(U)),typeof(LowerTriangular(M))}
 
-    @test (@inferred TI A[1,1]) == Symmetric(U)
-    @test (@inferred TI A[1,2]) == U
-    @test (@inferred TI A[2,1]) == transpose(U)
-    @test (@inferred TI A[1,3]) == zero(U)
-    @test (@inferred TI A[3,1]) == zero(transpose(U))
+    @test A[1,1] == Symmetric(U)
+    @test A[1,2] == U
+    @test A[2,1] == transpose(U)
+    @test iszero(A[1,3])
+    @test iszero(A[3,1])
+
+    matf(m, n) = copyto!(Matrix{Int}(undef, m, n), 1:(m * n))
+    dv = [matf(2,2), matf(3,3), matf(4,4), matf(3,3)]
+    ev = [matf(2,3), matf(3,4), matf(4,3)]
+    SymT = SymTridiagonal(dv, ev)
+    T = Tridiagonal(SymT)
+    @test SymT == T
+    @test iszero(T - SymT)
+    @test iszero(SymT - T)
+    @test SymT + T == T + SymT == T + T == SymT + SymT
+    for S in (SymT, T)
+        @test iszero(S[1,3])
+        @test iszero(S[3,1])
+        # check that the number of rows are identical along a row,
+        # and the number of columns are identical along a column
+        sz = [size(A) for A in S]
+        @test all(allequal, eachcol(last.(sz)))
+        @test all(allequal, eachrow(first.(sz)))
+    end
 
     A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
     @test (@inferred A[1,1]) == M
@@ -505,6 +523,37 @@ end
 
         A = Tridiagonal(ev, dv, ev)
         @test A == Matrix{eltype(A)}(A)
+    end
+
+    function bidiagchecks(T)
+        B = Bidiagonal(T)
+        @test B == T
+        @test iszero(B - T)
+        @test iszero(T - B)
+        @test B + T == T + B == B + B
+    end
+
+    function diagchecks(T)
+        D = Diagonal(T)
+        @test D == T
+        @test iszero(D - T)
+        @test iszero(T - D)
+        @test D + T == T + D == D + D
+    end
+
+    @testset "Diagonal/Bidiagonal conversions" begin
+        @testset "SymTridiagonal" begin
+            ST = SymTridiagonal(dv, zero.(ev))
+            bidiagchecks(ST)
+            diagchecks(ST)
+        end
+        @testset "Tridiagonal" begin
+            T = Tridiagonal(zero.(transpose.(ev)), dv, ev)
+            bidiagchecks(T)
+
+            T = Tridiagonal(zero.(transpose.(ev)), dv, zero.(ev))
+            diagchecks(T)
+        end
     end
 end
 

@@ -21,14 +21,20 @@ Tridiagonal(A::Bidiagonal) =
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
+Diagonal(A::SymTridiagonal{<:AbstractMatrix}) = Diagonal(diag(A))
 
 # These can fail when ev has the same length as dv
 # TODO: Revisit when a good solution for #42477 is found
 Bidiagonal(A::SymTridiagonal) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-Tridiagonal(A::SymTridiagonal) =
-    Tridiagonal(copy(A.ev), A.dv, A.ev)
+Tridiagonal(A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
+# For matrices, we need to account for transposes and symmetrization
+Bidiagonal(A::SymTridiagonal{<:AbstractMatrix}) =
+    iszero(A.ev) ? Bidiagonal(diag(A), diag(A,1), :U) :
+        throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+Tridiagonal(A::SymTridiagonal{<:AbstractMatrix}) =
+    Tridiagonal(diag(A,-1), diag(A), diag(A,1))
 
 # conversions from Tridiagonal to other special matrix types
 Diagonal(A::Tridiagonal) = Diagonal(A.d)
@@ -164,25 +170,30 @@ function (-)(A::Diagonal, B::Bidiagonal)
 end
 
 @commutative function (+)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag + B.dv
-    SymTridiagonal(A.diag + B.dv, typeof(newdv)(B.ev))
+    newdv = A.diag + _diagview(B)
+    SymTridiagonal(newdv, typeof(newdv)(B.ev))
 end
 
 function (-)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag - B.dv
+    newdv = A.diag - _diagview(B)
     SymTridiagonal(newdv, typeof(newdv)(-B.ev))
 end
 
 function (-)(A::SymTridiagonal, B::Diagonal)
-    newdv = A.dv - B.diag
+    newdv = _diagview(A) - B.diag
     SymTridiagonal(newdv, typeof(newdv)(A.ev))
 end
 
 # this set doesn't have the aforementioned problem
 
-@commutative (+)(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+_evview(B), A.d+B.dv, A.du+_evview(B))
--(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-_evview(B), A.d-B.dv, A.du-_evview(B))
--(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(_evview(A)-B.dl, A.dv-B.d, _evview(A)-B.du)
+@commutative (+)(A::Tridiagonal, B::SymTridiagonal) =
+    Tridiagonal(A.dl+_ldiagview(B), A.d+_diagview(B), A.du+_evview(B))
+
+-(A::Tridiagonal, B::SymTridiagonal) =
+    Tridiagonal(A.dl-_ldiagview(B), A.d-_diagview(B), A.du-_evview(B))
+
+-(A::SymTridiagonal, B::Tridiagonal) =
+    Tridiagonal(_ldiagview(A)-B.dl, _diagview(A)-B.d, _evview(A)-B.du)
 
 @commutative function (+)(A::Diagonal, B::Tridiagonal)
     newdv = A.diag + B.d
@@ -215,18 +226,24 @@ function (-)(A::Tridiagonal, B::Bidiagonal)
 end
 
 @commutative function (+)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv + B.dv
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(_evview(B)), A.dv+B.dv, A.ev+_evview(B)) : (A.ev+_evview(B), A.dv+B.dv, typeof(newdv)(_evview(B))))...)
+    newdv = A.dv + _diagview(B)
+    Tridiagonal((A.uplo == 'U' ?
+        (typeof(newdv)(_ldiagview(B)), newdv, A.ev+_evview(B)) :
+        (A.ev+_ldiagview(B), newdv, typeof(newdv)(_evview(B))))...)
 end
 
 function (-)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv - B.dv
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview(B), newdv, typeof(newdv)(-_evview(B))))...)
+    newdv = A.dv - _diagview(B)
+    Tridiagonal((A.uplo == 'U' ?
+        (typeof(newdv)(-_ldiagview(B)), newdv, A.ev-_evview(B)) :
+        (A.ev-_ldiagview(B), newdv, typeof(newdv)(-_evview(B))))...)
 end
 
 function (-)(A::SymTridiagonal, B::Bidiagonal)
-    newdv = A.dv - B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
+    newdv = _diagview(A) - B.dv
+    Tridiagonal((B.uplo == 'U' ?
+        (typeof(newdv)(_ldiagview(A)), newdv, _evview(A)-B.ev) :
+        (_ldiagview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
 @commutative function (+)(A::Tridiagonal, B::UniformScaling)
@@ -235,7 +252,7 @@ end
 end
 
 @commutative function (+)(A::SymTridiagonal, B::UniformScaling)
-    newdv = A.dv .+ Ref(B)
+    newdv = _diagview(A) .+ Ref(B)
     SymTridiagonal(newdv, typeof(newdv)(A.ev))
 end
 
@@ -255,7 +272,7 @@ function (-)(A::UniformScaling, B::Tridiagonal)
     Tridiagonal(convert(typeof(d), -B.dl), d, convert(typeof(d), -B.du))
 end
 function (-)(A::UniformScaling, B::SymTridiagonal)
-    dv = Ref(A) .- B.dv
+    dv = Ref(A) .- _diagview(B)
     SymTridiagonal(dv, convert(typeof(dv), -B.ev))
 end
 function (-)(A::UniformScaling, B::Bidiagonal)
@@ -313,7 +330,7 @@ dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractV
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 
 ==(A::Diagonal, B::Bidiagonal) = iszero(B.ev) && A.diag == B.dv
-==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == B.dv
+==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == _diagview(B)
 ==(B::Bidiagonal, A::Diagonal) = A == B
 ==(A::Diagonal, B::Tridiagonal) = iszero(B.dl) && iszero(B.du) && A.diag == B.d
 ==(B::Tridiagonal, A::Diagonal) = A == B
@@ -327,7 +344,8 @@ function ==(A::Bidiagonal, B::Tridiagonal)
 end
 ==(B::Tridiagonal, A::Bidiagonal) = A == B
 
-==(A::Bidiagonal, B::SymTridiagonal) = iszero(_evview(B)) && iszero(A.ev) && A.dv == B.dv
+==(B::Bidiagonal, ST::SymTridiagonal) =
+    iszero(_evview(ST)) && iszero(B.ev) && B.dv == _diagview(ST)
 ==(B::SymTridiagonal, A::Bidiagonal) = A == B
 
 # concatenation

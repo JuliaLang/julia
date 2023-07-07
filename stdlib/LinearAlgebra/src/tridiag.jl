@@ -119,6 +119,12 @@ SymTridiagonal{T}(S::SymTridiagonal) where {T} =
                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
+_diagview(S::SymTridiagonal) = S.dv
+_ldiagview(S::SymTridiagonal) = _evview(S)
+# Account for symmetrization and transposes for matrix eltypes
+_diagview(A::SymTridiagonal{<:AbstractMatrix}) = @view A[diagind(A)]
+_ldiagview(A::SymTridiagonal{<:AbstractMatrix}) = @view A[diagind(A,-1)]
+
 AbstractMatrix{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
@@ -176,18 +182,18 @@ issymmetric(S::SymTridiagonal) = true
 tr(S::SymTridiagonal) = sum(S.dv)
 
 function diagzero(A::SymTridiagonal{<:AbstractMatrix{Tel}}, i, j) where {Tel}
-    # assumes that the blocks are square
     if i < j
-        xu = similar(A.ev[i])
+        xu = similar(A.ev[i], size(A.ev[i],1), size(A.ev[j-1],2))
         fill!(xu, zero(eltype(xu)))
         return xu
     elseif j < i
-        xl = similar(A.ev[i-1])
+        xl = similar(A.ev[j], size(A.ev[j],1), size(A.ev[i-1],2))
         fill!(xl, zero(eltype(xl)))
         return copy(transpose(xl))
     else
-        TS = symmetric_type(eltype(A.dv))
-        return symmetric(zero(A.dv[i]), :U)::TS
+        xd = similar(A.dv[i], size(A.dv[i],1), size(A.dv[j],2))
+        fill!(xd, zero(eltype(xd)))
+        return symmetric(xd, :U)
     end
 end
 
