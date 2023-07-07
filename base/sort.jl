@@ -306,7 +306,7 @@ the definition of equivalence. Note that the `by` function is applied to the
 searched value `x` as well as the values in `v`.
 
 The range is generally found using binary search, but there are optimized
-implementations for `v` values that are ranges of real numbers.
+implementations for some inputs.
 
 See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
