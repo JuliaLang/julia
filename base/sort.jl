@@ -2014,8 +2014,8 @@ struct MergeSortAlg     <: Algorithm end
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
 Indicate that a sorting function should use the partial quick sort algorithm.
-Partial quick sort is like quick sort, but is only required to find and sort the
-elements that would end up in `v[k]` were `v` fully sorted.
+`PartialQuickSort(k)` is like `QuickSort`, but is only required to find and
+sort the elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
   * *not stable*: does not preserve the ordering of elements that
