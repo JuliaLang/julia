@@ -854,7 +854,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
+        page->nold++;
     }
     else {
         ptls->gc_cache.scanned_bytes += page->osize;
@@ -1382,17 +1382,19 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
         // We're basically losing a bit of precision in the sweep phase at the cost of
         // making the mark phase considerably cheaper.
         // See issue #50419
-        assert(jl_n_markthreads != 0 || !prev_sweep_full || pg->prev_nold >= pg->nold);
-        if (!prev_sweep_full || pg->prev_nold == pg->nold) {
-            // the position of the freelist begin/end in this page
-            // is stored in its metadata
-            if (pg->fl_begin_offset != (uint16_t)-1) {
-                *pfl = page_pfl_beg(pg);
-                pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+        if (jl_n_markthreads == 0) {
+            assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+            if (!prev_sweep_full || pg->prev_nold == pg->nold) {
+                // the position of the freelist begin/end in this page
+                // is stored in its metadata
+                if (pg->fl_begin_offset != (uint16_t)-1) {
+                    *pfl = page_pfl_beg(pg);
+                    pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+                }
+                freedall = 0;
+                nfree = pg->nfree;
+                goto done;
             }
-            freedall = 0;
-            nfree = pg->nfree;
-            goto done;
         }
     }
 
