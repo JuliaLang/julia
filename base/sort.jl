@@ -1361,8 +1361,9 @@ for available algorithms).
 
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
-resulting order is reversed if `rev=true`. The current implemention applies the
-`by` transformation before each comparison rather than once per element.
+resulting order is reversed if `rev=true` (this preserves forward stability:
+elements that compare equal are not reversed). The current implemention applies
+the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than
 [`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,
