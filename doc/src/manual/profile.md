@@ -341,12 +341,12 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
 !!! compat "Julia 1.11"
 
     Older versions of Julia could not capture types in all cases. In older versions of
-    julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
+    Julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
     the profiler doesn't know what type of object was allocated. This mainly happened when
     the allocation was coming from generated code produced by the compiler. See
     [issue #43688](https://github.com/JuliaLang/julia/issues/43688) for more info.
 
-    In Julia 1.11+, all allocations should have a type reported.
+    Since Julia 1.11, all allocations should have a type reported.
 
 For more details on how to use this tool, please see the following talk from JuliaCon 2022:
 https://www.youtube.com/watch?v=BFvpwC8hEWQ
@@ -356,6 +356,7 @@ https://www.youtube.com/watch?v=BFvpwC8hEWQ
 Here is an example of how to invoke the Allocation profiler. A good number of samples to aim
 for is around 1 - 10 thousand. Too many, and the profile visualizer can get overwhelmed, and
 profiling will be slow. Too few, and you don't have a representative sample.
+
 ```julia-repl
 julia> import Profile
 
