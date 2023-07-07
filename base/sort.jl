@@ -383,7 +383,7 @@ Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
 searched value `x` as well as the values in `v`.
 
 The index is generally found using binary search, but there are optimized
-implementations for `v` values that are ranges of real numbers.
+implementations for some inputs
 
 # Examples
 ```jldoctest
