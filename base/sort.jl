@@ -1355,9 +1355,10 @@ defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default. A specific
-algorithm can be selected via the `alg` keyword (see [Sorting Algorithms](@ref)
-for available algorithms).
+Sort the vector `v` in place. A stable algorithm is used by default: the
+ordering of elements that compare equal is preserved. A specific algorithm can
+be selected via the `alg` keyword (see [Sorting Algorithms](@ref) for available
+algorithms).
 
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
