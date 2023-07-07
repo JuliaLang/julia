@@ -1308,12 +1308,13 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls) {
             dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval);
-            dest->freed += jl_atomic_load_relaxed(&ptls->gc_num.freed);
             dest->malloc += jl_atomic_load_relaxed(&ptls->gc_num.malloc);
             dest->realloc += jl_atomic_load_relaxed(&ptls->gc_num.realloc);
             dest->poolalloc += jl_atomic_load_relaxed(&ptls->gc_num.poolalloc);
             dest->bigalloc += jl_atomic_load_relaxed(&ptls->gc_num.bigalloc);
-            dest->freecall += jl_atomic_load_relaxed(&ptls->gc_num.freecall);
+            uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc);
+            uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
+            jl_atomic_store_relaxed(&gc_heap_stats.heap_size, alloc_acc - free_acc + jl_atomic_load_relaxed(&gc_heap_stats.heap_size));
         }
     }
 }
@@ -3871,7 +3872,13 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, sz);
+        uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc);
+        if (alloc_acc + sz < 16*1024)
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, alloc_acc + sz);
+        else {
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, alloc_acc + sz);
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
+        }
     }
     return malloc(sz);
 }
@@ -3887,7 +3894,13 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + nm*sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, nm*sz);
+        uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc);
+        if (alloc_acc + sz < 16*1024)
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, alloc_acc + sz * nm);
+        else {
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, alloc_acc + sz * nm);
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
+        }
     }
     return calloc(nm, sz);
 }
@@ -3899,11 +3912,13 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
     free(p);
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
-        jl_atomic_store_relaxed(&ptls->gc_num.freed,
-            jl_atomic_load_relaxed(&ptls->gc_num.freed) + sz);
-        jl_atomic_store_relaxed(&ptls->gc_num.freecall,
-            jl_atomic_load_relaxed(&ptls->gc_num.freecall) + 1);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -sz);
+        uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
+        if (free_acc + sz < 16*1024)
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + sz);
+        else {
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + sz));
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
+        }
     }
 }
 
