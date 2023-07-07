@@ -236,6 +236,19 @@ end
     end
 end
 
+@testset "AbstractArray fallbacks for CartesianIndices" begin
+    @test ndims(CartesianIndices{3}) == 3
+    @test eltype(CartesianIndices{3}) == CartesianIndex{3}
+    for t in ((1:2, 1:2), (3:4,), ())
+        C2 = CartesianIndices(t)
+        @test ndims(C2) == length(t)
+        @test ndims(typeof(C2)) == length(t)
+        @test IndexStyle(C2) == IndexCartesian()
+        @test eltype(C2) == CartesianIndex{length(t)}
+        @test Base.IteratorSize(C2) isa Base.HasShape{length(t)}
+    end
+end
+
 @testset "LinearIndices" begin
     @testset "constructors" begin
         for oinds in [
@@ -681,6 +694,14 @@ function test_cat(::Type{TestAbstractArray})
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
+
+    @testset "issue #49676, bad error message on v[1 +1]" begin
+        # This is here because all these expressions are handled by Base.typed_hcat
+        v = [1 2 3]
+        @test_throws ArgumentError v[1 +1]
+        @test_throws ArgumentError v[1 1]
+        @test_throws ArgumentError v[[1 2] [2 3]]
+    end
 
     @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])

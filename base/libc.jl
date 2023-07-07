@@ -6,10 +6,13 @@ Interface to libc, the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
+# these need to be defined seperately for bootstrapping but belong to Libc
+import Base: memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
+    memmove, memset, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
+    transcode
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
@@ -336,7 +339,6 @@ if Sys.iswindows()
 end
 
 ## Memory related ##
-
 """
     free(addr::Ptr)
 
@@ -346,6 +348,8 @@ be freed by the free functions defined in that library, to avoid assertion failu
 multiple `libc` libraries exist on the system.
 """
 free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
+free(p::Cstring) = free(convert(Ptr{UInt8}, p))
+free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 """
     malloc(size::Integer) -> Ptr{Cvoid}
@@ -371,8 +375,7 @@ Call `calloc` from the C standard library.
 """
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
-free(p::Cstring) = free(convert(Ptr{UInt8}, p))
-free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
 
 ## Random numbers ##
 

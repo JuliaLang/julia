@@ -213,8 +213,7 @@ L factor:
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
-Q factor:
-4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}"""
+Q factor: 4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}"""
 end
 
 @testset "adjoint of LQ" begin

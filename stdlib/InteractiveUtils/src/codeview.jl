@@ -167,10 +167,18 @@ const OC_MISMATCH_WARNING =
 """
 
 # Printing code representations in IR and assembly
+
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
-                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool,
-                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0)))
+                        raw::Bool, dump_module::Bool, syntax::Symbol,
+                        optimize::Bool, debuginfo::Symbol, binary::Bool)
+        params = CodegenParams(debug_info_kind=Cint(0),
+                               safepoint_on_entry=raw, gcstack_arg=raw)
+        _dump_function(f, t, native, wrapper, raw, dump_module, syntax,
+                       optimize, debuginfo, binary, params)
+end
+function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
+                        raw::Bool, dump_module::Bool, syntax::Symbol,
+                        optimize::Bool, debuginfo::Symbol, binary::Bool, params::CodegenParams)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -180,21 +188,21 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     if !isa(f, Core.OpaqueClosure)
         world = Base.get_world_counter()
         match = Base._which(signature_type(f, t); world)
-        linfo = Core.Compiler.specialize_method(match)
+        mi = Core.Compiler.specialize_method(match)
         # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-        isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+        isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
         world = UInt64(f.world)
         if Core.Compiler.is_source_inferred(f.source.source)
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
-            linfo = f.source.specializations::Core.MethodInstance
+            mi = f.source.specializations::Core.MethodInstance
             Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
         else
-            linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
-            actual = isdispatchtuple(linfo.specTypes)
-            isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            actual = isdispatchtuple(mi.specTypes)
+            isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
     end
     # get the code for it
@@ -208,21 +216,25 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             throw(ArgumentError("'syntax' must be either :intel or :att"))
         end
         if dump_module
-            str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary, params)
+            # we want module metadata, so use LLVM to generate assembly output
+            str = _dump_function_native_assembly(mi, world, wrapper, syntax, debuginfo, binary, raw, params)
         else
-            str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary)
+            # if we don't want the module metadata, just disassemble what our JIT has
+            str = _dump_function_native_disassembly(mi, world, wrapper, syntax, debuginfo, binary)
         end
     else
-        str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
+        str = _dump_function_llvm(mi, world, wrapper, !raw, dump_module, optimize, debuginfo, params)
     end
     str = warning * str
     return str
 end
 
-function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool)
-    str = ccall(:jl_dump_method_asm, Ref{String},
-                (Any, UInt, Bool, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                linfo, world, false, wrapper, syntax, debuginfo, binary)
+function _dump_function_native_disassembly(mi::Core.MethodInstance, world::UInt,
+                                           wrapper::Bool, syntax::Symbol,
+                                           debuginfo::Symbol, binary::Bool)
+    str = @ccall jl_dump_method_asm(mi::Any, world::UInt, false::Bool, wrapper::Bool,
+                                    syntax::Ptr{UInt8}, debuginfo::Ptr{UInt8},
+                                    binary::Bool)::Ref{String}
     return str
 end
 
@@ -231,27 +243,30 @@ struct LLVMFDump
     f::Ptr{Cvoid} # opaque
 end
 
-function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
+function _dump_function_native_assembly(mi::Core.MethodInstance, world::UInt,
+                                        wrapper::Bool, syntax::Symbol, debuginfo::Symbol,
+                                        binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump},mi::Any, world::UInt, wrapper::Bool,
+                             true::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
-    str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf_dump, false, syntax, debuginfo, binary)
+    str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
+                                      syntax::Ptr{UInt8}, debuginfo::Ptr{UInt8},
+                                      binary::Bool, raw::Bool)::Ref{String}
     return str
 end
 
-function _dump_function_linfo_llvm(
-        linfo::Core.MethodInstance, world::UInt, wrapper::Bool,
+function _dump_function_llvm(
+        mi::Core.MethodInstance, world::UInt, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, world::UInt,
+                             wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
-    str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
-                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
+    str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
+                                     dump_module::Bool, debuginfo::Ptr{UInt8})::Ref{String}
     return str
 end
 
@@ -268,7 +283,7 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, !raw, dump_module, :intel, optimize, debuginfo, false)
+    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
@@ -290,20 +305,22 @@ generic function and type signature to `io`.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
+* If `raw` is `false`, uninteresting instructions (like the safepoint function prologue) are elided.
 
 See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                     dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
-    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
+                     dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
+                     debuginfo::Symbol=:default, binary::Bool=false)
+    d = _dump_function(f, types, true, false, raw, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
-    code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false, debuginfo::Symbol=:default, binary::Bool=false) =
+    code_native(stdout, f, types; dump_module, syntax, raw, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 
 ## colorized IR and assembly printing

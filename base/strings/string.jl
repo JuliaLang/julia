@@ -127,7 +127,11 @@ end
 
 _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}) = _memcmp(a, b, min(sizeof(a), sizeof(b)))
 function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len::Int)
-    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+    GC.@preserve a b begin
+        pa = unsafe_convert(Ptr{UInt8}, a)
+        pb = unsafe_convert(Ptr{UInt8}, b)
+        memcmp(pa, pb, len % Csize_t) % Int
+    end
 end
 
 function cmp(a::String, b::String)
@@ -542,7 +546,7 @@ function repeat(c::AbstractChar, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        memset(p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

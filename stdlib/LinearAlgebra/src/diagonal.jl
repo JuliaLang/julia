@@ -111,7 +111,8 @@ Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     n = size(D, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
+    n > 1 && fill!(B, zero(T))
     @inbounds for i in 1:n
         B[i,i] = D.diag[i]
     end
@@ -137,6 +138,26 @@ function size(D::Diagonal,d::Integer)
         throw(ArgumentError("dimension must be ≥ 1, got $d"))
     end
     return d<=2 ? length(D.diag) : 1
+end
+
+@inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, D, i, j) || return false
+    if i == j
+        @inbounds r = isassigned(D.diag, i)
+    else
+        r = true
+    end
+    r
+end
+
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
 end
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
@@ -785,12 +806,11 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
         return eigen(Diagonal(A), D; sortby)
-    elseif ishermitian(A)
+    elseif all(isposdef, D.diag)
         S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+        return eigen(A, cholesky(Diagonal{S}(D)); sortby)
     else
-        S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+        return eigen!(D \ A; sortby)
     end
 end
 

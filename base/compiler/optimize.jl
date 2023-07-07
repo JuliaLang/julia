@@ -66,26 +66,6 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-struct EdgeTracker
-    edges::Vector{Any}
-    valid_worlds::RefValue{WorldRange}
-    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
-        new(edges, RefValue{WorldRange}(range))
-end
-EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
-
-intersect!(et::EdgeTracker, range::WorldRange) =
-    et.valid_worlds[] = intersect(et.valid_worlds[], range)
-
-function add_backedge!(et::EdgeTracker, mi::MethodInstance)
-    push!(et.edges, mi)
-    return nothing
-end
-function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    push!(et.edges, invokesig, mi)
-    return nothing
-end
-
 is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
@@ -125,16 +105,16 @@ function inlining_policy(interp::AbstractInterpreter,
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
-    et::Union{EdgeTracker,Nothing}
+    edges::Vector{Any}
     world::UInt
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    et = EdgeTracker(sv.stmt_edges[1]::Vector{Any}, sv.valid_worlds)
-    return InliningState(et, sv.world, interp)
+    edges = sv.stmt_edges[1]::Vector{Any}
+    return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
-    return InliningState(nothing, get_world_counter(interp), interp)
+    return InliningState(Any[], get_world_counter(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -235,6 +215,41 @@ is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
 is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
+function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
+    Targ = args[1]
+    atyp = argextype(Targ, src)
+    # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    typ, isexact = instanceof_tfunc(atyp)
+    if !isexact
+        atyp = unwrap_unionall(widenconst(atyp))
+        if isType(atyp) && isTypeDataType(atyp.parameters[1])
+            typ = atyp.parameters[1]
+        else
+            return (false, false, false)
+        end
+        isabstracttype(typ) && return (false, false, false)
+    else
+        isconcretedispatch(typ) || return (false, false, false)
+    end
+    typ = typ::DataType
+    fcount = datatype_fieldcount(typ)
+    fcount === nothing && return (false, false, false)
+    fcount >= length(args) - 1 || return (false, false, false)
+    for fidx in 1:(length(args) - 1)
+        farg = args[fidx + 1]
+        eT = argextype(farg, src)
+        fT = fieldtype(typ, fidx)
+        if !isexact && has_free_typevars(fT)
+            if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
+                continue
+            end
+            return (false, false, false)
+        end
+        ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
+    end
+    return (false, true, true)
+end
+
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
         (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
@@ -284,36 +299,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            atyp = argextype(args[1], src)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(atyp)
-            if !isexact
-                atyp = unwrap_unionall(widenconst(atyp))
-                if isType(atyp) && isTypeDataType(atyp.parameters[1])
-                    typ = atyp.parameters[1]
-                else
-                    return (false, false, false)
-                end
-                isabstracttype(typ) && return (false, false, false)
-            else
-                isconcretedispatch(typ) || return (false, false, false)
-            end
-            typ = typ::DataType
-            fcount = datatype_fieldcount(typ)
-            fcount === nothing && return (false, false, false)
-            fcount >= length(args) - 1 || return (false, false, false)
-            for fld_idx in 1:(length(args) - 1)
-                eT = argextype(args[fld_idx + 1], src)
-                fT = fieldtype(typ, fld_idx)
-                # Currently, we cannot represent any type equality constraints
-                # in the lattice, so if we see any type of type parameter,
-                # there is very little we can say about it
-                if !isexact && has_free_typevars(fT)
-                    return (false, false, false)
-                end
-                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
-            end
-            return (false, true, true)
+            return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
             effects = foreigncall_effects(stmt) do @nospecialize x
                 argextype(x, src)
@@ -372,7 +358,9 @@ function argextype(
         elseif x.head === :copyast
             return argextype(x.args[1], src, sptypes, slottypes)
         end
-        @assert false "argextype only works on argument-position values"
+        Core.println("argextype called on Expr with head ", x.head,
+                     " which is not valid for IR in argument-position.")
+        @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
     elseif isa(x, TypedSlot)
@@ -530,7 +518,6 @@ function run_passes(
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

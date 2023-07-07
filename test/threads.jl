@@ -312,7 +312,7 @@ close(proc.in)
         if ( !success(proc) ) || ( timeout )
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows()
+        if Sys.iswindows() || Sys.isapple()
             # Known failure: https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else

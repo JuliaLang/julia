@@ -575,7 +575,7 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT_CODEGEN
-jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
     std::string code;
@@ -600,7 +600,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char raw_mc, const char* asm_va
         return jl_pchar_to_string("", 0);
     }
 
-    if (raw_mc) {
+    if (emit_mc) {
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
 
@@ -1203,7 +1203,7 @@ public:
 
 // get a native assembly for llvm::Function
 extern "C" JL_DLLEXPORT_CODEGEN
-jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw)
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
@@ -1217,12 +1217,15 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char raw_mc, const 
                 if (f != &f2 && !f->isDeclaration())
                     f2.deleteBody();
             }
+            // add a nounwind attribute to get rid of cfi instructions
+            if (!raw)
+                f->addFnAttr(Attribute::NoUnwind);
         });
         auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        if (raw_mc) {
+        if (emit_mc) {
             raw_svector_ostream obj_OS(ObjBufferSV);
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
                 return jl_an_empty_string;

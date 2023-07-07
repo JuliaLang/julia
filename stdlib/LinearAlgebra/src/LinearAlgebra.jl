@@ -9,14 +9,14 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
-    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
-    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
-    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
+    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
+    kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
+    power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
     vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -456,6 +456,34 @@ include("deprecated.jl")
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+wrapper_char(::AbstractArray) = 'N'
+wrapper_char(::Adjoint) = 'C'
+wrapper_char(::Adjoint{<:Real}) = 'T'
+wrapper_char(::Transpose) = 'T'
+wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
+wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+
+function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+    if tA == 'N'
+        return A
+    elseif tA == 'T'
+        return transpose(A)
+    elseif tA == 'C'
+        return adjoint(A)
+    elseif tA == 'H'
+        return Hermitian(A, :U)
+    elseif tA == 'h'
+        return Hermitian(A, :L)
+    elseif tA == 'S'
+        return Symmetric(A, :U)
+    else # tA == 's'
+        return Symmetric(A, :L)
+    end
+end
+
+_unwrap(A::AbstractVecOrMat) = A
 
 ## convenience methods
 ## return only the solution of a least squares problem while avoiding promoting

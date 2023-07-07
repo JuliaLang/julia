@@ -40,10 +40,10 @@ STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
  * Combine
  * ```
  * %v0 = fmul ... %a, %b
- * %v = fadd fast ... %v0, %c
+ * %v = fadd contract ... %v0, %c
  * ```
  * to
- * `%v = call fast @llvm.fmuladd.<...>(... %a, ... %b, ... %c)`
+ * `%v = call contract @llvm.fmuladd.<...>(... %a, ... %b, ... %c)`
  * when `%v0` has no other use
  */
 
@@ -87,13 +87,13 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
             it++;
             switch (I.getOpcode()) {
             case Instruction::FAdd: {
-                if (!I.isFast())
+                if (!I.hasAllowContract())
                     continue;
                 modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
             }
             case Instruction::FSub: {
-                if (!I.isFast())
+                if (!I.hasAllowContract())
                     continue;
                 modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
@@ -109,7 +109,7 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
     return modified;
 }
 
-PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
+PreservedAnalyses CombineMulAddPass::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
 {
     if (combineMulAdd(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

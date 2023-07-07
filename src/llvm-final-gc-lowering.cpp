@@ -81,37 +81,16 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
-    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
-    AllocaInst *gcframe_alloca = new AllocaInst(
-        T_prjlvalue,
-        allocaAddressSpace,
-        ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
-        Align(16));
-    gcframe_alloca->insertAfter(target);
-    Instruction *gcframe;
-    if (allocaAddressSpace) {
-        // addrspacecast as needed for non-0 alloca addrspace
-        gcframe = new AddrSpaceCastInst(gcframe_alloca, T_prjlvalue->getPointerTo(0));
-        gcframe->insertAfter(gcframe_alloca);
-    } else {
-        gcframe = gcframe_alloca;
-    }
+    IRBuilder<> builder(target->getNextNode());
+    auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
+    gcframe_alloca->setAlignment(Align(16));
+    // addrspacecast as needed for non-0 alloca addrspace
+    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, T_prjlvalue->getPointerTo(0)));
     gcframe->takeName(target);
 
     // Zero out the GC frame.
-    BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F.getContext()), "");
-    tempSlot_i8->insertAfter(gcframe);
-    Type *argsT[2] = {tempSlot_i8->getType(), Type::getInt32Ty(F.getContext())};
-    Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-    Value *args[4] = {
-        tempSlot_i8, // dest
-        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-        ConstantInt::get(Type::getInt32Ty(F.getContext()), sizeof(jl_value_t*) * (nRoots + 2)), // len
-        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-    CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-    cast<MemSetInst>(zeroing)->setDestAlignment(Align(16));
-    zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    zeroing->insertAfter(tempSlot_i8);
+    auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
+    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
 
     return gcframe;
 }

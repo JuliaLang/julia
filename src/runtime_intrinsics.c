@@ -429,6 +429,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         jl_atomic_error("atomic_pointerreplace: invalid atomic ordering");
     // TODO: filter other invalid orderings
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    if (!is_valid_intrinsic_elptr(ety))
+        jl_error("atomic_pointerreplace: invalid pointer");
     char *pp = (char*)jl_unbox_long(p);
     jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
@@ -447,8 +449,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         return result;
     }
     else {
-        if (!is_valid_intrinsic_elptr(ety))
-            jl_error("atomic_pointerreplace: invalid pointer");
         if (jl_typeof(x) != ety)
             jl_type_error("atomic_pointerreplace", ety, x);
         size_t nb = jl_datatype_size(ety);
