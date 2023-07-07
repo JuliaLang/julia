@@ -494,8 +494,6 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
     return newargexprs
 end
 
-const FATAL_TYPE_BOUND_ERROR = ErrorException("fatal error in type inference (type bound)")
-
 """
     ir_inline_unionsplit!
 
