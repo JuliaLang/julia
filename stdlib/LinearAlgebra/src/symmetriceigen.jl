@@ -186,16 +186,31 @@ end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
 function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), B; sortby)
+    eigen!(copy(A), copy(B); sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    D = B.D
-    M = (B.uplo == 'U') ? B.U : B.L ;
+   # Call sysconvf/_rook directly as getproperty creates a copy of B.LD.
+   if B.rook
+        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
+    else
+        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
+    end
+    if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
+        du = od[2:end]
+        # Aliasing pointers of dl and du is not allowed for gtsv!
+        dl = B.symmetric ? copy(du) : conj.(copy(du))
+    else
+        M = UnitLowerTriangular(LUD)
+        dl = od[1:end-1]
+        # Aliasing pointers of dl and du is not allowed for gtsv!
+        du = B.symmetric ? copy(dl) : conj.(copy(dl))
+    end
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
-    LAPACK.gtsv!(D.dl, D.d, copy(D.du), A)
+    LAPACK.gtsv!(dl, diag(LUD), du, A)
     vals, vecs = eigen!(A; sortby)
     LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), M.data), vecs)
     LAPACK.lapmr!(vecs, invperm(B.p), true)
@@ -239,15 +254,30 @@ end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(copy(A), B; sortby)
+    eigvals!(copy(A), copy(B); sortby)
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    D = B.D
-    M = (B.uplo == 'U') ? B.U : B.L ;
+    # Call sysconvf/_rook directly as getproperty creates a copy of B.LD.
+    if B.rook
+        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
+    else
+        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
+    end
+    if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
+        du = od[2:end]
+        # Aliasing pointers of dl and du is not allowed for gtsv!
+        dl = B.symmetric ? copy(du) : conj.(copy(du))
+    else
+        M = UnitLowerTriangular(LUD)
+        dl = od[1:end-1]
+        # Aliasing pointers of dl and du is not allowed for gtsv!
+        du = B.symmetric ? copy(dl) : conj.(copy(dl))
+    end
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
-    LAPACK.gtsv!(D.dl, D.d, copy(D.du), A)
+    LAPACK.gtsv!(dl, diag(LUD), du, A)
     return eigvals!(A; sortby)
 end
