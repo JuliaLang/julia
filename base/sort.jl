@@ -345,7 +345,7 @@ The vector `v` must be sorted according to the order defined by the keywords.
 searched value `x` as well as the values in `v`.
 
 The index is generally found using binary search, but there are optimized
-implementations for `v` values that are ranges of real numbers.
+implementations for some inputs.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
