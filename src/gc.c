@@ -3852,7 +3852,9 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 #endif
     errno = last_errno;
     // gc_managed_realloc_ is currently used exclusively for resizing array buffers.
-    maybe_record_alloc_to_profile((jl_value_t*)b, sz, (jl_datatype_t*)jl_buff_tag);
+    if (allocsz > oldsz) {
+        maybe_record_alloc_to_profile((jl_value_t*)b, allocsz - oldsz, (jl_datatype_t*)jl_buff_tag);
+    }
     return b;
 }
 
