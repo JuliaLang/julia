@@ -99,7 +99,7 @@ listed after the ending quote, to change its behaviour:
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
   opposed to the whole string.
 - `s` allows the `.` modifier to match newlines.
-- `x` enables "free-spacing mode": whitespace in the regex is ignored except when escaped with `\\`,
+- `x` enables "free-spacing mode": whitespace between regex tokens is ignored except when escaped with `\\`,
    and `#` in the regex is treated as starting a comment (which is ignored to the line ending).
 - `a` enables ASCII mode (disables `UTF` and `UCP` modes). By default `\\B`, `\\b`, `\\D`,
   `\\d`, `\\S`, `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With
