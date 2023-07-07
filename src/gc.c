@@ -3929,10 +3929,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
-        if (sz < old)
-            jl_atomic_store_relaxed(&ptls->gc_num.freed,
-                jl_atomic_load_relaxed(&ptls->gc_num.freed) + (old - sz));
-        else
+        if (!(sz < old))
             jl_atomic_store_relaxed(&ptls->gc_num.allocd,
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
@@ -4043,10 +4040,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }
-    else if (allocsz < oldsz)
-        jl_atomic_store_relaxed(&ptls->gc_num.freed,
-            jl_atomic_load_relaxed(&ptls->gc_num.freed) + (oldsz - allocsz));
-    else
+    else if (!(allocsz < oldsz))
         jl_atomic_store_relaxed(&ptls->gc_num.allocd,
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (allocsz - oldsz));
     jl_atomic_store_relaxed(&ptls->gc_num.realloc,
