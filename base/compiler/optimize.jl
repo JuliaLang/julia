@@ -406,18 +406,9 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     opt.ir = ir
 
     # determine and cache inlineability
-    union_penalties = false
     if !force_noinline
         sig = unwrap_unionall(specTypes)
-        if isa(sig, DataType) && sig.name === Tuple.name
-            for P in sig.parameters
-                P = unwrap_unionall(P)
-                if isa(P, Union)
-                    union_penalties = true
-                    break
-                end
-            end
-        else
+        if !(isa(sig, DataType) && sig.name === Tuple.name)
             force_noinline = true
         end
         if !is_declared_inline(src) && result === Bottom
@@ -448,7 +439,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, cost_threshold)
         end
     end
     return nothing
@@ -645,7 +636,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
+                        params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -683,13 +674,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
-            elseif f === Core.isa
-                # If we're in a union context, we penalize type computations
-                # on union types. In such cases, it is usually better to perform
-                # union splitting on the outside.
-                if union_penalties && isa(argextype(ex.args[2],  src, sptypes), Union)
-                    return params.inline_nonleaf_penalty
-                end
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -720,7 +704,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, union_penalties, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -736,11 +720,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                                  union_penalties::Bool, params::OptimizationParams)
+                                  params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, union_penalties, params,
+        thiscost = statement_cost(stmt, line, src, sptypes, params,
                                   is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
@@ -753,24 +737,24 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+function inline_cost(ir::IRCode, params::OptimizationParams,
                        cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return MAX_INLINE_COST
     end
     return inline_cost_clamp(bodycost)
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, params::OptimizationParams)
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
-                                            unionpenalties, params)
+                                            params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
