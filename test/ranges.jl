@@ -2535,3 +2535,14 @@ end
     a = StepRangeLen(1,2,3,2)
     @test a[UInt(1)] == -1
 end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    r = StepRangeLen(CartesianIndex(2,3), CartesianIndex(1,1), 4)
+    @test length(r) == 4
+    @test first(r) == CartesianIndex(2,3)
+    @test last(r) == CartesianIndex(5,6)
+    @test r[2] == CartesianIndex(3,4)
+
+    r = StepRangeLen(CartesianIndex(), CartesianIndex(), 3)
+    @test all(==(CartesianIndex()), r)
+end

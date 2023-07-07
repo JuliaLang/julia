@@ -83,6 +83,7 @@ module IteratorsMD
     CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
+    CartesianIndex{N}(index::CartesianIndex{N}) where {N} = index
     CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     flatten(::Tuple{}) = ()
     flatten(I::Tuple{Any}) = Tuple(I[1])
