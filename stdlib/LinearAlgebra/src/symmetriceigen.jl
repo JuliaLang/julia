@@ -189,12 +189,13 @@ function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     eigen!(copy(A), B; sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    D = B.D
+    M = (B.uplo == 'U') ? B.U : B.L ;
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    M = (B.uplo == 'U') ? B.U : B.L ;
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
-    LAPACK.gtsv!(B.D.dl, B.D.d, B.D.du, A)
+    LAPACK.gtsv!(D.dl, D.d, copy(D.du), A)
     vals, vecs = eigen!(A; sortby)
     LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), M.data), vecs)
     LAPACK.lapmr!(vecs, invperm(B.p), true)
@@ -241,11 +242,12 @@ function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
     eigvals!(copy(A), B; sortby)
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    D = B.D
+    M = (B.uplo == 'U') ? B.U : B.L ;
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    M = (B.uplo == 'U') ? B.U : B.L ;
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
-    LAPACK.gtsv!(B.D.dl, B.D.d, B.D.du, A)
+    LAPACK.gtsv!(D.dl, D.d, copy(D.du), A)
     return eigvals!(A; sortby)
 end
