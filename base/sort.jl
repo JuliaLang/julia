@@ -1443,7 +1443,7 @@ julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
  NaN
  NaN
 
-julia> sort([2, NaN, 1, NaN, 3], lt=<) # wrong sort due to invalid lt
+julia> sort([2, NaN, 1, NaN, 3], lt=<) # wrong sort due to invalid lt. This behavior is undefined.
 5-element Vector{Float64}:
    2.0
  NaN
