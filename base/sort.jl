@@ -2078,8 +2078,7 @@ Characteristics:
   * *stable*: preserves the ordering of elements that compare
     equal (e.g. "a" and "A" in a sort of letters that ignores
     case).
-  * *not in-place* in memory — requires a temporary
-    array of half the size of the input array.
+  * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
   * *good performance* for large collections but typically not quite as
     fast as [`QuickSort`](@ref).
