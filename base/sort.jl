@@ -336,7 +336,7 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
     searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
 Return the index of the first value in `v` greater than or equivalent to `x`.
-If `x` is greater than all values in `v` the function returns `lastindex(v) + 1`.
+If `x` is greater than all values in `v`, return `lastindex(v) + 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
 `insert!`ing `x` at the returned index will maintain the sorted order. Refer to
