@@ -1377,7 +1377,12 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
     // For quick sweep, we might be able to skip the page if the page doesn't
     // have any young live cell before marking.
     if (!sweep_full && !pg->has_young) {
-        assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+        // note that `pg->nold` may not be accurate with multithreaded marking since
+        // two threads may race when trying to set the mark bit in `gc_try_setmark_tag`.
+        // We're basically losing a bit of precision in the sweep phase at the cost of
+        // making the mark phase considerably cheaper.
+        // See issue #50419
+        assert(jl_n_markthreads != 0 || !prev_sweep_full || pg->prev_nold >= pg->nold);
         if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             // the position of the freelist begin/end in this page
             // is stored in its metadata
