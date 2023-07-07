@@ -417,7 +417,7 @@ equivalence. Note that the `by` function is applied to the searched value `x`
 as well as the values in `v`.
 
 The check is generally done using binary search, but there are optimized
-implementations for `v` values that are ranges of real numbers.
+implementations for some inputs.
 
 See also [`in`](@ref).
 
