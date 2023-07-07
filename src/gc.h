@@ -383,11 +383,6 @@ typedef struct {
 
 typedef struct {
     _Atomic(size_t) bytes_mapped;
-    _Atomic(size_t) bytes_freed;
-    _Atomic(size_t) bytes_allocd;
-    _Atomic(size_t) bytes_mallocd;
-    _Atomic(size_t) malloc_bytes_freed;
-    _Atomic(size_t) pages_perm_allocd;
     _Atomic(size_t) heap_size;
     _Atomic(size_t) heap_target;
 } gc_heapstatus_t;
