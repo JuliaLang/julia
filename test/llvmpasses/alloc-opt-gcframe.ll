@@ -14,17 +14,18 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 ; CHECK-NOT: @julia.gc_alloc_obj
 
 ; TYPED: %current_task = getelementptr inbounds {}*, {}** %gcstack, i64 -12
+; TYPED-NEXT: call void @llvm.assume(i1 true) [ "align"({} addrspace(10)* @tag, i64 16) ]
 ; TYPED-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; TYPED-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; TYPED-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; TYPED-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-; TYPED-NEXT: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc(i8* [[ptls_i8]], i32 [[SIZE_T:[0-9]+]], i32 16)
+; TYPED-NEXT: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc_instrumented(i8* [[ptls_i8]], i32 [[SIZE_T:[0-9]+]], i32 16, i64 ptrtoint [[.*]])
 ; TYPED: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !4
 
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %gcstack, i64 -12
 ; OPAQUE-NEXT: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
 ; OPAQUE-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
-; OPAQUE-NEXT: %v = call noalias nonnull dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc(ptr [[ptls_load]], i32 [[SIZE_T:[0-9]+]], i32 16)
+; OPAQUE-NEXT: %v = call noalias nonnull dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc_instrumented(ptr [[ptls_load]], i32 [[SIZE_T:[0-9]+]], i32 16, ptr)
 ; OPAQUE: store atomic ptr addrspace(10) @tag, ptr addrspace(10) {{.*}} unordered, align 8, !tbaa !4
 
 define {} addrspace(10)* @return_obj() {
@@ -39,7 +40,7 @@ define {} addrspace(10)* @return_obj() {
 ; CHECK-LABEL: @return_load
 ; CHECK: alloca i64
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK-NOT: @jl_gc_pool_alloc
+; CHECK-NOT: @ijl_gc_pool_alloc_instrumented
 ; TYPED: call void @llvm.lifetime.start{{.*}}(i64 8, i8*
 ; OPAQUE: call void @llvm.lifetime.start{{.*}}(i64 8, ptr
 ; CHECK-NOT: @tag
@@ -62,7 +63,7 @@ define i64 @return_load(i64 %i) {
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK: @ijl_gc_pool_alloc
+; CHECK: @ijl_gc_pool_alloc_instrumented
 ; TYPED: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !4
 ; OPAQUE: store atomic ptr addrspace(10) @tag, ptr addrspace(10) {{.*}} unordered, align 8, !tbaa !4
 define void @ccall_obj(i8* %fptr) {
@@ -81,7 +82,7 @@ define void @ccall_obj(i8* %fptr) {
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK-NOT: @jl_gc_pool_alloc
+; CHECK-NOT: @jl_gc_pool_alloc_instrumented
 ; TYPED: call void @llvm.lifetime.start{{.*}}(i64 8, i8*
 ; TYPED: %f = bitcast i8* %fptr to void (i8*)*
 
@@ -109,7 +110,7 @@ define void @ccall_ptr(i8* %fptr) {
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK: @ijl_gc_pool_alloc
+; CHECK: @ijl_gc_pool_alloc_instrumented
 ; TYPED: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !4
 ; OPAQUE: store atomic ptr addrspace(10) @tag, ptr addrspace(10) {{.*}} unordered, align 8, !tbaa !4
 define void @ccall_unknown_bundle(i8* %fptr) {
@@ -179,7 +180,7 @@ L3:
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK-NOT: @jl_gc_pool_alloc
+; CHECK-NOT: @jl_gc_pool_alloc_instrumented
 ; CHECK-NOT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, align 8, !tbaa !4
 define void @object_field({} addrspace(10)* %field) {
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -198,7 +199,7 @@ define void @object_field({} addrspace(10)* %field) {
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK-NOT: @jl_gc_pool_alloc
+; CHECK-NOT: @jl_gc_pool_alloc_instrumented
 ; TYPED: call void @llvm.memcpy.p0i8.p0i8.i64
 ; OPAQUE: call void @llvm.memcpy.p0.p0.i64
 define void @memcpy_opt(i8* %v22) {
@@ -218,7 +219,7 @@ top:
 ; TYPED: call {}*** @julia.get_pgcstack()
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
-; CHECK-NOT: @jl_gc_pool_alloc
+; CHECK-NOT: @jl_gc_pool_alloc_instrumented
 ; CHECK-NOT: @llvm.lifetime.end
 ; CHECK: @external_function
 define void @preserve_opt(i8* %v22) {
@@ -270,11 +271,11 @@ L3:
 }
 ; CHECK-LABEL: }{{$}}
 
-; TYPED: declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8*,
-; TYPED: declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc(i8*,
+; TYPED: declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc_instrumented(i8*,
+; TYPED: declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc_instrumented(i8*,
 
-; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_pool_alloc(ptr,
-; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_big_alloc(ptr,
+; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_pool_alloc_instrumented(ptr,
+; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_big_alloc_instrumented(ptr,
 declare void @external_function()
 declare {}*** @julia.get_pgcstack()
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
