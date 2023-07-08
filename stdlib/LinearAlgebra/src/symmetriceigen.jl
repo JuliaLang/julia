@@ -189,7 +189,8 @@ function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     eigen!(copy(A), copy(B); sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-   # Call sysconvf/_rook directly as getproperty creates a copy of B.LD.
+   # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
+   # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
    if B.rook
         LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
     else
@@ -198,21 +199,31 @@ function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby
     if B.uplo == 'U'
         M = UnitUpperTriangular(LUD)
         du = od[2:end]
-        # Aliasing pointers of dl and du is not allowed for gtsv!
+        # Aliasing of dl and du is not allowed for gtsv! below.
         dl = B.symmetric ? copy(du) : conj.(copy(du))
     else
         M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
-        # Aliasing pointers of dl and du is not allowed for gtsv!
+        # Aliasing of dl and du is not allowed for gtsv! below.
         du = B.symmetric ? copy(dl) : conj.(copy(dl))
     end
+    # In-place permutation of A, A .= A[B.p, B.p]
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
+    # In-place A .= inv(M)*A
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    # In-place A .= A*inv(M^H)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
     LAPACK.gtsv!(dl, diag(LUD), du, A)
+    # Compute the eigenvalues and eigenvectors of A, which are the generalized eigenvalues
+    # and eigenvectors.
+    # NOTE: That vecs overwrites A for matrices with real-valued generalized eigenvalues
+    # and complex-valued eigenvalues. In other cases, a copy is created, see eigen.jl for details.
     vals, vecs = eigen!(A; sortby)
+    # In-place vecs .= inv(M^H)*vecs
     LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), M.data), vecs)
+    # In-place vecs .= vecs[invperm(B.p), :]
     LAPACK.lapmr!(vecs, invperm(B.p), true)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
@@ -257,7 +268,8 @@ function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
     eigvals!(copy(A), copy(B); sortby)
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    # Call sysconvf/_rook directly as getproperty creates a copy of B.LD.
+    # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
+    # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
     if B.rook
         LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
     else
@@ -266,18 +278,23 @@ function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sort
     if B.uplo == 'U'
         M = UnitUpperTriangular(LUD)
         du = od[2:end]
-        # Aliasing pointers of dl and du is not allowed for gtsv!
+        # Aliasing of dl and du is not allowed for gtsv! below.
         dl = B.symmetric ? copy(du) : conj.(copy(du))
     else
         M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
-        # Aliasing pointers of dl and du is not allowed for gtsv!
+        # Aliasing of dl and du is not allowed for gtsv! below.
         du = B.symmetric ? copy(dl) : conj.(copy(dl))
     end
+    # In-place permutation of A, A .= A[B.p, B.p]
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
+    # In-place A .= inv(M)*A
     LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    # In-place A .= A*inv(M^H)
     BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
     LAPACK.gtsv!(dl, diag(LUD), du, A)
+    # Compute the eigenvalues of A, which are the generalized eigenvalues.
     return eigvals!(A; sortby)
 end
