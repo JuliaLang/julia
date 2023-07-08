@@ -355,10 +355,11 @@ tests = [
         "A.@x(y)"    =>  "(macrocall-p (. A @x) y)"
         "A.@x(y).z"  =>  "(. (macrocall-p (. A @x) y) z)"
         # do
-        "f() do\nend"         =>  "(do (call f) (tuple) (block))"
-        "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
-        "f() do x, y\n body end"  =>  "(do (call f) (tuple x y) (block body))"
-        "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
+        "f() do\nend"         =>  "(call f (do (tuple) (block)))"
+        "f() do ; body end"   =>  "(call f (do (tuple) (block body)))"
+        "f() do x, y\n body end"  =>  "(call f (do (tuple x y) (block body)))"
+        "f(x) do y body end"  =>  "(call f x (do (tuple y) (block body)))"
+        "@f(x) do y body end" =>  "(macrocall-p @f x (do (tuple y) (block body)))"
 
         # square brackets
         "@S[a,b]"  => "(macrocall @S (vect a b))"

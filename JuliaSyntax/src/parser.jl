@@ -1510,12 +1510,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_call_arglist(ps, K")")
+            if peek(ps) == K"do"
+                # f(x) do y body end  ==>  (call f x (do (tuple y) (block body)))
+                parse_do(ps)
+            end
             emit(ps, mark, is_macrocall ? K"macrocall" : K"call",
                  is_macrocall ? PARENS_FLAG : EMPTY_FLAGS)
-            if peek(ps) == K"do"
-                # f(x) do y body end  ==>  (do (call f x) (tuple y) (block body))
-                parse_do(ps, mark)
-            end
             if is_macrocall
                 # @x(a, b)   ==>  (macrocall-p @x a b)
                 # A.@x(y)    ==>  (macrocall-p (. A @x) y)
@@ -2266,18 +2266,19 @@ function parse_catch(ps::ParseState)
 end
 
 # flisp: parse-do
-function parse_do(ps::ParseState, mark)
+function parse_do(ps::ParseState)
+    mark = position(ps)
     bump(ps, TRIVIA_FLAG) # do
     ps = normal_context(ps)
     m = position(ps)
     if peek(ps) in KSet"NewlineWs ;"
-        # f() do\nend        ==>  (do (call f) (tuple) (block))
-        # f() do ; body end  ==>  (do (call f) (tuple) (block body))
+        # f() do\nend        ==>  (call f (do (tuple) (block)))
+        # f() do ; body end  ==>  (call f (do (tuple) (block body)))
         # this trivia needs to go into the tuple due to the way position()
         # works.
         bump(ps, TRIVIA_FLAG)
     else
-        # f() do x, y\n body end  ==>  (do (call f) (tuple x y) (block body))
+        # f() do x, y\n body end  ==>  (call f (do (tuple x y) (block body)))
         parse_comma_separated(ps, parse_range)
     end
     emit(ps, m, K"tuple")

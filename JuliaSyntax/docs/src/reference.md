@@ -43,7 +43,7 @@ the source text more closely.
 * The right hand side of `x where {T}` retains the `K"braces"` node around the `T` to distinguish it from `x where T`.
 * Ternary syntax is not immediately lowered to an `if` node: `a ? b : c` parses as `(? a b c)` rather than `Expr(:if, :a, :b, :c)` (#85)
 * `global const` and `const global` are not normalized by the parser. This is done in `Expr` conversion (#130)
-* The AST for `do` is flatter and not lowered to a lambda by the parser: `f(x) do y ; body end` is parsed as `(do (call f x) (tuple y) (block body))` (#98)
+* [`do` syntax](#Do-blocks) is nested as the last child of the call which the `do` lambda will be passed to (#98, #322)
 * `@.` is not lowered to `@__dot__` inside the parser (#146)
 * Docstrings use the `K"doc"` kind, and are not lowered to `Core.@doc` until later (#217)
 * Juxtaposition uses the `K"juxtapose"` kind rather than lowering immediately to `*` (#220)
@@ -77,7 +77,6 @@ class of tokenization errors and lets the parser deal with them.
 * The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
 * We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
 * Multiple iterations within the header of a `for`, as in `for a=as, b=bs body end` are represented with a `cartesian_iterator` head rather than a `block`, as these lists of iterators are neither semantically nor syntactically a sequence of statements. Unlike other uses of `block` (see also generators).
-
 
 ## More detail on tree differences
 
@@ -196,23 +195,38 @@ The same goes for command strings which are always wrapped in `K"cmdstring"`
 regardless of whether they have multiple pieces (due to triple-quoted
 dedenting) or otherwise.
 
-### No desugaring of the closure in do blocks
+### Do blocks
 
-The reference parser represents `do` syntax with a closure for the second
-argument. That is,
+`do` syntax is represented in the `Expr` AST with the `do` outside the call.
+This makes some sense syntactically (do appears as "an operator" after the
+function call).
 
-```julia
-f(x) do y
-    body
-end
-```
+However semantically this nesting is awkward because the lambda represented by
+the do block is passed to the call. This same problem occurs for the macro form
+`@f(x) do \n body end` where the macro expander needs a special rule to expand
+nestings of the form `Expr(:do, Expr(:macrocall ...), ...)`, rearranging the
+expression which are passed to this macro call rather than passing the
+expressions up the tree.
 
-becomes `(do (call f x) (-> (tuple y) (block body)))` in the reference parser.
+The implied closure is also lowered to a nested `Expr(:->)` expression, though
+it this somewhat premature to do this during parsing.
 
-However, the nested closure with `->` head is implied here rather than present
-in the surface syntax, which suggests this is a premature desugaring step.
-Instead we emit the flatter structure `(do (call f x) (tuple y) (block body))`.
+To resolve these problems we parse
 
+    @f(x, y) do a, b\n body\n end
+    f(x, y) do a, b\n body\n end
+
+by tacking the `do` onto the end of the call argument list:
+
+    (macrocall @f x y (do (tuple a b) body))
+    (call f x y (do (tuple a b) body))
+
+This achieves the following desirable properties
+1. Content of `do` is nested inside the call which improves the match between AST and semantics
+2. Macro can be passed the syntax as-is rather than the macro expander rearranging syntax before passing it to the macro
+3. In the future, a macro can detect when it's being passed do syntax rather than lambda syntax
+4. `do` head is used uniformly for both call and macrocall
+5. We preserve the source ordering properties we need for the green tree.
 
 ## Tree structure reference
 

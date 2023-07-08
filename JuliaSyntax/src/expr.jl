@@ -184,6 +184,16 @@ function _fixup_Expr_children!(head, loc, args)
     return args
 end
 
+# Remove the `do` block from the final position in a function/macro call arg list
+function _extract_do_lambda!(args)
+    if length(args) > 1 && Meta.isexpr(args[end], :do_lambda)
+        do_ex = pop!(args)::Expr
+        return Expr(:->, do_ex.args...)
+    else
+        return nothing
+    end
+end
+
 # Convert internal node of the JuliaSyntax parse tree to an Expr
 function _internal_node_to_Expr(source, srcrange, head, childranges, childheads, args)
     k = kind(head)
@@ -217,8 +227,12 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             end
         end
     elseif k == K"macrocall"
+        do_lambda = _extract_do_lambda!(args)
         _reorder_parameters!(args, 2)
         insert!(args, 2, loc)
+        if do_lambda isa Expr
+            return Expr(:do, Expr(headsym, args...), do_lambda)
+        end
     elseif k == K"block" || (k == K"toplevel" && !has_flags(head, TOPLEVEL_SEMICOLONS_FLAG))
         if isempty(args)
             push!(args, loc)
@@ -247,6 +261,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             popfirst!(args)
             headsym = Symbol("'")
         end
+        do_lambda = _extract_do_lambda!(args)
         # Move parameters blocks to args[2]
         _reorder_parameters!(args, 2)
         if headsym === :dotcall
@@ -258,6 +273,9 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
                 headsym = :call
                 args[1] = Symbol(".", args[1])
             end
+        end
+        if do_lambda isa Expr
+            return Expr(:do, Expr(headsym, args...), do_lambda)
         end
     elseif k == K"."
         if length(args) == 2
@@ -402,8 +420,9 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             # as inert QuoteNode rather than in `Expr(:quote)` quasiquote
             return QuoteNode(a1)
         end
-    elseif k == K"do" && length(args) == 3
-        return Expr(:do, args[1], Expr(:->, args[2], args[3]))
+    elseif k == K"do"
+        # Temporary head which is picked up by _extract_do_lambda
+        headsym = :do_lambda
     elseif k == K"let"
         a1 = args[1]
         if @isexpr(a1, :block)
