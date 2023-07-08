@@ -63,6 +63,7 @@ generate_markdown("NEWS")
 
 Manual = [
     "manual/getting-started.md",
+    "manual/installation.md",
     "manual/variables.md",
     "manual/integers-and-floating-point-numbers.md",
     "manual/mathematical-operations.md",
@@ -101,6 +102,7 @@ Manual = [
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
     "manual/command-line-interface.md",
+    "manual/juliaup.md",
 ]
 
 BaseDocs = [
