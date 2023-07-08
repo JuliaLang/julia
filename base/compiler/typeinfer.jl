@@ -261,7 +261,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         opt = caller.result.src
-        if opt isa OptimizationState{typeof(caller.interp)} # implies `may_optimize(interp) === true`
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
         end
     end
