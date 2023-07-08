@@ -296,11 +296,39 @@
 
     @testset "do block conversion" begin
         @test parsestmt("f(x) do y\n body end") ==
-            Expr(:do, Expr(:call, :f, :x),
+            Expr(:do,
+                 Expr(:call, :f, :x),
                  Expr(:->, Expr(:tuple, :y),
                       Expr(:block,
                            LineNumberNode(2),
                            :body)))
+
+        @test parsestmt("@f(x) do y body end") ==
+            Expr(:do,
+                 Expr(:macrocall, Symbol("@f"), LineNumberNode(1), :x),
+                 Expr(:->, Expr(:tuple, :y),
+                      Expr(:block,
+                           LineNumberNode(1),
+                           :body)))
+
+        @test parsestmt("f(x; a=1) do y body end") ==
+            Expr(:do,
+                 Expr(:call, :f, Expr(:parameters, Expr(:kw, :a, 1)), :x),
+                 Expr(:->, Expr(:tuple, :y),
+                      Expr(:block,
+                           LineNumberNode(1),
+                           :body)))
+
+        # Test calls with do inside them
+        @test parsestmt("g(f(x) do y\n body end)") ==
+            Expr(:call,
+                 :g,
+                 Expr(:do,
+                      Expr(:call, :f, :x),
+                      Expr(:->, Expr(:tuple, :y),
+                           Expr(:block,
+                                LineNumberNode(2),
+                                :body))))
     end
 
     @testset "= to Expr(:kw) conversion" begin
@@ -708,7 +736,7 @@
         @test parsestmt("(x", ignore_errors=true) ==
             Expr(:block, :x, Expr(:error))
         @test parsestmt("x do", ignore_errors=true) ==
-            Expr(:block, :x, Expr(:error, Expr(:do)))
+            Expr(:block, :x, Expr(:error, Expr(:do_lambda)))
     end
 
     @testset "import" begin
