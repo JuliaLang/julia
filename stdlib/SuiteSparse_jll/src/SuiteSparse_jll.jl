@@ -62,8 +62,8 @@ elseif Sys.isapple()
     const libcolamd = "@rpath/libcolamd.3.dylib"
     const libklu = "@rpath/libklu.2.dylib"
     const libldl = "@rpath/libldl.3.dylib"
-    const librbio = "@rpath/librbio.3.dylib"
-    const libspqr = "@rpath/libspqr.3.dylib"
+    const librbio = "@rpath/librbio.4.dylib"
+    const libspqr = "@rpath/libspqr.4.dylib"
     const libsuitesparseconfig = "@rpath/libsuitesparseconfig.7.dylib"
     const libumfpack = "@rpath/libumfpack.6.dylib"
 else
@@ -75,8 +75,8 @@ else
     const libcolamd = "libcolamd.so.3"
     const libklu = "libklu.so.2"
     const libldl = "libldl.so.3"
-    const librbio = "librbio.so.3"
-    const libspqr = "libspqr.so.3"
+    const librbio = "librbio.so.4"
+    const libspqr = "libspqr.so.4"
     const libsuitesparseconfig = "libsuitesparseconfig.so.7"
     const libumfpack = "libumfpack.so.6"
 end
