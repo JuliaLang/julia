@@ -17,9 +17,6 @@
         # Compatibility hack for VERSION >= v"1.4"
         # https://github.com/JuliaLang/julia/pull/34077
         @test parseatom(":true") == Expr(:quote, true)
-
-        # Handling of K"inert"
-        @test parsestmt("a.\$b") == Expr(:., :a, QuoteNode(Expr(:$, :b)))
     end
 
     @testset "Line numbers" begin
@@ -384,6 +381,16 @@
             Expr(:tuple, Expr(:(=), :a, 1))
         @test parsestmt("(;((a = 1)),)") ==
             Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
+    end
+
+    @testset "Field access syntax" begin
+        @test parsestmt("a.b") == Expr(:., :a, QuoteNode(:b))
+        @test parsestmt("a.\$b") == Expr(:., :a, QuoteNode(Expr(:$, :b)))
+        @test parsestmt("a.:b") == Expr(:., :a, QuoteNode(:b))
+        @test parsestmt("a.@b x") == Expr(:macrocall,
+                                          Expr(:., :a, QuoteNode(Symbol("@b"))),
+                                          LineNumberNode(1),
+                                          :x)
     end
 
     @testset "dotcall / dotted operators" begin

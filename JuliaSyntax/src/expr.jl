@@ -259,10 +259,17 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
                 args[1] = Symbol(".", args[1])
             end
         end
-    elseif k == K"." && length(args) == 1 && is_operator(childheads[1])
-        # Hack: Here we preserve the head of the operator to determine whether
-        # we need to coalesce it with the dot into a single symbol later on.
-        args[1] = (childheads[1], args[1])
+    elseif k == K"."
+        if length(args) == 2
+            a2 = args[2]
+            if !@isexpr(a2, :quote) && !(a2 isa QuoteNode)
+                args[2] = QuoteNode(a2)
+            end
+        elseif length(args) == 1 && is_operator(childheads[1])
+            # Hack: Here we preserve the head of the operator to determine whether
+            # we need to coalesce it with the dot into a single symbol later on.
+            args[1] = (childheads[1], args[1])
+        end
     elseif k == K"ref" || k == K"curly"
         # Move parameters blocks to args[2]
         _reorder_parameters!(args, 2)
