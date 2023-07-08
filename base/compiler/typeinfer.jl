@@ -257,33 +257,28 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         caller.valid_worlds = valid_worlds
-        finish(caller, interp)
+        finish(caller, caller.interp)
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
-              frames[i].cached )
-        for i in 1:length(frames) ]
-    empty!(frames)
-    for (caller, _, _) in results
-        opt = caller.src
-        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            optimize(interp, opt, caller)
+    for caller in frames
+        opt = caller.result.src
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+            optimize(caller.interp, opt, caller.result)
         end
     end
-    for (caller, edges, cached) in results
-        valid_worlds = caller.valid_worlds
+    for caller in frames
+        (; result ) = caller
+        valid_worlds = result.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(result, caller.stmt_edges[1])
         end
-        if cached
-            cache_result!(interp, caller)
+        if caller.cached
+            cache_result!(caller.interp, result)
         end
-        finish!(interp, caller)
+        finish!(caller.interp, result)
     end
+    empty!(frames)
     return true
 end
 

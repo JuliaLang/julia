@@ -795,42 +795,10 @@ function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     end
 end
 
-"""
-    reinterpret(::Type{Out}, x::In)
-
-Reinterpret the valid non-padding bytes of an isbits value `x` as isbits type `Out`.
-
-Both types must have the same amount of non-padding bytes. This operation is guaranteed
-to be reversible.
-
-```jldoctest
-julia> reinterpret(NTuple{2, UInt8}, 0x1234)
-(0x34, 0x12)
-
-julia> reinterpret(UInt16, (0x34, 0x12))
-0x1234
-
-julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
-(0x0301, 0x02)
-```
-
-!!! warning
-
-    Use caution if some combinations of bits in `Out` are not considered valid and would
-    otherwise be prevented by the type's constructors and methods. Unexpected behavior
-    may result without additional validation.
-"""
-@inline function reinterpret(::Type{Out}, x::In) where {Out, In}
+@inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
+    # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
-    if isprimitivetype(Out) && isprimitivetype(In)
-        outsize = sizeof(Out)
-        insize = sizeof(In)
-        outsize == insize ||
-            throw(ArgumentError("Sizes of types $Out and $In do not match; got $outsize \
-                and $insize, respectively."))
-        return bitcast(Out, x)
-    end
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||

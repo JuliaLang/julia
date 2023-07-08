@@ -1757,7 +1757,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     if m == 0
         _deleteat!(a, i, 1)
     elseif m == 1
-        a[i] = ins[1]
+        a[i] = only(ins)
     else
         _growat!(a, i, m-1)
         k = 1
@@ -2445,9 +2445,8 @@ julia> findall(x -> x >= 0, d)
 ```
 """
 function findall(testf::Function, A)
-    T = eltype(keys(A))
     gen = (first(p) for p in pairs(A) if testf(last(p)))
-    isconcretetype(T) ? collect(T, gen) : collect(gen)
+    @default_eltype(gen) === Union{} ? collect(@default_eltype(keys(A)), gen) : collect(gen)
 end
 
 # Broadcasting is much faster for small testf, and computing

@@ -439,39 +439,39 @@ end
 
 # any & all
 
-@test @inferred any([]) == false
-@test @inferred any(Bool[]) == false
-@test @inferred any([true]) == true
-@test @inferred any([false, false]) == false
-@test @inferred any([false, true]) == true
-@test @inferred any([true, false]) == true
-@test @inferred any([true, true]) == true
-@test @inferred any([true, true, true]) == true
-@test @inferred any([true, false, true]) == true
-@test @inferred any([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, any([])) == false
+@test @inferred(any(Bool[])) == false
+@test @inferred(any([true])) == true
+@test @inferred(any([false, false])) == false
+@test @inferred(any([false, true])) == true
+@test @inferred(any([true, false])) == true
+@test @inferred(any([true, true])) == true
+@test @inferred(any([true, true, true])) == true
+@test @inferred(any([true, false, true])) == true
+@test @inferred(any([false, false, false])) == false
 
-@test @inferred all([]) == true
-@test @inferred all(Bool[]) == true
-@test @inferred all([true]) == true
-@test @inferred all([false, false]) == false
-@test @inferred all([false, true]) == false
-@test @inferred all([true, false]) == false
-@test @inferred all([true, true]) == true
-@test @inferred all([true, true, true]) == true
-@test @inferred all([true, false, true]) == false
-@test @inferred all([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, all([])) == true
+@test @inferred(all(Bool[])) == true
+@test @inferred(all([true])) == true
+@test @inferred(all([false, false])) == false
+@test @inferred(all([false, true])) == false
+@test @inferred(all([true, false])) == false
+@test @inferred(all([true, true])) == true
+@test @inferred(all([true, true, true])) == true
+@test @inferred(all([true, false, true])) == false
+@test @inferred(all([false, false, false])) == false
 
-@test @inferred any(x->x>0, []) == false
-@test @inferred any(x->x>0, Int[]) == false
-@test @inferred any(x->x>0, [-3]) == false
-@test @inferred any(x->x>0, [4]) == true
-@test @inferred any(x->x>0, [-3, 4, 5]) == true
+@test @inferred(Union{Missing,Bool}, any(x->x>0, [])) == false
+@test @inferred(any(x->x>0, Int[])) == false
+@test @inferred(any(x->x>0, [-3])) == false
+@test @inferred(any(x->x>0, [4])) == true
+@test @inferred(any(x->x>0, [-3, 4, 5])) == true
 
-@test @inferred all(x->x>0, []) == true
-@test @inferred all(x->x>0, Int[]) == true
-@test @inferred all(x->x>0, [-3]) == false
-@test @inferred all(x->x>0, [4]) == true
-@test @inferred all(x->x>0, [-3, 4, 5]) == false
+@test @inferred(Union{Missing,Bool}, all(x->x>0, [])) == true
+@test @inferred(all(x->x>0, Int[])) == true
+@test @inferred(all(x->x>0, [-3])) == false
+@test @inferred(all(x->x>0, [4])) == true
+@test @inferred(all(x->x>0, [-3, 4, 5])) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)

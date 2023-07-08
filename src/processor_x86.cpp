@@ -1042,6 +1042,11 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
 jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())

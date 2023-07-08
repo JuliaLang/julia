@@ -21,6 +21,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
 --------------------

@@ -272,8 +272,8 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real; interval::Real=0.0)
-    timer = Timer(timeout, interval=interval)
+function Timer(cb::Function, timeout; kwargs...)
+    timer = Timer(timeout; kwargs...)
     t = @task begin
         unpreserve_handle(timer)
         while _trywait(timer)

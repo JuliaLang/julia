@@ -778,11 +778,11 @@ end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
-    count == 0 && return str
+    count == 0 && return String(str)
     e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
         foreach(_free_pat_replacer, patterns)
-        return str
+        return String(str)
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))

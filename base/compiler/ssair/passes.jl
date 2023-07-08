@@ -908,6 +908,62 @@ end
     return nothing
 end
 
+struct IsEgal <: Function
+    x::Any
+    IsEgal(@nospecialize(x)) = new(x)
+end
+(x::IsEgal)(@nospecialize(y)) = x.x === y
+
+# This tries to match patterns of the form
+#  %ft   = typeof(%farg)
+#  %Targ = apply_type(Foo, ft)
+#  %x    = new(%Targ, %farg)
+#
+# and if possible refines the nothrowness of the new expr based on it.
+function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
+                              @nospecialize(Targ), @nospecialize(farg))
+    isa(Targ, SSAValue) || return false
+
+    Tdef = compact[Targ][:inst]
+    is_known_call(Tdef, Core.apply_type, compact) || return false
+    length(Tdef.args) ≥ 2 || return false
+
+    applyT = argextype(Tdef.args[2], compact)
+    isa(applyT, Const) || return false
+
+    applyT = applyT.val
+    tvars = Any[]
+    while isa(applyT, UnionAll)
+        applyTvar = applyT.var
+        applyT = applyT.body
+        push!(tvars, applyTvar)
+    end
+
+    applyT.name === typ.name || return false
+    fT = fieldtype(applyT, fidx)
+    idx = findfirst(IsEgal(fT), tvars)
+    idx === nothing && return false
+    checkbounds(Bool, Tdef.args, 2+idx) || return false
+    valarg = Tdef.args[2+idx]
+    isa(valarg, SSAValue) || return false
+    valdef = compact[valarg][:inst]
+    is_known_call(valdef, typeof, compact) || return false
+
+    return valdef.args[2] === farg
+end
+
+function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    if consistent
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
+    end
+    if effect_free_and_nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
+    end
+end
+
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
@@ -1037,6 +1093,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+            elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
+                refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
         end
