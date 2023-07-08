@@ -64,6 +64,7 @@ class of tokenization errors and lets the parser deal with them.
 
 ### Improvements for AST inconsistencies
 
+* Field access syntax like `a.b` is parsed as `(. a b)` rather than `(. a (quote b))` to avoid the inconsistency between this and actual quoted syntax literals like `:(b)` and `quote b end` ([#342](https://github.com/JuliaLang/JuliaSyntax.jl/issues/324))
 * Dotted call syntax like `f.(a,b)` and `a .+ b` has been made consistent with the `K"dotcall"` head (#90)
 * Standalone dotted operators are always parsed as `(. op)`. For example `.*(x,y)` is parsed as `(call (. *) x y)` (#240)
 * The `K"="` kind is used for keyword syntax rather than `kw`, to avoid various inconsistencies and ambiguities (#103)
