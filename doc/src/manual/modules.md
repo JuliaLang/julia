@@ -78,10 +78,8 @@ module-local.
 ### Export lists
 
 Names (referring to functions, types, global variables, and constants) can be added to the
-*export list* of a module with `export`: these are the symbols that define the public API of
-the module and, by default, they are imported when `using` the module. Typically, they are
-at or near the top of the module definition so that readers of the source code can find them
-easily, as in
+*export list* of a module with `export`: these are the symbols that are imported when `using` the module. Typically, they are at or near the top of the module definition
+so that readers of the source code can find them easily, as in
 
 ```jldoctest module_manual
 julia> module NiceStuff
@@ -96,26 +94,23 @@ julia> module NiceStuff
 but this is just a style suggestion — a module can have multiple `export` statements in arbitrary
 locations.
 
-### Scoped Exports
+It is common to export names which form part of the API (application programming interface). In
+the above code, the export list suggests that users should use `nice` and `DOG`. However, since
+qualified names always make identifiers accessible, this is just an option for organizing APIs:
+unlike other languages, Julia has no facilities for truly hiding module internals.
 
-Modules should export all names which form part of their API, however it is sometimes
-unhelpful to automatically load every symbol that is part of the API on `using`. In this
-case, it is appropriate to use `export (scoped-true), name` instead of ``export name` to
-mark the symbol as a part of the public API, but not to load it on `using`. This is usually
-done when modules use common words, such as `derivative`, in their API, which could easily
-clash with the export lists of other modules. We will see how to manage name clashes below.
-
-Since qualified names always make identifiers accessible, this is just an option for
-organizing APIs: unlike some other languages, Julia discourages truly hiding module internals.
+Also, some modules don't export names at all. This is usually done if they use common
+words, such as `derivative`, in their API, which could easily clash with the export lists of other
+modules. We will see how to manage name clashes below.
 
 ### Standalone `using` and `import`
 
-The most common way of loading a module is `using ModuleName`. This [loads](@ref
+Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
 code-loading) the code associated with `ModuleName`, and brings
 
 1. the module name
 
-2. and the elements of the export list (excluding scoped exports) into the surrounding global namespace.
+2. and the elements of the export list into the surrounding global namespace.
 
 Technically, the statement `using ModuleName` means that a module called `ModuleName` will be
 available for resolving names as needed. When a global variable is encountered that has no

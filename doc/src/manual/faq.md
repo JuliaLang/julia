@@ -23,32 +23,36 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 ### How does Julia define its public API?
 
 Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
-documentation of symbols exported from `Base`
-and the standard libraries. Functions, types, and constants are not part of the public
-API if they are not exported, _even if they have docstrings_. Further, only the documented
-behavior of exported symbols is part of the public API. Undocumented behavior of exported
+documentation of public symbols from `Base` and the standard libraries. Functions,
+types, and constants are not part of the public API if they are not public, even if
+they have docstrings or are described in the documentation. Further, only the documented
+behavior of public symbols is part of the public API. Undocumented behavior of public
 symbols is internal.
+
+Public symbols are those marked with either `public foo` or `export bar`.
+Exported symbols are automatically considered public
 
 In other words:
 
-- Documented behavior of exported symbols is part of the public API.
+- Documented behavior of public symbols is part of the public API.
 
-- Undocumented behavior of exported symbols is not part of the public API.
+- Undocumented behavior of public symbols is not part of the public API.
 
-- Documented behavior of unexported symbols is not part of the public API.
+- Documented behavior of private symbols is not part of the public API.
 
-- Undocumented behavior of unexported symbols is not part of the public API.
+- Undocumented behavior of private symbols is not part of the public API.
 
-You can get a complete list of the symbols exported from a module with `names(MyModule)`.
+You can get a complete list of the public symbols from a module with `names(MyModule)`.
 
 Package authors are encouraged to define their public API similarly.
 
-Documented behavior of symbols exported from submodules are only part of the public API
-if the module they belong to is also exported. If module A marks submodule B as public and
+Publicity nests in the same wa as exporting.
+Documented behavior of public symbols from submodules are only part of the public API
+if the module they belong to is also public. If module A marks submodule B as public and
 B marks foo as public, then A.B.foo is public, but if A does not mark B as public,
 then writing A.B.foo outside of A is accessing an internal and anything that B marks as
 public forms a sub-api that is not covered by the SymVer of A. This could be for the
-convenience of developers of A if A is a large package...
+convenience of developers of A if A is a large package.
 
 Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
 will not be removed or receive meaningful breaking changes in a minor version update.

@@ -73,26 +73,28 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module; all::Bool = false, imported::Bool = false)
+    names(x::Module; qualified::Bool=true, all::Bool = false, imported::Bool = false)
 
-Get an array of the names exported by a `Module`, excluding deprecated names.
-If `all` is true, then the list also includes non-exported names defined in the module,
+Get an array of the public names of `Module`, excluding deprecated names.
+
+If `qualified` is false, then return only exported names, not public but unexported names.
+If `all` is true, then the list also includes private names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
 
-As a special case, all names defined in `Main` are considered \"exported\",
-since it is not idiomatic to explicitly export names from `Main`.
+As a special case, all names defined in `Main` are considered \"public\",
+since it is not idiomatic to mark names from `Main` as public.
 
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false, scoped::Bool = true) =
-    sort!(unsorted_names(m; all, imported, scoped))
-unsorted_names(m::Module; all::Bool = false, imported::Bool = false, scoped::Bool = true) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, scoped)
+names(m::Module; qualified::Bool = true, all::Bool = false, imported::Bool = false) =
+    sort!(unsorted_names(m; qualified, all, imported))
+unsorted_names(m::Module; qualified::Bool = true, all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, qualified, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
-isinternal(m::Module, s::Symbol) = !isexported(m, s) && ccall(:jl_module_scoped_exports_p, Cint, (Any, Any), m, s) == 0
+isinternal(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) == 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 

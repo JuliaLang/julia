@@ -1617,8 +1617,8 @@
        ((export)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
-          ; (if (not (every symbol-or-interpolate? es)) ; TODO make this much more strict
-          ;     (error "invalid \"export\" statement"))
+          (if (not (every symbol-or-interpolate? es))
+              (error "invalid \"export\" statement"))
           `(export ,@es)))
        ((import using)
         (parse-imports s word))
