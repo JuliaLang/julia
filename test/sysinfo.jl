@@ -10,6 +10,9 @@ Base.Sys.loadavg()
 @test Base.libllvm_path() isa Symbol
 @test contains(String(Base.libllvm_path()), "LLVM")
 
+@test length(ccall(:jl_get_cpu_name, String, ())) != 0
+@test length(ccall(:jl_get_cpu_features, String, ())) >= 0
+
 if Sys.isunix()
     mktempdir() do tempdir
         firstdir = joinpath(tempdir, "first")

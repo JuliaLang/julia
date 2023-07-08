@@ -184,7 +184,7 @@ add_tfunc(neg_float, 1, 1, math_tfunc, 1)
 add_tfunc(add_float, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float, 2, 2, math_tfunc, 4)
-add_tfunc(div_float, 2, 2, math_tfunc, 20)
+add_tfunc(div_float, 2, 2, math_tfunc, 4)
 add_tfunc(fma_float, 3, 3, math_tfunc, 5)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 5)
 
@@ -193,7 +193,7 @@ add_tfunc(neg_float_fast, 1, 1, math_tfunc, 1)
 add_tfunc(add_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 2)
-add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
+add_tfunc(div_float_fast, 2, 2, math_tfunc, 2)
 
 # bitwise operators
 # -----------------
@@ -1382,7 +1382,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         op = unwrapva(argtypes[4])
         v = unwrapva(argtypes[5])
         TF = getfield_tfunc(𝕃ᵢ, o, f)
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=# 1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=#1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
@@ -2640,10 +2640,10 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     if isa(sv, InferenceState)
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
         sv.restrict_abstract_call_sites = old_restrict
     else
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     end
     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
     rt = widenslotwrapper(call.rt)

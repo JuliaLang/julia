@@ -563,6 +563,12 @@ function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
+function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, PhiNode) && return def.values
+    is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
+    return nothing
+end
+
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
@@ -573,12 +579,8 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
 
-    predecessors = function (@nospecialize(def), compact::IncrementalCompact)
-        isa(def, PhiNode) && return def.values
-        is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
-        return nothing
-    end
-    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, predecessors)
+
+    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
@@ -730,7 +732,7 @@ function perform_lifting!(compact::IncrementalCompact,
             new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
             new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
 
-            ssa = insert_node!(compact, old_ssa, new_inst)
+            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
         end
         # lifting_cache[ckey] = ssa
@@ -766,6 +768,21 @@ function perform_lifting!(compact::IncrementalCompact,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
             else_result = lifted_value(compact, old_node_ssa, else_result,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
+
+            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
+            # to a PiNode from a guarding conditional, replace with the remaining branch.
+            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
+                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
+
+                # Replace Core.ifelse(%cond, %a, %b) with %a
+                compact[lf.ssa][:inst] = only_result
+                should_count && _count_added_node!(compact, only_result)
+
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # we have not deleted the preceding statement that this was derived from, this
+                # replacement is safe, i.e. it will not affect the effects observed.
+                continue
+            end
 
             @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
             @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
@@ -889,6 +906,62 @@ end
         end
     end
     return nothing
+end
+
+struct IsEgal <: Function
+    x::Any
+    IsEgal(@nospecialize(x)) = new(x)
+end
+(x::IsEgal)(@nospecialize(y)) = x.x === y
+
+# This tries to match patterns of the form
+#  %ft   = typeof(%farg)
+#  %Targ = apply_type(Foo, ft)
+#  %x    = new(%Targ, %farg)
+#
+# and if possible refines the nothrowness of the new expr based on it.
+function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
+                              @nospecialize(Targ), @nospecialize(farg))
+    isa(Targ, SSAValue) || return false
+
+    Tdef = compact[Targ][:inst]
+    is_known_call(Tdef, Core.apply_type, compact) || return false
+    length(Tdef.args) ≥ 2 || return false
+
+    applyT = argextype(Tdef.args[2], compact)
+    isa(applyT, Const) || return false
+
+    applyT = applyT.val
+    tvars = Any[]
+    while isa(applyT, UnionAll)
+        applyTvar = applyT.var
+        applyT = applyT.body
+        push!(tvars, applyTvar)
+    end
+
+    applyT.name === typ.name || return false
+    fT = fieldtype(applyT, fidx)
+    idx = findfirst(IsEgal(fT), tvars)
+    idx === nothing && return false
+    checkbounds(Bool, Tdef.args, 2+idx) || return false
+    valarg = Tdef.args[2+idx]
+    isa(valarg, SSAValue) || return false
+    valdef = compact[valarg][:inst]
+    is_known_call(valdef, typeof, compact) || return false
+
+    return valdef.args[2] === farg
+end
+
+function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    if consistent
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
+    end
+    if effect_free_and_nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
+    end
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -1020,6 +1093,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+            elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
+                refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
         end
@@ -1078,11 +1153,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         # perform SROA on immutable structs here on
-
         field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
-        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
+        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
         isempty(leaves) && continue
 
         lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)
@@ -1510,8 +1584,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 idx == newidx && continue # this is allocation
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 ssa = SSAValue(idx)
-                is_nothrow(ir, ssa) || continue
-                ir[ssa][:inst] = nothing
+                if is_nothrow(ir, ssa)
+                    ir[ssa][:inst] = nothing
+                else
+                    # We can't eliminate this statement, because it might still
+                    # throw an error, but we can mark it as effect-free since we
+                    # know we have removed all uses of the mutable allocation.
+                    # As a result, if we ever do prove nothrow, we can delete
+                    # this statement then.
+                    ir[ssa][:flag] |= IR_FLAG_EFFECT_FREE
+                end
             end
         end
         preserve_uses === nothing && continue

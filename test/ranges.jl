@@ -2490,3 +2490,11 @@ function check_ranges(rx, ry)
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
 # TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "checkbounds overflow (#26623)" begin
+    # the reported issue:
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
+
+    # a case that using mul_with_overflow & add_with_overflow might get wrong:
+    @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
+end

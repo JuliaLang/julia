@@ -742,6 +742,57 @@ let m = Meta.@lower 1 + 1
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+# A lifted Core.ifelse with an eliminated branch (#50276)
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        #=  %1: =# Core.Argument(2),
+        # block 2
+        #=  %2: =# Expr(:call, Core.ifelse, SSAValue(1), true, missing),
+        #=  %3: =# GotoIfNot(SSAValue(2), 11),
+        # block 3
+        #=  %4: =# PiNode(SSAValue(2), Bool), # <-- This PiNode is the trigger of the bug, since it
+                                              #     means that only one branch of the Core.ifelse
+                                              #     is lifted.
+        #=  %5: =# GotoIfNot(false, 8),
+        # block 2
+        #=  %6: =# nothing,
+        #=  %7: =# GotoNode(8),
+        # block 4
+        #=  %8: =# PhiNode(Int32[5, 7], Any[SSAValue(4), SSAValue(6)]),
+        #               ^-- N.B. This PhiNode also needs to have a Union{ ... } type in order
+        #                   for lifting to be performed (it is skipped for e.g. `Bool`)
+        #
+        #=  %9: =# Expr(:call, isa, SSAValue(8), Missing),
+        #= %10: =# ReturnNode(SSAValue(9)),
+        # block 5
+        #= %11: =# ReturnNode(false),
+    ]
+    src.ssavaluetypes = Any[
+        Any,
+        Union{Missing, Bool},
+        Any,
+        Bool,
+        Any,
+        Missing,
+        Any,
+        Union{Nothing, Bool},
+        Bool,
+        Any,
+        Any
+    ]
+    nstmts = length(src.code)
+    src.codelocs = fill(one(Int32), nstmts)
+    src.ssaflags = fill(one(Int32), nstmts)
+    src.slotflags = fill(zero(UInt8), 3)
+    ir = Core.Compiler.inflate_ir(src)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #31546 - missing widenconst in SROA
 function f_31546(x)
     (a, b) = x == "r"  ? (false, false) :
@@ -1304,3 +1355,19 @@ let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
     @test count(isnew, src.code) == 0
     @test count(iscall((src, typeassert)), src.code) == 0
 end
+
+# Test that we can eliminate new{typeof(x)}(x)
+struct TParamTypeofTest1{T}
+    x::T
+    @eval TParamTypeofTest1(x) = $(Expr(:new, :(TParamTypeofTest1{typeof(x)}), :x))
+end
+tparam_typeof_test_elim1(x) = TParamTypeofTest1(x).x
+@test fully_eliminated(tparam_typeof_test_elim1, Tuple{Any})
+
+struct TParamTypeofTest2{S,T}
+    x::S
+    y::T
+    @eval TParamTypeofTest2(x, y) = $(Expr(:new, :(TParamTypeofTest2{typeof(x),typeof(y)}), :x, :y))
+end
+tparam_typeof_test_elim2(x, y) = TParamTypeofTest2(x, y).x
+@test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any})

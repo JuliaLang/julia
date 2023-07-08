@@ -732,6 +732,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(cast_t->getContext().supportsTypedPointers());
                 replace_i = new BitCastInst(replace_i, cast_t, "", user);
                 replace_i->setDebugLoc(user->getDebugLoc());
                 replace_i->takeName(user);

@@ -100,7 +100,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_lazily_freed`
     meta = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         // page is already mapped
         return meta;
     }
@@ -108,14 +108,14 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_clean`
     meta = pop_lf_page_metadata_back(&global_page_pool_clean);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
     // try to get page from `pool_freed`
     meta = pop_lf_page_metadata_back(&global_page_pool_freed);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
@@ -155,7 +155,7 @@ exit:
 void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
-    gc_alloc_map_set((char*)p, 0);
+    gc_alloc_map_set((char*)p, GC_PAGE_FREED);
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {

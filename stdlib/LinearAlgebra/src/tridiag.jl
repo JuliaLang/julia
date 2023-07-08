@@ -427,6 +427,19 @@ logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shif
     end
 end
 
+@inline function Base.isstored(A::SymTridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.ev, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.ev, i)
+    else
+        return false
+    end
+end
+
 @inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -629,6 +642,19 @@ end
         return @inbounds isassigned(A.du, i)
     else
         return true
+    end
+end
+
+@inline function Base.isstored(A::Tridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.d, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.dl, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.du, i)
+    else
+        return false
     end
 end
 
