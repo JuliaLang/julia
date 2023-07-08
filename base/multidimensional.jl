@@ -167,6 +167,11 @@ module IteratorsMD
     Base.iterate(::CartesianIndex) =
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
+    # ranges are deliberately disabled to prevent ambiguities with the colon constructor
+    Base.range_start_step_length(start::CartesianIndex, step::CartesianIndex, len::Integer) =
+        error("range with a specified length is deliberately unsupported for CartesianIndex arguments."*
+            " Use StepRangeLen($start, $step, $len) to construct this range")
+
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}
     """

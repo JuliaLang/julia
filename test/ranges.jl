@@ -2545,4 +2545,7 @@ end
 
     r = StepRangeLen(CartesianIndex(), CartesianIndex(), 3)
     @test all(==(CartesianIndex()), r)
+
+    errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
+    @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
 end
