@@ -25,7 +25,7 @@ LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DLAPACK_LINKER_FLAGS="blastrampoline"
 
 $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v$(LIBSUITESPARSE_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/Wimmerer/SuiteSparse/archive/v$(LIBSUITESPARSE_VER).tar.gz
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
