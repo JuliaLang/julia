@@ -580,6 +580,11 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
 
     result = frame.result.result
     result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
+    if isa(result, Union)
+        # unswitch `Union` of same `UnionAll` instances to `UnionAll` of `Union`s
+        # so that we can use the field information of the `UnionAll`
+        return CC.unswitchtypeunion(result)
+    end
     return result
 end
 
