@@ -9,7 +9,7 @@ Modules in Julia help organize code into coherent units. They are delimited synt
 2. Modules have facilities for detailed namespace management: each defines a set of names it
    `export`s, and can import names from other modules with `using` and `import` (we explain these below).
 
-3. Modules can be precompiled for faster loading, and contain code for runtime initialization.
+3. Modules can be precompiled for faster loading, and may contain code for runtime initialization.
 
 Typically, in larger Julia packages you will see module code organized into files, eg
 
@@ -171,7 +171,7 @@ julia> using .NiceStuff: nice
 julia> struct Cat end
 
 julia> nice(::Cat) = "nice 😸"
-ERROR: error in method definition: function NiceStuff.nice must be explicitly imported to be extended
+ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
 Stacktrace:
  [1] top-level scope
    @ none:0
@@ -429,11 +429,14 @@ Large modules can take several seconds to load because executing all of the stat
 often involves compiling a large amount of code.
 Julia creates precompiled caches of the module to reduce this time.
 
-The incremental precompiled module file are created and used automatically when using `import`
-or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref). The resulting
-cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
-recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
+Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module.  If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
+cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]`. If nothing about your system changes,
+such cache files will be used when you load the module with `import` or `using`.
+
+Precompilation cache files store definitions of modules, types, methods, and constants. They may also store method specializations and the code generated for them, but this typically requires that the developer add explicit [`precompile`](@ref) directives or execute workloads that force compilation during the package build.
+
+However, if you update the module's dependencies or change its source code, the module is automatically
+recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
@@ -445,6 +448,7 @@ by the search logic in `require` matches the path that had created the precompil
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between
 the running system and the precompile cache.
+Finally, it takes account of changes in any [compile-time preferences](@ref preferences).
 
 If you know that a module is *not* safe to precompile
 (for example, for one of the reasons described below), you should
@@ -589,6 +593,12 @@ A few other points to be aware of:
 It is sometimes helpful during module development to turn off incremental precompilation. The
 command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
 off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
+are ignored when loading modules and module dependencies.
+More fine-grained control is available with `--pkgimages=no`, which suppresses only
+native-code storage during precompilation. `Base.compilecache` can still be called
 manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
 precompilation triggering when installing, updating, and explicitly building packages.
+
+You can also debug some precompilation failures with environment variables. Setting
+`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of compiled
+native code. See the **Developer Documentation** part of the Julia manual, where you will find further details in the section documenting Julia's internals under "Package Images".

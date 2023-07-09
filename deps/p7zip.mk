@@ -4,7 +4,7 @@ include $(SRCDIR)/p7zip.version
 ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
 
 $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/jinfeihan57/p7zip/archive/refs/tags/v$(P7ZIP_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/p7zip-project/p7zip/archive/refs/tags/v$(P7ZIP_VER).tar.gz
 
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 	$(JLCHECKSUM) $<

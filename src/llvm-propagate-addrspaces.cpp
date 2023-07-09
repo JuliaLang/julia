@@ -23,7 +23,7 @@
 #include <llvm/Support/Debug.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 
@@ -187,6 +187,8 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
         if (CurrentV->getType() != TargetType) {
+            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+            assert(CurrentV->getContext().supportsTypedPointers());
             auto *BCI = new BitCastInst(CurrentV, TargetType);
             ToInsert.push_back(std::make_pair(BCI, InsertPt));
             CurrentV = BCI;
@@ -302,7 +304,11 @@ struct PropagateJuliaAddrspacesLegacy : FunctionPass {
 
     PropagateJuliaAddrspacesLegacy() : FunctionPass(ID) {}
     bool runOnFunction(Function &F) override {
-        return propagateJuliaAddrspaces(F);
+        bool modified = propagateJuliaAddrspaces(F);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyFunction(F, &errs()));
+#endif
+        return modified;
     }
 };
 
@@ -314,14 +320,20 @@ Pass *createPropagateJuliaAddrspaces() {
 }
 
 PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysisManager &AM) {
-    if (propagateJuliaAddrspaces(F)) {
+    bool modified = propagateJuliaAddrspaces(F);
+
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

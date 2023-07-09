@@ -233,7 +233,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices. The axes should be their own axes, that is `axes.(axes(A),1) == axes(A)` should be satisfied. |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -462,10 +462,17 @@ Not all types support `axes` and indexing, but many are convenient to allow in b
 The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
-support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
-`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+support `axes` and indexing.
+
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
+```julia
+Base.broadcastable(o::MyType) = Ref(o)
+```
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
+
+Custom array-like types can specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though

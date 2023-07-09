@@ -29,6 +29,7 @@ end
 function nonnothingtype_checked(T::Type)
     R = nonnothingtype(T)
     R >: T && error("could not compute non-nothing type")
+    R <: Union{} && error("cannot convert a value to nothing for assignment")
     return R
 end
 
@@ -84,6 +85,9 @@ julia> something(nothing, 1)
 
 julia> something(Some(1), nothing)
 1
+
+julia> something(Some(nothing), 2) === nothing
+true
 
 julia> something(missing, nothing)
 missing

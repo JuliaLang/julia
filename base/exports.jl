@@ -238,6 +238,7 @@ export
     bitrotate,
     bswap,
     cbrt,
+    fourthroot,
     ceil,
     cis,
     cispi,
@@ -352,6 +353,7 @@ export
     tan,
     tand,
     tanh,
+    tanpi,
     trailing_ones,
     trailing_zeros,
     trunc,
@@ -363,6 +365,7 @@ export
     zero,
     √,
     ∛,
+    ∜,
     ≈,
     ≉,
 
@@ -818,7 +821,7 @@ export
     atreplinit,
     exit,
     ntuple,
-    Splat,
+    splat,
 
 # I/O and events
     close,
@@ -856,6 +859,8 @@ export
     readline,
     readlines,
     readuntil,
+    copyuntil,
+    copyline,
     redirect_stdio,
     redirect_stderr,
     redirect_stdin,
@@ -978,8 +983,11 @@ export
     reenable_sigint,
     unsafe_copyto!,
     unsafe_load,
+    unsafe_modify!,
     unsafe_pointer_to_objref,
+    unsafe_replace!,
     unsafe_store!,
+    unsafe_swap!,
 
 # implemented in Random module
     rand,
@@ -1003,6 +1011,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @Kwargs,
     @lazy_str, # lazy string
 
     # documentation
@@ -1020,6 +1029,7 @@ export
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
 
     # tasks
     @sync,

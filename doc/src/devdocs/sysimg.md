@@ -8,6 +8,9 @@ as many platforms as possible, so as to give vastly improved startup times.  On 
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
 
+Julia will by default generate its system image on half of the available system threads. This
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref env-image-threads) environment variable.
+
 This operation is useful for multiple reasons.  A user may:
 
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
@@ -19,7 +22,7 @@ This operation is useful for multiple reasons.  A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
-## System image optimized for multiple microarchitectures
+## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
@@ -38,6 +41,9 @@ The syntax for each target is a CPU name followed by multiple features separated
 All features supported by LLVM are supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
+
+!!! note
+    It is good practice to specify either `clone_all` or `base(<n>)` for every target apart from the first one. This makes it explicit which targets have all functions cloned, and which targets are based on other targets. If this is not done, the default behavior is to not clone every function, and to use the first target's function definition as the fallback when not cloning a function.
 
 1. `clone_all`
 
@@ -101,7 +107,7 @@ See code comments for each components for more implementation details.
     (see comments in `MultiVersioning::runOnModule` for how this is done),
     the pass also generates metadata so that the runtime can load and initialize the
     system image correctly.
-    A detail description of the metadata is available in `src/processor.h`.
+    A detailed description of the metadata is available in `src/processor.h`.
 
 2. System image loading
 

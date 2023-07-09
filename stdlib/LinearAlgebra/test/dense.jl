@@ -238,6 +238,15 @@ end
     @test pinv(M,rtol=0.5)== M
 end
 
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
+end
+
 @testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)
@@ -1202,6 +1211,11 @@ end
     # case where no sqrt is needed (s=0)
     A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
     @test exp(log(A2)) ≈ A2
+end
+
+@testset "sqrt of empty Matrix of type $T" for T in [Int,Float32,Float64,ComplexF32,ComplexF64]
+    @test sqrt(Matrix{T}(undef, 0, 0)) == Matrix{T}(undef, 0, 0)
+    @test_throws DimensionMismatch sqrt(Matrix{T}(undef, 0, 3))
 end
 
 struct TypeWithoutZero end

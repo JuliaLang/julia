@@ -41,6 +41,16 @@ Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
 @test Issue29451String() == "0"
 @test parse(Int, Issue29451String()) == 0
 
+# https://github.com/JuliaStrings/InlineStrings.jl/issues/57
+struct InlineStringIssue57 <: AbstractString end
+Base.ncodeunits(::InlineStringIssue57) = 4
+Base.lastindex(::InlineStringIssue57) = 4
+Base.isvalid(::InlineStringIssue57, i::Integer) = 0 < i < 5
+Base.iterate(::InlineStringIssue57, i::Integer=1) = i == 1 ? ('t', 2) : i == 2 ? ('r', 3) : i == 3 ? ('u', 4) : i == 4 ? ('e', 5) : nothing
+Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
+
+@test parse(Bool, InlineStringIssue57())
+
 @testset "Issue 20587, T=$T" for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
@@ -300,7 +310,7 @@ end
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
 
-@testset "isssue #29980" begin
+@testset "issue #29980" begin
     @test parse(Bool, "1") === true
     @test parse(Bool, "01") === true
     @test parse(Bool, "0") === false

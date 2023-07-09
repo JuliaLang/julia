@@ -111,10 +111,6 @@ void jl_safepoint_init(void)
 
 int jl_safepoint_start_gc(void)
 {
-    if (jl_n_threads == 1) {
-        jl_atomic_store_relaxed(&jl_gc_running, 1);
-        return 1;
-    }
     // The thread should have set this already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
     uv_mutex_lock(&safepoint_lock);
@@ -128,6 +124,14 @@ int jl_safepoint_start_gc(void)
         jl_safepoint_wait_gc();
         return 0;
     }
+    // Foreign thread adoption disables the GC and waits for it to finish, however, that may
+    // introduce a race between it and this thread checking if the GC is enabled and only
+    // then setting jl_gc_running. To avoid that, check again now that we won that race.
+    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+        jl_atomic_store_release(&jl_gc_running, 0);
+        uv_mutex_unlock(&safepoint_lock);
+        return 0;
+    }
     jl_safepoint_enable(1);
     jl_safepoint_enable(2);
     uv_mutex_unlock(&safepoint_lock);
@@ -137,10 +141,6 @@ int jl_safepoint_start_gc(void)
 void jl_safepoint_end_gc(void)
 {
     assert(jl_atomic_load_relaxed(&jl_gc_running));
-    if (jl_n_threads == 1) {
-        jl_atomic_store_relaxed(&jl_gc_running, 0);
-        return;
-    }
     uv_mutex_lock(&safepoint_lock);
     // Need to reset the page protection before resetting the flag since
     // the thread will trigger a segfault immediately after returning from
@@ -158,8 +158,10 @@ void jl_safepoint_end_gc(void)
 
 void jl_safepoint_wait_gc(void)
 {
+    jl_task_t *ct = jl_current_task; (void)ct;
+    JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
     // The thread should have set this is already
-    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0);
+    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != 0);
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {

@@ -132,14 +132,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                setglobal!(Main, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -159,7 +159,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            setglobal!(Main, :err, lasterr)
+            setglobal!(Base.MainInclude, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -202,10 +202,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 # detect the reason which caused an :incomplete expression
 # from the error message
 # NOTE: the error messages are defined in src/julia-parser.scm
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    Meta.isexpr(ex, :incomplete) || return :none
-    msg = ex.args[1]
+function fl_incomplete_tag(msg::AbstractString)
     occursin("string", msg) && return :string
     occursin("comment", msg) && return :comment
     occursin("requires end", msg) && return :block
@@ -213,6 +210,20 @@ function incomplete_tag(ex::Expr)
     occursin("character", msg) && return :char
     return :other
 end
+
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    elseif ex.args[1] isa String
+        return fl_incomplete_tag(ex.args[1])
+    else
+        return incomplete_tag(ex.args[1])
+    end
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)
@@ -478,6 +489,25 @@ function include(fname::AbstractString)
     Base._include(identity, Main, fname)
 end
 eval(x) = Core.eval(Main, x)
+
+"""
+    ans
+
+A variable referring to the last computed value, automatically imported to the interactive prompt.
+"""
+global ans = nothing
+
+"""
+    err
+
+A variable referring to the last thrown errors, automatically imported to the interactive prompt.
+The thrown errors are collected in a stack of exceptions.
+"""
+global err = nothing
+
+# weakly exposes ans and err variables to Main
+export ans, err
+
 end
 
 """

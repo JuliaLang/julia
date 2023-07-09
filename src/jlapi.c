@@ -15,6 +15,10 @@
 #include "julia_assert.h"
 #include "julia_internal.h"
 
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
+
 #ifdef __cplusplus
 #include <cfenv>
 extern "C" {
@@ -96,9 +100,15 @@ JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
     jl_init_with_image(julia_bindir, image_relative_path);
 }
 
+static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    ct->ptls->previous_exception = NULL;
+}
+
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         const char filename[] = "none";
         jl_value_t *ast = jl_parse_all(str, strlen(str),
@@ -106,10 +116,10 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception();
         r = NULL;
     }
     return r;
@@ -128,7 +138,7 @@ JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_current_task->ptls->previous_exception = NULL;
+    _jl_exception_clear(jl_current_task);
 }
 
 // get the name of a type as a string
@@ -181,7 +191,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
         v = jl_apply(argv, nargs);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -201,7 +211,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         v = jl_apply_generic(f, NULL, 0);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -224,7 +234,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         v = jl_apply(argv, 2);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -248,7 +258,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         v = jl_apply(argv, 3);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -261,6 +271,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c)
 {
     jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 4);
@@ -268,16 +279,15 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         argv[1] = a;
         argv[2] = b;
         argv[3] = c;
-        jl_task_t *ct = jl_current_task;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -467,6 +477,11 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
     jl_cpu_pause();
 }
 
+JL_DLLEXPORT void (jl_cpu_suspend)(void)
+{
+    jl_cpu_suspend();
+}
+
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
@@ -560,15 +575,15 @@ static NOINLINE int true_main(int argc, char *argv[])
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
+        jl_task_t *ct = jl_current_task;
         JL_TRY {
-            jl_task_t *ct = jl_current_task;
             size_t last_age = ct->world_age;
             ct->world_age = jl_get_world_counter();
             jl_apply(&start_client, 1);
             ct->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception());
+            jl_no_exc_handler(jl_current_exception(), ct);
         }
         return 0;
     }
@@ -674,6 +689,11 @@ static void rr_detach_teleport(void) {
 
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
+#ifdef USE_TRACY
+    if (getenv("JULIA_WAIT_FOR_TRACY"))
+        while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
+#endif
+
     // no-op on Windows, note that the caller must have already converted
     // from `wchar_t` to `UTF-8` already if we're running on Windows.
     uv_setup_args(argc, argv);
