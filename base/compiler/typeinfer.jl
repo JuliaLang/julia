@@ -698,13 +698,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    stmt_info = sv.stmt_info
     src = sv.src
-    body = src.code
-    nexpr = length(body)
-    codelocs = src.codelocs
+    stmts = src.code
+    nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
     undefs = fill(false, nslots)
@@ -718,8 +715,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     #    NOTE because of this, `was_reached` will no longer be available after this point
     # 5. eliminate GotoIfNot if either branch target is unreachable
     changemap = nothing # initialized if there is any dead region
-    for i = 1:nexpr
-        expr = body[i]
+    for i = 1:nstmt
+        expr = stmts[i]
         if was_reached(sv, i)
             if run_optimizer
                 if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
@@ -733,7 +730,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
+            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
@@ -741,7 +738,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 ssavaluetypes[i] = Any # 4
             else
                 ssavaluetypes[i] = Bottom # 4
-                body[i] = Const(expr) # annotate that this statement actually is dead
+                stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
     end
