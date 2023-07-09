@@ -343,7 +343,7 @@ Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
 
-(Note that a "cyclic permutation" here means that all of the elements lie within
+(Here, a "cyclic permutation" means that all of the elements lie within
 a single cycle of length `n`.  There are ``(n-1)!`` possible cyclic permutations,
 which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty array.)
 
