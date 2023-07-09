@@ -343,6 +343,10 @@ Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
 
+(Note that a cyclic permutation means that all of the elements consist of
+a single cycle of length `n`.  There are ``(n-1)!`` possible cyclic permutations,
+which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty array.)
+
 !!! compat "Julia 1.1"
     In Julia 1.1 `randcycle` returns a vector `v` with `eltype(v) == typeof(n)`
     while in Julia 1.0 `eltype(v) == Int`.
@@ -387,6 +391,7 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     @assert n <= Int64(2)^52
     a[1] = 1
     mask = 3
+    # Sattolo's algorithm:
     @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i-1, mask))
         a[i] = a[j]
