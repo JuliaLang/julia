@@ -1,5 +1,5 @@
 # Mathematical Operations and Elementary Functions
- 
+
 Julia provides a complete collection of basic arithmetic and bitwise operators across all of its
 numeric primitive types, as well as providing portable, efficient implementations of a comprehensive
 collection of standard mathematical functions.
