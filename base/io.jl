@@ -524,7 +524,7 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
 readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
-readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), s, delim, keep)
+readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
 """
