@@ -220,6 +220,7 @@ julia> shuffle!(rng, Vector(1:16))
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
+    # keep it consistent with `randperm!` and `randcycle!` if possible
     require_one_based_indexing(a)
     n = length(a)
     @assert n <= Int64(2)^52
@@ -315,6 +316,7 @@ julia> randperm!(MersenneTwister(1234), Vector{Int}(undef, 4))
 ```
 """
 function randperm!(r::AbstractRNG, a::Array{<:Integer})
+    # keep it consistent with `shuffle!` and `randcycle!` if possible
     n = length(a)
     @assert n <= Int64(2)^52
     n == 0 && return a
@@ -382,16 +384,17 @@ julia> randcycle!(MersenneTwister(1234), Vector{Int}(undef, 6))
 ```
 """
 function randcycle!(r::AbstractRNG, a::Array{<:Integer})
+    # keep it consistent with `shuffle!` and `randperm!` if possible
     n = length(a)
-    n == 0 && return a
     @assert n <= Int64(2)^52
+    n == 0 && return a
     a[1] = 1
     mask = 3
     @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i-1, mask))
         a[i] = a[j]
         a[j] = i
-        i == 1+mask && (mask = 2mask + 1)
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
