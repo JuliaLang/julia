@@ -863,3 +863,32 @@ end
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
 end
+
+@testset "type-piracy and AbstractOneTo" begin
+    # subtyping Base.AbstractOneTo ensures that `similar`/`reshape`
+    # aren't impacted by the type-piracy by OffsetArrays
+    struct MyOneTo <: Base.AbstractOneTo{Int}
+        x :: Base.OneTo{Int}
+    end
+    MyOneTo(n::Int) = MyOneTo(Base.OneTo(n))
+    for f in (:size, :first, :last, :length)
+        Basef = :(Base.$f)
+        @eval $Basef(r::MyOneTo) = $f(r.x)
+    end
+    Base.getindex(r::MyOneTo, i::Int) = getindex(r.x, i::Int)
+    struct MyIntFillVec <: AbstractVector{Int}
+        x :: Int
+        n :: Int
+    end
+    Base.size(A::MyIntFillVec) = (A.n,)
+    Base.axes(A::MyIntFillVec) = (MyOneTo(A.n),)
+    function Base.getindex(A::MyIntFillVec, i::Int)
+        checkbounds(A, i)
+        A.x
+    end
+    x = MyIntFillVec(2, 1)
+    y = similar(x)
+    @test y isa Vector{Int}
+    @test length(y) == length(x)
+    @test reshape(x, axes(x)) isa typeof(x)
+end
