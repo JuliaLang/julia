@@ -103,10 +103,10 @@ julia> sort(v, alg=InsertionSort)
 
 All the sorting and order related functions rely on a "less than" relation defining a
 [strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings)
-on the values to be manipulated. The `isless` function is invoked by default, but the relation
-can be specified via the `lt` keyword, a function that takes two array elements and returns `true`
-if and only if the first argument is "less than" the second. See [`sort!`](@ref) and [Alternate orderings](@ref) for
-more information.
+on the values to be manipulated. The `isless` function is invoked by default, but the
+relation can be specified via the `lt` keyword, a function that takes two array elements
+and returns `true` if and only if the first argument is "less than" the second. See
+[`sort!`](@ref) and [Alternate Orderings](@ref) for more information.
 
 ## Sorting Functions
 
