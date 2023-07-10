@@ -135,8 +135,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
-!!! compat "Julia 1.9"
-    Support for italic output was added in Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for italic output was added in Julia 1.10.
 """
 @constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
