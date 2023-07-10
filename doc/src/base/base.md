@@ -372,6 +372,7 @@ Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
 Base.@static
+Base.@lock
 ```
 
 ## Versioning
