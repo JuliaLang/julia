@@ -185,10 +185,10 @@ function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
-function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     eigen!(copy(A), copy(B); sortby)
 end
-function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
    # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
    # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
    if B.rook
@@ -200,12 +200,12 @@ function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby
         M = UnitUpperTriangular(LUD)
         du = od[2:end]
         # Aliasing of dl and du is not allowed for gtsv! below.
-        dl = B.symmetric ? copy(du) : conj.(copy(du))
+        dl = B.symmetric ? copy(du) : conj.(du)
     else
         M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
         # Aliasing of dl and du is not allowed for gtsv! below.
-        du = B.symmetric ? copy(dl) : conj.(copy(dl))
+        du = B.symmetric ? copy(dl) : conj.(dl)
     end
     # In-place permutation of A, A .= A[B.p, B.p]
     LAPACK.lapmt!(A, B.p, true)
@@ -264,10 +264,10 @@ function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
-function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     eigvals!(copy(A), copy(B); sortby)
 end
-function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
     # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
     if B.rook
@@ -279,12 +279,12 @@ function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sort
         M = UnitUpperTriangular(LUD)
         du = od[2:end]
         # Aliasing of dl and du is not allowed for gtsv! below.
-        dl = B.symmetric ? copy(du) : conj.(copy(du))
+        dl = B.symmetric ? copy(du) : conj.(du)
     else
         M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
         # Aliasing of dl and du is not allowed for gtsv! below.
-        du = B.symmetric ? copy(dl) : conj.(copy(dl))
+        du = B.symmetric ? copy(dl) : conj.(dl)
     end
     # In-place permutation of A, A .= A[B.p, B.p]
     LAPACK.lapmt!(A, B.p, true)
