@@ -503,6 +503,9 @@ julia> unzip(enumerate("Hello"))
 julia> unzip([[1, "apple"], [2.5, "orange"], [0, "mango"]])
 (Real[1, 2.5, 0], ["apple", "orange", "mango"])
 ```
+
+!!! compat "Julia 1.11"
+    The `unzip` function requires Julia 1.11 or later.
 """
 function unzip(itrs)
     n = Base.haslength(itrs) ? length(itrs) : nothing
