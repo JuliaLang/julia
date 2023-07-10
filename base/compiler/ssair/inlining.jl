@@ -236,7 +236,7 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
         push!(from_bbs, length(state.new_cfg_blocks))
         # TODO: Right now we unconditionally generate a fallback block
         # in case of subtyping errors - This is probably unnecessary.
-        if i != length(cases) || (!fully_covered || (!params.trust_inference))
+        if i != length(cases) || (!fully_covered)
             # This block will have the next condition or the final else case
             push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
             push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
@@ -494,8 +494,6 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
     return newargexprs
 end
 
-const FATAL_TYPE_BOUND_ERROR = ErrorException("fatal error in type inference (type bound)")
-
 """
     ir_inline_unionsplit!
 
@@ -575,7 +573,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         cond = true
         nparams = fieldcount(atype)
         @assert nparams == fieldcount(mtype)
-        if i != ncases || !fully_covered || !params.trust_inference
+        if i != ncases || !fully_covered
             for i = 1:nparams
                 a, m = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
@@ -630,14 +628,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     end
     bb += 1
     # We're now in the fall through block, decide what to do
-    if fully_covered
-        if !params.trust_inference
-            e = Expr(:call, GlobalRef(Core, :throw), FATAL_TYPE_BOUND_ERROR)
-            insert_node_here!(compact, NewInstruction(e, Union{}, line))
-            insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
-            finish_current_bb!(compact, 0)
-        end
-    else
+    if !fully_covered
         ssa = insert_node_here!(compact, NewInstruction(stmt, typ, line))
         push!(pn.edges, bb)
         push!(pn.values, ssa)

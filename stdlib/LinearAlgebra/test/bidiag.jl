@@ -120,6 +120,21 @@ Random.seed!(1)
         @test_throws ArgumentError Bl[4, 5] = 1
     end
 
+    @testset "isstored" begin
+        ubd = Bidiagonal(dv, ev, :U)
+        lbd = Bidiagonal(dv, ev, :L)
+        # bidiagonal isstored / upper & lower
+        @test_throws BoundsError Base.isstored(ubd, n + 1, 1)
+        @test_throws BoundsError Base.isstored(ubd, 1, n + 1)
+        @test Base.isstored(ubd, 2, 2)
+        # bidiagonal isstored / upper
+        @test Base.isstored(ubd, 2, 3)
+        @test !Base.isstored(ubd, 3, 2)
+        # bidiagonal isstored / lower
+        @test Base.isstored(lbd, 3, 2)
+        @test !Base.isstored(lbd, 2, 3)
+    end
+
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
         dstring = sprint(Base.print_matrix,BD.dv')

@@ -879,6 +879,9 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
             return os
         end
     elseif isa(before, NewSSAValue)
+        # As above, new_new_nodes must get counted. We don't visit them during our compact,
+        # so they're immediately considered reified.
+        count_added_node!(compact, newinst.stmt)
         # TODO: This is incorrect and does not maintain ordering among the new nodes
         before_entry = compact.new_new_nodes.info[-before.id]
         newline = something(newinst.line, compact.new_new_nodes.stmts[-before.id][:line])

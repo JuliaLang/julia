@@ -104,7 +104,9 @@ function show_task_exception(io::IO, t::Task; indent = true)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
+    state = t.state
+    state_str = "$state" * ((state == :runnable && istaskstarted(t)) ? ", started" : "")
+    print(io, "Task ($state_str) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 """
@@ -303,13 +305,14 @@ end
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
     if !istaskdone(t)
-        lock(t.donenotify)
+        donenotify = t.donenotify::ThreadSynchronizer
+        lock(donenotify)
         try
             while !istaskdone(t)
-                wait(t.donenotify)
+                wait(donenotify)
             end
         finally
-            unlock(t.donenotify)
+            unlock(donenotify)
         end
     end
     nothing
@@ -330,13 +333,14 @@ function _wait2(t::Task, waiter::Task)
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
         end
-        lock(t.donenotify)
+        donenotify = t.donenotify::ThreadSynchronizer
+        lock(donenotify)
         if !istaskdone(t)
-            push!(t.donenotify.waitq, waiter)
-            unlock(t.donenotify)
+            push!(donenotify.waitq, waiter)
+            unlock(donenotify)
             return nothing
         else
-            unlock(t.donenotify)
+            unlock(donenotify)
         end
     end
     schedule(waiter)

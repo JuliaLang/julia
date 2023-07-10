@@ -1897,7 +1897,7 @@ function f4528(A, B)
     end
 end
 @test f4528(false, Int32(12)) === nothing
-@test_throws ArgumentError f4528(true, Int32(12))
+@test_throws ErrorException f4528(true, Int32(12))
 
 # issue #4518
 f4518(x, y::Union{Int32,Int64}) = 0

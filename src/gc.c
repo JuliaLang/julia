@@ -24,6 +24,9 @@ _Atomic(int) gc_n_threads_marking;
 _Atomic(int) gc_master_tid;
 // `tid` of first GC thread
 int gc_first_tid;
+// Mutex/cond used to synchronize wakeup of GC threads on parallel marking
+uv_mutex_t gc_threads_lock;
+uv_cond_t gc_threads_cond;
 // To indicate whether concurrent sweeping should run
 uv_sem_t gc_sweep_assists_needed;
 
@@ -854,7 +857,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
+        page->nold++;
     }
     else {
         ptls->gc_cache.scanned_bytes += page->osize;
@@ -1241,7 +1244,10 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in pool_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
-    jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
+    jl_gc_pagemeta_t *pg = pop_page_metadata_back(&ptls->page_metadata_lazily_freed);
+    if (pg == NULL) {
+        pg = jl_gc_alloc_page();
+    }
     pg->osize = p->osize;
     pg->thread_n = ptls->tid;
     set_page_metadata(pg);
@@ -1298,20 +1304,8 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
-            pg = pop_page_metadata_back(&ptls->page_metadata_lazily_freed);
-            if (pg != NULL) {
-                v = gc_reset_page(ptls, p, pg);
-                pg->osize = p->osize;
-                push_page_metadata_back(&ptls->page_metadata_allocd, pg);
-            }
-            else {
-                v = NULL;
-            }
         }
-        // Not an else!!
-        if (v == NULL) {
-            v = gc_add_page(p);
-        }
+        v = gc_add_page(p);
         next = (jl_taggedvalue_t*)((char*)v + osize);
     }
     p->newpages = next;
@@ -1356,15 +1350,19 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
     char *data = pg->data;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = data + GC_PAGE_SZ - osize;
+    char *lim_newpages = data + GC_PAGE_SZ;
+    if (gc_page_data((char*)p->newpages - 1) == data) {
+        lim_newpages = (char*)p->newpages;
+    }
     size_t old_nfree = pg->nfree;
     size_t nfree;
 
-    int reuse_page = 1;
+    int re_use_page = 1;
     int freed_lazily = 0;
     int freedall = 1;
     int pg_skpd = 1;
     if (!pg->has_marked) {
-        reuse_page = 0;
+        re_use_page = 0;
     #ifdef _P64 // TODO: re-enable on `_P32`?
         // lazy version: (empty) if the whole page was already unused, free it (return it to the pool)
         // eager version: (freedall) free page as soon as possible
@@ -1379,20 +1377,27 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         goto done;
     }
-    // For quick sweep, we might be able to skip the page if the page doesn't
-    // have any young live cell before marking.
-    if (!sweep_full && !pg->has_young) {
-        assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
-        if (!prev_sweep_full || pg->prev_nold == pg->nold) {
-            // the position of the freelist begin/end in this page
-            // is stored in its metadata
-            if (pg->fl_begin_offset != (uint16_t)-1) {
-                *pfl = page_pfl_beg(pg);
-                pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+    // note that `pg->nold` may not be accurate with multithreaded marking since
+    // two threads may race when trying to set the mark bit in `gc_try_setmark_tag`.
+    // We're basically losing a bit of precision in the sweep phase at the cost of
+    // making the mark phase considerably cheaper.
+    // See issue #50419
+    if (jl_n_markthreads == 0) {
+        // For quick sweep, we might be able to skip the page if the page doesn't
+        // have any young live cell before marking.
+        if (!sweep_full && !pg->has_young) {
+            assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+            if (!prev_sweep_full || pg->prev_nold == pg->nold) {
+                // the position of the freelist begin/end in this page
+                // is stored in its metadata
+                if (pg->fl_begin_offset != (uint16_t)-1) {
+                    *pfl = page_pfl_beg(pg);
+                    pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+                }
+                freedall = 0;
+                nfree = pg->nfree;
+                goto done;
             }
-            freedall = 0;
-            nfree = pg->nfree;
-            goto done;
         }
     }
 
@@ -1405,7 +1410,8 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
         jl_taggedvalue_t **pfl_begin = NULL;
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
-            if (!gc_marked(bits)) {
+            // if an object is past `lim_newpages` then we can guarantee it's garbage
+            if (!gc_marked(bits) || (char*)v >= lim_newpages) {
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
@@ -1442,7 +1448,7 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
     nfree = pg->nfree;
 
 done:
-    if (reuse_page) {
+    if (re_use_page) {
         push_page_metadata_back(allocd, pg);
     }
     else if (freed_lazily) {
@@ -1455,6 +1461,7 @@ done:
             push_lf_page_metadata_back(&global_page_pool_freed, pg);
         }
         else {
+            gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
             push_lf_page_metadata_back(&global_page_pool_lazily_freed, pg);
         }
     #else
@@ -1545,7 +1552,6 @@ static void gc_sweep_pool(int sweep_full)
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
             }
-            p->newpages = NULL;
         }
         jl_gc_pagemeta_t *pg = ptls2->page_metadata_lazily_freed;
         while (pg != NULL) {
@@ -1567,6 +1573,10 @@ static void gc_sweep_pool(int sweep_full)
                 pg = pg2;
             }
             ptls2->page_metadata_allocd = allocd;
+            for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
+                p->newpages = NULL;
+            }
         }
     }
 
@@ -2838,13 +2848,10 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
     if (master) {
         jl_atomic_store(&gc_master_tid, ptls->tid);
         // Wake threads up and try to do some work
+        uv_mutex_lock(&gc_threads_lock);
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
-            jl_ptls_t ptls2 = gc_all_tls_states[i];
-            uv_mutex_lock(&ptls2->sleep_lock);
-            uv_cond_signal(&ptls2->wake_signal);
-            uv_mutex_unlock(&ptls2->sleep_lock);
-        }
+        uv_cond_broadcast(&gc_threads_cond);
+        uv_mutex_unlock(&gc_threads_lock);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
@@ -3342,6 +3349,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (sweep_full) {
         gc_num.last_full_sweep = gc_end_time;
     }
+    else {
+        gc_num.last_incremental_sweep = gc_end_time;
+    }
 
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
@@ -3608,6 +3618,8 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
+    uv_mutex_init(&gc_threads_lock);
+    uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
 
     jl_gc_init_page();
