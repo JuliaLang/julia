@@ -13,7 +13,7 @@ using .Base:
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing, something, copyto!,
+    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing, copyto!,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
 using Core: @doc
@@ -514,7 +514,7 @@ function unzip(itrs)
     vals, state = outer
     vecs = ntuple(length(vals)) do i
         x = vals[i]
-        v = Vector{typeof(x)}(undef, something(n, 1))
+        v = Vector{typeof(x)}(undef, Base.something(n, 1))
         @inbounds v[1] = x
         return v
     end
@@ -541,7 +541,7 @@ function unzip_rest(vecs, eltypes, i, itrs, state)
                 T = Base.promote_typejoin(eltype(v), typeof(x))
                 v′ = Vector{T}(undef, length(v) + !(i isa Int))
                 copyto!(v′, v)
-                @inbounds v′[something(i, end)] = x
+                @inbounds v′[Base.something(i, end)] = x
                 return v′
             end
             eltypes′ = Tuple{map(eltype, vecs′)...}
