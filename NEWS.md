@@ -55,6 +55,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `unzip(itr)` is now provided, essentially as an inverse of `zip` ([#33515]).
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
   it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
@@ -63,6 +64,7 @@ New library functions
 * `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 * `Iterators.findeach` is a lazy version of `findall` ([#54124]).
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
 --------------------
