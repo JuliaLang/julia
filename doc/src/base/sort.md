@@ -106,7 +106,7 @@ All the sorting and order related functions rely on a "less than" relation defin
 on the values to be manipulated. The `isless` function is invoked by default, but the relation
 can be specified via the `lt` keyword, a function that takes two array elements and returns `true`
 if and only if the first argument is "less than" the second. See [`sort!`](@ref) and [Alternate orderings](@ref) for
-more info.
+more information.
 
 ## Sorting Functions
 
@@ -174,15 +174,11 @@ two elements in order to determine which should come first. The
 orderings on the same set of elements: when calling a sorting function like
 `sort!`, an instance of `Ordering` can be provided with the keyword argument `order`.
 
-Instances of `Ordering` define a
-[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings)
-through the [`Base.Order.lt`](@ref) function, which works as
-a generalization of `isless`.
-For `lt` to be a strict weak order, for any elements `a`, `b`, `c` the following must hold:
-
-* `lt(a, b) && lt(b, a) === false`;
-* if `lt(a, b) && lt(b, c)`, then `lt(a, c)`; and
-* if `!lt(a, b) && !lt(b, c)`, then `!lt(a, c)`
+Instances of `Ordering` define an order through the [`Base.Order.lt`](@ref)
+function, which works as a generalization of `isless`.
+This function must satisfy all the conditions of a 
+[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings).
+See [`sort!`](@ref) for details and examples of valid and invalid `lt` functions.
 
 ```@docs
 Base.Order.Ordering
