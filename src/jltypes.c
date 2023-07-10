@@ -2032,7 +2032,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     ndt = jl_new_uninitialized_datatype();
     ndt->isprimitivetype = dt->isprimitivetype;
     // Usually dt won't have ismutationfree set at this point, but it is
-    // overriden for `Type`, which we handle here.
+    // overridden for `Type`, which we handle here.
     ndt->ismutationfree = dt->ismutationfree;
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
