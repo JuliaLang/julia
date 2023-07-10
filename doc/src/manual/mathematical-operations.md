@@ -602,4 +602,3 @@ asind  acosd  atand  acotd  asecd  acscd
 
 Many other special mathematical functions are provided by the package
 [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).
-
