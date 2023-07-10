@@ -739,6 +739,13 @@ static const auto jlundefvarerror_func = new JuliaFunction<>{
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
+static const auto jlhasnofield_func = new JuliaFunction<>{
+    XSTR(jl_has_no_field_error),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted),
+             PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
@@ -3318,6 +3325,8 @@ static jl_llvm_functions_t
         jl_value_t *jlrettype,
         jl_codegen_params_t &params);
 
+static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *type, jl_cgval_t name);
+
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               const jl_cgval_t *argv, size_t nargs, jl_value_t *rt,
                               jl_expr_t *ex, bool is_promotable)
@@ -3817,6 +3826,19 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *fld_val = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, obj), vidx });
                 *ret = mark_julia_type(ctx, fld_val, true, jl_any_type);
                 return true;
+            }
+        }
+        else if (fld.typ == (jl_value_t*)jl_symbol_type) {
+            if (jl_is_datatype(utt) && !jl_is_namedtuple_type(utt)) { // TODO: Look into this for NamedTuple
+                if (jl_struct_try_layout(utt) && (jl_datatype_nfields(utt) == 1)) {
+                    jl_svec_t *fn = jl_field_names(utt);
+                    assert(jl_svec_len(fn) == 1);
+                    Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
+                    Value *cond = ctx.builder.CreateICmpEQ(mark_callee_rooted(ctx, typ_sym), mark_callee_rooted(ctx, boxed(ctx, fld)));
+                    emit_hasnofield_error_ifnot(ctx, cond, utt->name->name, fld);
+                    *ret = emit_getfield_knownidx(ctx, obj, 0, utt, order);
+                    return true;
+                }
             }
         }
         // TODO: generic getfield func with more efficient calling convention
@@ -4607,6 +4629,22 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
     ctx.builder.SetInsertPoint(err);
     ctx.builder.CreateCall(prepare_call(jlundefvarerror_func),
         mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)name)));
+    ctx.builder.CreateUnreachable();
+    ctx.f->getBasicBlockList().push_back(ifok);
+    ctx.builder.SetInsertPoint(ifok);
+}
+
+static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *type, jl_cgval_t name)
+{
+    ++EmittedUndefVarErrors;
+    assert(name.typ == (jl_value_t*)jl_symbol_type);
+    BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
+    BasicBlock *ifok = BasicBlock::Create(ctx.builder.getContext(), "ok");
+    ctx.builder.CreateCondBr(ok, ifok, err);
+    ctx.builder.SetInsertPoint(err);
+    ctx.builder.CreateCall(prepare_call(jlhasnofield_func),
+                          {mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)type)),
+                           mark_callee_rooted(ctx, boxed(ctx, name))});
     ctx.builder.CreateUnreachable();
     ctx.f->getBasicBlockList().push_back(ifok);
     ctx.builder.SetInsertPoint(ifok);
@@ -9011,6 +9049,7 @@ static void init_jit_functions(void)
     add_named_global(jlatomicerror_func, &jl_atomic_error);
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
+    add_named_global(jlhasnofield_func, &jl_has_no_field_error);
     add_named_global(jlboundserrorv_func, &jl_bounds_error_ints);
     add_named_global(jlboundserror_func, &jl_bounds_error_int);
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);

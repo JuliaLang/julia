@@ -143,6 +143,19 @@ end
     end
 end
 
+@inline function Base.isstored(A::Bidiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds Base.isstored(A.ev, i)
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds Base.isstored(A.ev, j)
+    else
+        return false
+    end
+end
+
 @inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j

@@ -854,7 +854,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
+        page->nold++;
     }
     else {
         ptls->gc_cache.scanned_bytes += page->osize;
@@ -1374,20 +1374,27 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         goto done;
     }
-    // For quick sweep, we might be able to skip the page if the page doesn't
-    // have any young live cell before marking.
-    if (!sweep_full && !pg->has_young) {
-        assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
-        if (!prev_sweep_full || pg->prev_nold == pg->nold) {
-            // the position of the freelist begin/end in this page
-            // is stored in its metadata
-            if (pg->fl_begin_offset != (uint16_t)-1) {
-                *pfl = page_pfl_beg(pg);
-                pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+    // note that `pg->nold` may not be accurate with multithreaded marking since
+    // two threads may race when trying to set the mark bit in `gc_try_setmark_tag`.
+    // We're basically losing a bit of precision in the sweep phase at the cost of
+    // making the mark phase considerably cheaper.
+    // See issue #50419
+    if (jl_n_markthreads == 0) {
+        // For quick sweep, we might be able to skip the page if the page doesn't
+        // have any young live cell before marking.
+        if (!sweep_full && !pg->has_young) {
+            assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+            if (!prev_sweep_full || pg->prev_nold == pg->nold) {
+                // the position of the freelist begin/end in this page
+                // is stored in its metadata
+                if (pg->fl_begin_offset != (uint16_t)-1) {
+                    *pfl = page_pfl_beg(pg);
+                    pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
+                }
+                freedall = 0;
+                nfree = pg->nfree;
+                goto done;
             }
-            freedall = 0;
-            nfree = pg->nfree;
-            goto done;
         }
     }
 
@@ -1542,7 +1549,6 @@ static void gc_sweep_pool(int sweep_full)
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
             }
-            p->newpages = NULL;
         }
         jl_gc_pagemeta_t *pg = ptls2->page_metadata_lazily_freed;
         while (pg != NULL) {
@@ -1564,6 +1570,10 @@ static void gc_sweep_pool(int sweep_full)
                 pg = pg2;
             }
             ptls2->page_metadata_allocd = allocd;
+            for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
+                p->newpages = NULL;
+            }
         }
     }
 
@@ -3270,6 +3280,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.sweep_time = sweep_time;
     if (sweep_full) {
         gc_num.last_full_sweep = gc_end_time;
+    }
+    else {
+        gc_num.last_incremental_sweep = gc_end_time;
     }
 
     // sweeping is over
