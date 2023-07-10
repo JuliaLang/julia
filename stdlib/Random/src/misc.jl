@@ -343,9 +343,11 @@ Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
 
-(Here, a "cyclic permutation" means that all of the elements lie within
+Here, a "cyclic permutation" means that all of the elements lie within
 a single cycle of length `n`.  There are ``(n-1)!`` possible cyclic permutations,
-which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty array.)
+which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty array.
+
+[`randcycle!`](@ref) is an in-place variant of this function.
 
 !!! compat "Julia 1.1"
     In Julia 1.1 `randcycle` returns a vector `v` with `eltype(v) == typeof(n)`
@@ -369,9 +371,15 @@ randcycle(n::Integer) = randcycle(default_rng(), n)
 """
     randcycle!([rng=default_rng(),] A::Array{<:Integer})
 
-Construct in `A` a random cyclic permutation of length `length(A)`.
+Construct in `A` a random cyclic permutation of length `n = length(A)`.
 The optional `rng` argument specifies a random number generator, see
 [Random Numbers](@ref).
+
+Here, a "cyclic permutation" means that all of the elements lie within a single cycle.
+If `A` is nonempty (`n > 0`), there are ``(n-1)!`` possible cyclic permutations,
+which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
+
+[`randcycle`](@ref) is a variant of this function that allocates a new array.
 
 # Examples
 ```jldoctest
