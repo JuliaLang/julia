@@ -344,7 +344,7 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
 
 Here, a "cyclic permutation" means that all of the elements lie within
-a single cycle of length `n`.  There are ``(n-1)!`` possible cyclic permutations,
+a single cycle.  If `n > 0`, there are ``(n-1)!`` possible cyclic permutations,
 which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty array.
 
 [`randcycle!`](@ref) is an in-place variant of this function.
