@@ -176,7 +176,7 @@ orderings on the same set of elements: when calling a sorting function like
 
 Instances of `Ordering` define an order through the [`Base.Order.lt`](@ref)
 function, which works as a generalization of `isless`.
-This function's behavior on custom `Ordering`s must satisfy all the conditions of a 
+This function's behavior on custom `Ordering`s must satisfy all the conditions of a
 [strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings).
 See [`sort!`](@ref) for details and examples of valid and invalid `lt` functions.
 
