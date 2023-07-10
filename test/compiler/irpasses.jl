@@ -1371,3 +1371,22 @@ struct TParamTypeofTest2{S,T}
 end
 tparam_typeof_test_elim2(x, y) = TParamTypeofTest2(x, y).x
 @test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any})
+
+# Test that sroa doesn't get confused by free type parameters in struct types
+struct Wrap1{T}
+    x::T
+    @eval @inline (T::Type{Wrap1{X}} where X)(x) = $(Expr(:new, :T, :x))
+end
+Wrap1(x) = Wrap1{typeof(x)}(x)
+
+function wrap1_wrap1_ifelse(b, x, w1)
+    w2 = Wrap1(Wrap1(x))
+    w3 = Wrap1(typeof(w1)(w1.x))
+    Core.ifelse(b, w3, w2).x.x
+end
+function wrap1_wrap1_wrapper(b, x, y)
+    w1 = Base.inferencebarrier(Wrap1(y))::Wrap1{<:Union{Int, Float64}}
+    wrap1_wrap1_ifelse(b, x, w1)
+end
+@test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
+@test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
