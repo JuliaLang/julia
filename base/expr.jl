@@ -513,7 +513,7 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     the other was optimized).
 
 !!! note
-    The `:consistent`-cy assertion currrently includes the assertion that the function
+    The `:consistent`-cy assertion currently includes the assertion that the function
     will not execute any undefined behavior (for any input). Note that undefined behavior
     may technically cause the function to violate other effect assertions (such as
     `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
@@ -656,7 +656,7 @@ currently equivalent to the following `setting`s:
 
 !!! note
     An explicit `@inbounds` annotation inside the function will also disable
-    constant folding and not be overriden by `:foldable`.
+    constant folding and not be overridden by `:foldable`.
 
 ---
 ## `:removable`
