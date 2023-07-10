@@ -22,6 +22,7 @@ Build system changes
 New library functions
 ---------------------
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `unzip(itr)` is now provided, essentially as an inverse of `zip` ([#33515]).
 
 New library features
 --------------------

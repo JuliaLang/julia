@@ -1001,3 +1001,14 @@ end
     end
     @test v == ()
 end
+
+@testset "unzip" begin
+    for itrs in ((1:3,), (1:3, 4:6), (1:3,4:6,7:9),
+                 ((), ()), (Bool[], Int8[]),
+                 (Iterators.filter(isodd,1:6), 4:6))
+        @test unzip(zip(itrs...)) == collect.(itrs)
+    end
+    @test unzip([(), (), ()]) == ()
+    @test unzip([(1,2), (4,5,6)]) == ([1, 4], [2, 5])
+    @test unzip([(4,5,6), (1,2)]) == ([4, 1], [5, 2])
+end
