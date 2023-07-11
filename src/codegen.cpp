@@ -2365,7 +2365,7 @@ static void jl_name_jlfunc_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 3);
     F->getArg(0)->setName("function::Core.Function");
     F->getArg(1)->setName("args::Any[]");
-    F->getArg(2)->setName("nargs::UInt");
+    F->getArg(2)->setName("nargs::UInt32");
 }
 
 static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) {
