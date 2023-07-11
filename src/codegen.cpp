@@ -7368,7 +7368,8 @@ static jl_llvm_functions_t
                     const char *name = jl_symbol_name(slot_symbol(ctx, ctx.vaSlot));
                     if (!name[0])
                         name = "...";
-                    arg.setName(name + StringRef("[") + Twine(vidx++) + StringRef("]::") + type);
+                    vidx++;
+                    arg.setName(name + StringRef("[") + Twine(vidx) + StringRef("]::") + type);
                 }
             }
         }
