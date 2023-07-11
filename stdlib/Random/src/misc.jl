@@ -379,7 +379,7 @@ Here, a "cyclic permutation" means that all of the elements lie within a single 
 If `A` is nonempty (`n > 0`), there are ``(n-1)!`` possible cyclic permutations,
 which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
 
-[`randcycle`](@ref) is a variant of this function that allocates a new array.
+[`randcycle`](@ref) is a variant of this function that allocates a new vector.
 
 # Examples
 ```jldoctest
