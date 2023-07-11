@@ -1244,7 +1244,7 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
             touch(fpath)
             rm(fpath; force=true)
         catch
-            @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `tempdir()`" maxlog=1 _id=Symbol(wd)
+            @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
             fpath = joinpath(tempdir(), fname)
         end
     else
