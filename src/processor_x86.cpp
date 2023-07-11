@@ -1036,7 +1036,7 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
 
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    jl_value_t *rejection_reason;
+    jl_value_t *rejection_reason = NULL;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();

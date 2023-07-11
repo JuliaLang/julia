@@ -1588,7 +1588,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id, jl_value_t** rejection_reason)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason JL_REQUIRE_ROOTED_SLOT)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -1826,7 +1826,7 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
 
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    jl_value_t *rejection_reason;
+    jl_value_t *rejection_reason = NULL;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
