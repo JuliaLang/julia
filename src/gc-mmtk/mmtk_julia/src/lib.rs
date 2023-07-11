@@ -153,8 +153,6 @@ pub struct Julia_Upcalls {
     pub set_gc_old_state: extern "C" fn(old_state: i8),
     pub mmtk_jl_run_finalizers: extern "C" fn(tls: OpaquePointer),
     pub jl_throw_out_of_memory_error: extern "C" fn(),
-    pub mark_julia_object_as_scanned: extern "C" fn(obj: Address),
-    pub julia_object_has_been_scanned: extern "C" fn(obj: Address) -> u8,
     pub mmtk_sweep_malloced_array: extern "C" fn(),
     pub wait_in_a_safepoint: extern "C" fn(),
     pub exit_from_safepoint: extern "C" fn(old_state: i8),

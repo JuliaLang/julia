@@ -93,8 +93,6 @@ typedef struct {
     void (* set_gc_old_state) (int8_t old_state);
     void (* mmtk_jl_run_finalizers) (void* tls);
     void (* jl_throw_out_of_memory_error) (void);
-    void (* mark_object_as_scanned) (void* obj);
-    int8_t (* object_has_been_scanned) (void* obj);
     void (* sweep_malloced_array) (void);
     void (* wait_in_a_safepoint) (void);
     void (* exit_from_safepoint) (int8_t old_state);
