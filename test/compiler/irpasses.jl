@@ -1390,3 +1390,34 @@ function wrap1_wrap1_wrapper(b, x, y)
 end
 @test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
 @test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
+
+# Test unswitching-union optimization within SRO Apass
+function sroaunswitchuniontuple(c, x1, x2)
+    t = c ? (x1,) : (x2,)
+    return getfield(t, 1)
+end
+struct SROAUnswitchUnion1{T}
+    x::T
+end
+struct SROAUnswitchUnion2{S,T}
+    x::T
+    @inline SROAUnswitchUnion2{S}(x::T) where {S,T} = new{S,T}(x)
+end
+function sroaunswitchunionstruct1(c, x1, x2)
+    x = c ? SROAUnswitchUnion1(x1) : SROAUnswitchUnion1(x2)
+    return getfield(x, :x)
+end
+function sroaunswitchunionstruct2(c, x1, x2)
+    x = c ? SROAUnswitchUnion2{:a}(x1) : SROAUnswitchUnion2{:a}(x2)
+    return getfield(x, :x)
+end
+let src = code_typed1(sroaunswitchuniontuple, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+let src = code_typed1(sroaunswitchunionstruct1, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+@test sroaunswitchunionstruct2(true, 1, 1.0) === 1
+@test sroaunswitchunionstruct2(false, 1, 1.0) === 1.0

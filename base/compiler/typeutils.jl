@@ -317,33 +317,40 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
     return depth
 end
 
-# convert a Union of Tuple types to a Tuple of Unions
-unswitchtupleunion(u::Union) = unswitchtypeunion(u, Tuple.name)
-
+# convert a Union of same `UnionAll` types to the `UnionAll` type whose parameter is the Unions
 function unswitchtypeunion(u::Union, typename::Union{Nothing,Core.TypeName}=nothing)
     ts = uniontypes(u)
     n = -1
     for t in ts
-        if t isa DataType
-            if typename === nothing
-                typename = t.name
-            elseif typename !== t.name
-                return u
-            end
-            if length(t.parameters) != 0 && !isvarargtype(t.parameters[end])
-                if n == -1
-                    n = length(t.parameters)
-                elseif n != length(t.parameters)
-                    return u
-                end
-            end
-        else
+        t isa DataType || return u
+        if typename === nothing
+            typename = t.name
+        elseif typename !== t.name
+            return u
+        end
+        params = t.parameters
+        np = length(params)
+        if np == 0 || isvarargtype(params[end])
+            return u
+        end
+        if n == -1
+            n = np
+        elseif n ≠ np
             return u
         end
     end
     Head = (typename::Core.TypeName).wrapper
-    unionparams = Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]
-    return Head{unionparams...}
+    hparams = Any[]
+    for i = 1:n
+        uparams = Any[]
+        for t in ts
+            tpᵢ = (t::DataType).parameters[i]
+            tpᵢ isa Type || return u
+            push!(uparams, tpᵢ)
+        end
+        push!(hparams, Union{uparams...})
+    end
+    return Head{hparams...}
 end
 
 function unwraptv_ub(@nospecialize t)
