@@ -170,7 +170,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool)
+            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool
         end
         # Looking for a binding in a module
         if mod == context_module
@@ -192,25 +192,32 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         end
     else
         # Looking for a member of a type
-        if t isa DataType && t != Any
-            # Check for cases like Type{typeof(+)}
-            if Base.isType(t)
-                t = typeof(t.parameters[1])
-            end
-            # Only look for fields if this is a concrete type
-            if isconcretetype(t)
-                fields = fieldnames(t)
-                for field in fields
-                    isa(field, Symbol) || continue # Tuple type has ::Int field name
-                    s = string(field)
-                    if startswith(s, name)
-                        push!(suggestions, FieldCompletion(t, field))
-                    end
+        add_field_completions!(suggestions, name, t)
+    end
+    return suggestions
+end
+
+function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
+    if isa(t, Union)
+        add_field_completions!(suggestions, name, t.a)
+        add_field_completions!(suggestions, name, t.b)
+    elseif t isa DataType && t != Any
+        # Check for cases like Type{typeof(+)}
+        if Base.isType(t)
+            t = typeof(t.parameters[1])
+        end
+        # Only look for fields if this is a concrete type
+        if isconcretetype(t)
+            fields = fieldnames(t)
+            for field in fields
+                isa(field, Symbol) || continue # Tuple type has ::Int field name
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, FieldCompletion(t, field))
                 end
             end
         end
     end
-    suggestions
 end
 
 const sorted_keywords = [
@@ -580,11 +587,6 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
 
     result = frame.result.result
     result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
-    if isa(result, Union)
-        # unswitch `Union` of same `UnionAll` instances to `UnionAll` of `Union`s
-        # so that we can use the field information of the `UnionAll`
-        return CC.unswitchtypeunion(result)
-    end
     return result
 end
 
