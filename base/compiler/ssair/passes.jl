@@ -1107,8 +1107,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         struct_typ = widenconst(argextype(val, compact))
         struct_typ_unwrapped = unwrap_unionall(struct_typ)
-        if isa(struct_typ, Union) && struct_typ <: Tuple
-            struct_typ_unwrapped = unswitchtupleunion(struct_typ_unwrapped)
+        if isa(struct_typ, Union)
+            struct_typ_unwrapped = unswitchtypeunion(struct_typ_unwrapped)
         end
         if isa(struct_typ_unwrapped, Union) && is_isdefined
             lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
