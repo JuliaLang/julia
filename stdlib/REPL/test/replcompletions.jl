@@ -1873,3 +1873,13 @@ let s = "`abc`.e"
     # (completions for the fields of `Cmd`)
     @test c == Any["env", "exec"]
 end
+
+# Test completion for a case when type inference returned `Union` of the same types
+function union_somes()
+    return rand() < 0.5 ? Some(1) : Some(2.)
+end
+let s = "union_somes()."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c
+end
