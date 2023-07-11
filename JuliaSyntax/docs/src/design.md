@@ -327,16 +327,16 @@ parsing `key=val` pairs inside parentheses.
 
 * `let` bindings might be stored in a block, or they might not be, depending on
   special cases:
-   ```
-   # Special cases not in a block
-   let x=1 ; end   ==>  (let (= x 1) (block))
-   let x::1 ; end  ==>  (let (:: x 1) (block))
-   let x ; end     ==>  (let x (block))
+  ```julia
+  # Special cases not in a block
+  let x=1 ; end   # ==>  (let (= x 1) (block))
+  let x::1 ; end  # ==>  (let (:: x 1) (block))
+  let x ; end     # ==>  (let x (block))
 
-   # In a block
-   let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
-   let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
-   ```
+  # In a block
+  let x=1,y=2 ; end  # ==>  (let (block (= x 1) (= y 2) (block)))
+  let x+=1 ; end     # ==>  (let (block (+= x 1)) (block))
+  ```
 
 * The `elseif` condition is always in a block but not the `if` condition.
   Presumably because of the need to add a line number node in the flisp parser
