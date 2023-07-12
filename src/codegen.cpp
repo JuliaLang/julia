@@ -2373,7 +2373,7 @@ static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) 
     F->getArg(0)->setName("function::Core.Function");
     F->getArg(1)->setName("args::Any[]");
     F->getArg(2)->setName("nargs::UInt32");
-    F->getArg(3)->setName("sparams");
+    F->getArg(3)->setName("sparams::Any");
 }
 
 static void jl_init_function(Function *F, const Triple &TT)
@@ -7342,34 +7342,39 @@ static jl_llvm_functions_t
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
-        auto arg_typename = [&](size_t i) JL_NOTSAFEPOINT { return jl_symbol_name(((jl_datatype_t*)jl_tparam(lam->specTypes, i))->name->name); };
-        size_t nreal = 0;
-        for (size_t i = 0; i < std::min(nreq, static_cast<size_t>(used_args.size())); i++) {
-            jl_sym_t *argname = slot_symbol(ctx, i);
-            if (argname == jl_unused_sym)
-                continue;
-            if (used_args.test(i)) {
-                auto &arg = *f->getArg(args_begin++);
-                nreal++;
-                auto name = jl_symbol_name(argname);
-                if (!name[0]) {
-                    arg.setName(StringRef("#") + Twine(nreal) + StringRef("::") + arg_typename(i));
-                } else {
-                    arg.setName(name + StringRef("::") + arg_typename(i));
-                }
-            }
-        }
-        if (va && ctx.vaSlot != -1) {
-            size_t vidx = 0;
-            for (size_t i = nreq; i < used_args.size(); i++) {
+        if (ctx.emission_context.debug_level > 0) {
+            auto arg_typename = [&](size_t i) JL_NOTSAFEPOINT {
+                auto tp = jl_tparam(lam->specTypes, i);
+                return jl_is_datatype(tp) ? jl_symbol_name(((jl_datatype_t*)tp)->name->name) : "<unknown datatype>";
+            };
+            size_t nreal = 0;
+            for (size_t i = 0; i < std::min(nreq, static_cast<size_t>(used_args.size())); i++) {
+                jl_sym_t *argname = slot_symbol(ctx, i);
+                if (argname == jl_unused_sym)
+                    continue;
                 if (used_args.test(i)) {
                     auto &arg = *f->getArg(args_begin++);
-                    auto type = arg_typename(i);
-                    const char *name = jl_symbol_name(slot_symbol(ctx, ctx.vaSlot));
-                    if (!name[0])
-                        name = "...";
-                    vidx++;
-                    arg.setName(name + StringRef("[") + Twine(vidx) + StringRef("]::") + type);
+                    nreal++;
+                    auto name = jl_symbol_name(argname);
+                    if (!name[0]) {
+                        arg.setName(StringRef("#") + Twine(nreal) + StringRef("::") + arg_typename(i));
+                    } else {
+                        arg.setName(name + StringRef("::") + arg_typename(i));
+                    }
+                }
+            }
+            if (va && ctx.vaSlot != -1) {
+                size_t vidx = 0;
+                for (size_t i = nreq; i < used_args.size(); i++) {
+                    if (used_args.test(i)) {
+                        auto &arg = *f->getArg(args_begin++);
+                        auto type = arg_typename(i);
+                        const char *name = jl_symbol_name(slot_symbol(ctx, ctx.vaSlot));
+                        if (!name[0])
+                            name = "...";
+                        vidx++;
+                        arg.setName(name + StringRef("[") + Twine(vidx) + StringRef("]::") + type);
+                    }
                 }
             }
         }
