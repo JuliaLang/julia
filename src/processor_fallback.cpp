@@ -2,6 +2,9 @@
 
 // Fallback processor detection and dispatch
 
+static constexpr FeatureName feature_names[] = {};
+static constexpr uint32_t nfeature_names = sizeof(feature_names) / sizeof(FeatureName);
+
 namespace Fallback {
 
 static inline const std::string &host_cpu_name()
