@@ -95,7 +95,7 @@ julia> axes(A)
 """
 function axes(A)
     @inline
-    map(oneto, size(A))
+    map(unchecked_oneto, size(A))
 end
 
 """
