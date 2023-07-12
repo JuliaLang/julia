@@ -1,5 +1,53 @@
 # Julia SSA-form IR
 
+Julia uses a static single assignment intermediate representation ([SSA IR](https://en.wikipedia.org/wiki/Static_single-assignment_form)) to perform optimization.
+This IR is different from LLVM IR, and unique to Julia.
+It allows for Julia specific optimizations.
+
+1. Basic blocks (regions with no control flow) are explicitly annotated.
+2. if/else and loops are turned into `goto` statements.
+3. lines with multiple operations are split into multiple lines by introducing variables.
+
+For example the following Julia code:
+```julia
+function foo(x)
+    y = sin(x)
+    if x > 5.0
+        y = y + cos(x)
+    end
+    return exp(2) + y
+end
+```
+when called with a `Float64` argument is translated into:
+
+```julia
+using InteractiveUtils
+@code_typed foo(1.0)
+```
+
+```llvm
+CodeInfo(
+1 ─ %1 = invoke Main.sin(x::Float64)::Float64
+│   %2 = Base.lt_float(x, 5.0)::Bool
+└──      goto #3 if not %2
+2 ─ %4 = invoke Main.cos(x::Float64)::Float64
+└── %5 = Base.add_float(%1, %4)::Float64
+3 ┄ %6 = φ (#2 => %5, #1 => %1)::Float64
+│   %7 = Base.add_float(7.38905609893065, %6)::Float64
+└──      return %7
+) => Float64
+```
+
+In this example, we can see all of these changes.
+1. The first basic block is everything in
+```llvm
+1 ─ %1 = invoke Main.sin(x::Float64)::Float64
+│   %2 = Base.lt_float(x, 5.0)::Bool
+└──      goto #3 if not %2
+```
+2. The `if` statement is translated into `goto #3 if not %2` which goes to the 3rd basic block if `x>5` isn't met and otherwise goes to the second basic block.
+3. `%2` is an SSA value introduced to represent `x > 5`.
+
 ## Background
 
 Beginning in Julia 0.7, parts of the compiler use a new [SSA-form](https://en.wikipedia.org/wiki/Static_single_assignment_form)
@@ -11,11 +59,9 @@ linearized (i.e. turned into a form where function arguments could only be SSA v
 conditional control flow). This negated much of the usefulness of SSA form representation when performing
 middle end optimizations. Some heroic effort was put into making these optimizations work without a complete SSA
 form representation, but the lack of such a representation ultimately proved prohibitive.
+## Categories of IR nodes
 
-## New IR nodes
-
-With the new IR representation, the compiler learned to handle four new IR nodes, Phi nodes, Pi
-nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for exception handling).
+The SSA IR representation has four categories of IR nodes: Phi, Pi, PhiC, and Upsilon nodes (the latter two are only used for exception handling).
 
 ### Phi nodes and Pi nodes
 

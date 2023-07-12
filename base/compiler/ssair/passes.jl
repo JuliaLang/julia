@@ -1105,25 +1105,25 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
-        if isa(struct_typ, Union) && struct_typ <: Tuple
-            struct_typ = unswitchtupleunion(struct_typ)
+        struct_typ = widenconst(argextype(val, compact))
+        struct_typ_unwrapped = unwrap_unionall(struct_typ)
+        if isa(struct_typ, Union)
+            struct_typ_unwrapped = unswitchtypeunion(struct_typ_unwrapped)
         end
-        if isa(struct_typ, Union) && is_isdefined
+        if isa(struct_typ_unwrapped, Union) && is_isdefined
             lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             continue
         end
-        isa(struct_typ, DataType) || continue
+        isa(struct_typ_unwrapped, DataType) || continue
 
-        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        struct_typ_unwrapped.name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
              (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
-
         # analyze this mutable struct here for the later pass
-        if ismutabletype(struct_typ)
+        if ismutabletype(struct_typ_unwrapped)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
                 callback = IntermediaryCollector(intermediaries)
@@ -1153,7 +1153,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         # perform SROA on immutable structs here on
-        field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
+        field = try_compute_fieldidx_stmt(compact, stmt, struct_typ_unwrapped)
         field === nothing && continue
 
         leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
