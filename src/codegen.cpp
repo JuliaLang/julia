@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "julia.h"
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
@@ -3858,7 +3857,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     Value *cond = ctx.builder.CreateICmpNE(index, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1));
                     emit_hasnofield_error_ifnot(ctx, cond, utt->name->name, fld);
                     Value *idx2 = ctx.builder.CreateAdd(ctx.builder.CreateIntCast(index, ctx.types().T_size, false), ConstantInt::get(ctx.types().T_size, 1));
-                    if (emit_getfield_unknownidx(ctx, ret, obj, idx2, utt, jl_false, order)) 
+                    if (emit_getfield_unknownidx(ctx, ret, obj, idx2, utt, jl_false, order))
                             return true;
                 }
             }
