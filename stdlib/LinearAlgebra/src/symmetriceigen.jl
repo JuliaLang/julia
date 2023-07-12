@@ -185,8 +185,19 @@ function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
-function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     eigen!(copy(A), copy(B); sortby)
+end
+function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    D = copy(B.D)
+    M = B.uplo == 'U' ? B.U : B.L
+    A .= A[B.p, B.p]
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(lu!(D), A)
+    vals, vecs = eigen!(A; sortby)
+    vecs .= ldiv!(M', vecs)[invperm(B.p), :]
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
    # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
@@ -197,12 +208,10 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
         LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
     end
     if B.uplo == 'U'
-        M = UnitUpperTriangular(LUD)
         du = od[2:end]
         # Aliasing of dl and du is not allowed for gtsv! below.
         dl = B.symmetric ? copy(du) : conj.(du)
     else
-        M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
         # Aliasing of dl and du is not allowed for gtsv! below.
         du = B.symmetric ? copy(dl) : conj.(dl)
@@ -211,9 +220,9 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
     # In-place A .= inv(M)*A
-    LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    LAPACK.trtrs!(B.uplo, 'N', 'U', LUD, A)
     # In-place A .= A*inv(M^H)
-    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), LUD, A)
     # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
     LAPACK.gtsv!(dl, diag(LUD), du, A)
     # Compute the eigenvalues and eigenvectors of A, which are the generalized eigenvalues
@@ -222,7 +231,7 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     # and complex-valued eigenvalues. In other cases, a copy is created, see eigen.jl for details.
     vals, vecs = eigen!(A; sortby)
     # In-place vecs .= inv(M^H)*vecs
-    LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), M.data), vecs)
+    LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), LUD), vecs)
     # In-place vecs .= vecs[invperm(B.p), :]
     LAPACK.lapmr!(vecs, invperm(B.p), true)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
@@ -264,8 +273,17 @@ function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
-function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     eigvals!(copy(A), copy(B); sortby)
+end
+function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    D = copy(B.D)
+    M = B.uplo == 'U' ? B.U : B.L
+    A .= A[B.p, B.p]
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(lu!(D), A)
+    return eigvals!(A; sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
@@ -276,12 +294,10 @@ function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
         LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
     end
     if B.uplo == 'U'
-        M = UnitUpperTriangular(LUD)
         du = od[2:end]
         # Aliasing of dl and du is not allowed for gtsv! below.
         dl = B.symmetric ? copy(du) : conj.(du)
     else
-        M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
         # Aliasing of dl and du is not allowed for gtsv! below.
         du = B.symmetric ? copy(dl) : conj.(dl)
@@ -290,9 +306,9 @@ function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
     # In-place A .= inv(M)*A
-    LAPACK.trtrs!(B.uplo, 'N', 'U', M.data, A)
+    LAPACK.trtrs!(B.uplo, 'N', 'U', LUD, A)
     # In-place A .= A*inv(M^H)
-    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), M.data, A)
+    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), LUD, A)
     # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
     LAPACK.gtsv!(dl, diag(LUD), du, A)
     # Compute the eigenvalues of A, which are the generalized eigenvalues.
