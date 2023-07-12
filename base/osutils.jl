@@ -33,6 +33,17 @@ macro static(ex)
                 return cond
             end
         end
+        if hd == :for && ex.args[1].head == :(=)
+            var = ex.args[1].args[1]
+            itr = Core.eval(__module__, ex.args[1].args[2])
+            blk = quote end
+            for val in itr
+                let_blk = :(let $var = $val end)
+                let_blk.args[2] = ex.args[2]
+                push!(blk.args, let_blk)
+            end
+            return esc(blk)
+        end
     end
-    throw(ArgumentError("invalid @static macro"))
+    throw(ArgumentError("invalid @static macro usage"))
 end
