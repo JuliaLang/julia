@@ -1875,11 +1875,15 @@ let s = "`abc`.e"
 end
 
 # Test completion for a case when type inference returned `Union` of the same types
-function union_somes()
-    return rand() < 0.5 ? Some(1) : Some(2.)
-end
-let s = "union_somes()."
+union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
+let s = "union_somes(1, 1.0)."
     c, r, res = test_complete_context(s, @__MODULE__)
     @test res
     @test "value" in c
+end
+union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
+let s = "union_some_ref(1, 1.0)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c && "x" in c
 end
