@@ -196,7 +196,7 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-exec(re, subject::Union{String,SubString{String}, offset, options, match_data) =
+exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
     _exec(re, subject, offset, options, match_data)
 exec(re, subject, offset, options, match_data) =
     _exec(re, String(subject), offset, options, match_data)
