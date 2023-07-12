@@ -107,13 +107,13 @@ static inline bool test_nbit(const T1 &bits, T2 _bitidx)
 }
 
 template<typename T>
-static inline void unset_bits(T &bits)
+static inline void unset_bits(T &bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }
 
 template<typename T, typename T1, typename... Rest>
-static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest)
+static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest) JL_NOTSAFEPOINT
 {
     auto bitidx = static_cast<uint32_t>(_bitidx);
     auto u32idx = bitidx / 32;
@@ -142,7 +142,7 @@ static inline void set_bit(T &bits, T1 _bitidx, bool val)
 template<size_t n>
 struct FeatureList {
     uint32_t eles[n];
-    uint32_t &operator[](size_t pos)
+    uint32_t &operator[](size_t pos) JL_NOTSAFEPOINT
     {
         return eles[pos];
     }
