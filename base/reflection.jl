@@ -529,8 +529,10 @@ function ismutabletype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.flags & 0x2 == 0x2
+    return isa(t, DataType) && ismutabletypename(t.name)
 end
+
+ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 """
     isstructtype(T) -> Bool
