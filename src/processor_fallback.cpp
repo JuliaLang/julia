@@ -33,7 +33,7 @@ static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host
     return res;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -51,7 +51,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<1> target = jit_targets.front();
     // Find the last name match or use the default one.
