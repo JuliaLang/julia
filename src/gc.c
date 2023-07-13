@@ -1242,7 +1242,10 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     // in pool_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = pop_page_metadata_back(&ptls->page_metadata_lazily_freed);
-    if (pg == NULL) {
+    if (pg != NULL) {
+        gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+    }
+    else {
         pg = jl_gc_alloc_page();
     }
     pg->osize = p->osize;
@@ -1449,6 +1452,7 @@ done:
         push_page_metadata_back(allocd, pg);
     }
     else if (freed_lazily) {
+        gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
         push_page_metadata_back(lazily_freed, pg);
     }
     else {
@@ -4027,7 +4031,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         jl_gc_pool_t *pool =
             gc_all_tls_states[meta->thread_n]->heap.norm_pools +
             meta->pool_n;
-        if (meta->fl_begin_offset == (uint16_t) -1) {
+        if (meta->fl_begin_offset == UINT16_MAX) {
             // case 2: this is a page on the newpages list
             jl_taggedvalue_t *newpages = pool->newpages;
             // Check if the page is being allocated from via newpages
@@ -4069,8 +4073,18 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         // before the freelist pointer was either live during the last
         // sweep or has been allocated since.
         if (gc_page_data(cell) == gc_page_data(pool->freelist)
-            && (char *)cell < (char *)pool->freelist)
+            && (char *)cell < (char *)pool->freelist) {
             goto valid_object;
+        }
+        else {
+            jl_taggedvalue_t *v = pool->freelist;
+            while (v != NULL) {
+                if (v == cell) {
+                    return NULL;
+                }
+                v = v->next;
+            }
+        }
         // Not a freelist entry, therefore a valid object.
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
