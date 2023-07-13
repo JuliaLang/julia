@@ -2,6 +2,9 @@
 
 using Random, LinearAlgebra
 
+isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
+using .Main.InfiniteArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -54,6 +57,13 @@ end
     @test checkbounds(Bool, A, 6, CartesianIndex((4, 3)))  == false
     @test checkbounds(Bool, A, 5, CartesianIndex((5,)), 3) == false
     @test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
+end
+
+@testset "Infinite CartesianIndices" begin
+    r = OneToInf()
+    C = CartesianIndices(size(r))
+    ax = to_indices(r, (C,))[1]
+    @test ax === r
 end
 
 @testset "vector indices" begin
