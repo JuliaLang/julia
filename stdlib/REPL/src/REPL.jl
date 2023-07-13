@@ -248,11 +248,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
