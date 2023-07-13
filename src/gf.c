@@ -3426,7 +3426,9 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
             }
             if ((size_t)visited->items[idx] == 1) {
-                assert(cycle == depth);
+                // n.b. cycle might be < depth, if we had a cycle with a child
+                // idx, but since we are on the top of the stack, nobody
+                // observed that and so we are content to ignore this
                 size_t childidx = (size_t)arraylist_pop(stack);
                 assert(childidx == idx); (void)childidx;
                 assert(!subt || *found_minmax == 2);
