@@ -7345,7 +7345,7 @@ static jl_llvm_functions_t
         if (ctx.emission_context.debug_level > 0) {
             auto arg_typename = [&](size_t i) JL_NOTSAFEPOINT {
                 auto tp = jl_tparam(lam->specTypes, i);
-                return jl_is_datatype(tp) ? jl_symbol_name(((jl_datatype_t*)tp)->name->name) : "<unknown datatype>";
+                return jl_is_datatype(tp) ? jl_symbol_name(((jl_datatype_t*)tp)->name->name) : "<unknown type>";
             };
             size_t nreal = 0;
             for (size_t i = 0; i < std::min(nreq, static_cast<size_t>(used_args.size())); i++) {
