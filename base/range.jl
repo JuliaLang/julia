@@ -1257,7 +1257,7 @@ function -(r::LinRange)
     LinRange{typeof(start)}(start, -r.stop, length(r))
 end
 
-for f in (rad2deg, deg2rad)
+for f in (:rad2deg, :deg2rad)
     @eval $f(r::AbstractRange) = StepRangeLen($f(first(r)), $f(step(r)), length(r))
     @eval $f(r::StepRangeLen{T}) where {T} = StepRangeLen{typeof($f(T(r.ref)))}($f(r.ref), $f(r.step), length(r), r.offset)
     @eval $f(r::LinRange) = LinRange($f(r.start), $f(r.stop), r.len)
