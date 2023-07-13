@@ -4072,8 +4072,10 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         // Freelist entries are consumed in ascending order. Anything
         // before the freelist pointer was either live during the last
         // sweep or has been allocated since.
-        if (gc_page_data(cell) != gc_page_data(pool->freelist)
-            || (char *)cell >= (char *)pool->freelist)
+        if (gc_page_data(cell) == gc_page_data(pool->freelist)
+            && (char *)cell < (char *)pool->freelist)
+            goto valid_object;
+        else
             return NULL;
         // Not a freelist entry, therefore a valid object.
     valid_object:
