@@ -227,7 +227,7 @@ end
 
 
 const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
-	
+
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
