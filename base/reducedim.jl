@@ -1368,6 +1368,16 @@ julia> mean(A, dims=2)
 """
 mean(A::AbstractArray; dims=:) = _mean(identity, A, dims)
 
+function mean(f::Number, itr::Number)
+    f_value = try
+        f(itr)
+    catch MethodError
+        rethrow(ArgumentError("""mean(f, itr) requires a function and an iterable.
+                                 Perhaps you meant mean((x, y))?"""))
+    end
+    Base.reduce_first(+, f_value)/1
+end
+
 # ::Dims is there to force specializing on Colon (as it is a Function)
 function _mean(f, A::AbstractArray, dims::Dims=:) where Dims
     isempty(A) && return sum(f, A, dims=dims)/0
