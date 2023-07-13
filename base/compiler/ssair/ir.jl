@@ -1511,10 +1511,20 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
     return skipped
 end
 
-function attach_after_stmt_after(compact::IncrementalCompact, idx::Int)
-    compact.new_nodes_idx > length(compact.perm) && return false
-    entry = compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]]
-    return entry.pos == idx && entry.attach_after
+"""
+    stmts_awaiting_insertion(compact::IncrementalCompact, idx::Int)
+
+Returns true if there are new/pending instructions enqueued for insertion into
+`compact` on any instruction in the range `1:idx`. Otherwise, returns false.
+"""
+function stmts_awaiting_insertion(compact::IncrementalCompact, idx::Int)
+
+    new_node_waiting = compact.new_nodes_idx <= length(compact.perm) &&
+        compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]].pos <= idx
+    pending_node_waiting = !isempty(compact.pending_perm) &&
+        compact.pending_nodes.info[compact.pending_perm[1]].pos <= idx
+
+    return new_node_waiting || pending_node_waiting
 end
 
 function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_entry::Instruction, new_node_info::NewNodeInfo, idx::Int, active_bb::Int, do_rename_ssa::Bool)
@@ -1526,7 +1536,7 @@ function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_en
     compact.result_idx = result_idx
     # If this instruction has reverse affinity and we were at the end of a basic block,
     # finish it now.
-    if new_node_info.attach_after && idx == last(bb.stmts)+1 && !attach_after_stmt_after(compact, idx-1)
+    if new_node_info.attach_after && idx == last(bb.stmts)+1 && !stmts_awaiting_insertion(compact, idx-1)
         active_bb += 1
         finish_current_bb!(compact, active_bb, old_result_idx)
     end
@@ -1656,7 +1666,7 @@ function iterate_compact(compact::IncrementalCompact)
     compact.result[old_result_idx] = compact.ir.stmts[idx]
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx, active_bb, true)
     compact.result_idx = result_idx
-    if idx == last(bb.stmts) && !attach_after_stmt_after(compact, idx)
+    if idx == last(bb.stmts) && !stmts_awaiting_insertion(compact, idx)
         finish_current_bb!(compact, active_bb, old_result_idx)
         active_bb += 1
     end
