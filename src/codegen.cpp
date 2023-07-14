@@ -4235,16 +4235,6 @@ static CallInst *emit_jlcall_stack(jl_codectx_t &ctx, FunctionCallee theFptr, Va
     //   Value *arg = literal_pointer_val(ctx, (jl_value_t*)(argv[i]).typ);
       theArgs.push_back(arg);
     }
-    // Specify whether the arg is a box or a pointer to the stack.
-    // 1 indicates a boxed value; 0 indicates a pointer to a stack-allocated value.
-    for (size_t i = 0; i < nargs; i++) {
-      if (deserves_stack(argv[i].typ)) {
-        theArgs.push_back(literal_pointer_val(ctx, (jl_value_t*)0));
-      } else {
-        theArgs.push_back(literal_pointer_val(ctx, (jl_value_t*)1));
-      }
-    }
-
     CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
     result->setAttributes(TheTrampoline->getAttributes());
     // TODO: we could add readonly attributes in many cases to the args

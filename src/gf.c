@@ -3095,18 +3095,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
 
     //jl_printf(JL_STDERR, "nargs: %d\n", nargs);
 
-    // The args come three times:
-    // 1. The actual args
-    // 2. Their types
-    // 3. Whether or not they are boxed.
-    //    - It feels like we should be able to encode whether they're boxed in the type,
-    //      but we're going to need the actual runtime types for the method lookup. And
-    //      we don't want to have to allocate a new vector, so we write over the svec that
-    //      was passed to us.
-    nargs = nargs / 3;
+    nargs = nargs / 2;
     jl_value_t** types = (jl_value_t**)&args[nargs];
     size_t ntypes = nargs + 1;
-    int* boxed_indicators = (int*)&args[nargs * 2];
 
     //jl_printf(JL_STDERR, "world: %zu\n", world);
     //jl_printf(JL_STDERR, "F: ");
@@ -3117,10 +3108,10 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
         //jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
         //jl_(types[i]);
         //jl_printf(JL_STDERR, "\n is concrete: %d\n", jl_is_concrete_type(types[i]));
-        if (boxed_indicators[i] == 1) {
+        if (!jl_is_concrete_type(types[i])) {
             //jl_(args[i-1]);
             // Get the runtime type
-            types[i] = jl_typeof((jl_value_t*)args[i-1]);
+            types[i] = jl_typeof(args[i-1]);
         }
         //jl_(types[i]);
     }
@@ -3173,22 +3164,16 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
         //jl_printf(JL_STDERR, "Expecting type %zu: ", i);
         //jl_(jl_svecref(spec_types, i+1));
-
-        // If the function is expecting a boxed value (because it's not specialized), but we
-        // have a pointer to a stack-allocated value, we need to box the value here.
+        // If the function is expecting a boxed value (because it's not specialized)
+        // we need to ensure the value is boxed.
         if (!jl_is_concrete_type(jl_svecref(spec_types, i+1)) &&
-                    boxed_indicators[i] == 0) {
+            // Does this need to be "and isbits"? I don't _think_ so?
+            jl_is_concrete_type(jl_typeof(args[i]))) {
             // re-box the value
             jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
             newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
-        // Otherwise, we either have an already boxed value, and we can pass that through,
-        // or we have a pointer to a stack-allocated value (NOT a real jl_value_t*), but
-        // since we know that the function was specialized to it, we know that it's going to
-        // immediately dereference the pointer and copy the value onto the new stack frame.
         } else {
-            // TODO: We probably want to have a variant of jl_invoke that can accept
-            // void** args, rather than jl_value_t** args, since we're currently lying.
-            newargs[i] = (jl_value_t*)args[i];
+            newargs[i] = args[i];
         }
         //jl_printf(JL_STDERR, "new arg %zu: ", i);
         //jl_(newargs[i]);
