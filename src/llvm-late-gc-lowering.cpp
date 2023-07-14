@@ -2218,14 +2218,14 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size,
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
+    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1), "tag_ptr");
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, T_size, V);
     auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0));
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), "tag");
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2594,7 +2594,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "", InsertBefore);
+        "gc_slot_addr", InsertBefore);
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
@@ -2652,7 +2652,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
-            {gcframe, ConstantInt::get(T_int32, 0)});
+            {gcframe, ConstantInt::get(T_int32, 0)}, "gcpush");
         pushGcframe->insertAfter(pgcstack);
 
         // Replace Allocas
@@ -2666,7 +2666,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr");
             slotAddress->insertAfter(gcframe);
             slotAddress->takeName(AI);
 
@@ -2711,7 +2711,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             for (unsigned i = 0; i < Store.second; ++i) {
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr");
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
@@ -2739,7 +2739,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             if (isa<ReturnInst>(BB.getTerminator())) {
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
-                    {gcframe});
+                    {gcframe}, "gcpop");
                 popGcframe->insertBefore(BB.getTerminator());
             }
         }
