@@ -376,7 +376,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     bool onstack = false;
     size_t rewrite_len = 0;
     if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len, ctx))
-        return StructType::get(ctx, ArrayRef<Type*>(std::vector<Type*>(rewrite_len, rewrite_ty)));
+        return StructType::get(ctx, ArrayRef<Type*>(std::vector<Type*>(rewrite_len, rewrite_ty)), true);
     return NULL;
 }
 
