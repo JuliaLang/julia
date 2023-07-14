@@ -1421,3 +1421,20 @@ let src = code_typed1(sroaunswitchunionstruct1, Tuple{Bool, Int, Float64})
 end
 @test sroaunswitchunionstruct2(true, 1, 1.0) === 1
 @test sroaunswitchunionstruct2(false, 1, 1.0) === 1.0
+
+# Test SROA of union into getfield
+struct SingleFieldStruct1
+	x::Int
+end
+struct SingleFieldStruct2
+	x::Int
+end
+function foo(b, x)
+	if b
+		f = SingleFieldStruct1(x)
+	else
+		f = SingleFieldStruct2(x)
+	end
+	getfield(f, :x) + 1
+end
+@test foo(true, 1) == 2
