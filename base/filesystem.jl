@@ -200,11 +200,10 @@ end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l::UInt8 = leading_ones(b0)
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if 2 ≤ l ≤ 4
+    if l ≤ 0x10
         s = 16
-        l = 8(4-l)
         while s ≥ l && !eof(f)
             # this works around lack of peek(::File)
             p = position(f)
