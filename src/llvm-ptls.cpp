@@ -253,8 +253,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             auto key = builder.CreateLoad(T_size, pgcstack_key_slot);
             key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
-            auto new_pgcstack = builder.CreateCall(FT_pgcstack_getter, getter, {key});
-            new_pgcstack->takeName(pgcstack);
+            auto new_pgcstack = builder.CreateCall(FT_pgcstack_getter, getter, {key}, "new_pgcstack");
             pgcstack->replaceAllUsesWith(new_pgcstack);
             pgcstack->eraseFromParent();
             pgcstack = new_pgcstack;
@@ -277,8 +276,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         if (TargetTriple.isOSDarwin()) {
             assert(sizeof(k) == sizeof(uintptr_t));
             Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
-            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
-            new_pgcstack->takeName(pgcstack);
+            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "new_pgcstack", pgcstack);
             pgcstack->replaceAllUsesWith(new_pgcstack);
             pgcstack->eraseFromParent();
             pgcstack = new_pgcstack;
