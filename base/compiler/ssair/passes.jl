@@ -83,8 +83,7 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
+        @assert is_known_call(ex, setfield!, ir)
         return ex.args[4]
     end
 end
@@ -939,7 +938,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
         push!(tvars, applyTvar)
     end
 
-    applyT.name === typ.name || return false
+    @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)
     idx = findfirst(IsEgal(fT), tvars)
     idx === nothing && return false
@@ -1106,15 +1105,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             val = stmt.args[2]
         end
         struct_typ = widenconst(argextype(val, compact))
-        struct_typ_name = argument_datatype(struct_typ)
-        if struct_typ_name === nothing
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
             if isa(struct_typ, Union)
                 lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             end
             continue
-        else
-            struct_typ_name = struct_typ_name.name
         end
+        struct_typ_name = struct_argtyp.name
 
         struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
