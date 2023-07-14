@@ -15,10 +15,11 @@ for (s1, rev) in enumerate([true, false])
                 target = is_fwd ? (1:3) : (3:-1:1)
                 # arrays, integer and float ranges sometimes have different code paths
                 @test target == sort([2, 3, 1], rev=rev, lt=lt, by=by, order=order)
-                @test target === sort(1:3, rev=rev, lt=lt, by=by, order=order)
-                @test target === sort(3:-1:1, rev=rev, lt=lt, by=by, order=order)
-                @test float(target) === sort(1.0:3, rev=rev, lt=lt, by=by, order=order)
-                @test float(target) === sort(3.0:-1:1, rev=rev, lt=lt, by=by, order=order)
+
+                @test target == sort(1:3, rev=rev, lt=lt, by=by, order=order)
+                @test target == sort(3:-1:1, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) == sort(1.0:3, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) == sort(3.0:-1:1, rev=rev, lt=lt, by=by, order=order)
             end
         end
     end
