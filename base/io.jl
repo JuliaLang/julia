@@ -884,10 +884,11 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 8(4-leading_ones(b0))
+    l::UInt8 = leading_ones(b0)
     c = UInt32(b0) << 24
-    if l < 24
+    if 2 ≤ l ≤ 4
         s = 16
+        l = 8(4-l)
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
             b = read(io, UInt8)::UInt8

@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "basic properties" begin
-
     @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
     @test typemax(Char) == reinterpret(Char, 0xffffffff)
@@ -211,6 +210,27 @@ end
         end
     finally
         rm(file, force=true)
+    end
+end
+
+# issue #50532
+@testset "invalid read(io, Char)" begin
+    # byte values with different numbers of leading bits
+    B = UInt8[
+        0x3f, 0x4d, 0x52, 0x63, 0x81, 0x83, 0x89, 0xb6,
+        0xc0, 0xc8, 0xd3, 0xe3, 0xea, 0xeb, 0xf0, 0xf2,
+        0xf4, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+    ]
+    for b1 in B, b2 in B, t = 0:3
+        bytes = [b1, b2]
+        append!(bytes, rand(B, t))
+        s = String(bytes)
+        io = IOBuffer(s)
+        chars = Char[]
+        while !eof(io)
+            push!(chars, read(io, Char))
+        end
+        @test collect(s) == chars
     end
 end
 
