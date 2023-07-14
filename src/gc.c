@@ -3558,7 +3558,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t sweep_time = gc_end_time - start_sweep_time;
     gc_num.total_sweep_time += sweep_time;
     gc_num.sweep_time = sweep_time;
-
+    
+    int thrashing = 0; // maybe we should report this to the user or error out?
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
     double min_interval = default_collect_interval;
@@ -3577,17 +3578,18 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         old_freed_diff = freed_diff;
         old_pause_time = pause;
         old_heap_size = heap_size;
+        thrashing = gc_time > mutator_time * 98 ? 1 : 0;
         if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
             double alloc_rate = alloc_mem/alloc_time;
             double gc_rate = gc_mem/gc_time;
             target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
         }
     }
-    if (target_allocs == 0.0)
+    if (target_allocs == 0.0 || thrashing) // If we are thrashing go back to default
         target_allocs = 2*sqrt((double)heap_size/min_interval);
 
     uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
-    if (target_heap > max_total_memory)
+    if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
         target_heap = max_total_memory;
     else if (target_heap < default_collect_interval)
         target_heap = default_collect_interval;
