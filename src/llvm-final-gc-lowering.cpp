@@ -107,21 +107,21 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
-                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
-                        T_size->getPointerTo(), "nroots"),
+                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),
+                        T_size->getPointerTo(), "frame.nroots"), // GEP of 0 becomes a noop and eats the name
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
     inst = builder.CreateAlignedStore(
-            builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*)), "pgcstack_frame"),
+            builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*)), "task.gcstack"),
             builder.CreatePointerCast(
-                    builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
-                    PointerType::get(T_ppjlvalue, 0), "new_frame"),
+                    builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1, "frame.prev"),
+                    PointerType::get(T_ppjlvalue, 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
             gcframe,
-            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0), "pgcstack_frame"),
+            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
             Align(sizeof(void*)));
 }
 
@@ -135,12 +135,12 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)), "prev_frame");
+    Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)), "frame.prev");
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(pgcstack,
-            PointerType::get(T_prjlvalue, 0), "pgcstack_frame"),
+            PointerType::get(T_prjlvalue, 0)),
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
