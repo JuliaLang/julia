@@ -1070,4 +1070,13 @@ end
     end
 end
 
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for UT in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        T = UT(M)
+        @test_throws "invalid index" S[true, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
 end # module TestTriangular
