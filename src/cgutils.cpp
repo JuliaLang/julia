@@ -3197,16 +3197,19 @@ static Value *address_of_stack(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type 
     //Type *pt = PointerType::get(t, AddressSpace::Derived);
     Type *pt = PointerType::get(t, 0);
 
-    // Create the alloca instruction for the stack-allocated value
+    // .... I'm not sure why this is needed. This seems like it's making another copy of the
+    // already stack-allocated value?
     llvm::AllocaInst* allocaInst = builder.CreateAlloca(t);
+
+    // Store the value %0 into the stack-allocated value (%2) ???
+    builder.CreateStore(vinfo.V, allocaInst);
 
     // Create the alloca instruction for the pointer to the stack-allocated value
     llvm::AllocaInst* allocaPtrInst = builder.CreateAlloca(pt);
 
-    // Store the value %0 into the stack-allocated value (%2)
-    builder.CreateStore(vinfo.V, allocaInst);
-
     // Store the address of the stack-allocated value (%2) into the pointer (%3)
+    // This is the magic. Apparently this doesn't store the _contents_ of allocaInst, but
+    // somehow stores the pointer?
     builder.CreateStore(allocaInst, allocaPtrInst, true);
 
     // Load the value from the pointer (%3)
