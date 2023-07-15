@@ -177,6 +177,14 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
     }
 }
 
+void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
+{
+    assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
+    if (params.debug_level && !isa<Constant>(V)) {
+        V->setName(Twine(GetName()));
+    }
+}
+
 STATISTIC(EmittedAllocas, "Number of allocas emitted");
 STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
 STATISTIC(ModulesCreated, "Number of LLVM Modules created");
