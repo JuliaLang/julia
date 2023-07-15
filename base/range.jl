@@ -932,7 +932,6 @@ function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     val % T
 end
 
-checkbounds(::Type{Bool}, v::AbstractRange, i::Integer) = ((i > 0) & (i <= v.stop))
 let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
     function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
         res = widemul(step(v), i-oneunit(i)) + first(v)
