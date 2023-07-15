@@ -218,7 +218,8 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     # Compute generalized eigenvectors from 'vecs':
     #   vecs = P'*inv(M')*vecs
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
-    LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), LUD), vecs)
+    M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
+    ldiv!(M', vecs)
     LAPACK.lapmr!(vecs, invperm(B.p), true)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
