@@ -1107,7 +1107,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         struct_typ = widenconst(argextype(val, compact))
         struct_argtyp = argument_datatype(struct_typ)
         if struct_argtyp === nothing
-            if isa(struct_typ, Union)
+            if isa(struct_typ, Union) && is_isdefined
                 lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             end
             continue
