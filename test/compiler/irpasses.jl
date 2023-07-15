@@ -1424,17 +1424,17 @@ end
 
 # Test SROA of union into getfield
 struct SingleFieldStruct1
-	x::Int
+    x::Int
 end
 struct SingleFieldStruct2
-	x::Int
+    x::Int
 end
 function foo(b, x)
-	if b
-		f = SingleFieldStruct1(x)
-	else
-		f = SingleFieldStruct2(x)
-	end
-	getfield(f, :x) + 1
+    if b
+        f = SingleFieldStruct1(x)
+    else
+        f = SingleFieldStruct2(x)
+    end
+    getfield(f, :x) + 1
 end
 @test foo(true, 1) == 2
