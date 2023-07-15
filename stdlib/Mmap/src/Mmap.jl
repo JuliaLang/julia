@@ -210,8 +210,10 @@ function mmap(io::IO,
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
     requestedSizeLarger = false
-    if !(io isa Mmap.Anonymous || Sys.isapple())
-        requestedSizeLarger = szfile > filesize(io)
+    if !(io isa Mmap.Anonymous)
+        @static if !Sys.isapple()
+            requestedSizeLarger = szfile > filesize(io)
+        end
     end
     # platform-specific mmapping
     @static if Sys.isunix()
@@ -226,6 +228,9 @@ function mmap(io::IO,
             else
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
             end
+        end
+        @static if Sys.isapple()
+            iswrite && grow && grow!(io, offset, len)
         end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
