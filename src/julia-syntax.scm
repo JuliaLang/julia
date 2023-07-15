@@ -555,7 +555,7 @@
           name positional-sparams
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
-             ,(if (any kwarg? pargl) (gensy) UNUSED)
+             ,(if (any kwarg? `(,@pargl ,@vararg)) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
             ;; propagate method metadata to keyword sorter

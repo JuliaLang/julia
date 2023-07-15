@@ -2093,10 +2093,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // // Force imaging mode for names of pointers
         // output.imaging = true;
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
-        // // Force at least medium debug info for introspection
+        // Force at least medium debug info for introspection
         // No debug info = no variable names,
         // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
-        output.debug_level = jl_options.debug_level;
+        output.debug_level = std::max(1, static_cast<int>(jl_options.debug_level));
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 
