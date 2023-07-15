@@ -253,7 +253,7 @@ if opt_level > 0
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
     @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
-    @test occursin("ret $Iptr %0", load_dummy_ref_ir)
+    @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
 
 # Issue 22770

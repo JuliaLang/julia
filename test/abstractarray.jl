@@ -2,6 +2,9 @@
 
 using Random, LinearAlgebra
 
+isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
+using .Main.InfiniteArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -54,6 +57,13 @@ end
     @test checkbounds(Bool, A, 6, CartesianIndex((4, 3)))  == false
     @test checkbounds(Bool, A, 5, CartesianIndex((5,)), 3) == false
     @test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
+end
+
+@testset "Infinite CartesianIndices" begin
+    r = OneToInf()
+    C = CartesianIndices(size(r))
+    ax = to_indices(r, (C,))[1]
+    @test ax === r
 end
 
 @testset "vector indices" begin
@@ -683,8 +693,8 @@ function test_cat(::Type{TestAbstractArray})
     @test hcat() == Any[]
     @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
-    @test_throws ArgumentError hcat(B1, B2)
-    @test_throws ArgumentError vcat(C1, C2)
+    @test_throws DimensionMismatch hcat(B1, B2)
+    @test_throws DimensionMismatch vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
@@ -713,9 +723,9 @@ function test_cat(::Type{TestAbstractArray})
     end
 
     @test_throws ArgumentError hvcat(7, 1:20...)
-    @test_throws ArgumentError hvcat((2), C1, C3)
-    @test_throws ArgumentError hvcat((1), C1, C2)
-    @test_throws ArgumentError hvcat((1), C2, C3)
+    @test_throws DimensionMismatch hvcat((2), C1, C3)
+    @test_throws DimensionMismatch hvcat((1), C1, C2)
+    @test_throws DimensionMismatch hvcat((1), C2, C3)
 
     tup = tuple(rand(1:10, i)...)
     @test hvcat(tup) == []
@@ -724,8 +734,8 @@ function test_cat(::Type{TestAbstractArray})
     @test_throws ArgumentError hvcat((2, 2), 1, 2, 3, 4, 5)
     @test_throws ArgumentError Base.typed_hvcat(Int, (2, 2), 1, 2, 3, 4, 5)
     # check for # of columns mismatch b/w rows
-    @test_throws ArgumentError hvcat((3, 2), 1, 2, 3, 4, 5, 6)
-    @test_throws ArgumentError Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
+    @test_throws DimensionMismatch hvcat((3, 2), 1, 2, 3, 4, 5, 6)
+    @test_throws DimensionMismatch Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
 
     # 18395
     @test isa(Any["a" 5; 2//3 1.0][2,1], Rational{Int})
@@ -1344,7 +1354,7 @@ end
 
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
-    @test_throws ArgumentError Int[t...; 3 4 5]
+    @test_throws DimensionMismatch Int[t...; 3 4 5]
 end
 
 @testset "issue #39896, modified getindex " begin
@@ -1398,15 +1408,15 @@ using Base: typed_hvncat
     @test [1;;] == fill(1, (1,1))
 
     for v in (1, fill(1), fill(1,1,1), fill(1, 1, 1, 1))
-        @test_throws ArgumentError [v; v;; v]
-        @test_throws ArgumentError [v; v;; v; v; v]
-        @test_throws ArgumentError [v; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v; v]
+        @test_throws DimensionMismatch [v; v;; v]
+        @test_throws DimensionMismatch [v; v;; v; v; v]
+        @test_throws DimensionMismatch [v; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v; v]
         # ensure a wrong shape with the right number of elements doesn't pass through
-        @test_throws ArgumentError [v; v;; v; v;;; v; v; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v; v]
 
         @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
         @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
@@ -1474,7 +1484,7 @@ using Base: typed_hvncat
     end
 
     # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
-    @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
+    @test_throws DimensionMismatch hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
 
     # zero-length arrays are handled appropriately
     @test [zeros(Int, 1, 2, 0) ;;; 1 3] == [1 3;;;]
@@ -1489,18 +1499,18 @@ using Base: typed_hvncat
     for v1 ∈ (zeros(Int, 0, 0), zeros(Int, 0, 0, 0, 0), zeros(Int, 0, 0, 0, 0, 0, 0, 0))
         for v2 ∈ (1, [1])
             for v3 ∈ (2, [2])
-                @test_throws ArgumentError [v1 ;;; v2]
-                @test_throws ArgumentError [v1 ;;; v2 v3]
-                @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+                @test_throws DimensionMismatch [v1 ;;; v2]
+                @test_throws DimensionMismatch [v1 ;;; v2 v3]
+                @test_throws DimensionMismatch [v1 v1 ;;; v2 v3]
             end
         end
     end
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            @test_throws ArgumentError [v1 ;;; v2 v3]
-            @test_throws ArgumentError [v1 ;;; v2]
-            @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+            @test_throws DimensionMismatch [v1 ;;; v2 v3]
+            @test_throws DimensionMismatch [v1 ;;; v2]
+            @test_throws DimensionMismatch [v1 v1 ;;; v2 v3]
         end
     end
 
@@ -1568,8 +1578,8 @@ using Base: typed_hvncat
     @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
 
     # Issue 43933 - semicolon precedence mistake should produce an error
-    @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
-    @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+    @test_throws DimensionMismatch [[1 1]; 2 ;; 3 ; [3 4]]
+    @test_throws DimensionMismatch [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 
     @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 
