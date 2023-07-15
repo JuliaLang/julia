@@ -1215,14 +1215,16 @@ end
 """
     Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
-Devtools Heap Snapshot viewer (.heapsnapshot extension), to a file
-(`\$pid_\$timestamp.heapsnapshot`) in the current directory, or the given
-file path, or IO stream. If `all_one` is true, then report the size of
-every object as one so they can be easily counted. Otherwise, report the
-actual size.
+Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory by default (or tempdir if
+the current directory is unwritable), or in `dir` if given, or the given
+full file path, or IO stream.
+
+If `all_one` is true, then report the size of every object as one so they can be easily
+counted. Otherwise, report the actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
@@ -1233,9 +1235,22 @@ function take_heap_snapshot(filepath::String, all_one::Bool=false)
     end
     return filepath
 end
-function take_heap_snapshot(all_one::Bool=false)
-    f = joinpath(tempdir(), "$(getpid())_$(time_ns()).heapsnapshot")
-    return take_heap_snapshot(f, all_one)
+function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
+    fname = "$(getpid())_$(time_ns()).heapsnapshot"
+    if isnothing(dir)
+        wd = pwd()
+        fpath = joinpath(wd, fname)
+        try
+            touch(fpath)
+            rm(fpath; force=true)
+        catch
+            @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
+            fpath = joinpath(tempdir(), fname)
+        end
+    else
+        fpath = joinpath(expanduser(dir), fname)
+    end
+    return take_heap_snapshot(fpath, all_one)
 end
 
 

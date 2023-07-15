@@ -196,7 +196,7 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcholmod_cuda libcolamd libklu libldl librbio libspqr libspqr_cuda libsuitesparseconfig libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
