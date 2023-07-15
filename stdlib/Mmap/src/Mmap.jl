@@ -210,7 +210,7 @@ function mmap(io::IO,
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
     requestedSizeLarger = false
-    if !(io isa Mmap.Anonymous)
+    if !(io isa Mmap.Anonymous || Sys.isapple())
         requestedSizeLarger = szfile > filesize(io)
     end
     # platform-specific mmapping
