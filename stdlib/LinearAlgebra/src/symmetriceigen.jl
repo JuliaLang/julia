@@ -185,54 +185,40 @@ function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
-function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     eigen!(copy(A), copy(B); sortby)
 end
-function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    D = copy(B.D)
-    M = B.uplo == 'U' ? B.U : B.L
-    A .= A[B.p, B.p]
-    ldiv!(M, A)
-    rdiv!(A, M')
-    ldiv!(lu!(D), A)
-    vals, vecs = eigen!(A; sortby)
-    vecs .= ldiv!(M', vecs)[invperm(B.p), :]
-    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
-end
 function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
-   # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
-   # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
+   # NOTE: Copy of BunchKaufman's getproperty(B, :D) and getproperty(B, :L/U) in bunchkaufman.jl as 'getproperty' is not in place.
    if B.rook
         LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
     else
         LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
     end
     if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
         du = od[2:end]
-        # Aliasing of dl and du is not allowed for gtsv! below.
+        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
         dl = B.symmetric ? copy(du) : conj.(du)
     else
+        M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
-        # Aliasing of dl and du is not allowed for gtsv! below.
+        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
         du = B.symmetric ? copy(dl) : conj.(dl)
     end
-    # In-place permutation of A, A .= A[B.p, B.p]
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    # In-place A .= inv(M)*A
-    LAPACK.trtrs!(B.uplo, 'N', 'U', LUD, A)
-    # In-place A .= A*inv(M^H)
-    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), LUD, A)
-    # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
-    LAPACK.gtsv!(dl, diag(LUD), du, A)
-    # Compute the eigenvalues and eigenvectors of A, which are the generalized eigenvalues
-    # and eigenvectors.
-    # NOTE: That vecs overwrites A for matrices with real-valued generalized eigenvalues
-    # and complex-valued eigenvalues. In other cases, a copy is created, see eigen.jl for details.
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
     vals, vecs = eigen!(A; sortby)
-    # In-place vecs .= inv(M^H)*vecs
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     LAPACK.trtrs!(B.uplo, 'C', 'U', convert(typeof(vecs), LUD), vecs)
-    # In-place vecs .= vecs[invperm(B.p), :]
     LAPACK.lapmr!(vecs, invperm(B.p), true)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
@@ -273,44 +259,34 @@ function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby
 end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
-function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
     eigvals!(copy(A), copy(B); sortby)
 end
-function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    D = copy(B.D)
-    M = B.uplo == 'U' ? B.U : B.L
-    A .= A[B.p, B.p]
-    ldiv!(M, A)
-    rdiv!(A, M')
-    ldiv!(lu!(D), A)
-    return eigvals!(A; sortby)
-end
 function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
-    # NOTE: getproperty(B, :D) and getproperty(B, :L/U) are not in-place. Hence, in the following, sysconvf/_rook is
-    # directly utilized to obtain M, du, d = diag(LUD), and dl. See bunchkaufman.jl/getproperty for details.
-    if B.rook
+   # NOTE: Copy of BunchKaufman's getproperty(B, :D) and getproperty(B, :L/U) in bunchkaufman.jl as 'getproperty' is not in place.
+   if B.rook
         LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
     else
         LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
     end
     if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
         du = od[2:end]
-        # Aliasing of dl and du is not allowed for gtsv! below.
+        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
         dl = B.symmetric ? copy(du) : conj.(du)
     else
+        M = UnitLowerTriangular(LUD)
         dl = od[1:end-1]
-        # Aliasing of dl and du is not allowed for gtsv! below.
+        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
         du = B.symmetric ? copy(dl) : conj.(dl)
     end
-    # In-place permutation of A, A .= A[B.p, B.p]
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     LAPACK.lapmt!(A, B.p, true)
     LAPACK.lapmr!(A, B.p, true)
-    # In-place A .= inv(M)*A
-    LAPACK.trtrs!(B.uplo, 'N', 'U', LUD, A)
-    # In-place A .= A*inv(M^H)
-    BLAS.trsm!('R', B.uplo , 'C', 'U', one(T), LUD, A)
-    # In-place A .= inv(Tridiagonal(dl, d = diag(LUD), du))*A
-    LAPACK.gtsv!(dl, diag(LUD), du, A)
-    # Compute the eigenvalues of A, which are the generalized eigenvalues.
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
     return eigvals!(A; sortby)
 end
