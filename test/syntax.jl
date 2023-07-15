@@ -3507,3 +3507,23 @@ let x = 1 => 2
     @test_throws ErrorException @eval a => b = 2
     @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
 end
+
+# Splatting in non-final default value (Ref #50518)
+for expr in (quote
+    function g1(a=(1,2)..., b...=3)
+        b
+    end
+end,quote
+    function g2(a=(1,2)..., b=3, c=4)
+        (b, c)
+    end
+end,quote
+    function g3(a=(1,2)..., b=3, c...=4)
+        (b, c)
+    end
+end)
+    let exc = try eval(expr); catch exc; exc end
+        @test isa(exc, ErrorException)
+        @test startswith(exc.msg, "syntax: Splatting in non-final positional default")
+    end
+end
