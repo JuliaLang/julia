@@ -814,7 +814,7 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
     return {};
 }
 
-bool verifyLLVMIR(const Module &M) {
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {
     if (verifyModule(M, &errs())) {
         errs() << "Failed to verify module '" << M.getModuleIdentifier() << "', dumping entire module!\n\n";
         errs() << M << "\n";
@@ -823,7 +823,7 @@ bool verifyLLVMIR(const Module &M) {
     return false;
 }
 
-bool verifyLLVMIR(const Function &F) {
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT {
     if (verifyFunction(F, &errs())) {
         errs() << "Failed to verify function '" << F.getName() << "', dumping entire module!\n\n";
         errs() << *F.getParent() << "\n";
@@ -832,7 +832,7 @@ bool verifyLLVMIR(const Function &F) {
     return false;
 }
 
-bool verifyLLVMIR(const Loop &L) {
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT {
     if (verifyFunction(*L.getHeader()->getParent(), &errs())) {
         errs() << "Failed to verify loop '" << L.getName() << "', dumping entire module!\n\n";
         errs() << *L.getHeader()->getModule() << "\n";
