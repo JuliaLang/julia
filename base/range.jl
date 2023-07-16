@@ -907,7 +907,7 @@ end
 
 isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
 
-function getindex(v::AbstractRange, i::Integer)
+@propagate_inbounds function getindex(v::AbstractRange, i::Integer)
     if i isa Bool # Not via dispatch to avoid ambiguities
         throw(ArgumentError("invalid index: $i of type Bool"))
     else
