@@ -148,8 +148,9 @@ function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
             ndata = tpdum.data[idx+1]
             ndata == 0 && break
             tpdum.data[idx] = ndata
+            idx += 1
         end
-        tpdum.data[idx + 1] = 0
+        tpdum.data[idx] = 0
     end
 end
 kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
@@ -688,7 +689,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     @assert code.def === mi
     src = @atomic :monotonic code.inferred
-    if isa(src, Vector{UInt8})
+    if isa(src, String)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     else
         isa(src, CodeInfo) || return nothing
@@ -860,3 +861,34 @@ should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 
 add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
 add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
+
+function get_max_methods(interp::AbstractInterpreter, @nospecialize(f), sv::AbsIntState)
+    fmax = get_max_methods_for_func(f)
+    fmax !== nothing && return fmax
+    return get_max_methods(interp, sv)
+end
+function get_max_methods(interp::AbstractInterpreter, @nospecialize(f))
+    fmax = get_max_methods_for_func(f)
+    fmax !== nothing && return fmax
+    return get_max_methods(interp)
+end
+function get_max_methods(interp::AbstractInterpreter, sv::AbsIntState)
+    mmax = get_max_methods_for_module(sv)
+    mmax !== nothing && return mmax
+    return get_max_methods(interp)
+end
+get_max_methods(interp::AbstractInterpreter) = InferenceParams(interp).max_methods
+
+function get_max_methods_for_func(@nospecialize(f))
+    if f !== nothing
+        fmm = typeof(f).name.max_methods
+        fmm !== UInt8(0) && return Int(fmm)
+    end
+    return nothing
+end
+get_max_methods_for_module(sv::AbsIntState) = get_max_methods_for_module(frame_module(sv))
+function get_max_methods_for_module(mod::Module)
+    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
+    max_methods < 0 && return nothing
+    return max_methods
+end

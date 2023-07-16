@@ -80,7 +80,7 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
+    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
@@ -643,4 +643,11 @@ end
     @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
 end
 
-sortperm(reverse([NaN, missing, NaN, missing]))
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
+end

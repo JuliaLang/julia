@@ -460,14 +460,14 @@ Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))
 
-Base.sleep(duration::Period) = sleep(toms(duration) / 1000)
+Base.sleep(duration::Period) = sleep(seconds(duration))
 
 function Base.Timer(delay::Period; interval::Period=Second(0))
-    Timer(toms(delay) / 1000, interval=toms(interval) / 1000)
+    Timer(seconds(delay), interval=seconds(interval))
 end
 
 function Base.timedwait(testcb, timeout::Period; pollint::Period=Millisecond(100))
-    timedwait(testcb, toms(timeout) / 1000, pollint=toms(pollint) / 1000)
+    timedwait(testcb, seconds(timeout), pollint=seconds(pollint))
 end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()

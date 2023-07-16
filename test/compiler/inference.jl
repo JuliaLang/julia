@@ -362,7 +362,7 @@ code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
-@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+@test isa(Base.return_types(promote, (Any,Any,Vararg{Any})), Vector)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if isa(arg, Type) && arg<:Tuple
@@ -644,7 +644,6 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
         @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
     test_inferred_static(codetype, all_ssa)
@@ -699,7 +698,7 @@ f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 let fieldtype_tfunc(@nospecialize args...) =
         Core.Compiler.fieldtype_tfunc(Core.Compiler.fallback_lattice, args...),
     fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(
-        Core.Compiler.OptimizerLattice(), s0, name)
+        Core.Compiler.SimpleInferenceLattice.instance, s0, name)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
@@ -727,19 +726,6 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
-end
-
-import Core.Compiler: MaybeUndef, builtin_nothrow
-let 𝕃ₒ = Core.Compiler.OptimizerLattice()
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
-    @test !builtin_nothrow(𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
-    @test !builtin_nothrow(𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
-    @test !builtin_nothrow(𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
-    @test !builtin_nothrow(𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
-    @test !builtin_nothrow(𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
 end
 
 # issue #11480
@@ -1167,25 +1153,18 @@ let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}
     @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
 end
 
-function count_specializations(method::Method)
-    specs = method.specializations
-    specs isa Core.MethodInstance && return 1
-    n = count(!isnothing, specs::Core.SimpleVector)
-    return n
-end
-
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
 copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 4 < count_specializations(m) < 15, methods(copy_dims_out)) # currently about 5
+@test all(m -> 4 < length(Base.specializations(m)) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 3 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 5
+@test all(m -> 3 < length(Base.specializations(m)) < 15, methods(copy_dims_pair)) # currently about 5
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
@@ -1740,7 +1719,7 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
 end
 let setfield!_nothrow(@nospecialize xs...) =
-        Core.Compiler.setfield!_nothrow(Core.Compiler.OptimizerLattice(), xs...)
+        Core.Compiler.setfield!_nothrow(Core.Compiler.SimpleInferenceLattice.instance, xs...)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
     @test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
@@ -2172,15 +2151,15 @@ mutable struct AliasableConstField{S,T}
 end
 
 import Core.Compiler:
-    InferenceLattice, OptimizerLattice, MustAliasesLattice, InterMustAliasesLattice,
-    BaseInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
+    InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
+    BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
 include("newinterp.jl")
 @newinterp MustAliasInterpreter
 let CC = Core.Compiler
     CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-    CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+    CC.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.instance
 end
 
 # lattice
@@ -2402,6 +2381,20 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# prioritize constraints on slot objects
+# https://github.com/aviatesk/JET.jl/issues/509
+struct JET509
+    list::Union{Tuple{},Vector{Int}}
+end
+jet509_hasitems(list) = length(list) >= 1
+@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+    list = ilist.list
+    if jet509_hasitems(list)
+        return list
+    end
+    error("list is empty")
+end |> only == Vector{Int}
 
 # === constraint
 # --------------
@@ -3390,7 +3383,7 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    𝕃 = Core.Compiler.OptimizerLattice()
+    𝕃 = Core.Compiler.SimpleInferenceLattice.instance
     argtypes = Any[Core.Compiler.Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)]
@@ -3506,8 +3499,15 @@ end
               Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
 # Test that these don't throw
 @test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Char}}, 0) == Tuple{Vararg{Int}}
+@test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Int}, Tuple{String,Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Vararg{Int}}, Tuple{String,Int}, 0) == Tuple{String,Vararg{Int}}
 @test Core.Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
 @test Core.Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
+
+@test Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Int}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Int})
 
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
@@ -3797,7 +3797,7 @@ end
             end
         end
     end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 6)", string(timingmod.children))
     # END LINE NUMBER SENSITIVITY
 
     # Recursive function
@@ -4159,6 +4159,102 @@ Base.getproperty(x::Interface41024Extended, sym::Symbol) =
 @test Base.return_types((Interface41024Extended,)) do x
     x.x
 end |> only === Int
+
+function call_func_itr(func, itr)
+    local r = 0
+    r += func(itr[1])
+    r += func(itr[2])
+    r += func(itr[3])
+    r += func(itr[4])
+    r += func(itr[5])
+    r
+end
+
+global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
+# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+function is_inline_checker(@nospecialize stmt)
+    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+end
+
+function func_nospecialized(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+@inline function func_nospecialized_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer function func_nospecializeinfer(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+Base.@nospecializeinfer @inline function func_nospecializeinfer_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer Base.@constprop :aggressive function func_nospecializeinfer_constprop(c::Bool, @nospecialize a)
+    if c
+        return inline_checker(a) # dynamic dispatch, preventing inlining/constprop (but forced by the annotation)
+    end
+    return false
+end
+Base.@nospecializeinfer func_nospecializeinfer_constprop(@nospecialize a) = func_nospecializeinfer_constprop(false, a)
+
+itr_dispatchonly = Any[sin, muladd, "foo", nothing, missing]   # untyped container can cause excessive runtime dispatch
+itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container can cause excessive inference
+
+@testset "compilation annotations" begin
+    @testset "@nospecialize" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecialized, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 1
+        # `@nospecialize` should allow inference to happen
+        @test call_func_itr(func_nospecialized, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized, itr_dispatchonly)) == 0
+
+        # `@nospecialize` should allow inlinining
+        @test call_func_itr(func_nospecialized_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 1
+        @test call_func_itr(func_nospecialized_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized_inline, itr_dispatchonly)) == 5
+    end
+
+    @testset "@nospecializeinfer" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecializeinfer, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        # `@nospecializeinfer` suppresses inference also
+        @test call_func_itr(func_nospecializeinfer, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        @test !any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow inlinining
+        @test call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test call_func_itr(func_nospecializeinfer_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow constprop
+        @test Base.return_types((Any,)) do x
+            Val(func_nospecializeinfer_constprop(x))
+        end |> only == Val{false}
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_dispatchonly) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_withinfernce) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+    end
+end
 
 @testset "fieldtype for unions" begin # e.g. issue #40177
     f40177(::Type{T}) where {T} = fieldtype(T, 1)
@@ -4871,3 +4967,50 @@ function nt_splat_partial(x::Int)
     Val{tuple(nt...)[2]}()
 end
 @test @inferred(nt_splat_partial(42)) == Val{2}()
+
+# Test that irinterp refines based on discovered errors
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, x)
+    y = b1 ? "julia" : xs[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, ys, x)
+    y = b1 ? xs[] : ys[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+let src = code_typed1((Bool,Base.RefValue{Any},Int,)) do b2, xs, x
+        kill_error_edge(true, b2, xs, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do b2, xs, ys, x
+        kill_error_edge(true, b2, xs, ys, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+struct Issue49785{S, T<:S} end
+let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
+    argtypes = Any[Core.Compiler.Const(Issue49785),
+        Union{Type{String},Type{Int}},
+        Union{Type{String},Type{Int}}]
+    rt = Type{Issue49785{<:Any, Int}}
+    # the following should not throw
+    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test code_typed() do
+        S = Union{Type{String},Type{Int}}[Int][1]
+        map(T -> Issue49785{S,T}, (a = S,))
+    end isa Vector
+end

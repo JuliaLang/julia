@@ -80,6 +80,7 @@ typedef struct {
     void *stacktop;
 } _jl_ucontext_t;
 #endif
+#pragma GCC visibility push(default)
 #if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -89,6 +90,7 @@ typedef unw_context_t _jl_ucontext_t;
 #include <ucontext.h>
 typedef ucontext_t _jl_ucontext_t;
 #endif
+#pragma GCC visibility pop
 #endif
 
 typedef struct {
@@ -196,6 +198,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+struct _jl_gc_pagemeta_t;
 
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
@@ -258,6 +261,8 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    struct _jl_gc_pagemeta_t *page_metadata_allocd;
+    struct _jl_gc_pagemeta_t *page_metadata_lazily_freed;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
@@ -276,13 +281,13 @@ typedef struct _jl_tls_states_t {
     )
 
     // some hidden state (usually just because we don't have the type's size declaration)
-#ifdef LIBRARY_EXPORTS
+#ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
 #endif
 } jl_tls_states_t;
 
-#ifndef LIBRARY_EXPORTS
+#ifndef JL_LIBRARY_EXPORTS
 // deprecated (only for external consumers)
 JL_DLLEXPORT void *jl_get_ptls_states(void);
 #endif

@@ -130,7 +130,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -142,7 +142,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -163,7 +163,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -175,7 +175,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -321,6 +321,8 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->inlining = 2;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
+                else if (ma == (jl_value_t*)jl_nospecializeinfer_sym)
+                    li->nospecializeinfer = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
@@ -477,6 +479,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->inferred = 0;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
+    src->nospecializeinfer = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->inlining = 0;
@@ -504,7 +507,7 @@ void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
     JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
-        assert(jl_typeis(ln, jl_lineinfonode_type));
+        assert(jl_typetagis(ln, jl_lineinfonode_type));
         jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
@@ -569,7 +572,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
     JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
-    jl_timing_show_method_instance(linfo, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method_instance(linfo, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
@@ -662,7 +665,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     return new_linfo;
 }
 
-static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;
@@ -682,6 +685,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
     }
     m->called = called;
+    m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
     jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
@@ -689,7 +693,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
     JL_GC_PUSH3(&copy, &sparam_vars, &src);
-    assert(jl_typeis(src->code, jl_array_any_type));
+    assert(jl_typetagis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);
@@ -811,6 +815,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
+    m->nospecializeinfer = 0;
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
@@ -962,12 +967,6 @@ jl_methtable_t *jl_kwmethod_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) J
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
-}
-
-// get the MethodTable implied by a single given type, or `nothing`
-JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    return nth_methtable(argt, 0);
 }
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;

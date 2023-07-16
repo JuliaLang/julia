@@ -59,6 +59,9 @@ using InteractiveUtils: code_llvm
     @test last(10:0.2:3) === 9.8
     @test step(10:0.2:3) === 0.2
     @test isempty(10:0.2:3)
+
+    unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
+    @test_throws unitrangeerrstr UnitRange('a', 'b')
 end
 
 using Dates, Random
@@ -2476,4 +2479,22 @@ end
     @test !occursin("steprange_last", ir)
     @test !occursin("_colon", ir)
     @test !occursin("StepRange", ir)
+end
+
+# DimensionMismatch and LazyString
+function check_ranges(rx, ry)
+    if length(rx) != length(ry)
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+    end
+    rx, ry
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
+# TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "checkbounds overflow (#26623)" begin
+    # the reported issue:
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
+
+    # a case that using mul_with_overflow & add_with_overflow might get wrong:
+    @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
 end

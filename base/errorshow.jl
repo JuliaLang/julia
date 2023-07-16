@@ -35,6 +35,13 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+function showerror(io::IO, ex::Meta.ParseError)
+    if isnothing(ex.detail)
+        print(io, "ParseError(", repr(ex.msg), ")")
+    else
+        showerror(io, ex.detail)
+    end
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -243,7 +250,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int])
+        ex = MethodError(f, ex.args[3:end::Int], ex.world)
     end
     name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -490,7 +497,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)::Bool
+                        if k == 1 && Base.isvarargtype(sigtype)
+                            # There wasn't actually a mismatch - the method match failed for
+                            # some other reason, e.g. world age. Just print the sigstr.
+                            print(iob, sigstr...)
+                        elseif get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -761,6 +772,9 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    io = IOContext(io, :stacktrace_types_limited => limitflag)
 
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
@@ -781,12 +795,15 @@ function show_backtrace(io::IO, t::Vector)
     if length(filtered) > BIG_STACKTRACE_SIZE
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
+    else
+        try invokelatest(update_stackframes_callback[], filtered) catch end
+        # process_backtrace returns a Vector{Tuple{Frame, Int}}
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
-
-    try invokelatest(update_stackframes_callback[], filtered) catch end
-    # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
-    return
+    if limitflag[]
+        print(io, "\nSome type information was truncated. Use `show(err)` to see complete types.")
+    end
+    nothing
 end
 
 

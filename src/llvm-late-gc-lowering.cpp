@@ -702,8 +702,11 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
-        if (FalseElem->getType() != TrueElem->getType())
+        if (FalseElem->getType() != TrueElem->getType()) {
+            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+            assert(FalseElem->getContext().supportsTypedPointers());
             FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
+        }
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -776,6 +779,8 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
             else
                 BaseElem = IncomingBases[i];
             if (BaseElem->getType() != T_prjlvalue) {
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(BaseElem->getContext().supportsTypedPointers());
                 auto &remap = CastedRoots[i][BaseElem];
                 if (!remap) {
                     if (auto constant = dyn_cast<Constant>(BaseElem)) {
@@ -1262,6 +1267,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen)
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    assert(load_base); // Static analyzer
     auto gv = dyn_cast<GlobalVariable>(load_base);
     if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa),
                {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
@@ -2224,10 +2230,10 @@ Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
     auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is larger than page size.
+    // We can be sure that the tag is at least 16 (1<<4)
     // Hopefully this is enough to convince LLVM that the value is still not NULL
     // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 4096));
+    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
     load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
     return load;
 }
@@ -2594,8 +2600,11 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
-    if (Val->getType() != T_prjlvalue)
+    if (Val->getType() != T_prjlvalue) {
+        // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+        assert(Val->getContext().supportsTypedPointers());
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertBefore);
+    }
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
@@ -2676,6 +2685,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             }
             if (slotAddress->getType() != AI->getType()) {
                 // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(slotAddress->getContext().supportsTypedPointers());
                 auto BCI  = new BitCastInst(slotAddress, AI->getType());
                 BCI->insertAfter(slotAddress);
                 slotAddress = BCI;
@@ -2704,8 +2715,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
-                if (Elem->getType() != T_prjlvalue)
+                if (Elem->getType() != T_prjlvalue) {
+                    // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                    assert(Elem->getContext().supportsTypedPointers());
                     Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
+                }
                 //auto Idxs = makeArrayRef(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
@@ -2763,7 +2777,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     return modified;
 }
 
-PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     auto GetDT = [&AM, &F]() -> DominatorTree & {
         return AM.getResult<DominatorTreeAnalysis>(F);
@@ -2792,7 +2806,8 @@ Pass *createLateLowerGCFramePass() {
     return new LateLowerGCFrameLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLateLowerGCFramePass());
 }

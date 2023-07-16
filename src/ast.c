@@ -83,6 +83,7 @@ JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
 JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
+JL_DLLEXPORT jl_sym_t *jl_nospecializeinfer_sym;
 JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 JL_DLLEXPORT jl_sym_t *jl_colon_sym;
 JL_DLLEXPORT jl_sym_t *jl_hygienicscope_sym;
@@ -342,6 +343,7 @@ void jl_init_common_symbols(void)
     jl_isdefined_sym = jl_symbol("isdefined");
     jl_nospecialize_sym = jl_symbol("nospecialize");
     jl_specialize_sym = jl_symbol("specialize");
+    jl_nospecializeinfer_sym = jl_symbol("nospecializeinfer");
     jl_optlevel_sym = jl_symbol("optlevel");
     jl_compile_sym = jl_symbol("compile");
     jl_force_compile_sym = jl_symbol("force_compile");
@@ -434,6 +436,8 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
+        //jl_(jl_current_exception());
+        //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
         jl_array_ptr_set(ex->args, 0, jl_cstr_to_string("invalid AST"));
@@ -700,11 +704,11 @@ static value_t julia_to_scm_noalloc(fl_context_t *fl_ctx, jl_value_t *v, int che
     if (julia_to_scm_noalloc1(fl_ctx, v, &retval))
         return retval;
     assert(!jl_is_expr(v) &&
-           !jl_typeis(v, jl_linenumbernode_type) &&
-           !jl_typeis(v, jl_gotonode_type) &&
-           !jl_typeis(v, jl_quotenode_type) &&
-           !jl_typeis(v, jl_newvarnode_type) &&
-           !jl_typeis(v, jl_globalref_type));
+           !jl_typetagis(v, jl_linenumbernode_type) &&
+           !jl_typetagis(v, jl_gotonode_type) &&
+           !jl_typetagis(v, jl_quotenode_type) &&
+           !jl_typetagis(v, jl_newvarnode_type) &&
+           !jl_typetagis(v, jl_globalref_type));
     return julia_to_scm_noalloc2(fl_ctx, v, check_valid);
 }
 
@@ -745,7 +749,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
     // GC Note: jl_fieldref(v, 0) allocates for GotoNode
     //          but we don't need a GC root here because julia_to_list2_noalloc
     //          shouldn't allocate in this case.
-    if (jl_typeis(v, jl_linenumbernode_type)) {
+    if (jl_is_linenode(v)) {
         jl_value_t *file = jl_fieldref_noalloc(v,1);
         jl_value_t *line = jl_fieldref(v,0);
         value_t args = julia_to_list2_noalloc(fl_ctx, line, file, check_valid);
@@ -755,13 +759,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_typeis(v, jl_gotonode_type))
+    if (jl_typetagis(v, jl_gotonode_type))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_goto_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typeis(v, jl_quotenode_type))
+    if (jl_typetagis(v, jl_quotenode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)jl_inert_sym, jl_fieldref_noalloc(v,0), 0);
-    if (jl_typeis(v, jl_newvarnode_type))
+    if (jl_typetagis(v, jl_newvarnode_type))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_newvar_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typeis(v, jl_globalref_type)) {
+    if (jl_typetagis(v, jl_globalref_type)) {
         jl_module_t *m = jl_globalref_mod(v);
         jl_sym_t *sym = jl_globalref_name(v);
         if (m == jl_core_module)
@@ -784,7 +788,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                                      size_t offset, jl_value_t *options)
 {
     JL_TIMING(PARSING, PARSING);
-    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_DEFAULT_BLOCK);
     if (offset > text_len) {
         jl_value_t *textstr = jl_pchar_to_string(text, text_len);
         JL_GC_PUSH1(&textstr);
@@ -834,7 +838,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
+static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -847,8 +851,8 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     return result;
 }
 
-static jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
-                                              jl_module_t *inmodule, const char *file, int line)
+jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
+                                       jl_module_t *inmodule, const char *file, int line)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -998,7 +1002,59 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
     return 0;
 }
 
-static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, size_t world, int throw_load_error)
+// Utility function to return whether `e` is any of the special AST types or
+// will always evaluate to itself exactly unchanged. This corresponds to
+// `is_self_quoting` in Core.Compiler utilities.
+int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    return jl_is_newvarnode(e)
+        || jl_is_code_info(e)
+        || jl_is_linenode(e)
+        || jl_is_gotonode(e)
+        || jl_is_gotoifnot(e)
+        || jl_is_returnnode(e)
+        || jl_is_ssavalue(e)
+        || jl_is_slotnumber(e)
+        || jl_is_argument(e)
+        || jl_is_quotenode(e)
+        || jl_is_globalref(e)
+        || jl_is_symbol(e)
+        || jl_is_pinode(e)
+        || jl_is_phinode(e)
+        || jl_is_phicnode(e)
+        || jl_is_upsilonnode(e)
+        || jl_is_expr(e);
+}
+
+static int is_self_quoting_expr(jl_expr_t *e) JL_NOTSAFEPOINT
+{
+    return (e->head == jl_inert_sym ||
+            e->head == jl_core_sym ||
+            e->head == jl_line_sym ||
+            e->head == jl_lineinfo_sym ||
+            e->head == jl_meta_sym ||
+            e->head == jl_boundscheck_sym ||
+            e->head == jl_inline_sym ||
+            e->head == jl_noinline_sym);
+}
+
+// any AST, except those that cannot contain symbols
+// and have no side effects
+int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    if (jl_is_linenode(e)
+        || jl_is_ssavalue(e)
+        || jl_is_slotnumber(e)
+        || jl_is_argument(e)
+        || jl_is_quotenode(e))
+        return 0;
+    if (jl_is_expr(e))
+        return !is_self_quoting_expr((jl_expr_t*)e);
+    // note: jl_is_globalref(e) is not included here, since we care a little about about having a line number for it
+    return jl_is_ast_node(e);
+}
+
+static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error)
 {
     jl_task_t *ct = jl_current_task;
     JL_TIMING(MACRO_INVOCATION, MACRO_INVOCATION);
@@ -1010,10 +1066,9 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[0] = jl_array_ptr_ref(args, 0);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
+    if (!jl_is_linenode(lno))
+        lno = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
     margs[1] = lno;
-    if (!jl_typeis(lno, jl_linenumbernode_type)) {
-        margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
-    }
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
         margs[i] = jl_array_ptr_ref(args, i - 1);
@@ -1031,6 +1086,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
+        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
@@ -1051,6 +1107,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         }
     }
     ct->world_age = last_age;
+    *lineinfo = margs[1];
     JL_GC_POP();
     return result;
 }
@@ -1073,14 +1130,18 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         JL_GC_POP();
         return expr;
     }
-    if (e->head == jl_hygienicscope_sym && jl_expr_nargs(e) == 2) {
+    if (e->head == jl_hygienicscope_sym && jl_expr_nargs(e) >= 2) {
         struct macroctx_stack newctx;
         newctx.m = (jl_module_t*)jl_exprarg(e, 1);
         JL_TYPECHK(hygienic-scope, module, (jl_value_t*)newctx.m);
         newctx.parent = macroctx;
         jl_value_t *a = jl_exprarg(e, 0);
         jl_value_t *a2 = jl_expand_macros(a, inmodule, &newctx, onelevel, world, throw_load_error);
-        if (a != a2)
+        if (jl_is_expr(a2) && ((jl_expr_t*)a2)->head == jl_escape_sym && !need_esc_node(jl_exprarg(a2, 0)))
+            expr = jl_exprarg(a2, 0);
+        else if (!need_esc_node(a2))
+            expr = a2;
+        else if (a != a2)
             jl_array_ptr_set(e->args, 0, a2);
         return expr;
     }
@@ -1088,21 +1149,28 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         struct macroctx_stack newctx;
         newctx.m = macroctx ? macroctx->m : inmodule;
         newctx.parent = macroctx;
-        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, world, throw_load_error);
+        jl_value_t *lineinfo = NULL;
+        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, &lineinfo, world, throw_load_error);
+        if (!need_esc_node(result))
+            return result;
         jl_value_t *wrap = NULL;
-        JL_GC_PUSH3(&result, &wrap, &newctx.m);
+        JL_GC_PUSH4(&result, &wrap, &newctx.m, &lineinfo);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
         if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
             result = jl_exprarg(result, 0);
         else
-            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 2);
+            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 3);
         result = jl_copy_ast(result);
         if (!onelevel)
             result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, world, throw_load_error);
-        if (wrap) {
+        if (wrap && need_esc_node(result)) {
             jl_exprargset(wrap, 0, result);
             jl_exprargset(wrap, 1, newctx.m);
-            result = wrap;
+            jl_exprargset(wrap, 2, lineinfo);
+            if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
+                result = jl_exprarg(result, 0);
+            else
+                result = wrap;
         }
         JL_GC_POP();
         return result;
@@ -1178,6 +1246,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmod
                                             const char *file, int line, size_t world)
 {
     JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, world, 1);
@@ -1191,6 +1260,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
                                                  const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_array_t *kwargs = NULL;
     JL_GC_PUSH2(&expr, &kwargs);
     expr = jl_copy_ast(expr);
@@ -1259,8 +1329,8 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
 // Internal C entry point to parser
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
-JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                                  size_t lineno, size_t offset, jl_value_t *options)
+jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                     size_t lineno, size_t offset, jl_value_t *options)
 {
     jl_value_t *core_parse = NULL;
     if (jl_core_module) {
@@ -1278,8 +1348,8 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_ulong(lineno);
-    args[4] = jl_box_ulong(offset);
+    args[3] = jl_box_long(lineno);
+    args[4] = jl_box_long(offset);
     args[5] = options;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;

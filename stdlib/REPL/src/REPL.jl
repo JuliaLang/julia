@@ -248,11 +248,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -1418,6 +1416,7 @@ function out_transform(@nospecialize(x), n::Ref{Int})
 end
 
 function get_usings!(usings, ex)
+    ex isa Expr || return usings
     # get all `using` and `import` statements which are at the top level
     for (i, arg) in enumerate(ex.args)
         if Base.isexpr(arg, :toplevel)

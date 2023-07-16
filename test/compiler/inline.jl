@@ -684,9 +684,9 @@ begin
 end
 
 # https://github.com/JuliaLang/julia/issues/42246
-@test mktempdir() do dir
+mktempdir() do dir
     cd(dir) do
-        code = quote
+        code = """
             issue42246() = @noinline IOBuffer("a")
             let
                 ci, rt = only(code_typed(issue42246))
@@ -699,10 +699,31 @@ end
                     exit(1)
                end
             end
-        end |> string
+            """
         cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
-        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+        @test success(pipeline(cmd; stdout, stderr))
     end
+end
+
+# callsite inlining with cached frames
+issue49823_events = @NamedTuple{evid::Int8, base_time::Float64}[
+    (evid = 1, base_time = 0.0), (evid = -1, base_time = 0.0)]
+issue49823_fl1(t, events) = @inline findlast(x -> x.evid ∈ (1, 4) && x.base_time <= t, events)
+issue49823_fl3(t, events) = @inline findlast(x -> any(==(x.evid), (1,4)) && x.base_time <= t, events)
+issue49823_fl5(t, events) = begin
+    f = let t=t
+        x -> x.evid ∈ (1, 4) && x.base_time <= t
+    end
+    @inline findlast(f, events)
+end
+let src = @code_typed1 issue49823_fl1(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
+end
+let src = @code_typed1 issue49823_fl3(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
+end
+let src = @code_typed1 issue49823_fl5(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
 end
 
 # Issue #42264 - crash on certain union splits

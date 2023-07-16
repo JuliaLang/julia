@@ -257,34 +257,28 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         caller.valid_worlds = valid_worlds
-        finish(caller, interp)
+        finish(caller, caller.interp)
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
-              frames[i].cached )
-        for i in 1:length(frames) ]
-    empty!(frames)
-    for (caller, _, _) in results
-        opt = caller.src
-        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, caller)
-            caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
+    for caller in frames
+        opt = caller.result.src
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+            optimize(caller.interp, opt, caller.result)
         end
     end
-    for (caller, edges, cached) in results
-        valid_worlds = caller.valid_worlds
+    for caller in frames
+        (; result ) = caller
+        valid_worlds = result.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(result, caller.stmt_edges[1])
         end
-        if cached
-            cache_result!(interp, caller)
+        if caller.cached
+            cache_result!(caller.interp, result)
         end
-        finish!(interp, caller)
+        finish!(caller.interp, result)
     end
+    empty!(frames)
     return true
 end
 
@@ -325,9 +319,15 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] :
-                     inferred_result === nothing ? UInt8(1) : UInt8(0)
-    # relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+    relocatability = 0x0
+    if isa(inferred_result, String)
+        t = @_gc_preserve_begin inferred_result
+        relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+        @_gc_preserve_end t
+    elseif inferred_result === nothing
+        relocatability = 0x1
+    end
+    # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
@@ -352,7 +352,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
             nslots = length(ci.slotflags)
             resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
-            return ccall(:jl_compress_ir, Vector{UInt8}, (Any, Any), def, ci)
+            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
         else
             return ci
         end
@@ -364,10 +364,9 @@ end
 function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
-    # If we decided not to optimize, drop the OptimizationState now.
-    # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState{typeof(interp)}
-        inferred_result = ir_to_codeinf!(inferred_result)
+        # TODO respect must_be_codeinf setting here?
+        result.src = inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
@@ -699,13 +698,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    stmt_info = sv.stmt_info
     src = sv.src
-    body = src.code
-    nexpr = length(body)
-    codelocs = src.codelocs
+    stmts = src.code
+    nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
     undefs = fill(false, nslots)
@@ -719,8 +715,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     #    NOTE because of this, `was_reached` will no longer be available after this point
     # 5. eliminate GotoIfNot if either branch target is unreachable
     changemap = nothing # initialized if there is any dead region
-    for i = 1:nexpr
-        expr = body[i]
+    for i = 1:nstmt
+        expr = stmts[i]
         if was_reached(sv, i)
             if run_optimizer
                 if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
@@ -734,7 +730,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
+            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
@@ -742,7 +738,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 ssavaluetypes[i] = Any # 4
             else
                 ssavaluetypes[i] = Bottom # 4
-                body[i] = Const(expr) # annotate that this statement actually is dead
+                stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
     end
@@ -1031,7 +1027,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 inf.rettype = code.rettype
             end
             return inf
-        elseif isa(inf, Vector{UInt8})
+        elseif isa(inf, String)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
             inf = _uncompressed_ir(code, inf)
             return inf

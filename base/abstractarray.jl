@@ -95,7 +95,7 @@ julia> axes(A)
 """
 function axes(A)
     @inline
-    map(oneto, size(A))
+    map(unchecked_oneto, size(A))
 end
 
 """
@@ -603,20 +603,6 @@ end
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
-
-
-function isassigned(a::AbstractArray, i::Integer...)
-    try
-        a[i...]
-        true
-    catch e
-        if isa(e, BoundsError) || isa(e, UndefRefError)
-            return false
-        else
-            rethrow()
-        end
-    end
-end
 
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)
@@ -1442,7 +1428,7 @@ end
 """
     parent(A)
 
-Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+Return the underlying parent object of the view. This parent of objects of types `SubArray`, `SubString`, `ReshapedArray`
 or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
 during object creation. If the input is not a wrapped object, return the input itself. If the input is
 wrapped multiple times, only the outermost wrapper will be removed.
@@ -1465,6 +1451,8 @@ julia> parent(V)
  3  4
 ```
 """
+function parent end
+
 parent(a::AbstractArray) = a
 
 ## rudimentary aliasing detection ##
@@ -1644,6 +1632,14 @@ end
 
 typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
 
+# Catch indexing errors like v[i +1] (instead of v[i+1] or v[i + 1]), where indexing is
+# interpreted as a typed concatenation. (issue #49676)
+typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear whether you \
+    intend to perform an indexing operation or typed concatenation. If you intend to \
+    perform indexing (v[1 + 2]), adjust spacing or insert missing operator to clarify. \
+    If you intend to perform typed concatenation (T[1 2]), ensure that T is a type."))
+
+
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
@@ -1655,7 +1651,7 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     for j = 1:nargs
         Aj = A[j]
         if size(Aj, 1) != nrows
-            throw(ArgumentError("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
+            throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
         end
         dense &= isa(Aj,Array)
         nd = ndims(Aj)
@@ -1690,7 +1686,7 @@ function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     ncols = size(A[1], 2)
     for j = 2:nargs
         if size(A[j], 2) != ncols
-            throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
+            throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
     B = similar(A[1], T, nrows, ncols)
@@ -1988,16 +1984,14 @@ julia> cat(1, [2], [3;;]; dims=Val(2))
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
-# The specializations for Union{AbstractVecOrMat,Number} are necessary
-# to have more specialized methods here than in LinearAlgebra/uniformscaling.jl
 vcat(A::AbstractArray) = cat(A; dims=Val(1))
 vcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(1))
 vcat(A::AbstractArray...) = cat(A...; dims=Val(1))
-vcat(A::Union{AbstractVecOrMat,Number}...) = cat(A...; dims=Val(1))
+vcat(A::Union{AbstractArray,Number}...) = cat(A...; dims=Val(1))
 hcat(A::AbstractArray) = cat(A; dims=Val(2))
 hcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(2))
 hcat(A::AbstractArray...) = cat(A...; dims=Val(2))
-hcat(A::Union{AbstractVecOrMat,Number}...) = cat(A...; dims=Val(2))
+hcat(A::Union{AbstractArray,Number}...) = cat(A...; dims=Val(2))
 
 typed_vcat(T::Type, A::AbstractArray) = _cat_t(Val(1), T, A)
 typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = _cat_t(Val(1), T, A, B)
@@ -2059,8 +2053,8 @@ julia> hvcat((2,2,2), a,b,c,d,e,f) == hvcat(2, a,b,c,d,e,f)
 true
 ```
 """
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
     nbr = length(rows)  # number of block rows
@@ -2088,16 +2082,16 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat..
             Aj = as[a+j-1]
             szj = size(Aj,2)
             if size(Aj,1) != szi
-                throw(ArgumentError("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
+                throw(DimensionMismatch("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
             end
             if c-1+szj > nc
-                throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
+                throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
             end
             out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
         end
         if c != nc+1
-            throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
+            throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
         end
         r += szi
         a += rows[i]
@@ -2119,7 +2113,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     k = 1
     @inbounds for i=1:nr
         if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+            throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
         for j=1:nc
             a[i,j] = xs[k]
@@ -2148,14 +2142,14 @@ end
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 # the following method is needed to provide a more specific one compared to LinearAlgebra/uniformscaling.jl
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{AbstractVecOrMat,Number}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{AbstractArray,Number}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
         if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+            throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
     end
     hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
@@ -2323,7 +2317,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         Ndim += cat_size(as[i], N)
         nd = max(nd, cat_ndims(as[i]))
         for d ∈ 1:N - 1
-            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
+            cat_size(as[1], d) == cat_size(as[i], d) || throw(DimensionMismatch("mismatched size along axis $d in element $i"))
         end
     end
 
@@ -2350,7 +2344,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         nd = max(nd, cat_ndims(as[i]))
         for d ∈ 1:N-1
             cat_size(as[i], d) == 1 ||
-                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
+                throw(DimensionMismatch("all dimensions of element $i other than $N must be of length 1"))
         end
     end
 
@@ -2408,18 +2402,22 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Num
 end
 
 function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    nr, nc = size(A, 1), size(A, 2)
+    na = prod(size(A)[3:end])
+    len = length(xs)
+    nrc = nr * nc
+    if nrc * na != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $(size(A))"))
+    end
     # putting these in separate functions leads to unnecessary allocations
     if row_first
-        nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
-        na = prod(size(A)[3:end])
         k = 1
         for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
                 for j ∈ 1:nc
-                    A[Ai] = xs[k]
+                    @inbounds A[Ai] = xs[k]
                     k += 1
                     Ai += nr
                 end
@@ -2427,7 +2425,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
         end
     else
         for k ∈ eachindex(xs)
-            A[k] = xs[k]
+            @inbounds A[k] = xs[k]
         end
     end
 end
@@ -2463,7 +2461,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
                 for dd ∈ 1:N
                     dd == d && continue
                     if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
-                        throw(ArgumentError("incompatible shape in element $i"))
+                        throw(DimensionMismatch("incompatible shape in element $i"))
                     end
                 end
             end
@@ -2500,18 +2498,18 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
                     elseif currentdims[d] < outdims[d] # dimension in progress
                         break
                     else # exceeded dimension
-                        throw(ArgumentError("argument $i has too many elements along axis $d"))
+                        throw(DimensionMismatch("argument $i has too many elements along axis $d"))
                     end
                 end
             end
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            throw(ArgumentError("argument $i has too many elements along axis $d1"))
+            throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
     end
 
     outlen = prod(outdims)
     elementcount == outlen ||
-        throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
+        throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, outdims)
@@ -2572,8 +2570,8 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
             if d == 1 || i == 1 || wasstartblock
                 currentdims[d] += dsize
             elseif dsize != cat_size(as[i - 1], ad)
-                throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; \
-                                    expected $(cat_size(as[i - 1], ad)), got $dsize"))
+                throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $ad; \
+                                         expected $(cat_size(as[i - 1], ad)), got $dsize"))
             end
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
@@ -2583,15 +2581,15 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
                 if outdims[d] == -1
                     outdims[d] = currentdims[d]
                 elseif outdims[d] != currentdims[d]
-                    throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; \
-                                        expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"))
+                    throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $ad; \
+                                             expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"))
                 end
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
                 d > 1 && (blockcounts[d - 1] == 0 ||
-                    throw(ArgumentError("shape in level $d is inconsistent; level counts must nest \
-                                        evenly into each other")))
+                    throw(DimensionMismatch("shape in level $d is inconsistent; level counts must nest \
+                                             evenly into each other")))
             end
         end
     end
@@ -2613,28 +2611,36 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
+                              d1::Int, d2::Int, as::Tuple) where {T, N}
+    N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
+    length(scratch1) == length(scratch2) == N ||
+        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    0 < d1 < 3 &&
+    0 < d2 < 3 &&
+    d1 != d2 ||
+        throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
     for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
-                Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
                 A[Ai] = ai
 
-                for j ∈ 1:N
+                @inbounds for j ∈ 1:N
                     inneroffsets[j] += 1
                     inneroffsets[j] < cat_size(a, j) && break
                     inneroffsets[j] = 0
                 end
             end
         else
-            Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
             A[Ai] = a
         end
 
-        for j ∈ (d1, d2, 3:N...)
+        @inbounds for j ∈ (d1, d2, 3:N...)
             offsets[j] += cat_size(a, j)
             offsets[j] < outdims[j] && break
             offsets[j] = 0
@@ -3273,7 +3279,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
-apply `f` elementwise, and stop when when any of them is exhausted.
+apply `f` elementwise, and stop when any of them is exhausted.
 
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 

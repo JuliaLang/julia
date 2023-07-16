@@ -102,7 +102,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typeis(fname, jl_methtable_type)) {
+    if (jl_typetagis(fname, jl_methtable_type)) {
         mt = (jl_methtable_t*)fname;
     }
     atypes = eval_value(args[1], s);
@@ -349,20 +349,34 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 {
     size_t from = s->ip;
     size_t ip = to;
-    unsigned nphi = 0;
+    unsigned nphiblockstmts = 0;
     for (ip = to; ip < ns; ip++) {
         jl_value_t *e = jl_array_ptr_ref(stmts, ip);
-        if (!jl_is_phinode(e))
-            break;
-        nphi += 1;
+        if (!jl_is_phinode(e)) {
+            if (jl_is_expr(e) || jl_is_returnnode(e) || jl_is_gotoifnot(e) ||
+                jl_is_gotonode(e) || jl_is_phicnode(e) || jl_is_upsilonnode(e) ||
+                jl_is_ssavalue(e)) {
+                break;
+            }
+            // Everything else is allowed in the phi-block for implementation
+            // convenience - fall through.
+        }
+        nphiblockstmts += 1;
     }
-    if (nphi) {
+    if (nphiblockstmts) {
         jl_value_t **dest = &s->locals[jl_source_nslots(s->src) + to];
-        jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphi);
-        JL_GC_PUSHARGS(phis, nphi);
-        for (unsigned i = 0; i < nphi; i++) {
+        jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphiblockstmts);
+        JL_GC_PUSHARGS(phis, nphiblockstmts);
+        for (unsigned i = 0; i < nphiblockstmts; i++) {
             jl_value_t *e = jl_array_ptr_ref(stmts, to + i);
-            assert(jl_is_phinode(e));
+            if (!jl_is_phinode(e)) {
+                // IR verification guarantees that the only thing that gets
+                // evaluated here are constants, so it doesn't matter if we
+                // update the locals or the phis, but let's be consistent
+                // for simplicity.
+                phis[i] = eval_value(e, s);
+                continue;
+            }
             jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
             ssize_t edge = -1;
             size_t closest = to; // implicit edge has `to <= edge - 1 < to + i`
@@ -405,7 +419,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
                 i -= n_oldphi;
                 dest += n_oldphi;
                 to += n_oldphi;
-                nphi -= n_oldphi;
+                nphiblockstmts -= n_oldphi;
             }
             if (edge != -1) {
                 // if edges list doesn't contain last branch, or the value is explicitly undefined
@@ -418,7 +432,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             phis[i] = val;
         }
         // now move all phi values to their position in edges
-        for (unsigned j = 0; j < nphi; j++) {
+        for (unsigned j = 0; j < nphiblockstmts; j++) {
             dest[j] = phis[j];
         }
         JL_GC_POP();
@@ -641,7 +655,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
         }
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
             jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
@@ -663,7 +677,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     size_t world = ct->world_age;
     jl_code_info_t *src = jl_code_for_interpreter(mi, world);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
@@ -698,12 +712,12 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;
@@ -748,7 +762,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
     JL_GC_PUSHFRAME(s, s->locals, nroots);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     s->src = src;
     s->module = m;
     s->sparam_vals = jl_emptysvec;
