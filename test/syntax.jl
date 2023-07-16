@@ -3507,3 +3507,8 @@ let x = 1 => 2
     @test_throws ErrorException @eval a => b = 2
     @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
 end
+
+# Test that bad lowering does not segfault (ref #50518)
+@test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
+    $(Symbol("#unused#"))
+end
