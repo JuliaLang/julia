@@ -396,7 +396,7 @@ bool FinalLowerGCLegacy::doInitialization(Module &M) {
 bool FinalLowerGCLegacy::doFinalization(Module &M) {
     auto ret = finalLowerGC.doFinalization(M);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     return ret;
 }
@@ -414,7 +414,7 @@ PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
     }
     modified |= finalLowerGC.doFinalization(M);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

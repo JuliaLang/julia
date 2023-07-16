@@ -146,4 +146,8 @@ MODULE_MARKER_PASS(BeforeCleanup)
 MODULE_MARKER_PASS(AfterCleanup)
 MODULE_MARKER_PASS(AfterOptimization)
 
+bool verifyLLVMIR(const Module &M);
+bool verifyLLVMIR(const Function &F);
+bool verifyLLVMIR(const Loop &L);
+
 #endif

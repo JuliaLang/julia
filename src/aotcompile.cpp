@@ -984,7 +984,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     if (!opt && !obj && !asm_) {
         return out;
     }
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 
     timers.optimize.startTimer();
 
@@ -1007,7 +1007,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
 #endif
     optimizer.run(M);
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
     bool inject_aliases = false;
     for (auto &F : M.functions()) {
         if (!F.isDeclaration() && F.getName() != "_DllMainCRTStartup") {
@@ -1077,7 +1077,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
 // serialize module to bitcode
 static auto serializeModule(const Module &M) {
-    assert(!verifyModule(M, &errs()) && "Serializing invalid module!");
+    assert(!verifyLLVMIR(M) && "Serializing invalid module!");
     SmallVector<char, 0> ClonedModuleBuffer;
     BitcodeWriter BCWriter(ClonedModuleBuffer);
     BCWriter.writeModule(M);
@@ -2108,7 +2108,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             // and will better match what's actually in sysimg.
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
-            assert(!verifyModule(*m.getModuleUnlocked(), &errs()));
+            assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
 #ifndef JL_USE_NEW_PM
                 legacy::PassManager PM;
@@ -2120,7 +2120,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
 #endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
-                assert(!verifyModule(*m.getModuleUnlocked(), &errs()));
+                assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             }
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")

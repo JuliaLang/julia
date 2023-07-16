@@ -2772,7 +2772,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
     bool modified = lateLowerGCFrame.runOnFunction(F);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }
@@ -2786,7 +2786,7 @@ PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
     bool CFGModified = false;
     bool modified = lateLowerGCFrame.runOnFunction(F, &CFGModified);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         if (CFGModified) {
