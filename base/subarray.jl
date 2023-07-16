@@ -38,6 +38,7 @@ function SubArray(::IndexLinear, parent::P, indices::I, ::NTuple{N,Any}) where {
     SubArray{eltype(P), N, P, I, true}(parent, indices, compute_offset1(parent, stride1, indices), stride1)
 end
 const SubVector{T,P,I,L} = SubArray{T,1,P,I,L}
+const SubMatrix{T,P,I,L} = SubArray{T,2,P,I,L}
 
 check_parent_index_match(parent, indices) = check_parent_index_match(parent, index_ndims(indices...))
 check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T,N} = nothing

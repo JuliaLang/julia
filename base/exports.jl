@@ -94,6 +94,7 @@ export
     StridedVector,
     SubArray,
     SubVector,
+    SubMatrix,
     SubString,
     SubstitutionString,
     Timer,
