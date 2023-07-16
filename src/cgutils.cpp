@@ -2538,11 +2538,11 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     bool isatomic = jl_field_isatomic(jt, idx);
     bool needlock = isatomic && !jl_field_isptr(jt, idx) && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE;
     if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
-        emit_atomic_error(ctx, ("getfield: non-atomic field " + StringRef(jl_symbol_name(jt->name->name)) + "." + get_fieldname(jt, idx) + " cannot be accessed atomically").str());
+        emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
         return jl_cgval_t(); // unreachable
     }
     if (isatomic && order == jl_memory_order_notatomic) {
-        emit_atomic_error(ctx, ("getfield: atomic field " + StringRef(jl_symbol_name(jt->name->name)) + "." + get_fieldname(jt, idx) + " cannot be accessed non-atomically").str());
+        emit_atomic_error(ctx, "getfield: atomic field cannot be accessed non-atomically");
         return jl_cgval_t(); // unreachable
     }
     if (order == jl_memory_order_unspecified) {
