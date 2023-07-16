@@ -2617,7 +2617,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 ptindex = emit_struct_gep(ctx, cast<StructType>(lt), staddr, byte_offset + fsz);
             }
             auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, ctx.tbaa().tbaa_unionselbyte);
-            if (val.V) {
+            if (val.V && val.V != addr) {
                 setName(ctx.emission_context, val.V, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
             }
             return val;
@@ -3804,7 +3804,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 getInt8Ty(ctx.builder.getContext()),
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(ctx.types().T_size, byte_offset)); // TODO: use emit_struct_gep
-        setName(ctx.emission_context, addr, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+        setName(ctx.emission_context, addr, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0) + "_ptr").str(); });
     }
     jl_value_t *jfty = jl_field_type(sty, idx0);
     if (!jl_field_isptr(sty, idx0) && jl_is_uniontype(jfty)) {
@@ -3880,14 +3880,17 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
             jl_datatype_t *rettyp = jl_apply_cmpswap_type(jfty);
             oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
+            if (oldval.V) {
+                setName(ctx.emission_context, oldval.V, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+            }
         }
         else if (ismodifyfield) {
             jl_cgval_t argv[2] = {oldval, rhs};
             jl_datatype_t *rettyp = jl_apply_modify_type(jfty);
             oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
-        }
-        if (oldval.V) {
-            setName(ctx.emission_context, oldval.V, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+            if (oldval.V) {
+                setName(ctx.emission_context, oldval.V, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+            }
         }
         return oldval;
     }
