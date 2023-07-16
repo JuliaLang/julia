@@ -6975,8 +6975,8 @@ for (fn, elty) in ((:slapmr_, :Float32),
             m, n = size(A)
             lda = max(1, stride(A, 2))
             lp = length(p)
-            if n != lp
-                throw(DimensionMismatch("The second dimension of A, ($m,$n), and P, ($lp), must match"))
+            if m != lp
+                throw(DimensionMismatch("The first dimension of A, ($m,$n), and P, ($lp), must match"))
             end
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
             (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{Float64}, Ref{BlasInt}, Ptr{BlasInt}),

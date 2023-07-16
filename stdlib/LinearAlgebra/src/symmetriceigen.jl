@@ -220,7 +220,7 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
     ldiv!(M', vecs)
-    LAPACK.lapmr!(vecs, invperm(B.p), true)
+    LAPACK.lapmr!(vecs, B.p, false)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
