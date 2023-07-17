@@ -3527,3 +3527,8 @@ end)
         @test startswith(exc.msg, "syntax: Splatting in non-final positional default")
     end
 end
+
+# Test that bad lowering does not segfault (ref #50518)
+@test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
+    $(Symbol("#unused#"))
+end

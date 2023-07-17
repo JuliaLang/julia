@@ -1217,9 +1217,9 @@ namespace {
                 JL_TIMING(LLVM_OPT, LLVM_OPT);
 
                 //Run the optimization
-                assert(!verifyModule(M, &errs()));
+                assert(!verifyLLVMIR(M));
                 (***PMs).run(M);
-                assert(!verifyModule(M, &errs()));
+                assert(!verifyLLVMIR(M));
 
                 uint64_t end_time = 0;
                 {
