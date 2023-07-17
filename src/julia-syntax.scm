@@ -662,9 +662,9 @@
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
-                       (if (any (lambda (val) (and (pair? val) (eq? (car val) '...))) (butlast vals))
+                       (if (any vararg? (butlast vals))
                          ;; Forbid splat in all but the final default value
-                         (error "Splatting in non-final positional default")
+                         (error "invalid \"...\" in non-final positional argument default value")
                          (if (any (lambda (defaultv)
                                   ;; does any default val expression...
                                   (contains (lambda (e)
