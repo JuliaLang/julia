@@ -944,8 +944,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-static void jl_check_open_for(jl_module_t *m, const char* funcname)
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
 {
+    if (jl_current_task->ptls->in_pure_callback)
+        jl_errorf("%s cannot be used in a generated function", fname);
     if (jl_options.incremental && jl_generating_output()) {
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
@@ -965,25 +967,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
                           "This is likely due to some other module mutating `%s` with `%s` during "
-                          "precompilation - don't do this.", name, name, funcname);
+                          "precompilation - don't do this.", name, name, fname);
             }
         }
     }
 }
 
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
-{
-    if (jl_current_task->ptls->in_pure_callback)
-        jl_errorf("%s cannot be used in a generated function", fname);
-    jl_check_open_for(m, fname);
-}
-
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("eval cannot be used in a generated function");
-    jl_check_open_for(m, "eval");
+    jl_check_top_level_effect(m, "eval");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
@@ -1029,10 +1021,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("cannot use include inside a generated function");
-    jl_check_open_for(module, "include");
+    jl_check_top_level_effect(module, "include");
 
     jl_value_t *result = jl_nothing;
     jl_value_t *ast = NULL;
@@ -1045,6 +1034,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
         jl_errorf("jl_parse_all() must generate a top level expression");
     }
 
+    jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = ct->world_age;
