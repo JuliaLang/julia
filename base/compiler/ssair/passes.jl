@@ -64,7 +64,7 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
 end
 
 # assume `stmt` is a call of `getfield`/`setfield!`/`isdefined`
-function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
+function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, @nospecialize(typ))
     field = try_compute_field(ir, stmt.args[3])
     return try_compute_fieldidx(typ, field)
 end
@@ -83,8 +83,7 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
+        @assert is_known_call(ex, setfield!, ir)
         return ex.args[4]
     end
 end
@@ -563,6 +562,12 @@ function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
+function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, PhiNode) && return def.values
+    is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
+    return nothing
+end
+
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
@@ -573,12 +578,8 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
 
-    predecessors = function (@nospecialize(def), compact::IncrementalCompact)
-        isa(def, PhiNode) && return def.values
-        is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
-        return nothing
-    end
-    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, predecessors)
+
+    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
@@ -810,10 +811,10 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    length(stmt.args) != 4 && return
+    length(stmt.args) != 3 && return
 
-    vec = stmt.args[3]
-    val = stmt.args[4]
+    vec = stmt.args[2]
+    val = stmt.args[3]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
@@ -904,6 +905,62 @@ end
         end
     end
     return nothing
+end
+
+struct IsEgal <: Function
+    x::Any
+    IsEgal(@nospecialize(x)) = new(x)
+end
+(x::IsEgal)(@nospecialize(y)) = x.x === y
+
+# This tries to match patterns of the form
+#  %ft   = typeof(%farg)
+#  %Targ = apply_type(Foo, ft)
+#  %x    = new(%Targ, %farg)
+#
+# and if possible refines the nothrowness of the new expr based on it.
+function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
+                              @nospecialize(Targ), @nospecialize(farg))
+    isa(Targ, SSAValue) || return false
+
+    Tdef = compact[Targ][:inst]
+    is_known_call(Tdef, Core.apply_type, compact) || return false
+    length(Tdef.args) ≥ 2 || return false
+
+    applyT = argextype(Tdef.args[2], compact)
+    isa(applyT, Const) || return false
+
+    applyT = applyT.val
+    tvars = Any[]
+    while isa(applyT, UnionAll)
+        applyTvar = applyT.var
+        applyT = applyT.body
+        push!(tvars, applyTvar)
+    end
+
+    @assert applyT.name === typ.name
+    fT = fieldtype(applyT, fidx)
+    idx = findfirst(IsEgal(fT), tvars)
+    idx === nothing && return false
+    checkbounds(Bool, Tdef.args, 2+idx) || return false
+    valarg = Tdef.args[2+idx]
+    isa(valarg, SSAValue) || return false
+    valdef = compact[valarg][:inst]
+    is_known_call(valdef, typeof, compact) || return false
+
+    return valdef.args[2] === farg
+end
+
+function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    if consistent
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
+    end
+    if effect_free_and_nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
+    end
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -1035,6 +1092,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+            elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
+                refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
         end
@@ -1045,25 +1104,24 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
-        if isa(struct_typ, Union) && struct_typ <: Tuple
-            struct_typ = unswitchtupleunion(struct_typ)
-        end
-        if isa(struct_typ, Union) && is_isdefined
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+        struct_typ = widenconst(argextype(val, compact))
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
+            if isa(struct_typ, Union) && is_isdefined
+                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+            end
             continue
         end
-        isa(struct_typ, DataType) || continue
+        struct_typ_name = struct_argtyp.name
 
-        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
              (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
-
         # analyze this mutable struct here for the later pass
-        if ismutabletype(struct_typ)
+        if ismutabletypename(struct_typ_name)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
                 callback = IntermediaryCollector(intermediaries)
@@ -1093,11 +1151,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         # perform SROA on immutable structs here on
-
         field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
-        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
+        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
         isempty(leaves) && continue
 
         lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)

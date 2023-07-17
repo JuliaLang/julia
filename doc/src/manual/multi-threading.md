@@ -292,7 +292,7 @@ sum_multi_good (generic function with 1 method)
 julia> sum_multi_good(1:1_000_000)
 500000500000
 ```
-!!! Note
+!!! note
     Buffers should not be managed based on `threadid()` i.e. `buffers = zeros(Threads.nthreads())` because concurrent tasks
     can yield, meaning multiple concurrent tasks may use the same buffer on a given thread, introducing risk of data races.
     Further, when more than one thread is available tasks may change thread at yield points, which is known as

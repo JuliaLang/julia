@@ -83,6 +83,7 @@ typedef struct {
     uint64_t    total_sweep_time;
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
+    uint64_t    last_incremental_sweep;
 } jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of

@@ -78,6 +78,9 @@ Random.seed!(1)
         @test !istril(D, -1)
         @test istril(D, 1)
         @test istril(Diagonal(zero(diag(D))), -1)
+        @test Base.isstored(D,1,1)
+        @test !Base.isstored(D,1,2)
+        @test_throws BoundsError Base.isstored(D, n + 1, 1)
         if elty <: Real
             @test ishermitian(D)
         end

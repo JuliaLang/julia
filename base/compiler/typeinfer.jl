@@ -257,33 +257,28 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         caller.valid_worlds = valid_worlds
-        finish(caller, interp)
+        finish(caller, caller.interp)
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
-              frames[i].cached )
-        for i in 1:length(frames) ]
-    empty!(frames)
-    for (caller, _, _) in results
-        opt = caller.src
-        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            optimize(interp, opt, caller)
+    for caller in frames
+        opt = caller.result.src
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+            optimize(caller.interp, opt, caller.result)
         end
     end
-    for (caller, edges, cached) in results
-        valid_worlds = caller.valid_worlds
+    for caller in frames
+        (; result ) = caller
+        valid_worlds = result.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(result, caller.stmt_edges[1])
         end
-        if cached
-            cache_result!(interp, caller)
+        if caller.cached
+            cache_result!(caller.interp, result)
         end
-        finish!(interp, caller)
+        finish!(caller.interp, result)
     end
+    empty!(frames)
     return true
 end
 
@@ -703,13 +698,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    stmt_info = sv.stmt_info
     src = sv.src
-    body = src.code
-    nexpr = length(body)
-    codelocs = src.codelocs
+    stmts = src.code
+    nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
     undefs = fill(false, nslots)
@@ -723,8 +715,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     #    NOTE because of this, `was_reached` will no longer be available after this point
     # 5. eliminate GotoIfNot if either branch target is unreachable
     changemap = nothing # initialized if there is any dead region
-    for i = 1:nexpr
-        expr = body[i]
+    for i = 1:nstmt
+        expr = stmts[i]
         if was_reached(sv, i)
             if run_optimizer
                 if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
@@ -738,7 +730,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
+            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
@@ -746,7 +738,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 ssavaluetypes[i] = Any # 4
             else
                 ssavaluetypes[i] = Bottom # 4
-                body[i] = Const(expr) # annotate that this statement actually is dead
+                stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
     end

@@ -253,7 +253,7 @@ if opt_level > 0
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
     @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
-    @test occursin("ret $Iptr %0", load_dummy_ref_ir)
+    @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
 
 # Issue 22770
@@ -820,3 +820,15 @@ end
 # issue 48917, hoisting load to above the parent
 f48917(x, w) = (y = (a=1, b=x); z = (; a=(a=(1, w), b=(3, y))))
 @test f48917(1,2) == (a = (a = (1, 2), b = (3, (a = 1, b = 1))),)
+
+# https://github.com/JuliaLang/julia/issues/50317 getproperty allocation on struct with 1 field
+struct Wrapper50317
+    lock::ReentrantLock
+end
+const MONITOR50317 = Wrapper50317(ReentrantLock())
+issue50317() = @noinline MONITOR50317.lock
+issue50317()
+let res = @timed issue50317()
+    @test res.bytes == 0
+    return res # must return otherwise the compiler may eliminate the result entirely
+end

@@ -22,9 +22,12 @@ Build system changes
 
 New library functions
 ---------------------
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
 --------------------
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
 
 Standard library changes
 ------------------------

@@ -464,4 +464,11 @@ end
     @test Matrix(F1) ≈ Matrix(F2) ≈ C
 end
 
+@testset "matrix with Nonfinite" begin
+    lu(fill(NaN, 2, 2), check=false)
+    lu(fill(Inf, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
+end
+
 end # module TestLU

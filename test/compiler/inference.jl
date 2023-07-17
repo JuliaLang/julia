@@ -5014,3 +5014,19 @@ let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
         map(T -> Issue49785{S,T}, (a = S,))
     end isa Vector
 end
+
+# `getindex(::SimpleVector, ::Int)` shuold be concrete-evaluated
+@eval Base.return_types() do
+    $(Core.svec(1,Int,nothing))[2]
+end |> only == Type{Int}
+# https://github.com/JuliaLang/julia/issues/50544
+struct Issue50544{T<:Tuple}
+    t::T
+end
+Base.@propagate_inbounds f_issue50544(x, i, ii...) = f_issue50544(f_issue50544(x, i), ii...)
+Base.@propagate_inbounds f_issue50544(::Type{Issue50544{T}}, i) where T = T.parameters[i]
+g_issue50544(T...) = Issue50544{Tuple{T...}}
+h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2, 1))
+let x = Issue50544((1, Issue50544((2.0, 'x'))))
+    @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
+end

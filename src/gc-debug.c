@@ -787,11 +787,12 @@ void jl_print_gc_stats(JL_STREAM *s)
     malloc_stats();
 #endif
     double ptime = jl_hrtime() - process_t0;
-    jl_safe_printf("exec time\t%.5f sec\n", ptime);
+    double exec_time = jl_ns2s(ptime);
+    jl_safe_printf("exec time\t%.5f sec\n", exec_time);
     if (gc_num.pause > 0) {
         jl_safe_printf("gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
                        jl_ns2s(gc_num.total_time),
-                       jl_ns2s(gc_num.total_time) / ptime * 100,
+                       jl_ns2s(gc_num.total_time) / exec_time * 100,
                        gc_num.pause, gc_num.full_sweep);
         jl_safe_printf("gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
                        jl_ns2ms(gc_num.total_time) / gc_num.pause,
