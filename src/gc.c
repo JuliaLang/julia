@@ -3836,12 +3836,6 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    double percent;
-    if (total_mem < 128e9)
-        percent = total_mem * 2.34375e-12 + 0.6; // 60% at 0 gigs and 90% at 128 to not
-    else                                         // overcommit too much on memory contrained devices
-        percent = 0.8;
-    max_total_memory = total_mem * percent;
 #endif
     if (jl_options.heap_size_hint)
         jl_gc_set_max_memory(jl_options.heap_size_hint);
