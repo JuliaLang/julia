@@ -1785,6 +1785,36 @@ precompile_test_harness("Generator nospecialize") do load_path
     @eval using GenNoSpec
 end
 
+precompile_test_harness("Issue #50538") do load_path
+    write(joinpath(load_path, "I50538.jl"),
+        """
+        module I50538
+        const newglobal = try
+            Base.newglobal = false
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        const newtype = try
+            Core.set_binding_type!(Base, :newglobal)
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        global undefglobal
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("I50538"))
+    @eval using I50538
+    @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test I50538.newtype.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
+                 Core.set_binding_type!(I50538, :undefglobal, Int))
+    Core.set_binding_type!(I50538, :undefglobal, Any)
+    @test Core.get_binding_type(I50538, :undefglobal) === Any
+    @test !isdefined(I50538, :undefglobal)
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
