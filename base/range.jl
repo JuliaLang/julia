@@ -447,7 +447,7 @@ distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
-    stop::T
+    stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
@@ -463,6 +463,8 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
+
+    global unchecked_oneto(stop::Integer) = new{typeof(stop)}(stop)
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
@@ -702,8 +704,6 @@ step(r::LinRange) = (last(r)-first(r))/r.lendiv
 # high-precision step
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
-
-axes(r::AbstractRange) = (oneto(length(r)),)
 
 # Needed to ensure `has_offset_axes` can constant-fold.
 has_offset_axes(::StepRange) = false

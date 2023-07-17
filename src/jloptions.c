@@ -102,7 +102,7 @@ static const char opts[]  =
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]     Set <dir> as the home project/environment\n"
+    " --project[={<dir>|@.}]     Set <dir> as the active project/environment\n"
     " -J, --sysimage <file>      Start up with the given system image file\n"
     " -H, --home <dir>           Set location of `julia` executable\n"
     " --startup-file={yes*|no}   Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH`\n"

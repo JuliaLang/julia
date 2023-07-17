@@ -1736,7 +1736,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
 }
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL);
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg);
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg, BitVector *used_arguments=nullptr, size_t *args_begin=nullptr);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
@@ -2363,17 +2363,17 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 
 static void jl_name_jlfunc_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 3);
-    F->getArg(0)->setName("function");
-    F->getArg(1)->setName("args");
-    F->getArg(2)->setName("nargs");
+    F->getArg(0)->setName("function::Core.Function");
+    F->getArg(1)->setName("args::Any[]");
+    F->getArg(2)->setName("nargs::UInt32");
 }
 
 static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) {
     assert(F->arg_size() == 4);
-    F->getArg(0)->setName("function");
-    F->getArg(1)->setName("args");
-    F->getArg(2)->setName("nargs");
-    F->getArg(3)->setName("sparams");
+    F->getArg(0)->setName("function::Core.Function");
+    F->getArg(1)->setName("args::Any[]");
+    F->getArg(2)->setName("nargs::UInt32");
+    F->getArg(3)->setName("sparams::Any");
 }
 
 static void jl_init_function(Function *F, const Triple &TT)
@@ -4359,7 +4359,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
         }
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         theFptr = ai.decorateInst(ctx.builder.CreateAlignedLoad(pfunc, GV, Align(sizeof(void*))));
-        setName(ctx.emission_context, theFptr, namep);
+        setName(ctx.emission_context, theFptr, specFunctionObject);
     }
     else {
         theFptr = jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee();
@@ -4921,6 +4921,12 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx.slots[sl];
     jl_sym_t *sym = slot_symbol(ctx, sl);
+    if (sym == jl_unused_sym) {
+        // This shouldn't happen in well-formed input, but let's be robust,
+        // since we otherwise cause undefined behavior here.
+        emit_error(ctx, "(INTERNAL ERROR): Tried to use `#undef#` argument.");
+        return jl_cgval_t();
+    }
     return emit_varinfo(ctx, vi, sym);
 }
 
@@ -6935,10 +6941,11 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     return w;
 }
 
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg)
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg, BitVector *used_arguments, size_t *arg_offset)
 {
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
+    SmallVector<std::string, 4> argnames;
     Type *rt = NULL;
     Type *srt = NULL;
     if (jlrettype == (jl_value_t*)jl_bottom_type) {
@@ -6956,6 +6963,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             props.cc = jl_returninfo_t::Union;
             Type *AT = ArrayType::get(getInt8Ty(ctx.builder.getContext()), props.union_bytes);
             fsig.push_back(AT->getPointerTo());
+            argnames.push_back("union_bytes_return");
             Type *pair[] = { ctx.types().T_prjlvalue, getInt8Ty(ctx.builder.getContext()) };
             rt = StructType::get(ctx.builder.getContext(), makeArrayRef(pair));
         }
@@ -6980,6 +6988,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
+            argnames.push_back("sret_return");
             srt = rt;
             rt = getVoidTy(ctx.builder.getContext());
         }
@@ -7018,6 +7027,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
+        argnames.push_back("return_roots");
     }
 
     if (gcstack_arg){
@@ -7026,9 +7036,16 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(PointerType::get(JuliaType::get_ppjlvalue_ty(ctx.builder.getContext()), 0));
+        argnames.push_back("pgcstack_arg");
     }
 
-    for (size_t i = 0; i < jl_nparams(sig); i++) {
+    if (arg_offset)
+        *arg_offset = fsig.size();
+    size_t nparams = jl_nparams(sig);
+    if (used_arguments)
+        used_arguments->resize(nparams);
+
+    for (size_t i = 0; i < nparams; i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         bool isboxed = false;
         Type *ty = NULL;
@@ -7060,6 +7077,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         }
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(ty);
+        if (used_arguments)
+            used_arguments->set(i);
     }
 
     AttributeSet FnAttrs;
@@ -7089,8 +7108,14 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         else
             fval = emit_bitcast(ctx, fval, ftype->getPointerTo());
     }
-    if (gcstack_arg && isa<Function>(fval))
-        cast<Function>(fval)->setCallingConv(CallingConv::Swift);
+    if (auto F = dyn_cast<Function>(fval)) {
+        if (gcstack_arg)
+            F->setCallingConv(CallingConv::Swift);
+        assert(F->arg_size() >= argnames.size());
+        for (size_t i = 0; i < argnames.size(); i++) {
+            F->getArg(i)->setName(argnames[i]);
+        }
+    }
     props.decl = FunctionCallee(ftype, fval);
     props.attrs = attributes;
     return props;
@@ -7316,11 +7341,49 @@ static jl_llvm_functions_t
     Function *f = NULL;
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
+        BitVector used_args;
+        size_t args_begin;
         returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes,
-                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg));
+                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg), &used_args, &args_begin);
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
+        if (ctx.emission_context.debug_level > 0) {
+            auto arg_typename = [&](size_t i) JL_NOTSAFEPOINT {
+                auto tp = jl_tparam(lam->specTypes, i);
+                return jl_is_datatype(tp) ? jl_symbol_name(((jl_datatype_t*)tp)->name->name) : "<unknown type>";
+            };
+            size_t nreal = 0;
+            for (size_t i = 0; i < std::min(nreq, static_cast<size_t>(used_args.size())); i++) {
+                jl_sym_t *argname = slot_symbol(ctx, i);
+                if (argname == jl_unused_sym)
+                    continue;
+                if (used_args.test(i)) {
+                    auto &arg = *f->getArg(args_begin++);
+                    nreal++;
+                    auto name = jl_symbol_name(argname);
+                    if (!name[0]) {
+                        arg.setName(StringRef("#") + Twine(nreal) + StringRef("::") + arg_typename(i));
+                    } else {
+                        arg.setName(name + StringRef("::") + arg_typename(i));
+                    }
+                }
+            }
+            if (va && ctx.vaSlot != -1) {
+                size_t vidx = 0;
+                for (size_t i = nreq; i < used_args.size(); i++) {
+                    if (used_args.test(i)) {
+                        auto &arg = *f->getArg(args_begin++);
+                        auto type = arg_typename(i);
+                        const char *name = jl_symbol_name(slot_symbol(ctx, ctx.vaSlot));
+                        if (!name[0])
+                            name = "...";
+                        vidx++;
+                        arg.setName(name + StringRef("[") + Twine(vidx) + StringRef("]::") + type);
+                    }
+                }
+            }
+        }
 
         // common pattern: see if all return statements are an argument in that
         // case the apply-generic call can re-use the original box for the return
