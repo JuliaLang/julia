@@ -2654,6 +2654,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else if (isa<VectorType>(T)) {
             fldv = ctx.builder.CreateExtractElement(obj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), idx));
+            setName(ctx.emission_context, fldv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
         }
         else if (!jl_field_isptr(jt, idx) && jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx) - 1;
@@ -2664,7 +2665,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 IntegerType *ET = cast<IntegerType>(T->getStructElementType(st_idx));
                 unsigned align = (ET->getBitWidth() + 7) / 8;
                 lv = emit_static_alloca(ctx, ET);
-                setName(ctx.emission_context, lv, "union_split");
                 lv->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), (fsz + align - 1) / align));
                 // emit all of the align-sized words
                 unsigned i = 0;
@@ -2684,9 +2684,11 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                         ctx.builder.CreateAlignedStore(fldv, fldp, Align(1));
                     }
                 }
+                setName(ctx.emission_context, lv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
             }
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, makeArrayRef(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
+            setName(ctx.emission_context, tindex, [&]() { return (get_objname() + "." + get_fieldname(jt, idx) + ".tindex").str(); });
             return mark_julia_slot(lv, jfty, tindex, ctx.tbaa().tbaa_stack);
         }
         else {
@@ -2698,13 +2700,13 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else
                 llvm_unreachable("encountered incompatible type for a struct");
             fldv = ctx.builder.CreateExtractValue(obj, makeArrayRef(st_idx));
+            setName(ctx.emission_context, fldv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
         }
         if (maybe_null) {
             Value *first_ptr = jl_field_isptr(jt, idx) ? fldv : extract_first_ptr(ctx, fldv);
             if (first_ptr)
                 null_pointer_check(ctx, first_ptr, nullcheck);
         }
-        setName(ctx.emission_context, fldv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
         return mark_julia_type(ctx, fldv, jl_field_isptr(jt, idx), jfty);
     }
 }
