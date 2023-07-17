@@ -32,6 +32,10 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 const IR_FLAG_NOTHROW     = 0x01 << 5
 # This is :consistent
 const IR_FLAG_CONSISTENT  = 0x01 << 6
+# An optimization pass has updated this statement in a way that may
+# have exposed information that inference did not see. Re-running
+# inference on this statement may be profitable.
+const IR_FLAG_REFINED     = 0x01 << 7
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -39,7 +43,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 const InlineCostType = UInt16
 const MAX_INLINE_COST = typemax(InlineCostType)
 const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, Vector{UInt8}}
+const MaybeCompressed = Union{CodeInfo, String}
 
 is_inlineable(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
@@ -61,26 +65,6 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 #####################
 # OptimizationState #
 #####################
-
-struct EdgeTracker
-    edges::Vector{Any}
-    valid_worlds::RefValue{WorldRange}
-    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
-        new(edges, RefValue{WorldRange}(range))
-end
-EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
-
-intersect!(et::EdgeTracker, range::WorldRange) =
-    et.valid_worlds[] = intersect(et.valid_worlds[], range)
-
-function add_backedge!(et::EdgeTracker, mi::MethodInstance)
-    push!(et.edges, mi)
-    return nothing
-end
-function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    push!(et.edges, invokesig, mi)
-    return nothing
-end
 
 is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
@@ -121,17 +105,16 @@ function inlining_policy(interp::AbstractInterpreter,
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
-    params::OptimizationParams
-    et::Union{EdgeTracker,Nothing}
+    edges::Vector{Any}
     world::UInt
     interp::Interp
 end
-function InliningState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
-    et = EdgeTracker(frame.stmt_edges[1]::Vector{Any}, frame.valid_worlds)
-    return InliningState(params, et, frame.world, interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter)
+    edges = sv.stmt_edges[1]::Vector{Any}
+    return InliningState(edges, sv.world, interp)
 end
-function InliningState(params::OptimizationParams, interp::AbstractInterpreter)
-    return InliningState(params, nothing, get_world_counter(interp), interp)
+function InliningState(interp::AbstractInterpreter)
+    return InliningState(Any[], get_world_counter(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -151,15 +134,14 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     cfg::Union{Nothing,CFG}
     insert_coverage::Bool
 end
-function OptimizationState(frame::InferenceState, params::OptimizationParams,
-                           interp::AbstractInterpreter, recompute_cfg::Bool=true)
-    inlining = InliningState(frame, params, interp)
-    cfg = recompute_cfg ? nothing : frame.cfg
-    return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-               frame.sptypes, frame.slottypes, inlining, cfg, frame.insert_coverage)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
+                           recompute_cfg::Bool=true)
+    inlining = InliningState(sv, interp)
+    cfg = recompute_cfg ? nothing : sv.cfg
+    return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
+                             sv.sptypes, sv.slottypes, inlining, cfg, sv.insert_coverage)
 end
-function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
-                           interp::AbstractInterpreter)
+function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -179,24 +161,28 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::Optimiz
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
-    inlining = InliningState(params, interp)
+    inlining = InliningState(interp)
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
 end
-function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
-    src = retrieve_code_info(linfo)
+function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
+    world = get_world_counter(interp)
+    src = retrieve_code_info(linfo, world)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, params, interp)
+    return OptimizationState(linfo, src, interp)
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
-    optdef = linfo.def
-    replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
+    src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
+    validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
+end
+
+function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
+    replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
     src.inferred = true
-    # finish updating the result struct
-    validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
 
@@ -228,6 +214,41 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
 is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+
+function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
+    Targ = args[1]
+    atyp = argextype(Targ, src)
+    # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    typ, isexact = instanceof_tfunc(atyp)
+    if !isexact
+        atyp = unwrap_unionall(widenconst(atyp))
+        if isType(atyp) && isTypeDataType(atyp.parameters[1])
+            typ = atyp.parameters[1]
+        else
+            return (false, false, false)
+        end
+        isabstracttype(typ) && return (false, false, false)
+    else
+        isconcretedispatch(typ) || return (false, false, false)
+    end
+    typ = typ::DataType
+    fcount = datatype_fieldcount(typ)
+    fcount === nothing && return (false, false, false)
+    fcount >= length(args) - 1 || return (false, false, false)
+    for fidx in 1:(length(args) - 1)
+        farg = args[fidx + 1]
+        eT = argextype(farg, src)
+        fT = fieldtype(typ, fidx)
+        if !isexact && has_free_typevars(fT)
+            if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
+                continue
+            end
+            return (false, false, false)
+        end
+        ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
+    end
+    return (false, true, true)
+end
 
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
@@ -278,36 +299,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            atyp = argextype(args[1], src)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(atyp)
-            if !isexact
-                atyp = unwrap_unionall(widenconst(atyp))
-                if isType(atyp) && isTypeDataType(atyp.parameters[1])
-                    typ = atyp.parameters[1]
-                else
-                    return (false, false, false)
-                end
-                isabstracttype(typ) && return (false, false, false)
-            else
-                isconcretedispatch(typ) || return (false, false, false)
-            end
-            typ = typ::DataType
-            fcount = datatype_fieldcount(typ)
-            fcount === nothing && return (false, false, false)
-            fcount >= length(args) - 1 || return (false, false, false)
-            for fld_idx in 1:(length(args) - 1)
-                eT = argextype(args[fld_idx + 1], src)
-                fT = fieldtype(typ, fld_idx)
-                # Currently, we cannot represent any type equality constraints
-                # in the lattice, so if we see any type of type parameter,
-                # there is very little we can say about it
-                if !isexact && has_free_typevars(fT)
-                    return (false, false, false)
-                end
-                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
-            end
-            return (false, true, true)
+            return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
             effects = foreigncall_effects(stmt) do @nospecialize x
                 argextype(x, src)
@@ -366,7 +358,9 @@ function argextype(
         elseif x.head === :copyast
             return argextype(x.args[1], src, sptypes, slottypes)
         end
-        @assert false "argextype only works on argument-position values"
+        Core.println("argextype called on Expr with head ", x.head,
+                     " which is not valid for IR in argument-position.")
+        @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
     elseif isa(x, TypedSlot)
@@ -387,18 +381,18 @@ function argextype(
         return Const(x)
     end
 end
+abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
-
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
-           params::OptimizationParams, ir::IRCode, caller::InferenceResult)
+           ir::IRCode, caller::InferenceResult)
 
 Post-process information derived by Julia-level optimizations for later use.
 In particular, this function determines the inlineability of the optimized code.
 """
 function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                params::OptimizationParams, ir::IRCode, caller::InferenceResult)
+                ir::IRCode, caller::InferenceResult)
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
@@ -412,18 +406,9 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     opt.ir = ir
 
     # determine and cache inlineability
-    union_penalties = false
     if !force_noinline
         sig = unwrap_unionall(specTypes)
-        if isa(sig, DataType) && sig.name === Tuple.name
-            for P in sig.parameters
-                P = unwrap_unionall(P)
-                if isa(P, Union)
-                    union_penalties = true
-                    break
-                end
-            end
-        else
+        if !(isa(sig, DataType) && sig.name === Tuple.name)
             force_noinline = true
         end
         if !is_declared_inline(src) && result === Bottom
@@ -438,6 +423,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             set_inlineable!(src, true)
         else
             # compute the cost (size) of inlining this code
+            params = OptimizationParams(interp)
             cost_threshold = default = params.inline_cost_threshold
             if ⊑(optimizer_lattice(interp), result, Tuple) && !isconcretetype(widenconst(result))
                 cost_threshold += params.inline_tupleret_bonus
@@ -453,17 +439,16 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, cost_threshold)
         end
     end
     return nothing
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState,
-                  params::OptimizationParams, caller::InferenceResult)
+function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
-    return finish(interp, opt, params, ir, caller)
+    return finish(interp, opt, ir, caller)
 end
 
 using .EscapeAnalysis
@@ -524,7 +509,6 @@ function run_passes(
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
@@ -614,7 +598,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     if cfg === nothing
         cfg = compute_basic_blocks(code)
     end
-    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
+    # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
+    # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
+    # and eliminates slots (see below)
+    argtypes = sv.slottypes
+    return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -633,6 +621,9 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    # NOTE now we have converted `ir` to the SSA form and eliminated slots
+    # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
+    resize!(ir.argtypes, nargs)
     return ir
 end
 
@@ -645,7 +636,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
+                        params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -683,13 +674,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
-            elseif f === Core.isa
-                # If we're in a union context, we penalize type computations
-                # on union types. In such cases, it is usually better to perform
-                # union splitting on the outside.
-                if union_penalties && isa(argextype(ex.args[2],  src, sptypes), Union)
-                    return params.inline_nonleaf_penalty
-                end
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -720,7 +704,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, union_penalties, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -736,11 +720,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                                  union_penalties::Bool, params::OptimizationParams)
+                                  params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, union_penalties, params,
+        thiscost = statement_cost(stmt, line, src, sptypes, params,
                                   is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
@@ -753,24 +737,24 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+function inline_cost(ir::IRCode, params::OptimizationParams,
                        cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return MAX_INLINE_COST
     end
     return inline_cost_clamp(bodycost)
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, params::OptimizationParams)
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
-                                            unionpenalties, params)
+                                            params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost

@@ -172,7 +172,12 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) =
+    a === Any ? a :
+    a >: Union{Nothing, Missing} ? typesplit(a, Union{Nothing, Missing}) :
+    a >: Nothing ? typesplit(a, Nothing) :
+    a >: Missing ? typesplit(a, Missing) :
+    a
 
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
@@ -318,6 +323,12 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type, ::Type) = Bottom
+# Define some methods to avoid needing to enumerate unrelated possibilities when presented
+# with Type{<:T}, and return a value in general accordance with the result given by promote_type
+promote_rule(::Type{Bottom}, slurp...) = Bottom
+promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
+promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
+promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -467,6 +478,11 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+function TupleOrBottom(tt...)
+    any(p -> p === Union{}, tt) && return Union{}
+    return Tuple{tt...}
+end
+
 """
     promote_op(f, argtypes...)
 
@@ -478,7 +494,12 @@ Guess what an appropriate container eltype would be for storing results of
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
+function promote_op(f, S::Type...)
+    argT = TupleOrBottom(S...)
+    argT === Union{} && return Union{}
+    return _return_type(f, argT)
+end
+
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

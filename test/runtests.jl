@@ -71,10 +71,12 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
+move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 

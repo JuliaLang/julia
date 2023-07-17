@@ -78,6 +78,12 @@ end
     val
 end
 
+function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+    @boundscheck checkbounds(Bool, A, I...) || return false
+    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
+    x
+end
+
 @inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 

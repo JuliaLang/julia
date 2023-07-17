@@ -21,7 +21,6 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_argument_method_table) \
     XX(jl_arraylen) \
     XX(jl_arrayref) \
     XX(jl_arrayset) \
@@ -120,7 +119,7 @@
     XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
-    XX(jl_egal__special) \
+    XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
@@ -175,6 +174,7 @@
     XX(jl_gc_get_max_memory) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
+    XX(jl_gc_is_in_finalizer) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -212,6 +212,7 @@
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
+    XX(jl_get_cpu_features) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -257,7 +258,7 @@
     XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
-    XX(jl_init_restored_modules) \
+    XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
     XX(jl_init__threading) \
@@ -408,7 +409,6 @@
     XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
-    XX(jl_rettype_inferred) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
     XX(jl_SC_CLK_TCK) \
@@ -477,7 +477,6 @@
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
-    XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
     XX(jl_typeinf_lock_begin) \
     XX(jl_typeinf_lock_end) \
@@ -486,7 +485,6 @@
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_equality_is_identity) \
     XX(jl_type_error) \
     XX(jl_type_error_rt) \
     XX(jl_type_intersection) \
@@ -512,6 +510,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \
@@ -547,6 +546,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_generate_fptr_for_oc_wrapper) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
@@ -560,6 +560,8 @@
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_add_optimization_passes) \
+    YY(jl_build_newpm_pipeline) \
+    YY(jl_register_passbuilder_callbacks) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \
     YY(LLVMExtraAddPropagateJuliaAddrspaces) \
@@ -575,5 +577,33 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddRemoveNIPass) \
+    YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
+    YY(LLVMExtraMPMAddFinalLowerGCPass) \
+    YY(LLVMExtraMPMAddMultiVersioningPass) \
+    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
+    YY(LLVMExtraMPMAddLowerPTLSPass) \
+    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
+    YY(LLVMExtraFPMAddCombineMulAddPass) \
+    YY(LLVMExtraFPMAddLateLowerGCPass) \
+    YY(LLVMExtraFPMAddAllocOptPass) \
+    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
+    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
+    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraLPMAddJuliaLICMPass) \
+    YY(JLJITGetLLVMOrcExecutionSession) \
+    YY(JLJITGetJuliaOJIT) \
+    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITAddObjectFile) \
+    YY(JLJITAddLLVMIRModule) \
+    YY(JLJITLookup) \
+    YY(JLJITMangleAndIntern) \
+    YY(JLJITGetTripleString) \
+    YY(JLJITGetGlobalPrefix) \
+    YY(JLJITGetDataLayoutString) \
+    YY(JLJITGetIRCompileLayer) \
+
 
 // end of file

@@ -4,7 +4,8 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
+include("newinterp.jl")
 
 """
 Helper to walk the AST and call a function on every node.
@@ -616,8 +617,7 @@ let
         f42078(a)
     end
     let # make sure to discard the inferred source
-        specs = collect(only(methods(f42078)).specializations)
-        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        mi = only(methods(f42078)).specializations::Core.MethodInstance
         codeinf = getcache(mi)::Core.CodeInstance
         @atomic codeinf.inferred = nothing
     end
@@ -684,9 +684,9 @@ begin
 end
 
 # https://github.com/JuliaLang/julia/issues/42246
-@test mktempdir() do dir
+mktempdir() do dir
     cd(dir) do
-        code = quote
+        code = """
             issue42246() = @noinline IOBuffer("a")
             let
                 ci, rt = only(code_typed(issue42246))
@@ -699,10 +699,31 @@ end
                     exit(1)
                end
             end
-        end |> string
+            """
         cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
-        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+        @test success(pipeline(cmd; stdout, stderr))
     end
+end
+
+# callsite inlining with cached frames
+issue49823_events = @NamedTuple{evid::Int8, base_time::Float64}[
+    (evid = 1, base_time = 0.0), (evid = -1, base_time = 0.0)]
+issue49823_fl1(t, events) = @inline findlast(x -> x.evid ∈ (1, 4) && x.base_time <= t, events)
+issue49823_fl3(t, events) = @inline findlast(x -> any(==(x.evid), (1,4)) && x.base_time <= t, events)
+issue49823_fl5(t, events) = begin
+    f = let t=t
+        x -> x.evid ∈ (1, 4) && x.base_time <= t
+    end
+    @inline findlast(f, events)
+end
+let src = @code_typed1 issue49823_fl1(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
+end
+let src = @code_typed1 issue49823_fl3(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
+end
+let src = @code_typed1 issue49823_fl5(0.0, issue49823_events)
+    @test count(isinvoke(:findlast), src.code) == 0 # successful inlining
 end
 
 # Issue #42264 - crash on certain union splits
@@ -1109,7 +1130,7 @@ function f44200()
     x44200
 end
 let src = code_typed1(f44200)
-    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+    @test_broken count(x -> isa(x, Core.PiNode), src.code) == 0
 end
 
 # Test that peeling off one case from (::Any) doesn't introduce
@@ -1754,8 +1775,7 @@ let interp = Core.Compiler.NativeInterpreter()
 
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
-        Core.Compiler.get_world_counter(interp), interp)
+    inlining = Core.Compiler.InliningState(interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
@@ -1922,4 +1942,122 @@ let res = @test_throws MethodError let
     end
     err = res.value
     @test err.f === convert && err.args === (Union{Bool,Tuple{String,String}}, g48397)
+end
+
+# https://github.com/JuliaLang/julia/issues/49050
+abstract type Issue49050AbsTop{T,N} end
+abstract type Issue49050Abs1{T, N} <: Issue49050AbsTop{T,N} end
+abstract type Issue49050Abs2{T} <: Issue49050Abs1{T,3} end
+struct Issue49050Concrete{T} <: Issue49050Abs2{T}
+    x::T
+end
+issue49074(::Type{Issue49050AbsTop{T,N}}) where {T,N} = Issue49050AbsTop{T,N}
+Base.@assume_effects :foldable issue49074(::Type{C}) where {C<:Issue49050AbsTop} = issue49074(supertype(C))
+let src = code_typed1() do
+        issue49074(Issue49050Concrete)
+    end
+    @test any(isinvoke(:issue49074), src.code)
+end
+let result = @test_throws MethodError issue49074(Issue49050Concrete)
+    @test result.value.f === issue49074
+    @test result.value.args === (Any,)
+end
+
+# inlining of `TypeName`
+@test fully_eliminated() do
+    Ref.body.name
+end
+
+# Regression for finalizer inlining with more complex control flow
+global finalizer_escape::Int = 0
+mutable struct FinalizerEscapeTest
+    x::Int
+    function FinalizerEscapeTest()
+        this = new(0)
+        finalizer(this) do this
+            global finalizer_escape
+            finalizer_escape = this.x
+        end
+        return this
+    end
+end
+
+function run_finalizer_escape_test1(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    if b2
+        Base.donotdelete(b2)
+    end
+    x.x = 3
+    return nothing
+end
+
+function run_finalizer_escape_test2(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    x.x = 3
+    return nothing
+end
+
+for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_escape_test2)
+    global finalizer_escape::Int = 0
+
+    let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
+        @test any(x->isexpr(x, :(=)), src.code)
+    end
+
+    let
+        run_finalizer_escape_test(true, true)
+        @test finalizer_escape == 3
+    end
+end
+
+# `compilesig_invokes` inlining option
+@newinterp NoCompileSigInvokes
+Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
+    Core.Compiler.OptimizationParams(; compilesig_invokes=false)
+@noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
+# test the single dispatch candidate case
+let src = code_typed1((Type,)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 1
+end
+let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
+    end == 1
+end
+# test the union split case
+let src = code_typed1((Union{DataType,UnionAll},)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 2
+end
+let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
+    end == 1
 end

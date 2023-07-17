@@ -10,7 +10,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, significand,
+       cbrt, sqrt, fourthroot, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        @evalpoly, evalpoly
@@ -45,6 +45,11 @@ end
 end
 
 # non-type specific math functions
+
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
 
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
@@ -716,6 +721,13 @@ julia> .√(1:4)
 sqrt(x)
 
 """
+    fourthroot(x)
+
+Return the fourth root of `x` by applying `sqrt` twice successively.
+"""
+fourthroot(x::Number) = sqrt(sqrt(x))
+
+"""
     hypot(x, y)
 
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
@@ -1330,7 +1342,8 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     abs(x) < pi && return x
 
@@ -1355,7 +1368,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
@@ -1382,7 +1396,8 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     copysign(z,x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x < pi4o2_h
         if x >= 0
@@ -1413,7 +1428,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x > -pi4o2_h
         if x <= 0
@@ -1537,7 +1553,7 @@ include("special/log.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:log1p)
+             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
@@ -1573,5 +1589,6 @@ end
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 clamp(::Missing, lo, hi) = missing
+fourthroot(::Missing) = missing
 
 end # module

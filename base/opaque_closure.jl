@@ -40,10 +40,11 @@ function compute_ir_rettype(ir::IRCode)
     return Core.Compiler.widenconst(rt)
 end
 
-function compute_oc_argtypes(ir, nargs, isva)
-    argtypes = ir.argtypes[2:end]
-    @assert nargs == length(argtypes)
-    argtypes = Core.Compiler.anymap(Core.Compiler.widenconst, argtypes)
+function compute_oc_signature(ir::IRCode, nargs::Int, isva::Bool)
+    argtypes = Vector{Any}(undef, nargs)
+    for i = 1:nargs
+        argtypes[i] = Core.Compiler.widenconst(ir.argtypes[i+1])
+    end
     if isva
         lastarg = pop!(argtypes)
         if lastarg <: Tuple
@@ -52,34 +53,42 @@ function compute_oc_argtypes(ir, nargs, isva)
             push!(argtypes, Vararg{Any})
         end
     end
-    Tuple{argtypes...}
+    return Tuple{argtypes...}
 end
 
-function Core.OpaqueClosure(ir::IRCode, env...;
-        nargs::Int = length(ir.argtypes)-1,
-        isva::Bool = false,
-        rt = compute_ir_rettype(ir),
-        do_compile::Bool = true)
-    if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
-        throw(ArgumentError("invalid argument count"))
-    end
-    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-    src.slotflags = UInt8[]
-    src.slotnames = fill(:none, nargs+1)
-    src.slottypes = copy(ir.argtypes)
-    Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
-    Core.Compiler.widen_all_consts!(src)
-    src.inferred = true
+function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
+                            isva::Bool = false,
+                            do_compile::Bool = true)
     # NOTE: we need ir.argtypes[1] == typeof(env)
-
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-        compute_oc_argtypes(ir, nargs, isva), Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env, do_compile)
+    ir = Core.Compiler.copy(ir)
+    nargs = length(ir.argtypes)-1
+    sig = compute_oc_signature(ir, nargs, isva)
+    rt = compute_ir_rettype(ir)
+    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    src.slotnames = fill(:none, nargs+1)
+    src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+    src.slottypes = copy(ir.argtypes)
+    src.rettype = rt
+    src = Core.Compiler.ir_to_codeinf!(src, ir)
+    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile)
 end
 
-function Core.OpaqueClosure(src::CodeInfo, env...)
-    M = src.parent.def
-    sig = Base.tuple_type_tail(src.parent.specTypes)
+function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...)
+    src.inferred || throw(ArgumentError("Expected inferred src::CodeInfo"))
+    mi = src.parent::Core.MethodInstance
+    sig = Base.tuple_type_tail(mi.specTypes)
+    method = mi.def::Method
+    nargs = method.nargs-1
+    isva = method.isva
+    return generate_opaque_closure(sig, Union{}, src.rettype, src, nargs, isva, env...)
+end
 
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-          sig, Union{}, src.rettype, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env, true)
+function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nospecialize(rt_ub),
+                                 src::CodeInfo, nargs::Int, isva::Bool, @nospecialize env...;
+                                 mod::Module=@__MODULE__,
+                                 lineno::Int=0,
+                                 file::Union{Nothing,Symbol}=nothing,
+                                 do_compile::Bool=true)
+    return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+        sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile)
 end

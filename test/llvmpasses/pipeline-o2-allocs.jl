@@ -1,8 +1,19 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
+
+# RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
+# RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
+
 # RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 # RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
+# COM: This tests that simplifycfg is still hoisting allocations in different basic blocks
+# COM: into the parent basic block, and deduplicating them in the process
 # CHECK-LABEL: @julia_split
 # CHECK: alloc
 # CHECK-NOT: alloc
@@ -15,6 +26,8 @@ function split(maybe)
     end
 end
 
+# COM: This tests that irrespective of the condition outside the loop
+# COM: allocations inside the loop are hoisted and the loop is deleted
 # CHECK-LABEL: @julia_loop_alloc
 # CHECK: phi
 # CHECK-NOT: phi
@@ -27,6 +40,8 @@ function loop_alloc(N)
     ref
 end
 
+# COM: This tests that even with the allocation LLVM will recognize
+# COM: that the loop is meaningless and delete it
 # CHECK-LABEL: @julia_loop_const
 # CHECK-NOT: br
 function loop_const()
@@ -37,6 +52,8 @@ function loop_const()
     ref
 end
 
+# COM: This tests that the GC.@preserve macro is being ignored since ref
+# COM: is not used anywhere else
 # CHECK-LABEL: @julia_nopreserve
 # CHECK-NOT: alloc
 # CHECK-NOT: julia.gc_preserve_begin

@@ -50,6 +50,7 @@ private:
     Function *bigAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
+    Type *T_size;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
     Value *lowerNewGCFrame(CallInst *target, Function &F);
@@ -80,37 +81,16 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
-    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
-    AllocaInst *gcframe_alloca = new AllocaInst(
-        T_prjlvalue,
-        allocaAddressSpace,
-        ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
-        Align(16));
-    gcframe_alloca->insertAfter(target);
-    Instruction *gcframe;
-    if (allocaAddressSpace) {
-        // addrspacecast as needed for non-0 alloca addrspace
-        gcframe = new AddrSpaceCastInst(gcframe_alloca, T_prjlvalue->getPointerTo(0));
-        gcframe->insertAfter(gcframe_alloca);
-    } else {
-        gcframe = gcframe_alloca;
-    }
+    IRBuilder<> builder(target->getNextNode());
+    auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
+    gcframe_alloca->setAlignment(Align(16));
+    // addrspacecast as needed for non-0 alloca addrspace
+    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, T_prjlvalue->getPointerTo(0)));
     gcframe->takeName(target);
 
     // Zero out the GC frame.
-    BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F.getContext()), "");
-    tempSlot_i8->insertAfter(gcframe);
-    Type *argsT[2] = {tempSlot_i8->getType(), Type::getInt32Ty(F.getContext())};
-    Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-    Value *args[4] = {
-        tempSlot_i8, // dest
-        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-        ConstantInt::get(Type::getInt32Ty(F.getContext()), sizeof(jl_value_t*) * (nRoots + 2)), // len
-        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-    CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-    cast<MemSetInst>(zeroing)->setDestAlignment(Align(16));
-    zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    zeroing->insertAfter(tempSlot_i8);
+    auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
+    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
 
     return gcframe;
 }
@@ -125,10 +105,10 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
     StoreInst *inst = builder.CreateAlignedStore(
-                ConstantInt::get(getSizeTy(F.getContext()), JL_GC_ENCODE_PUSHARGS(nRoots)),
+                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
                         builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
-                        getSizeTy(F.getContext())->getPointerTo()),
+                        T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
@@ -199,7 +179,6 @@ Value *FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
     assert(target->arg_size() == 1);
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
-    auto T_size = getSizeTy(builder.getContext());
     Value* signal_page = target->getOperand(0);
     Value* load = builder.CreateLoad(T_size, signal_page, true);
     return load;
@@ -224,7 +203,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         if (offset < 0) {
             newI = builder.CreateCall(
                 bigAllocFunc,
-                { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
+                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)) });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
         }
         else {
@@ -234,8 +213,8 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
         }
     } else {
-        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), getSizeTy(F.getContext()));
-        size = builder.CreateAdd(size, ConstantInt::get(getSizeTy(F.getContext()), sizeof(void*)));
+        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
+        size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
@@ -254,6 +233,7 @@ bool FinalLowerGC::doInitialization(Module &M) {
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
+    T_size = M.getDataLayout().getIntPtrType(M.getContext());
 
     GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
     unsigned j = 0;
@@ -416,7 +396,7 @@ bool FinalLowerGCLegacy::doInitialization(Module &M) {
 bool FinalLowerGCLegacy::doFinalization(Module &M) {
     auto ret = finalLowerGC.doFinalization(M);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     return ret;
 }
@@ -434,7 +414,7 @@ PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
     }
     modified |= finalLowerGC.doFinalization(M);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -450,7 +430,8 @@ Pass *createFinalLowerGCPass()
     return new FinalLowerGCLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createFinalLowerGCPass());
 }
