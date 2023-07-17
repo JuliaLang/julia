@@ -3524,7 +3524,7 @@ end,quote
 end)
     let exc = try eval(expr); catch exc; exc end
         @test isa(exc, ErrorException)
-        @test startswith(exc.msg, "syntax: Splatting in non-final positional default")
+        @test startswith(exc.msg, "syntax: invalid \"...\" in non-final positional argument default value")
     end
 end
 
