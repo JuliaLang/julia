@@ -1808,7 +1808,7 @@ end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
     ret = insert_node!(
-        effect_free_and_nothrow(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
+        effect_free_and_nothrow(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
         tcheck = insert_node!(
