@@ -907,6 +907,7 @@ end
 
 isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
 
+# `_getindex` is like `getindex` but does not check if `i isa Bool`
 function _getindex(v::AbstractRange, i::Integer)
     @boundscheck checkbounds(v, i)
     unsafe_getindex(v, i)
@@ -937,6 +938,8 @@ let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # fo
 end
 
 # unsafe_getindex is separate to make it useful even when running with --check-bounds=yes
+# it assumes the index is inbounds but does not segfault even if the index is out of bounds.
+# it does not check if the index isa bool.
 unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
