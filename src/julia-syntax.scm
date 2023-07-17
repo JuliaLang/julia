@@ -296,7 +296,8 @@
                                   (if (eq? n '|#self#|) (gensy) n))
                                 arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
-                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 1))) (iota (length arg-names))))))))
+                                   ;; arg-names slots start at 2 (after name)
+                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
         (function (call ,name ,@arg-names) ,body)))))
