@@ -33,18 +33,24 @@ all-release: $(addprefix cache-release-, $(STDLIBS))
 all-debug:   $(addprefix cache-debug-, $(STDLIBS))
 
 define pkgimg_builder
-$1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
+PKGIMG_SRCS := $$(shell find "$$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src" -name \*.jl) \
     $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
-$$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
-#	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+PKGIMG_SENTINEL_NAME = $(subst =,_EQ_,$1)
+$$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).release.image: $$(PKGIMG_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
-$$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
-#	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+$$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).release.checkbounds.image: $$(PKGIMG_SRCS) $$(addsuffix .release.checkbounds.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $$(BUILDDIR)/stdlib/--check-bounds_EQ_yes.release.image $(build_private_libdir)/sys.$(SHLIB_EXT)
+	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	touch $$@
+cache-release-$$(PKGIMG_SENTINEL_NAME): $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.release.checkbounds.image
+$$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.image: $$(PKGIMG_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
+	touch $$@
+$$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.checkbounds.image: $$(PKGIMG_SRCS) $$(addsuffix .debug.checkbounds.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $$(BUILDDIR)/stdlib/--check-bounds_EQ_yes.debug.image $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	touch $$@
+cache-debug-$$(PKGIMG_SENTINEL_NAME): $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.image $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.checkbounds.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).release.image $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).release.checkbounds.image $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.image $$(BUILDDIR)/stdlib/$$(PKGIMG_SENTINEL_NAME).debug.checkbounds.image
 endef
 
 # Used to just define them in the dependency graph
@@ -52,14 +58,19 @@ endef
 define sysimg_builder
 $$(BUILDDIR)/stdlib/$1.release.image:
 	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
+$$(BUILDDIR)/stdlib/$1.release.checkbounds.image:
+	touch $$@
+cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.release.checkbounds.image
 $$(BUILDDIR)/stdlib/$1.debug.image:
 	touch $$@
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
+$$(BUILDDIR)/stdlib/$1.debug.checkbounds.image:
+	touch $$@
+cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.debug.checkbounds.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.release.checkbounds.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.debug.checkbounds.image
 endef
 
 # no dependencies
+$(eval $(call pkgimg_builder,--check-bounds=yes,))
 $(eval $(call pkgimg_builder,MozillaCACerts_jll,))
 $(eval $(call sysimg_builder,ArgTools,))
 $(eval $(call sysimg_builder,Artifacts,))

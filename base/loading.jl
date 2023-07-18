@@ -2924,7 +2924,7 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg (pidfile: $pidfile)"
             else
                 @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
             end

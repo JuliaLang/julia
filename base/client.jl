@@ -273,11 +273,14 @@ function exec_options(opts)
     end
 
     # Maybe redefine bounds checking if requested
-    if JLOptions().check_bounds != 0
-        if JLOptions().check_bounds == 1
-            Core.eval(Main, :(Core.should_check_bounds(boundscheck::Bool) = true))
-        else
-            Core.eval(Main, :(Core.should_check_bounds(boundscheck::Bool) = false))
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        # Inoperative during output generation. Determined by mandatory deps mechanism.
+        if JLOptions().check_bounds != 0
+            if JLOptions().check_bounds == 1
+                require(PkgId(UUID((0xb3a877e5_8181_4b4a, 0x8173_0b9cb13136fe)),"--check-bounds=yes"))
+            else
+                require(PkgId(UUID((0x5ece1bc4_2007_43a8, 0xac47_40059be74678)),"--check-bounds=no"))
+            end
         end
     end
 
