@@ -2053,7 +2053,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter,
-    closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::InferenceState, check::Bool=true)
+    closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
     (; rt, edge, effects) = result
