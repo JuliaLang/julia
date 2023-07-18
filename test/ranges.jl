@@ -2490,3 +2490,12 @@ function check_ranges(rx, ry)
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
 # TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+end
