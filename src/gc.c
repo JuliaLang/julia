@@ -813,6 +813,10 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
         tag = tag | mark_mode;
         assert((tag & 0x3) == mark_mode);
     }
+    // XXX: note that marking not only sets the GC bits but also updates the
+    // page metadata for pool allocated objects.
+    // The second step is **not** idempotent, so we need a compare exchange here
+    // (instead of a pair of load&store) to avoid marking an object twice
     tag = jl_atomic_exchange_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
     verify_val(jl_valueof(o));
     return !gc_marked(tag);
