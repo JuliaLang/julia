@@ -1109,7 +1109,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
     }
 
-    jl_method_table_insert(mt, m, NULL);
+    jl_method_table_insert(mt, m, NULL, 0);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();

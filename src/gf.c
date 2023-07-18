@@ -1541,8 +1541,11 @@ static int is_anonfn_typename(char *name)
     return other > &name[1] && other[1] > '0' && other[1] <= '9';
 }
 
+extern int8_t cache_is_mandatory;
 static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue)
 {
+    if (cache_is_mandatory)
+        return;
     // method overwritten
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
@@ -1980,7 +1983,7 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
     return 1;
 }
 
-JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
+JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype, int nowarn_overwrite)
 {
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
@@ -2010,7 +2013,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     if (replaced) {
         oldvalue = (jl_value_t*)replaced;
         invalidated = 1;
-        method_overwrite(newentry, replaced->func.method);
+        if (!nowarn_overwrite)
+            method_overwrite(newentry, replaced->func.method);
         jl_method_table_invalidate(mt, replaced, max_world);
     }
     else {

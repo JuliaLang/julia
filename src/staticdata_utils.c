@@ -597,16 +597,23 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 // OPT_LEVEL should always be the upper bits
 #define OPT_LEVEL 6
 
+int8_t cache_is_mandatory = 0;
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
     // OOICCDDP
     uint8_t flags = 0;
     flags |= (jl_options.use_pkgimages & 1); // 0-bit
     flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
-    flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
+    flags |= (cache_is_mandatory & 0x1) << 3;
+    // bit 4 unused
     flags |= (jl_options.can_inline & 1) << 5; // 5-bit
     flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
     return flags;
+}
+
+JL_DLLEXPORT void jl_set_ismandatory(int8_t is_mandatory)
+{
+    cache_is_mandatory = is_mandatory;
 }
 
 JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
@@ -621,8 +628,8 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
         return 1;
     }
 
-    // 2. Check all flags, execept opt level must be exact
-    uint8_t mask = (1 << OPT_LEVEL)-1;
+    // 2. Check all flags, execept opt level and ismandatory must be exact
+    uint8_t mask = ((1 << OPT_LEVEL)-1) & (~(1 << 3));
     if ((flags & mask) != (current_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
@@ -806,7 +813,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 // Deserialization
 
 // Add methods to external (non-worklist-owned) functions
-static void jl_insert_methods(jl_array_t *list)
+static void jl_insert_methods(jl_array_t *list, int nowarn_overwrite)
 {
     size_t i, l = jl_array_len(list);
     for (i = 0; i < l; i++) {
@@ -815,7 +822,7 @@ static void jl_insert_methods(jl_array_t *list)
         assert(!meth->is_for_opaque_closure);
         jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
-        jl_method_table_insert(mt, meth, NULL);
+        jl_method_table_insert(mt, meth, NULL, nowarn_overwrite);
     }
 }
 

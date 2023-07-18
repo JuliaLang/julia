@@ -3344,7 +3344,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     jl_gc_enable(en);
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos, int8_t *ismandatory)
 {
     uint8_t pkgimage = 0;
     if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos)) || (*checksum >> 32 != 0xfafbfcfd)) {
@@ -3355,6 +3355,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     if (pkgimage && !jl_match_cache_flags(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
+    *ismandatory |= !!(flags & (1 << 3));
     if (!pkgimage) {
         // skip past the worklist
         size_t len;
@@ -3378,7 +3379,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
-    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos);
+    int8_t ismandatory = 0;
+    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos, &ismandatory);
 
     if (verify_fail)
         return verify_fail;
@@ -3418,7 +3420,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_SIGATOMIC_END();
 
             // Insert method extensions
-            jl_insert_methods(extext_methods);
+            jl_insert_methods(extext_methods, ismandatory);
             // No special processing of `new_specializations` is required because recaching handled it
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
@@ -3430,7 +3432,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             arraylist_free(&ccallable_list);
 
             if (completeinfo) {
-                cachesizes_sv = jl_alloc_svec(7);
+                cachesizes_sv = jl_alloc_svec(8);
                 jl_svecset(cachesizes_sv, 0, jl_box_long(cachesizes.sysdata));
                 jl_svecset(cachesizes_sv, 1, jl_box_long(cachesizes.isbitsdata));
                 jl_svecset(cachesizes_sv, 2, jl_box_long(cachesizes.symboldata));
@@ -3438,11 +3440,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
                 jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
                 jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
-                restored = (jl_value_t*)jl_svec(8, restored, init_order, extext_methods, new_specializations, method_roots_list,
+                restored = (jl_value_t*)jl_svec(9, restored, init_order, ismandatory ? jl_true : jl_false, extext_methods, new_specializations, method_roots_list,
                                                    ext_targets, edges, cachesizes_sv);
             }
             else {
-                restored = (jl_value_t*)jl_svec(2, restored, init_order);
+                restored = (jl_value_t*)jl_svec(3, restored, init_order, ismandatory ? jl_true : jl_false);
             }
         }
     }

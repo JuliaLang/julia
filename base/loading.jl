@@ -1057,12 +1057,15 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     if isa(sv, Exception)
         return sv
     end
-
     restored = register_restored_modules(sv, pkg, path)
+    ismandatory = sv[3]
 
     for M in restored
         M = M::Module
         if parentmodule(M) === M && PkgId(M) == pkg
+            if ismandatory
+                push!(_mandatory_dependencies, PkgId(M) => module_build_id(M))
+            end
             if timing_imports
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
@@ -1388,7 +1391,7 @@ function isprecompiled(pkg::PkgId;
     )
     isnothing(sourcepath) && error("Cannot locate source for $(repr(pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true)
+        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, allow_new_mandatory = true)
         if staledeps === true
             continue
         end
@@ -1531,7 +1534,7 @@ end
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
-        staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try)
+        staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try, allow_new_mandatory = true)
         if staledeps === true
             continue
         end
@@ -1653,6 +1656,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
+const _mandatory_dependencies = Pair{PkgId,UInt128}[] # Like `_concrete_dependencies`, but required to actually be loaded (in order) in every precompile process
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
@@ -1707,6 +1711,17 @@ order to throw an error if Julia attempts to precompile it.
         throw(PrecompilableError())
     end
     nothing
+end
+
+function __precompile__(setting::Symbol)
+    if setting == :mandatory
+        if ccall(:jl_generating_output, Cint, ()) == 0
+            @warn "Mandatory precompilation outside of precompile - loading of precompile will be disabled for all future modules."
+            push!(_mandatory_dependencies, PkgId(__toplevel__)=>UInt128(0))
+        else
+            ccall(:jl_set_ismandatory, Cvoid, (Int8,), 0x1)
+        end
+    end
 end
 
 # require always works in Main scope and loads files from node 1
@@ -2194,7 +2209,7 @@ end
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+                                    concrete_deps::typeof(_concrete_dependencies), mandatory_deps::typeof(_mandatory_dependencies), source::Union{Nothing,String})
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
@@ -2208,6 +2223,10 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     if source !== nothing
         task_local_storage()[:SOURCE_PATH] = source
+    end
+
+    for (dep, build_id) in mandatory_deps
+        Base.require(dep)
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
@@ -2225,7 +2244,7 @@ end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), mandatory_deps::typeof(_mandatory_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2236,7 +2255,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
 
-    deps_strs = String[]
+    concrete_deps_strs = String[]
+    mandatory_deps_strs = String[]
     function pkg_str(_pkg::PkgId)
         if _pkg.uuid === nothing
             "Base.PkgId($(repr(_pkg.name)))"
@@ -2245,7 +2265,10 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         end
     end
     for (pkg, build_id) in concrete_deps
-        push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
+        push!(concrete_deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
+    end
+    for (pkg, build_id) in mandatory_deps
+        push!(mandatory_deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
 
     if output_o !== nothing
@@ -2258,7 +2281,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
-    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
+    concrete_deps_child = deps_eltype * "[" * join(concrete_deps_strs, ",") * "]"
+    mandatory_deps_child = deps_eltype * "[" * join(mandatory_deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
@@ -2274,7 +2298,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $deps, $(repr(source_path(nothing))))
+            $(repr(load_path)), $concrete_deps_child, $mandatory_deps_child, $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
@@ -2365,7 +2389,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, internal_stderr, internal_stdout)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, _mandatory_dependencies, internal_stderr, internal_stdout)
 
         if success(p)
             if cache_objects
@@ -2853,17 +2877,17 @@ struct CacheFlags
     # OOICCDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
-    check_bounds::Int
+    is_mandatory::Int
     inline::Bool
     opt_level::Int
 
     function CacheFlags(f::UInt8)
         use_pkgimages = Bool(f & 1)
         debug_level = Int((f >> 1) & 3)
-        check_bounds = Int((f >> 3) & 3)
+        is_mandatory = Int((f >> 3) & 1)
         inline = Bool((f >> 5) & 1)
         opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
-        new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
+        new(use_pkgimages, debug_level, is_mandatory, inline, opt_level)
     end
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
@@ -2872,7 +2896,7 @@ CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
 function show(io::IO, cf::CacheFlags)
     print(io, "use_pkgimages = ", cf.use_pkgimages)
     print(io, ", debug_level = ", cf.debug_level)
-    print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", is_mandatory = ", cf.is_mandatory)
     print(io, ", inline = ", cf.inline)
     print(io, ", opt_level = ", cf.opt_level)
 end
@@ -2917,10 +2941,10 @@ end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
-@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
+@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, allow_new_mandatory::Bool = false)
     return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
 end
-@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
+@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false, allow_new_mandatory::Bool = false)
     io = open(cachefile, "r")
     try
         checksum = isvalid_cache_header(io)
@@ -2939,6 +2963,17 @@ end
               cache file:      $(CacheFlags(flags))
             """
             return true
+        end
+        if CacheFlags(flags).is_mandatory != 0x0 && !allow_new_mandatory
+            # Check whether this is in the current list of mandatory packages
+            for (mandatory_modkey, mandatory_build_id) in _mandatory_dependencies
+                if mandatory_modkey == modkey && mandatory_build_id == build_id
+                    @goto mandatory_ok
+                end
+            end
+            @debug "Rejecting cache file $cachefile for $modkey since it is a mandatory package that we have not loaded"
+            return true
+            @label mandatory_ok
         end
         pkgimage = !isempty(clone_targets)
         if pkgimage
@@ -2974,11 +3009,21 @@ end
         id = id.first
         modules = Dict{PkgId, UInt64}(modules)
 
+        mandatory_deps = Dict{PkgId, UInt128}(_mandatory_dependencies)
+
         # Check if transitive dependencies can be fulfilled
         ndeps = length(required_modules)
         depmods = Vector{Any}(undef, ndeps)
         for i in 1:ndeps
             req_key, req_build_id = required_modules[i]
+            if haskey(mandatory_deps, req_key)
+                mandatory_build_id = mandatory_deps[req_key]
+                if req_build_id != mandatory_build_id
+                    @debug "Rejecting cache file $cachefile because module $req_key build id $req_build_id does not match mandatory build id $mandatory_build_id."
+                    return true # Mandatory dependency has bad version
+                end
+                delete!(mandatory_deps, req_key)
+            end
             # Module is already loaded
             if root_module_exists(req_key)
                 M = root_module(req_key)
@@ -3000,6 +3045,11 @@ end
                 end
                 depmods[i] = (path, req_key, req_build_id)
             end
+        end
+
+        if !isempty(mandatory_deps)
+            @debug "Rejecting cache file $cachefile because mandatory dependencies $(keys(mandatory_deps)) are unfulfilled."
+            return true # Missing mandatory dependency
         end
 
         # check if this file is going to provide one of our concrete dependencies
