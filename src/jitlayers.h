@@ -274,16 +274,23 @@ Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
-static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
+static inline Constant *literal_static_pointer_val(const void *p, Type *T, Module &M, const Twine &name) JL_NOTSAFEPOINT
 {
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,
     // and thus, this should typically be avoided in new API's
-#if defined(_P64)
-    return ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(T->getContext()), (uint64_t)p), T);
-#else
-    return ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt32Ty(T->getContext()), (uint32_t)p), T);
-#endif
+    auto ptr = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(T->getContext()), (uintptr_t)p), T);
+    if (name.isTriviallyEmpty())
+        return ptr;
+    Type *elty;
+    if (M.getContext().supportsTypedPointers()) {
+        elty = T->getNonOpaquePointerElementType();
+    }
+    else {
+        elty = PointerType::get(M.getContext(), 0);
+    }
+    auto ga = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, name, ptr, &M);
+    return ga;
 }
 
 static const inline char *name_from_method_instance(jl_method_instance_t *li) JL_NOTSAFEPOINT

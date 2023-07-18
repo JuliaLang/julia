@@ -323,7 +323,7 @@ static Value *get_gc_root_for(const jl_cgval_t &x)
 // --- emitting pointers directly into code ---
 
 
-static inline Constant *literal_static_pointer_val(const void *p, Type *T);
+static inline Constant *literal_static_pointer_val(const void *p, Type *T, Module &M, const Twine &name);
 
 static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
 {
@@ -391,16 +391,7 @@ static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
 {
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
-    if (!ctx.emission_context.imaging) {
-        // TODO: this is an optimization, but is it useful or premature
-        // (it'll block any attempt to cache these, but can be simply deleted)
-        Module *M = jl_Module;
-        GlobalVariable *gv = new GlobalVariable(
-                *M, ctx.types().T_pjlvalue, true, GlobalVariable::PrivateLinkage,
-                literal_static_pointer_val(p, ctx.types().T_pjlvalue));
-        gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
-        return gv;
-    }
+    assert(ctx.emission_context.imaging && "Should emit pointer directly in non-imaging mode!");
     if (JuliaVariable *gv = julia_const_gv(p)) {
         // if this is a known special object, use the existing GlobalValue
         return prepare_global_in(jl_Module, gv);
@@ -514,7 +505,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
     if (!ctx.emission_context.imaging)
-        return literal_static_pointer_val(p, ctx.types().T_pjlvalue);
+        return literal_static_pointer_val(p, ctx.types().T_pjlvalue, *jl_Module, Twine());
     Value *pgv = literal_pointer_val_slot(ctx, p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
@@ -530,10 +521,13 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
-    if (!ctx.emission_context.imaging)
-        return literal_static_pointer_val(p, ctx.types().T_pjlvalue);
-    // bindings are prefixed with jl_bnd#
     jl_globalref_t *gr = p->globalref;
+    if (!ctx.emission_context.imaging) {
+        const char *modname = gr && gr->mod ? jl_symbol_name(gr->mod->name) : nullptr;
+        const char *name = gr ? jl_symbol_name(gr->name) : nullptr;
+        return literal_static_pointer_val(p, ctx.types().T_pjlvalue, *jl_Module, modname && name ? modname + StringRef(".") + name : Twine());
+    }
+    // bindings are prefixed with jl_bnd#
     Value *pgv = gr ? julia_pgv(ctx, "jl_bnd#", gr->name, gr->mod, p) : julia_pgv(ctx, "jl_bnd#", p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
@@ -575,8 +569,8 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to a jl_binding_t
     // binding->value are prefixed with *
+    jl_globalref_t *gr = b->globalref;
     if (ctx.emission_context.imaging) {
-        jl_globalref_t *gr = b->globalref;
         Value *pgv = gr ? julia_pgv(ctx, "*", gr->name, gr->mod, b) : julia_pgv(ctx, "*jl_bnd#", b);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
@@ -584,7 +578,9 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
         return load;
     }
     else {
-        return literal_static_pointer_val(b, ctx.types().T_pjlvalue);
+        const char *modname = gr && gr->mod ? jl_symbol_name(gr->mod->name) : nullptr;
+        const char *name = gr ? jl_symbol_name(gr->name) : nullptr;
+        return literal_static_pointer_val(b, ctx.types().T_pjlvalue, *jl_Module, modname && name ? modname + StringRef(".") + name : Twine());
     }
 }
 
@@ -1123,7 +1119,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                 else if (justtag)
                     ptr = ConstantInt::get(expr_type, (uintptr_t)jt);
                 else
-                    ptr = ConstantExpr::getAddrSpaceCast(literal_static_pointer_val((jl_value_t*)jt, ctx.types().T_pjlvalue), expr_type);
+                    ptr = ConstantExpr::getAddrSpaceCast(literal_static_pointer_val((jl_value_t*)jt, ctx.types().T_pjlvalue, *jl_Module, jl_symbol_name(jt->name->name)), expr_type);
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");
             },

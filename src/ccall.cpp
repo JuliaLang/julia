@@ -2093,7 +2093,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (symarg.fptr != NULL) {
         ++LiteralCCalls;
         Type *funcptype = PointerType::get(functype, 0);
-        llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
+        llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype, *jl_Module, "<user-provided function pointer>");
         if (ctx.emission_context.imaging)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
@@ -2126,7 +2126,19 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 ++LiteralCCalls;
                 // since we aren't saving this code, there's no sense in
                 // putting anything complicated here: just JIT the function address
-                llvmf = literal_static_pointer_val(symaddr, funcptype);
+                const char *libname;
+                if (symarg.f_lib == NULL) {
+                    libname = "<runtime>";
+                } else if (symarg.f_lib == JL_EXE_LIBNAME) {
+                    libname = "<exe>";
+                } else if (symarg.f_lib == JL_LIBJULIA_DL_LIBNAME) {
+                    libname = "<libjulia>";
+                } else if (symarg.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
+                    libname = "<libjulia-internal>";
+                } else {
+                    libname = symarg.f_lib;
+                }
+                llvmf = literal_static_pointer_val(symaddr, funcptype, *jl_Module, libname + StringRef(".") + symarg.f_name);
             }
         }
     }

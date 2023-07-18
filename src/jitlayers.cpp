@@ -139,7 +139,7 @@ static uint64_t getAddressForFunction(StringRef fname) JL_NOTSAFEPOINT;
 void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
 {
     ++LinkedGlobals;
-    Constant *P = literal_static_pointer_val(addr, GV->getValueType());
+    Constant *P = literal_static_pointer_val(addr, GV->getValueType(), *GV->getParent(), "");
     GV->setInitializer(P);
     if (jl_options.image_codegen) {
         // If we are forcing imaging mode codegen for debugging,
