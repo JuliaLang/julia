@@ -2491,3 +2491,23 @@ for (tritype, comptritype) in ((:LowerTriangular, :UpperTriangular),
     @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Adjoint}) = transpose($comptritype(conj(parent(parent(A)))) \ u.parent)
     @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Transpose}) = transpose(transpose(A) \ u.parent)
 end
+
+# Cube root of a 2x2 real-valued matrix with complex conjugate eigenvalues and equal diagonal values.
+# Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
+#   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
+#   https://doi.org/10.1137/s0895479801392697
+function _cbrt_u22!(A::AbstractMatrix{T}) where {T<:Real}
+    m, n = size(A)
+    (m == 2 && n == 2) || throw(ArgumentError("U22!: Matrix A must be 2x2."))
+    (A[1,1] == A[2,2]) || throw(ArgumentError("U22!: Matrix A must have equal diagonal values."))
+    (A[1,2]*A[2,1] < 0) || throw(ArgumentError("U22!: Matrix A must have complex conjugate eigenvalues."))
+    μ = sqrt(-4*A[1,2]*A[2,1])/2
+    r = cbrt(sqrt(A[1,1]^2 + μ^2))
+    θ = atan(μ, A[1,1])
+    β′ = r*sin(θ/3)/µ
+    A[1,1] = r*cos(θ/3)
+    A[2,2] = A[1,1]
+    A[1,2] = β′*A[1,2]
+    A[2,1] = β′*A[2,1]
+    return A
+end
