@@ -5030,3 +5030,32 @@ h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2,
 let x = Issue50544((1, Issue50544((2.0, 'x'))))
     @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
 end
+
+# refine const-prop'ed `PartialStruct` with declared method signature type
+Base.@constprop :aggressive function refine_partial_struct1((a, b)::Tuple{String,Int})
+    if iszero(b)
+        println("b=0") # to prevent semi-concrete eval
+        return nothing
+    else
+        return a
+    end
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct1((s, 42))
+end |> only === String
+
+function refine_partial_struct2(xs::Union{Int,String,Symbol}...)
+    first(xs) isa Int && iszero(first(xs)) && return nothing
+    for x in xs[2:end]
+        if x isa String
+            continue
+        else
+            return nothing
+        end
+    end
+    return string(length(xs))
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct2(42, s)
+end |> only === String
+# JET.test_call(s::AbstractString->Base._string(s, 'c'))
