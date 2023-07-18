@@ -799,7 +799,7 @@ STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
 FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_NOTSAFEPOINT
 {
     assert(gc_marked(mark_mode));
-    uintptr_t tag = jl_atomic_load_relaxed((_Atomic(uintptr_t)*)&o->header);
+    uintptr_t tag = o->header;
     if (gc_marked(tag))
         return 0;
     if (mark_reset_age) {
@@ -813,9 +813,13 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
         tag = tag | mark_mode;
         assert((tag & 0x3) == mark_mode);
     }
-    jl_atomic_store_relaxed((_Atomic(uintptr_t)*)&o->header, tag); //xchg here was slower than
-    verify_val(jl_valueof(o));                                     //potentially redoing work because of a stale tag.
-    return 1;
+    // XXX: note that marking not only sets the GC bits but also updates the
+    // page metadata for pool allocated objects.
+    // The second step is **not** idempotent, so we need a compare exchange here
+    // (instead of a pair of load&store) to avoid marking an object twice
+    tag = jl_atomic_exchange_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
+    verify_val(jl_valueof(o));
+    return !gc_marked(tag);
 }
 
 // This function should be called exactly once during marking for each big
@@ -854,7 +858,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
-        page->nold++;
+        jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
     }
     else {
         ptls->gc_cache.scanned_bytes += page->osize;
@@ -1377,27 +1381,20 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         goto done;
     }
-    // note that `pg->nold` may not be accurate with multithreaded marking since
-    // two threads may race when trying to set the mark bit in `gc_try_setmark_tag`.
-    // We're basically losing a bit of precision in the sweep phase at the cost of
-    // making the mark phase considerably cheaper.
-    // See issue #50419
-    if (jl_n_markthreads == 0) {
-        // For quick sweep, we might be able to skip the page if the page doesn't
-        // have any young live cell before marking.
-        if (!sweep_full && !pg->has_young) {
-            assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
-            if (!prev_sweep_full || pg->prev_nold == pg->nold) {
-                // the position of the freelist begin/end in this page
-                // is stored in its metadata
-                if (pg->fl_begin_offset != (uint16_t)-1) {
-                    *pfl = page_pfl_beg(pg);
-                    pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
-                }
-                freedall = 0;
-                nfree = pg->nfree;
-                goto done;
+    // For quick sweep, we might be able to skip the page if the page doesn't
+    // have any young live cell before marking.
+    if (!sweep_full && !pg->has_young) {
+        assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+        if (!prev_sweep_full || pg->prev_nold == pg->nold) {
+            // the position of the freelist begin/end in this page
+            // is stored in its metadata
+            if (pg->fl_begin_offset != (uint16_t)-1) {
+                *pfl = page_pfl_beg(pg);
+                pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
             }
+            freedall = 0;
+            nfree = pg->nfree;
+            goto done;
         }
     }
 
