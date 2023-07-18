@@ -175,7 +175,7 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
     // is not checking that setName is only called for non-folded instructions (e.g. folded bitcasts
     // and 0-byte geps), which can result in information loss on the renamed instruction.
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level && !isa<Constant>(V)) {
+    if (params.debug_level >= 2 && !isa<Constant>(V)) {
         V->setName(Name);
     }
 }
@@ -183,7 +183,7 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level && !isa<Constant>(V)) {
+    if (params.debug_level >= 2 && !isa<Constant>(V)) {
         V->setName(Twine(GetName()));
     }
 }
