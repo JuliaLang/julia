@@ -2504,5 +2504,6 @@ end
         @test isassigned(r, lastindex(r))
         # test that the indexing actually succeeds
         @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
     end
 end
