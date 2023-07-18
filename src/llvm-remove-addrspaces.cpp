@@ -336,14 +336,14 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GlobalVariable *NGV = cast<GlobalVariable>(VMap[GV]);
         if (GV->hasInitializer())
-            NGV->setInitializer(MapValue(GV->getInitializer(), VMap));
+            NGV->setInitializer(MapValue(GV->getInitializer(), VMap, RF_None, &TypeRemapper, &Materializer));
 
         SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
         GV->getAllMetadata(MDs);
         for (auto MD : MDs)
             NGV->addMetadata(
                     MD.first,
-                    *MapMetadata(MD.second, VMap));
+                    *MapMetadata(MD.second, VMap, RF_None, &TypeRemapper, &Materializer));
 
         copyComdat(NGV, GV);
 
@@ -401,7 +401,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
     for (GlobalAlias *GA : Aliases) {
         GlobalAlias *NGA = cast<GlobalAlias>(VMap[GA]);
         if (const Constant *C = GA->getAliasee())
-            NGA->setAliasee(MapValue(C, VMap));
+            NGA->setAliasee(MapValue(C, VMap, RF_None, &TypeRemapper, &Materializer));
 
         GA->setAliasee(nullptr);
     }
@@ -409,7 +409,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
     // And named metadata
     for (auto &NMD : M.named_metadata()) {
         for (unsigned i = 0, e = NMD.getNumOperands(); i != e; ++i)
-            NMD.setOperand(i, MapMetadata(NMD.getOperand(i), VMap));
+            NMD.setOperand(i, MapMetadata(NMD.getOperand(i), VMap, RF_None, &TypeRemapper, &Materializer));
     }
 
     // Now that we've duplicated everything, remove the old references
