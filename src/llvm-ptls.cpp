@@ -329,6 +329,7 @@ bool LowerPTLS::run(bool *CFGModified)
                 }
             }
             if (pgcstack) {
+                pgcstack->takeName(call);
                 call->replaceAllUsesWith(pgcstack);
                 call->eraseFromParent();
                 continue;
