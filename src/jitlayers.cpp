@@ -134,6 +134,7 @@ static int jl_add_to_ee(
         DenseMap<orc::ThreadSafeModule*, int> &Queued,
         std::vector<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT;
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
+static void jl_resolve_private_aliases(Module &M) JL_NOTSAFEPOINT;
 static uint64_t getAddressForFunction(StringRef fname) JL_NOTSAFEPOINT;
 
 void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
@@ -1464,6 +1465,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
         jl_decorate_module(M);
+        jl_resolve_private_aliases(M);
         shareStrings(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
@@ -1473,18 +1475,16 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
 #if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
         // validate the relocations for M (not implemented for the JITLink memory manager yet)
-        for (Module::global_object_iterator I = M.global_objects().begin(), E = M.global_objects().end(); I != E; ) {
-            GlobalObject *F = &*I;
-            ++I;
-            if (F->isDeclaration()) {
-                if (F->use_empty())
-                    F->eraseFromParent();
-                else if (!((isa<Function>(F) && isIntrinsicFunction(cast<Function>(F))) ||
-                        findUnmangledSymbol(F->getName()) ||
+        for (auto &GO : make_early_inc_range(M.global_objects())) {
+            if (GO.isDeclaration()) {
+                if (GO.use_empty())
+                    GO.eraseFromParent();
+                else if (!((isa<Function>(GO) && isIntrinsicFunction(cast<Function>(&GO))) ||
+                        findUnmangledSymbol(GO.getName()) ||
                         SectionMemoryManager::getSymbolAddressInProcess(
-                            getMangledName(F->getName())))) {
+                            getMangledName(GO.getName())))) {
                     llvm::errs() << "FATAL ERROR: "
-                                << "Symbol \"" << F->getName().str() << "\""
+                                << "Symbol \"" << GO.getName().str() << "\""
                                 << "not found";
                     abort();
                 }
@@ -1869,6 +1869,17 @@ static void jl_decorate_module(Module &M) {
     __catchjmp:                     \n\
         .zero   12                  \n\
         .size   __catchjmp, 12");
+    }
+}
+
+static void jl_resolve_private_aliases(Module &M) JL_NOTSAFEPOINT {
+    // Resolve aliases with private linkage
+    // not doing this causes JIT errors on non-x86-64 platforms
+    for (auto &GA : make_early_inc_range(M.aliases())) {
+        if (GA.hasPrivateLinkage()) {
+            GA.replaceAllUsesWith(GA.getAliasee());
+            GA.eraseFromParent();
+        }
     }
 }
 
