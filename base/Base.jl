@@ -475,6 +475,9 @@ if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
 
+# Formerly PrecompileTools
+include("invalidations.jl")
+
 # finally, now make `include` point to the full version
 for m in methods(include)
     delete_method(m)
