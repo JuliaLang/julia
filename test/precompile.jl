@@ -1771,6 +1771,20 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+precompile_test_harness("Generator nospecialize") do load_path
+    write(joinpath(load_path, "GenNoSpec.jl"),
+        """
+        module GenNoSpec
+        @generated function f(x...)
+            :((\$(Base.Meta.quot(x)),))
+        end
+        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))
+    @eval using GenNoSpec
+end
+
 precompile_test_harness("Issue #50538") do load_path
     write(joinpath(load_path, "I50538.jl"),
         """
@@ -1800,7 +1814,6 @@ precompile_test_harness("Issue #50538") do load_path
     @test Core.get_binding_type(I50538, :undefglobal) === Any
     @test !isdefined(I50538, :undefglobal)
 end
-
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
