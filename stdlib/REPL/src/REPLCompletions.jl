@@ -170,7 +170,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool)
+            s->(!Base.isdeprecated(mod, s) && !Base.isinternal(mod, s) && s != modname && ffunc(mod, s)::Bool)
         end
         # Looking for a binding in a module
         if mod == context_module
