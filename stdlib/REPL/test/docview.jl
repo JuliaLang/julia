@@ -65,3 +65,45 @@ end
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
+
+module InternalSymbolWarningModule
+    public add_two
+    export add_three
+
+    """
+        add_one(x)
+
+    adds one to `x`
+    """
+    add_one(x) = x + 1
+
+    """
+        add_two(x)
+
+    adds two to `x`
+    """
+    add_two(x) = x + 2
+
+    """
+        add_three(x)
+
+    adds three to `x`
+    """
+    add_three(x) = x + 3
+end
+using .InternalSymbolWarningModule
+
+@testset "internal symbol warning" begin
+    @test !isdefined(@__MODULE__, :add_one)
+    @test !isdefined(@__MODULE__, :add_two)
+    @test isdefined(@__MODULE__, :add_three)
+    str1 = strip(string(@doc InternalSymbolWarningModule.add_one))
+    str2 = strip(string(@doc InternalSymbolWarningModule.add_two))
+    str3 = strip(string(@doc InternalSymbolWarningModule.add_three))
+    @test startswith(str1, "Warning: this symbol may be internal")
+    @test !startswith(str2, "Warning: this symbol may be internal")
+    @test !startswith(str3, "Warning: this symbol may be internal")
+    @test occursin("adds one to `x`", str1)
+    @test occursin("adds two to `x`", str2)
+    @test occursin("adds three to `x`", str3)
+end

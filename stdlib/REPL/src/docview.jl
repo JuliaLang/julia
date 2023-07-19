@@ -148,6 +148,9 @@ end
 
 _trimdocs(md, brief::Bool) = md, false
 
+const INTERNAL_WARNING = Markdown.Paragraph("Warning: this symbol may be internal. \
+    Behavior documented here might change in future versions.")
+
 """
     Docs.doc(binding, sig)
 
@@ -192,7 +195,7 @@ function doc(binding::Binding, sig::Type = Union{})
         # Get parsed docs and concatenate them.
         md = catdoc(mapany(parsedoc, results)...)
 
-        Base.isinternal(binding.mod, binding.var) && pushfirst!(md.content, Markdown.Paragraph("INTERNAL"))
+        Base.isinternal(binding.mod, binding.var) && pushfirst!(md.content, INTERNAL_WARNING)
 
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
