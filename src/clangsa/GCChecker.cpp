@@ -199,7 +199,7 @@ private:
   static bool isGCTracked(const Expr *E);
   bool isGloballyRootedType(QualType Type) const;
   static void dumpState(const ProgramStateRef &State);
-  static bool declHasAnnotation(const clang::Decl *D, const char *which);
+  static const AnnotateAttr *declHasAnnotation(const clang::Decl *D, const char *which);
   static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM);
   static const SourceManager &getSM(CheckerContext &C) { return C.getSourceManager(); }
   bool isSafepoint(const CallEvent &Call, CheckerContext &C) const;
@@ -242,6 +242,18 @@ public:
   class GCBugVisitor : public BugReporterVisitor {
   public:
     GCBugVisitor() {}
+
+    void Profile(llvm::FoldingSetNodeID &ID) const override {
+      static int X = 0;
+      ID.AddPointer(&X);
+    }
+
+    PDP VisitNode(const ExplodedNode *N, BugReporterContext &BRC, PathSensitiveBugReport &BR) override;
+  };
+
+  class SafepointBugVisitor : public BugReporterVisitor {
+  public:
+    SafepointBugVisitor() {}
 
     void Profile(llvm::FoldingSetNodeID &ID) const override {
       static int X = 0;
@@ -360,6 +372,33 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
     return MakePDP(Pos, "GC enabledness changed here.");
+  }
+  return nullptr;
+}
+
+PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
+                                       BugReporterContext &BRC, PathSensitiveBugReport &BR) {
+  const ExplodedNode *PrevN = N->getFirstPred();
+  unsigned NewSafepointDisabled = N->getState()->get<SafepointDisabledAt>();
+  unsigned OldSafepointDisabled = PrevN->getState()->get<SafepointDisabledAt>();
+  if (NewSafepointDisabled != OldSafepointDisabled) {
+    const Decl *D = &N->getCodeDecl();
+    const AnnotateAttr *Ann = declHasAnnotation(D, "julia_not_safepoint");
+    PathDiagnosticLocation Pos;
+    if (OldSafepointDisabled == (unsigned)-1) {
+      if (Ann) {
+        Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
+        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+      } else {
+        PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+            N->getLocationContext(), BRC.getSourceManager());
+        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+      }
+    } else if (NewSafepointDisabled == (unsigned)-1) {
+      PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+          N->getLocationContext(), BRC.getSourceManager());
+      return MakePDP(Pos, "Safepoints re-enabled here");
+    }
   }
   return nullptr;
 }
@@ -712,12 +751,12 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
   }
 }
 
-bool GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
+const AnnotateAttr *GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
   for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
     if (Ann->getAnnotation() == which)
-      return true;
+      return Ann;
   }
-  return false;
+  return nullptr;
 }
 
 bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM) {
@@ -1302,6 +1341,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
               Report->addNote(
                   "Tried to call method defined here",
                   PathDiagnosticLocation::create(FD, C.getSourceManager()));
+            Report->addVisitor(make_unique<SafepointBugVisitor>());
           },
           C, ("Calling potential safepoint as " +
               Call.getKindAsString() + " from function annotated JL_NOTSAFEPOINT").str());
