@@ -61,6 +61,12 @@ function pick_const_args!(𝕃::AbstractLattice, cache_argtypes::Vector{Any}, ov
         cache_argtype = cache_argtypes[i]
         if !is_argtype_match(𝕃, given_argtype, cache_argtype, false)
             # prefer the argtype we were given over the one computed from `linfo`
+            if (isa(given_argtype, PartialStruct) && isa(cache_argtype, Type) &&
+                !⊏(𝕃, given_argtype, cache_argtype))
+                # if the type information of this `PartialStruct` is less strict than
+                # declared method signature, narrow it down using `tmeet`
+                given_argtype = tmeet(𝕃, given_argtype, cache_argtype)
+            end
             cache_argtypes[i] = given_argtype
             overridden_by_const[i] = true
         end
