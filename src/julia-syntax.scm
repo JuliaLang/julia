@@ -2360,7 +2360,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -3704,7 +3704,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export inline noinline)))
+         error gc_preserve_begin gc_preserve_end import using export public inline noinline)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -4832,7 +4832,7 @@ f(x) = yt(x)
                val))
 
             ;; other top level expressions
-            ((import using export)
+            ((import using export public)
              (check-top-level e)
              (emit e)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
