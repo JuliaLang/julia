@@ -4070,18 +4070,10 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         // before the freelist pointer was either live during the last
         // sweep or has been allocated since.
         if (gc_page_data(cell) == gc_page_data(pool->freelist)
-            && (char *)cell < (char *)pool->freelist) {
+            && (char *)cell < (char *)pool->freelist)
             goto valid_object;
-        }
-        else {
-            jl_taggedvalue_t *v = pool->freelist;
-            while (v != NULL) {
-                if (v == cell) {
-                    return NULL;
-                }
-                v = v->next;
-            }
-        }
+        else
+            return NULL;
         // Not a freelist entry, therefore a valid object.
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
