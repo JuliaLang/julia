@@ -905,7 +905,10 @@ end
 
 ## indexing
 
-isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+function isassigned(r::AbstractRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    firstindex(r) <= i <= lastindex(r)
+end
 
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 

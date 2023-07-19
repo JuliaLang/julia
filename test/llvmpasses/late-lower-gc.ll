@@ -193,24 +193,24 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
   %l0 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e0
   %e1 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 1
   %l1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e1
-  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1) 
+  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1)
   ret void
 }
 
 ; CHECK-LABEL: @decayar
 ; TYPED:  %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
-; TYPED:  %1 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
-; TYPED:  store {} addrspace(10)* %l0, {} addrspace(10)** %1, align 8
-; TYPED:  %2 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
-; TYPED: store {} addrspace(10)* %l1, {} addrspace(10)** %2, align 8
+; TYPED:  [[gc_slot_addr_:%.*]] = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
+; TYPED:  store {} addrspace(10)* %l0, {} addrspace(10)** [[gc_slot_addr_:%.*]], align 8
+; TYPED:  [[gc_slot_addr_:%.*]] = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
+; TYPED: store {} addrspace(10)* %l1, {} addrspace(10)** [[gc_slot_addr_:%.*]], align 8
 ; TYPED: %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1)
 ; TYPED: call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 
 ; OPAQUE:  %gcframe = call ptr @julia.new_gc_frame(i32 2)
-; OPAQUE:  %1 = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
-; OPAQUE:  store ptr addrspace(10) %l0, ptr %1, align 8
-; OPAQUE:  %2 = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; OPAQUE: store ptr addrspace(10) %l1, ptr %2, align 8
+; OPAQUE: [[gc_slot_addr_:%.*]]1 = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
+; OPAQUE:  store ptr addrspace(10) %l0, ptr [[gc_slot_addr_:%.*]], align 8
+; OPAQUE:  [[gc_slot_addr_:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; OPAQUE: store ptr addrspace(10) %l1, ptr [[gc_slot_addr_:%.*]], align 8
 ; OPAQUE: %r = call i32 @callee_root(ptr addrspace(10) %l0, ptr addrspace(10) %l1)
 ; OPAQUE: call void @julia.pop_gc_frame(ptr %gcframe)
 

@@ -171,9 +171,20 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 {
     // we do the constant check again later, duplicating it here just makes sure the assertion
     // fires on debug builds even if debug info is not enabled
+    // note that if this assertion fires then the implication is that the caller of setName
+    // is not checking that setName is only called for non-folded instructions (e.g. folded bitcasts
+    // and 0-byte geps), which can result in information loss on the renamed instruction.
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level && !isa<Constant>(V)) {
+    if (params.debug_level >= 2 && !isa<Constant>(V)) {
         V->setName(Name);
+    }
+}
+
+void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
+{
+    assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
+    if (params.debug_level >= 2 && !isa<Constant>(V)) {
+        V->setName(Twine(GetName()));
     }
 }
 
@@ -3505,6 +3516,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 jl_value_t *boundscheck = argv[1].constant;
                 emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayref");
                 Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[3], nargs - 2, boundscheck);
+                auto get_arrayname = [&]() {
+                    return ary.V ? ary.V->getName() : StringRef("");
+                };
                 if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
                     assert(((jl_datatype_t*)ety)->instance != NULL);
                     *ret = ghostValue(ctx, ety);
@@ -3521,25 +3535,24 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         data = emit_bitcast(ctx, data, AT->getPointerTo());
                         // isbits union selector bytes are stored after a->maxsize
                         Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(getInt16Ty(ctx.builder.getContext()), nd));
-                        setName(ctx.emission_context, ndims, "ndims");
                         Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 1));
-                        setName(ctx.emission_context, is_vector, "isvec");
+                        setName(ctx.emission_context, is_vector, get_arrayname() + ".isvec");
                         Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, ctx.types().T_size));
-                        setName(ctx.emission_context, selidx_v, "selidx_v");
+                        setName(ctx.emission_context, selidx_v, get_arrayname() + ".vec_selidx");
                         Value *selidx_m = emit_arraylen(ctx, ary);
                         Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                        setName(ctx.emission_context, selidx, "selidx");
+                        setName(ctx.emission_context, selidx, get_arrayname() + ".selidx");
                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
-                        setName(ctx.emission_context, ptindex, "ptindex");
                         data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
-                        setName(ctx.emission_context, data, "data");
+                        setName(ctx.emission_context, data, get_arrayname() + ".data_ptr");
                     }
                     ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx);
+                    setName(ctx.emission_context, ptindex, get_arrayname() + ".tindex_ptr");
                     *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
                     if (ret->V)
-                        setName(ctx.emission_context, ret->V, "arrayref");
+                        setName(ctx.emission_context, ret->V, get_arrayname() + ".ref");
                 }
                 else {
                     MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.noalias().aliasscope.current : nullptr;
@@ -3551,7 +3564,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             isboxed,
                             AtomicOrdering::NotAtomic);
                     if (ret->V)
-                        setName(ctx.emission_context, ret->V, "arrayref");
+                        setName(ctx.emission_context, ret->V, get_arrayname() + ".ref");
                 }
                 return true;
             }
@@ -3823,7 +3836,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
                 // Unknown object, but field known to be integer
                 vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
-                Value *fld_val = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, obj), vidx });
+                Value *fld_val = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, obj), vidx }, "getfield");
                 *ret = mark_julia_type(ctx, fld_val, true, jl_any_type);
                 return true;
             }
@@ -5826,6 +5839,7 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
     // this will require the runtime, but it gets deleted later if unused
     ctx.topalloca = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
     ctx.pgcstack = ctx.topalloca;
+    ctx.pgcstack->setName("pgcstack");
 }
 
 static Value *get_current_task(jl_codectx_t &ctx)

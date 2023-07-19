@@ -2518,3 +2518,13 @@ end
     @test collect(r) isa Vector{Int}
     @test collect(r) == r
 end
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+
+end
