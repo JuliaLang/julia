@@ -229,19 +229,23 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_page_metadata_back(jl_gc_global_page_pool
     }
 }
 
+// Region values are
+// index shift = ptr_size - shift of the page counts before
+// i.e 64 - 18 = 46 ...
+// after that AND with the actual page count
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 14)
 #define REGION2_PG_COUNT (1 << 18)
 #define REGION0_INDEX(p) (((uintptr_t)(p) >> GC_PAGE_LG2) & 0xFFFF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 30) & 0xFFFF)
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 32) & 0x3FFF)
 #define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
 #else
 #define REGION0_PG_COUNT (1 << 8)
 #define REGION1_PG_COUNT (1 << 8)
 #define REGION2_PG_COUNT (1 << 0)
 #define REGION0_INDEX(p) (((uintptr_t)(p) >> GC_PAGE_LG2) & 0xFF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 24) & 0xFF) // 32 - pgcount1 shift
 #define REGION_INDEX(p)  (0)
 #endif
 
