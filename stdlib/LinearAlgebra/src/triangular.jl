@@ -2504,9 +2504,10 @@ function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     μ = sqrt(-4*A[1,2]*A[2,1])/2
     r = cbrt(sqrt(A[1,1]^2 + μ^2))
     θ = atan(μ, A[1,1])
+    α = r*cos(θ/3)
     β′ = r*sin(θ/3)/µ
-    A[1,1] = r*cos(θ/3)
-    A[2,2] = A[1,1]
+    A[1,1] = α
+    A[2,2] = α
     A[1,2] = β′*A[1,2]
     A[2,1] = β′*A[2,1]
     return A
@@ -2515,15 +2516,15 @@ end
 # Cube root of a block diagonal matrix with 1x1 and 2x2 blocks (output of Schur decomposition)
 function _cbrt_blkdiag_1x1_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     m, n = size(A)
-    (m == n) || throw(ArgumentError("_cbrt_blkdiag_1x1_2x2: Matrix A must be square."))
+    (m == n) || throw(ArgumentError("_cbrt_blkdiag_1x1_2x2!: Matrix A must be square."))
     # 2x2 and 1x1 blocks
-    idx22 = findall(x -> !iszero(x), diag(A,-1))
-    idx11 = setdiff(1:n, vcat(idx22, idx22.+1))
-    for idx in idx22
+    I2 = findall(x -> !iszero(x), diag(A,-1))
+    I1 = setdiff(1:n, vcat(I2, I2.+1))
+    for idx in I2
         @views _cbrt_2x2!(A[idx:idx+1,idx:idx+1])
     end
-    for idx in idx11
+    for idx in I1
         A[idx,idx] = cbrt(A[idx,idx])
     end
-    return A
+    return A, I2, I1
 end
