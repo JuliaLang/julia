@@ -2496,11 +2496,11 @@ end
 # Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
-function _cbrt_u22!(A::AbstractMatrix{T}) where {T<:Real}
+function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     m, n = size(A)
-    (m == 2 && n == 2) || throw(ArgumentError("U22!: Matrix A must be 2x2."))
-    (A[1,1] == A[2,2]) || throw(ArgumentError("U22!: Matrix A must have equal diagonal values."))
-    (A[1,2]*A[2,1] < 0) || throw(ArgumentError("U22!: Matrix A must have complex conjugate eigenvalues."))
+    (m == 2 && n == 2) || throw(ArgumentError("_cbrt_2x2!: Matrix A must be 2x2."))
+    (A[1,1] == A[2,2]) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have equal diagonal values."))
+    (A[1,2]*A[2,1] < 0) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have complex conjugate eigenvalues."))
     μ = sqrt(-4*A[1,2]*A[2,1])/2
     r = cbrt(sqrt(A[1,1]^2 + μ^2))
     θ = atan(μ, A[1,1])
@@ -2509,5 +2509,21 @@ function _cbrt_u22!(A::AbstractMatrix{T}) where {T<:Real}
     A[2,2] = A[1,1]
     A[1,2] = β′*A[1,2]
     A[2,1] = β′*A[2,1]
+    return A
+end
+
+# Cube root of a block diagonal matrix with 1x1 and 2x2 blocks (output of Schur decomposition)
+function _cbrt_blkdiag_1x1_2x2!(A::AbstractMatrix{T}) where {T<:Real}
+    m, n = size(A)
+    (m == n) || throw(ArgumentError("_cbrt_blkdiag_1x1_2x2: Matrix A must be square."))
+    # 2x2 and 1x1 blocks
+    idx22 = findall(x -> !iszero(x), diag(A,-1))
+    idx11 = setdiff(1:n, vcat(idx22, idx22.+1))
+    for idx in idx22
+        @views _cbrt_2x2!(A[idx:idx+1,idx:idx+1])
+    end
+    for idx in idx11
+        A[idx,idx] = cbrt(A[idx,idx])
+    end
     return A
 end
