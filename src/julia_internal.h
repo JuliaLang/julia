@@ -345,7 +345,8 @@ void *jl_gc_perm_alloc(size_t sz, int zero,
 void gc_sweep_sysimg(void);
 
 
-// pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
+// pools are 65528 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
+// TODO update table for 64k size
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
