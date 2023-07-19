@@ -42,6 +42,8 @@ static jl_gc_callback_list_t *gc_cblist_pre_gc;
 static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
+static jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
+typedef void (*jl_gc_cb_notify_gc_pressure_t)(void);
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -126,6 +128,14 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_fre
         jl_gc_register_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
 }
 
 // Protect all access to `finalizer_list_marked` and `to_finalize`.
@@ -739,6 +749,7 @@ static int mark_reset_age = 0;
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 int prev_sweep_full = 1;
+int under_pressure = 0;
 
 // Full collection heuristics
 static int64_t live_bytes = 0;
@@ -3338,6 +3349,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         next_sweep_full = 1;
     else
         next_sweep_full = 0;
+    if (heap_size > max_total_memory * 0.8 || thrashing)
+        under_pressure = 1;
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3487,6 +3500,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
         gc_cblist_post_gc, (collection));
+    if (under_pressure)
+        gc_invoke_callbacks(jl_gc_cb_notify_gc_pressure_t,
+            gc_cblist_notify_gc_pressure, ());
+    under_pressure = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
