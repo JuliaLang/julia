@@ -471,6 +471,26 @@ static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWri
     //    m->eraseNamedMetadata(md);
 }
 
+void jl_resolve_literal_pointers(Module *m) JL_NOTSAFEPOINT
+{
+    for (auto &F : *m) {
+        for (auto &BB : F) {
+            for (auto &I : BB) {
+                if (auto md = I.getMetadata("julia.literal_pointer")) {
+                    auto &SI = cast<StoreInst>(I);
+                    auto V = SI.getValueOperand();
+                    auto GA = cast<GlobalAlias>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue());
+                    auto casted = ConstantExpr::getPointerCast(GA, V->getType());
+                    // if we need both an addrspacecast and a bitcast then we need to run this twice
+                    if (casted->getType() != V->getType())
+                        casted = ConstantExpr::getPointerCast(GA, V->getType());
+                    SI.replaceUsesOfWith(V, ConstantExpr::getPointerCast(GA, V->getType()));
+                }
+            }
+        }
+    }
+}
+
 void jl_strip_llvm_debug(Module *m) JL_NOTSAFEPOINT
 {
     jl_strip_llvm_debug(m, false, NULL);
@@ -515,6 +535,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
             auto m = TSM->getModuleUnlocked();
             if (strip_ir_metadata) {
                 std::string llvmfn(llvmf->getName());
+                jl_resolve_literal_pointers(m);
                 jl_strip_llvm_addrspaces(m);
                 jl_strip_llvm_debug(m, true, &AAW);
                 // rewriting the function type creates a new function, so look it up again

@@ -2408,6 +2408,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                if (auto GA = dyn_cast<GlobalAlias>(CI->getArgOperand(2)->stripPointerCasts())) {
+                    store->setMetadata("julia.literal_pointer", MDNode::get(builder.getContext(), {ConstantAsMetadata::get(GA)}));
+                }
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
