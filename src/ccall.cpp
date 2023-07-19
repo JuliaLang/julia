@@ -472,7 +472,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
     // box if concrete type was not statically known
     Value *args[] = {
         literal_pointer_val(ctx, ty),
-        literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig),
+        literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig, jl_symbol_name(ctx.linfo->def.method->module->name) + StringRef(".") + jl_symbol_name(ctx.linfo->def.method->name) + ".sig"),
         ctx.builder.CreateInBoundsGEP(
                 ctx.types().T_prjlvalue,
                 ctx.spvals_ptr,
@@ -706,7 +706,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (sym.f_name == NULL && sym.fptr == NULL && sym.jl_ptr == NULL && sym.gcroot != NULL) {
         const char *errmsg = invalid_symbol_err_msg(/*ccall=*/false);
         jl_cgval_t arg1 = emit_expr(ctx, args[1]);
-        emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
+        emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type, jl_symbol_name(jl_pointer_typename->name)), errmsg);
         JL_GC_POP();
         return jl_cgval_t();
     }
@@ -1362,7 +1362,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (symarg.gcroot != NULL) { // static_eval(ctx, args[1]) could not be interpreted to a function pointer
             const char *errmsg = invalid_symbol_err_msg(/*ccall=*/true);
             jl_cgval_t arg1 = emit_expr(ctx, args[1]);
-            emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
+            emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type, jl_symbol_name(jl_pointer_typename->name)), errmsg);
         } else {
             emit_error(ctx, "ccall: null function pointer");
         }

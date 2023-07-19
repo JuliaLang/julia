@@ -1768,6 +1768,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p, const Twine &name);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
@@ -5278,7 +5279,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const s
     }
     if (condV.isboxed) {
         return ctx.builder.CreateICmpEQ(boxed(ctx, condV),
-            track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
+            track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false, "Core.false")));
     }
     // not a boolean
     return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0); // TODO: replace with Undef
@@ -5484,7 +5485,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         Value *cond = ctx.builder.CreateTrunc(emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type), getInt1Ty(ctx.builder.getContext()));
         if (var == jl_getfield_undefref_sym) {
             raise_exception_unless(ctx, cond,
-                literal_pointer_val(ctx, jl_undefref_exception));
+                literal_pointer_val(ctx, jl_undefref_exception, "::UndefRefException"));
         }
         else {
             undef_var_error_ifnot(ctx, cond, var);
@@ -5581,7 +5582,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 name = literal_pointer_val(ctx, (jl_value_t*)slot_symbol(ctx, sl));
             }
             if (bp) {
-                Value *mdargs[] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp, literal_pointer_val(ctx, bnd) };
+                Value *mdargs[] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp, literal_pointer_binding(ctx, bnd) };
                 jl_cgval_t gf = mark_julia_type(
                         ctx,
                         ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
@@ -5887,7 +5888,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
         theFunc = cast<Function>(
             M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(ctx.builder.getContext())).getCallee());
-        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst, theFptrName);
     }
     else {
         theFunc = prepare_call(jlinvoke_func);

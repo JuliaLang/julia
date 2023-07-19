@@ -500,12 +500,12 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 }
 
 // Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p, const Twine &name)
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
     if (!ctx.emission_context.imaging)
-        return literal_static_pointer_val(p, ctx.types().T_pjlvalue, *jl_Module, Twine());
+        return literal_static_pointer_val(p, ctx.types().T_pjlvalue, *jl_Module, name);
     Value *pgv = literal_pointer_val_slot(ctx, p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
@@ -515,8 +515,38 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     return load;
 }
 
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
+{
+    if (ctx.emission_context.debug_level < 2)
+        return literal_pointer_val(ctx, p, Twine());
+    // Take a best guess as to the common types
+    if (jl_is_datatype(p)) {
+        auto dt = (jl_datatype_t*)p;
+        return literal_pointer_val(ctx, p, jl_symbol_name(dt->name->name));
+    }
+    if (jl_is_symbol(p)) {
+        return literal_pointer_val(ctx, p, jl_symbol_name((jl_sym_t*)p));
+    }
+    if (jl_is_method(p)) {
+        auto m = (jl_method_t*)p;
+        return literal_pointer_val(ctx, p, jl_symbol_name(m->module->name) + StringRef(".") + jl_symbol_name(m->name));
+    }
+    if (jl_is_module(p)) {
+        auto m = (jl_module_t*)p;
+        return literal_pointer_val(ctx, p, jl_symbol_name(m->name));
+    }
+    if (jl_is_method_instance(p)) {
+        auto mi = (jl_method_instance_t*)p;
+        if (jl_is_method(mi->def.method)) {
+            auto m = (jl_method_t*)mi->def.method;
+            return literal_pointer_val(ctx, p, jl_symbol_name(m->module->name) + StringRef(".") + jl_symbol_name(m->name));
+        }
+    }
+    return literal_pointer_val(ctx, p, Twine());
+}
+
 // Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
+static Value *literal_pointer_binding(jl_codectx_t &ctx, jl_binding_t *p)
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
@@ -1368,7 +1398,7 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck = 
         return;
     }
     raise_exception_unless(ctx, null_pointer_cmp(ctx, v),
-            literal_pointer_val(ctx, jl_undefref_exception));
+            literal_pointer_val(ctx, jl_undefref_exception, "::UndefRefException"));
 }
 
 template<typename Func>
@@ -1645,7 +1675,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(
                 ctx.builder.CreateICmpEQ(
                     emit_datatype_name(ctx, emit_typeof(ctx, x, false, false)),
-                    literal_pointer_val(ctx, (jl_value_t*)dt->name)),
+                    literal_pointer_val(ctx, (jl_value_t*)dt->name, jl_symbol_name(dt->name->name) + StringRef(".name"))),
                 false);
     }
     if (jl_is_uniontype(intersected_type) &&
@@ -2313,8 +2343,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
 // Returns ctx.types().T_pjlvalue
 static Value *julia_bool(jl_codectx_t &ctx, Value *cond)
 {
-    auto boolean = ctx.builder.CreateSelect(cond, literal_pointer_val(ctx, jl_true),
-                                          literal_pointer_val(ctx, jl_false));
+    auto boolean = ctx.builder.CreateSelect(cond, literal_pointer_val(ctx, jl_true, "Core.true"),
+                                          literal_pointer_val(ctx, jl_false, "Core.false"));
     setName(ctx.emission_context, boolean, "bool");
     return boolean;
 }
@@ -2545,7 +2575,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         order = isatomic ? jl_memory_order_unordered : jl_memory_order_notatomic;
     }
     if (jfty == jl_bottom_type) {
-        raise_exception(ctx, literal_pointer_val(ctx, jl_undefref_exception));
+        raise_exception(ctx, literal_pointer_val(ctx, jl_undefref_exception, "::UndefRefException"));
         return jl_cgval_t(); // unreachable
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
@@ -3311,7 +3341,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     else if (!jb->name->abstract && jl_datatype_nbits(jb) == 0) {
         // singleton
         assert(jb->instance != NULL);
-        return track_pjlvalue(ctx, literal_pointer_val(ctx, jb->instance));
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, jb->instance, StringRef("::") + jl_symbol_name(jb->name->name)));
     }
     return box;
 }
@@ -3430,7 +3460,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                 switchInst->addCase(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx), tempBB);
                 Value *box;
                 if (type_is_ghost(t)) {
-                    box = track_pjlvalue(ctx, literal_pointer_val(ctx, jt->instance));
+                    box = track_pjlvalue(ctx, literal_pointer_val(ctx, jt->instance, StringRef("::") + jl_symbol_name(jt->name->name)));
                 }
                 else {
                     jl_cgval_t vinfo_r = jl_cgval_t(vinfo, (jl_value_t*)jt, NULL);
@@ -3540,7 +3570,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
     // This can happen in early bootstrap for `gc_preserve_begin` return value.
     if (jt == (jl_value_t*)jl_nothing_type)
-        return track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing, "Core.nothing"));
     if (vinfo.isboxed) {
         assert(vinfo.V == vinfo.Vboxed && vinfo.V != nullptr);
         assert(vinfo.V->getType() == ctx.types().T_prjlvalue);
@@ -3687,14 +3717,14 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 
     Value *istype =
         ctx.builder.CreateICmpEQ(emit_datatype_name(ctx, t),
-                                 literal_pointer_val(ctx, (jl_value_t*)jl_pointer_typename));
+                                 literal_pointer_val(ctx, (jl_value_t*)jl_pointer_typename, jl_symbol_name(jl_pointer_typename->name) + StringRef(".name")));
     setName(ctx.emission_context, istype, "istype");
     BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
     ctx.builder.CreateCondBr(istype, passBB, failBB);
     ctx.builder.SetInsertPoint(failBB);
 
-    just_emit_type_error(ctx, x, literal_pointer_val(ctx, (jl_value_t*)jl_pointer_type), msg);
+    just_emit_type_error(ctx, x, literal_pointer_val(ctx, (jl_value_t*)jl_pointer_type, jl_symbol_name(jl_pointer_typename->name)), msg);
     ctx.builder.CreateUnreachable();
 
     ctx.f->getBasicBlockList().push_back(passBB);

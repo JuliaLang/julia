@@ -983,7 +983,7 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
     setName(ctx.emission_context, ndivby0, "ndivby0");
     raise_exception_unless(ctx,
             ndivby0,
-            literal_pointer_val(ctx, jl_diverror_exception));
+            literal_pointer_val(ctx, jl_diverror_exception, "::DivideError"));
     BasicBlock *m1BB = BasicBlock::Create(ctx.builder.getContext(), "minus1", ctx.f);
     BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "oksrem", ctx.f);
     BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_srem", ctx.f);
@@ -1483,14 +1483,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                             ctx.builder.CreateICmpNE(y, ConstantInt::get(t, -1, true)),
                             ctx.builder.CreateICmpNE(x, typemin)));
         setName(ctx.emission_context, cond, "divisor_valid");
-        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception));
+        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception, "::DivideError"));
 
         return ctx.builder.CreateSDiv(x, y);
     }
     case checked_udiv_int: {
         auto cond = ctx.builder.CreateICmpNE(y, ConstantInt::get(t, 0));
         setName(ctx.emission_context, cond, "ndivby0");
-        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception));
+        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception, "::DivideError"));
         return ctx.builder.CreateUDiv(x, y);
     }
     case checked_srem_int:
@@ -1499,7 +1499,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case checked_urem_int: {
         auto cond = ctx.builder.CreateICmpNE(y, ConstantInt::get(t, 0));
         setName(ctx.emission_context, cond, "ndivby0");
-        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception));
+        raise_exception_unless(ctx, cond, literal_pointer_val(ctx, jl_diverror_exception, "::DivideError"));
         return ctx.builder.CreateURem(x, y);
     }
 
