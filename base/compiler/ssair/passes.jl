@@ -64,7 +64,7 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
 end
 
 # assume `stmt` is a call of `getfield`/`setfield!`/`isdefined`
-function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
+function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, @nospecialize(typ))
     field = try_compute_field(ir, stmt.args[3])
     return try_compute_fieldidx(typ, field)
 end
@@ -83,8 +83,7 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
+        @assert is_known_call(ex, setfield!, ir)
         return ex.args[4]
     end
 end
@@ -812,10 +811,10 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    length(stmt.args) != 4 && return
+    length(stmt.args) != 3 && return
 
-    vec = stmt.args[3]
-    val = stmt.args[4]
+    vec = stmt.args[2]
+    val = stmt.args[3]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
@@ -939,7 +938,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
         push!(tvars, applyTvar)
     end
 
-    applyT.name === typ.name || return false
+    @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)
     idx = findfirst(IsEgal(fT), tvars)
     idx === nothing && return false
@@ -1105,25 +1104,24 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
-        if isa(struct_typ, Union) && struct_typ <: Tuple
-            struct_typ = unswitchtupleunion(struct_typ)
-        end
-        if isa(struct_typ, Union) && is_isdefined
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+        struct_typ = widenconst(argextype(val, compact))
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
+            if isa(struct_typ, Union) && is_isdefined
+                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+            end
             continue
         end
-        isa(struct_typ, DataType) || continue
+        struct_typ_name = struct_argtyp.name
 
-        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
              (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
-
         # analyze this mutable struct here for the later pass
-        if ismutabletype(struct_typ)
+        if ismutabletypename(struct_typ_name)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
                 callback = IntermediaryCollector(intermediaries)

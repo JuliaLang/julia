@@ -2013,9 +2013,9 @@ struct MergeSortAlg     <: Algorithm end
 """
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Indicate that a sorting function should use the partial quick sort algorithm.
+`PartialQuickSort(k)` is like `QuickSort`, but is only required to find and
+sort the elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
   * *not stable*: does not preserve the ordering of elements that
@@ -2024,7 +2024,7 @@ Characteristics:
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 
-  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 
 ```jldoctest
 julia> x = rand(100);

@@ -761,7 +761,7 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
+getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
     @_total_meta
     t = @_gc_preserve_begin v

@@ -1655,11 +1655,9 @@ JL_CALLABLE(jl_f__compute_sparams)
 
 JL_CALLABLE(jl_f__svec_ref)
 {
-    JL_NARGS(_svec_ref, 3, 3);
-    jl_value_t *b = args[0];
-    jl_svec_t *s = (jl_svec_t*)args[1];
-    jl_value_t *i = (jl_value_t*)args[2];
-    JL_TYPECHK(_svec_ref, bool, b);
+    JL_NARGS(_svec_ref, 2, 2);
+    jl_svec_t *s = (jl_svec_t*)args[0];
+    jl_value_t *i = (jl_value_t*)args[1];
     JL_TYPECHK(_svec_ref, simplevector, (jl_value_t*)s);
     JL_TYPECHK(_svec_ref, long, i);
     size_t len = jl_svec_len(s);

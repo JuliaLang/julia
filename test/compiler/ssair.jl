@@ -566,6 +566,33 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
     @test call2.args[2] === SSAValue(2)
 end
 
+# Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
+let ci = make_ci([
+        # block 1
+        #= %1: =# Core.Compiler.GotoIfNot(Expr(:boundscheck), 3),
+        # block 2
+        #= %2: =# Expr(:call, println, Argument(1)),
+        # block 3
+        #= %3: =# Core.PhiNode(),
+        #= %4: =# Core.Compiler.ReturnNode(),
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+
+    # Insert another call at end of "block 2"
+    compact = Core.Compiler.IncrementalCompact(ir)
+    new_inst = NewInstruction(Expr(:call, println, Argument(1)), Nothing)
+    insert_node!(compact, SSAValue(2), new_inst, #= attach_after =# true)
+
+    # Complete iteration
+    x = Core.Compiler.iterate(compact)
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+    ir = Core.Compiler.complete(compact)
+
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
 # insert_node! with new instruction with flag computed
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b

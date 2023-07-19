@@ -1483,7 +1483,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
     assert(oldentry != closure->newentry && "entry already added");
     assert(oldentry->min_world <= closure->newentry->min_world && "old method cannot be newer than new method");
-    assert(oldentry->max_world == ~(size_t)0 && "method cannot be added at the same time as method deleted");
+    assert(oldentry->max_world != closure->newentry->min_world && "method cannot be added at the same time as method deleted");
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
     typemap_slurp_search(oldentry, &closure->match);
     jl_method_t *oldmethod = oldentry->func.method;
@@ -3426,7 +3426,9 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
             }
             if ((size_t)visited->items[idx] == 1) {
-                assert(cycle == depth);
+                // n.b. cycle might be < depth, if we had a cycle with a child
+                // idx, but since we are on the top of the stack, nobody
+                // observed that and so we are content to ignore this
                 size_t childidx = (size_t)arraylist_pop(stack);
                 assert(childidx == idx); (void)childidx;
                 assert(!subt || *found_minmax == 2);
