@@ -1057,3 +1057,19 @@ end
 @test !Base.ismutationfree(Vector{UInt64})
 
 @test Base.ismutationfree(Type{Union{}})
+
+module TestNames
+
+public publicized
+export exported
+
+publicized() = 1
+exported() = 1
+private() = 1
+
+end
+
+@test names(TestNames) == [:TestNames, :exported, :publicized]
+@test names(TestNames, qualified=false) == [:TestNames, :exported]
+
+end
