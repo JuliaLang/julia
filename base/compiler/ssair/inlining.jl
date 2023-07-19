@@ -322,8 +322,7 @@ inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
     topline.line === line.line
 
 function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
-                              inlinee::MethodInstance,
-                              inlined_at::Int32)
+                              inlinee::MethodInstance, inlined_at::Int32)
     inlinee_def = inlinee.def::Method
     coverage = coverage_enabled(inlinee_def.module)
     linetable_offset::Int32 = length(linetable)
@@ -358,18 +357,18 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
 end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
-        linetable::Vector{LineInfoNode}, ir′::IRCode, sparam_vals::SimpleVector,
-        mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
+                              ir::IRCode, mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
     def = mi.def::Method
+    linetable = inline_target isa IRCode ? inline_target.linetable : inline_target.ir.linetable
     topline::Int32 = length(linetable) + Int32(1)
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, mi, inlined_at)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir, mi, inlined_at)
     if extra_coverage_line != 0
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
-    sp_ssa = nothing
-    if !validate_sparams(sparam_vals)
+    spvals_ssa = nothing
+    if !validate_sparams(mi.sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
-        sp_ssa = insert_node!(
+        spvals_ssa = insert_node!(
             effect_free_and_nothrow(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
@@ -382,20 +381,17 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
         # Replace the first argument by a load of the capture environment
         argexprs[1] = insert_node!(
             NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
-            ir′.argtypes[1], topline))
+            ir.argtypes[1], topline))
     end
-    return (Pair{Union{Nothing, SSAValue}, Vector{Any}}(sp_ssa, argexprs), linetable_offset)
+    return SSASubstitute(mi, argexprs, spvals_ssa, linetable_offset)
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
-                         linetable::Vector{LineInfoNode}, item::InliningTodo,
-                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+                         item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
-    sparam_vals = item.mi.sparam_vals
     inlined_at = compact.result[idx][:line]
 
-    ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertHere(compact),
-        compact, linetable, item.ir, sparam_vals, item.mi, inlined_at, argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.mi, inlined_at, argexprs)
 
     if boundscheck === :default || boundscheck === :propagate
         if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
@@ -405,8 +401,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
-    def = item.mi.def::Method
-    sig = def.sig
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     new_new_offset = length(compact.new_new_nodes)
     late_fixup_offset = length(compact.late_fixup)
@@ -418,7 +412,9 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(InsertBefore(inline_compact, SSAValue(idx′)), inline_compact[SSAValue(idx′)], stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck)
+            insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
+            stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
+                                    ssa_substitute, boundscheck)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -445,7 +441,9 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(InsertBefore(inline_compact, SSAValue(idx′)), inline_compact[SSAValue(idx′)], stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck)
+            insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
+            stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
+                                    ssa_substitute, boundscheck)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -554,11 +552,10 @@ excluding cases where `case.sig::UnionAll`.
 In short, here we can process the dispatch candidates in order, assuming we haven't changed
 their order somehow somewhere up to this point.
 """
-function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
-                               argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
-                               (; fully_covered, atype, cases, bbs)::UnionSplit,
-                               boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}},
-                               params::OptimizationParams)
+function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
+                               union_split::UnionSplit, boundscheck::Symbol,
+                               todo_bbs::Vector{Tuple{Int,Int}}, params::OptimizationParams)
+    (; fully_covered, atype, cases, bbs) = union_split
     stmt, typ, line = compact.result[idx][:inst], compact.result[idx][:type], compact.result[idx][:line]
     join_bb = bbs[end]
     pn = PhiNode()
@@ -606,7 +603,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             end
         end
         if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
+            val = ir_inline_item!(compact, idx, argexprs′, case, boundscheck, todo_bbs)
         elseif isa(case, InvokeCase)
             inst = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
@@ -698,9 +695,9 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     end
                 end
                 if isa(item, InliningTodo)
-                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, ir.linetable, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, ir.linetable, item, boundscheck, state.todo_bbs, params)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, params)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -1795,15 +1792,18 @@ function late_inline_special_case!(
     return nothing
 end
 
-function ssa_substitute!(insert_node!::Inserter,
-                         subst_inst::Instruction, @nospecialize(val), arg_replacements::Vector{Any},
-                         @nospecialize(spsig), spvals::SimpleVector,
-                         spvals_ssa::Union{Nothing, SSAValue},
-                         linetable_offset::Int32, boundscheck::Symbol)
+struct SSASubstitute
+    mi::MethodInstance
+    arg_replacements::Vector{Any}
+    spvals_ssa::Union{Nothing,SSAValue}
+    linetable_offset::Int32
+end
+
+function ssa_substitute!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
+                         ssa_substitute::SSASubstitute, boundscheck::Symbol)
     subst_inst[:flag] &= ~IR_FLAG_INBOUNDS
-    subst_inst[:line] += linetable_offset
-    return ssa_substitute_op!(insert_node!, subst_inst,
-        val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
+    subst_inst[:line] += ssa_substitute.linetable_offset
+    return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute, boundscheck)
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
@@ -1819,26 +1819,24 @@ function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
     return (ret, tcheck_not)
 end
 
-function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
-                            @nospecialize(val), arg_replacements::Vector{Any},
-                            @nospecialize(spsig), spvals::SimpleVector,
-                            spvals_ssa::Union{Nothing, SSAValue},
-                            boundscheck::Symbol)
+function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
+                            ssa_substitute::SSASubstitute, boundscheck::Symbol)
     if isa(val, Argument)
-        return arg_replacements[val.n]
+        return ssa_substitute.arg_replacements[val.n]
     end
     if isa(val, Expr)
         e = val::Expr
         head = e.head
+        sparam_vals = ssa_substitute.mi.sparam_vals
         if head === :static_parameter
             spidx = e.args[1]::Int
-            val = spvals[spidx]
+            val = sparam_vals[spidx]
             if !isa(val, TypeVar) && val !== Vararg
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
                 maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, maybe_undef)
+                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
                         NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing))
@@ -1847,27 +1845,29 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
             end
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
-            val = spvals[spidx]
+            val = sparam_vals[spidx]
             if !isa(val, TypeVar)
                 return true
             else
-                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, true)
+                (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)
                 return tcheck_not
             end
-        elseif head === :cfunction && spvals_ssa === nothing
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+        elseif head === :cfunction && ssa_substitute.spvals_ssa === nothing
+            msig = (ssa_substitute.mi.def::Method).sig
+            @assert !isa(msig, UnionAll) || !isempty(sparam_vals)
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], msig, sparam_vals)
             e.args[4] = svec(Any[
-                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, msig, sparam_vals)
                 for argt in e.args[4]::SimpleVector ]...)
-        elseif head === :foreigncall && spvals_ssa === nothing
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+        elseif head === :foreigncall && ssa_substitute.spvals_ssa === nothing
+            msig = (ssa_substitute.mi.def::Method).sig
+            @assert !isa(msig, UnionAll) || !isempty(sparam_vals)
             for i = 1:length(e.args)
                 if i == 2
-                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
+                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], msig, sparam_vals)
                 elseif i == 3
                     e.args[3] = svec(Any[
-                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, msig, sparam_vals)
                         for argt in e.args[3]::SimpleVector ]...)
                 end
             end
@@ -1884,7 +1884,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
+        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute, boundscheck)
     end
     return urs[]
 end
