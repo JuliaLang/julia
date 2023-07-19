@@ -1577,6 +1577,12 @@ LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibd
 LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 
+LIBJULIATIMING_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-timing.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIATIMING_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-timing.$(JL_MAJOR_SHLIB_EXT))
+
+LIBJULIATIMING_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-timing-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIATIMING_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-timing-debug.$(JL_MAJOR_SHLIB_EXT))
+
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
 LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
@@ -1637,8 +1643,9 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 #  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
 #  * libstdc++, because while performing `libstdc++` probing we need to
 #    know the path to the bundled `libstdc++` library.
-#  * libjulia-internal, which must always come second-to-last.
-#  * libjulia-codegen, which must always come last
+#  * libjulia-internal, which must always come third-to-last.
+#  * libjulia-codegen, which must always come second-to-last.
+#  * libjulia-timing, which must always come last.
 #
 # We need these four separate variables because:
 #  * debug builds must link against libjuliadebug, not libjulia
@@ -1660,6 +1667,7 @@ LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
     @$(LIBSTDCXX_BUILD_DEPLIB) \
     @$(LIBJULIAINTERNAL_BUILD_DEPLIB) \
     @$(LIBJULIACODEGEN_BUILD_DEPLIB) \
+    @$(LIBJULIATIMING_BUILD_DEPLIB) \
 )
 
 LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
@@ -1668,6 +1676,7 @@ LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
    @$(LIBSTDCXX_BUILD_DEPLIB) \
    @$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB) \
    @$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB) \
+   @$(LIBJULIATIMING_DEBUG_BUILD_DEPLIB) \
 )
 
 LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \

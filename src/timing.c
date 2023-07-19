@@ -677,6 +677,10 @@ JL_DLLEXPORT uint32_t jl_timing_print_limit = 0;
 
 #endif
 
+#define UNAVAILABLE { return; }
+
+JL_DLLEXPORT void jl_timing_enabled_fallback(void) UNAVAILABLE
+
 #ifdef __cplusplus
 }
 #endif

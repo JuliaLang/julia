@@ -608,5 +608,7 @@
     YY(JLJITGetDataLayoutString) \
     YY(JLJITGetIRCompileLayer) \
 
+#define JL_INSTRUMENTATION_EXPORTED_FUNCS(YY) \
+    YY(jl_timing_enabled) \
 
 // end of file
