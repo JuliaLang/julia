@@ -94,7 +94,7 @@ unsorted_names(m::Module; qualified::Bool = true, all::Bool = false, imported::B
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, qualified, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
-isinternal(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) == 0
+ispublic(m::Module, s::Symbol) = m == Main ? isbindingresolved(m, s) : ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
