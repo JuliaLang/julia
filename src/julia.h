@@ -2363,6 +2363,9 @@ typedef struct {
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
+// Timing libjulia definitions
+JL_DLLEXPORT int jl_timing_available(void);
+
 #ifdef __cplusplus
 }
 #endif
