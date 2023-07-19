@@ -29,7 +29,7 @@ they have docstrings or are described in the documentation. Further, only the do
 behavior of public symbols is part of the public API. Undocumented behavior of public
 symbols is internal.
 
-Public symbols are those marked with either `public foo` or `export bar`.
+Public symbols are those marked with either `public foo` or `export foo`.
 Exported symbols are automatically considered public
 
 In other words:
@@ -46,16 +46,12 @@ You can get a complete list of the public symbols from a module with `names(MyMo
 
 Package authors are encouraged to define their public API similarly.
 
-Publicity nests in the same wa as exporting.
-Documented behavior of public symbols from submodules are only part of the public API
-if the module they belong to is also public. If module A marks submodule B as public and
-B marks foo as public, then A.B.foo is public, but if A does not mark B as public,
-then writing A.B.foo outside of A is accessing an internal and anything that B marks as
-public forms a sub-api that is not covered by the SymVer of A. This could be for the
-convenience of developers of A if A is a large package.
-
 Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
-will not be removed or receive meaningful breaking changes in a minor version update.
+will not be removed or receive meaningful breaking changes before Julia 2.0.
+
+### When is Julia 2.0 coming out?
+
+2047
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
