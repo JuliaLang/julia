@@ -102,7 +102,7 @@ static const char opts[]  =
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]     Set <dir> as the home project/environment\n"
+    " --project[={<dir>|@.}]     Set <dir> as the active project/environment\n"
     " -J, --sysimage <file>      Start up with the given system image file\n"
     " -H, --home <dir>           Set location of `julia` executable\n"
     " --startup-file={yes*|no}   Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH`\n"
@@ -110,7 +110,7 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no}\n"
+    " --compiled-modules={yes*|no|existing}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
@@ -460,8 +460,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
+            else if (!strcmp(optarg,"existing"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
             break;
         case opt_pkgimages:
             pkgimage_explicit = 1;

@@ -814,6 +814,33 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
     return {};
 }
 
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {
+    if (verifyModule(M, &errs())) {
+        errs() << "Failed to verify module '" << M.getModuleIdentifier() << "', dumping entire module!\n\n";
+        errs() << M << "\n";
+        return true;
+    }
+    return false;
+}
+
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT {
+    if (verifyFunction(F, &errs())) {
+        errs() << "Failed to verify function '" << F.getName() << "', dumping entire module!\n\n";
+        errs() << *F.getParent() << "\n";
+        return true;
+    }
+    return false;
+}
+
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT {
+    if (verifyFunction(*L.getHeader()->getParent(), &errs())) {
+        errs() << "Failed to verify loop '" << L.getName() << "', dumping entire module!\n\n";
+        errs() << *L.getHeader()->getModule() << "\n";
+        return true;
+    }
+    return false;
+}
+
 // new pass manager plugin
 
 // NOTE: Instead of exporting all the constructors in passes.h we could

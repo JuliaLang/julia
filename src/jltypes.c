@@ -1351,8 +1351,12 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
     JL_GC_PUSH1(&tc);
     jl_value_t *tc0 = tc;
     for (i=0; i < n; i++) {
-        if (!jl_is_unionall(tc0))
-            jl_error("too many parameters for type");
+        if (!jl_is_unionall(tc0)){
+            char *typ = "";
+            if (jl_is_datatype(tc0))
+                typ = jl_symbol_name_(((jl_datatype_t*)tc0)->name->name);
+            jl_errorf("too many parameters for type %s", typ);
+        }
         jl_value_t *pi = params[i];
 
         tc0 = ((jl_unionall_t*)tc0)->body;

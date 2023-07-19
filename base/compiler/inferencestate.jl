@@ -768,9 +768,10 @@ end
 iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
 function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
     # iterate through the cycle before walking to the parent
-    if cyclei < length(callers_in_cycle(sv))
+    callers = callers_in_cycle(sv)
+    if callers !== () && cyclei < length(callers)
         cyclei += 1
-        parent = callers_in_cycle(sv)[cyclei]
+        parent = callers[cyclei]
     else
         cyclei = 0
         parent = frame_parent(sv)

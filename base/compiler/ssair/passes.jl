@@ -83,8 +83,7 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
+        @assert is_known_call(ex, setfield!, ir)
         return ex.args[4]
     end
 end
@@ -812,10 +811,10 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    length(stmt.args) != 4 && return
+    length(stmt.args) != 3 && return
 
-    vec = stmt.args[3]
-    val = stmt.args[4]
+    vec = stmt.args[2]
+    val = stmt.args[3]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
@@ -939,7 +938,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
         push!(tvars, applyTvar)
     end
 
-    applyT.name === typ.name || return false
+    @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)
     idx = findfirst(IsEgal(fT), tvars)
     idx === nothing && return false
@@ -1106,15 +1105,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             val = stmt.args[2]
         end
         struct_typ = widenconst(argextype(val, compact))
-        struct_typ_name = argument_datatype(struct_typ)
-        if struct_typ_name === nothing
-            if isa(struct_typ, Union)
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
+            if isa(struct_typ, Union) && is_isdefined
                 lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             end
             continue
-        else
-            struct_typ_name = struct_typ_name.name
         end
+        struct_typ_name = struct_argtyp.name
 
         struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
@@ -1250,11 +1248,9 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 
     # TODO: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
-    ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
-        ir.linetable, src, mi.sparam_vals, mi, inlined_at, argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, mi, inlined_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
-    spvals = mi.sparam_vals
     ssa_rename = Vector{Any}(undef, length(src.stmts))
     for idx′ = 1:length(src.stmts)
         inst = src[SSAValue(idx′)]
@@ -1263,9 +1259,10 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         stmt′ = ssamap(stmt′) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
-        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
+        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′,
+                                   ssa_substitute, :default)
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=inst[:line]+linetable_offset),
+            NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
             attach_after)
     end
 
