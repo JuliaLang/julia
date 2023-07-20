@@ -2920,6 +2920,10 @@ function feature_names()
     fnames = Ref{Ptr{FeatureName}}()
     nf = Ref{Csize_t}()
     @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
+    if fnames[] == C_NULL
+        @assert nf[] == 0
+        return Vector{FeatureName}(undef, 0)
+    end
     Base.unsafe_wrap(Array, fnames[], nf[], own=false)
 end
 
