@@ -627,7 +627,7 @@ static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
 // Print function, file and line containing native instruction pointer `ip` by
 // looking up debug info. Prints multiple such frames when `ip` points to
 // inlined code.
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
+void jl_print_native_codeloc(int sig, uintptr_t ip) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -637,6 +637,9 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     int i;
 
     for (i = 0; i < n; i++) {
+        if (sig != -1) {
+            jl_safe_printf("signal (%d) ", sig);
+        }
         jl_frame_t frame = frames[i];
         if (!frame.func_name) {
             jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
@@ -651,10 +654,10 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
 }
 
 // Print code location for backtrace buffer entry at *bt_entry
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
     if (jl_bt_is_native(bt_entry)) {
-        jl_print_native_codeloc(bt_entry[0].uintptr);
+        jl_print_native_codeloc(sig, bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
         size_t ip = jl_bt_entry_header(bt_entry);
@@ -1086,7 +1089,7 @@ void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
-    jl_print_native_codeloc((uintptr_t)ip);
+    jl_print_native_codeloc(-1, (uintptr_t)ip);
 }
 
 // Print backtrace for current exception in catch block
@@ -1101,7 +1104,7 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
     size_t i, bt_size = jl_excstack_bt_size(s, s->top);
     jl_bt_element_t *bt_data = jl_excstack_bt_data(s, s->top);
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_print_bt_entry_codeloc(-1, bt_data + i);
     }
 }
 
@@ -1114,7 +1117,7 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
     size_t i, bt_size = ptls->bt_size;
     jl_bt_element_t *bt_data = ptls->bt_data;
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_print_bt_entry_codeloc(-1, bt_data + i);
     }
 }
 
