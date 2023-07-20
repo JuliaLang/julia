@@ -581,15 +581,15 @@ endif
 
 ifeq ($(OS),WINNT)
 define versioned_libname
-$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else ifeq ($(OS),Darwin)
 define versioned_libname
-$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else
 define versioned_libname
-$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
 endef
 endif
 
