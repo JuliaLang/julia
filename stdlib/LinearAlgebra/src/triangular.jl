@@ -2520,18 +2520,18 @@ function _cbrt_blkdiag_1x1_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     # 2x2 and 1x1 blocks
     I2 = findall(x -> !iszero(x), diag(A,-1))
     I1 = setdiff(1:n, vcat(I2, I2.+1))
-    for idx in I2 @views _cbrt_2x2!(A[idx:idx+1,idx:idx+1]) end
-    for idx in I1 @views A[idx,idx] = cbrt(A[idx,idx]) end
+    for i in I2 @views _cbrt_2x2!(A[i:i+1,i:i+1]) end
+    for i in I1 @views A[i,i] = cbrt(A[i,i]) end
     return A, I2, I1
 end
 
-# Cube root of a quasi triangular matrix (output of Schur decomposition)
+# Cube root of a quasi upper triangular matrix (output of Schur decomposition)
 # Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
-function _cbrt_quasi_triangular!(A::AbstractMatrix{T}) where {T<:BlasReal}
+function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:BlasReal}
     m, n = size(A)
-    (m == n) || throw(ArgumentError("_cbrt_quasi_triangular!: Matrix A must be square."))
+    (m == n) || throw(ArgumentError("_cbrt_quasi_triu!: Matrix A must be square."))
     A, I2, I1 = _cbrt_blkdiag_1x1_2x2!(A)
     sizes = [if i ∈ I1 1 elseif i ∈ I2 2 else 0 end for i=1:n]
     for k = 1:n-1
