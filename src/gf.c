@@ -1568,8 +1568,8 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "  ** incremental compilation may be fatally broken for this module **\n\n");
+    if (jl_generating_output())
+        jl_error("Method overwriting is not permitted during Module precompile.");
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
@@ -1860,6 +1860,8 @@ static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_RO
 
 static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world)
 {
+    if (jl_options.incremental && jl_generating_output())
+        jl_error("Method deletion is not possible during Module precompile.");
     jl_method_t *method = methodentry->func.method;
     assert(!method->is_for_opaque_closure);
     method->deleted_world = methodentry->max_world = max_world;
@@ -1911,9 +1913,6 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
 
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "WARNING: method deletion during Module precompile may lead to undefined behavior"
-                             "\n  ** incremental compilation may be fatally broken for this module **\n\n");
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable

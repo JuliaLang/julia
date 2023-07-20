@@ -397,7 +397,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     if (jt == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
         Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), maybe_bitcast(ctx, p, getInt8PtrTy(ctx.builder.getContext()))));
-        setName(ctx.emission_context, unbox_load, "unbox");
+        setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
         if (jt == (jl_value_t*)jl_bool_type)
             unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
                 ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
@@ -425,14 +425,14 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                 (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
                 DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
             Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-            setName(ctx.emission_context, load, "unbox");
+            setName(ctx.emission_context, load, p->getName() + ".unbox");
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
             return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
         }
     }
     p = maybe_bitcast(ctx, p, ptype);
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
-    setName(ctx.emission_context, load, "unbox");
+    setName(ctx.emission_context, load, p->getName() + ".unbox");
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     return ai.decorateInst(load);
 }

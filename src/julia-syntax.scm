@@ -296,7 +296,8 @@
                                   (if (eq? n '|#self#|) (gensy) n))
                                 arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
-                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 1))) (iota (length arg-names))))))))
+                                   ;; arg-names slots start at 2 (after name)
+                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
         (function (call ,name ,@arg-names) ,body)))))
@@ -662,7 +663,10 @@
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
-                       (if (any (lambda (defaultv)
+                       (if (any vararg? (butlast vals))
+                         ;; Forbid splat in all but the final default value
+                         (error "invalid \"...\" in non-final positional argument default value")
+                         (if (any (lambda (defaultv)
                                   ;; does any default val expression...
                                   (contains (lambda (e)
                                               ;; contain "e" such that...
@@ -681,7 +685,7 @@
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))

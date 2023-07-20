@@ -765,7 +765,7 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
         else
             y′ = y
         end
-        if x′.id == y′.id && (xinfo !== nothing || yinfo !== nothing)
+        if x′.id == y′.id
             if xinfo !== nothing && yinfo !== nothing
                 if xinfo.attach_after == yinfo.attach_after
                     return x.id < y.id
@@ -773,8 +773,8 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
                 return yinfo.attach_after
             elseif xinfo !== nothing
                 return !xinfo.attach_after
-            else
-                return (yinfo::NewNodeInfo).attach_after
+            elseif yinfo !== nothing
+                return yinfo.attach_after
             end
         end
         return x′.id < y′.id
