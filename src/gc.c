@@ -4072,8 +4072,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         if (gc_page_data(cell) == gc_page_data(pool->freelist)
             && (char *)cell < (char *)pool->freelist)
             goto valid_object;
-        else
-            return NULL;
+        // already skipped marked or old objects above, so here
+        // the age bits are 0, thus the object is on the freelist
+        return NULL;
         // Not a freelist entry, therefore a valid object.
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
