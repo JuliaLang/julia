@@ -553,6 +553,8 @@ typedef struct {
     // };
 } jl_datatype_layout_t;
 
+typedef void *(*jl_llvm_type_constructor_t)(void *ctx);
+
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
@@ -574,6 +576,7 @@ typedef struct _jl_datatype_t {
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
     uint16_t smalltag:6; // whether this type has a small-tag optimization
+    jl_llvm_type_constructor_t llvm_constructor; // callable function taking a context argument
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {

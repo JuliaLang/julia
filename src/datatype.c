@@ -114,6 +114,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->layout = NULL;
     t->types = NULL;
     t->instance = NULL;
+    t->llvm_constructor = NULL;
     return t;
 }
 

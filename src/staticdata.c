@@ -99,7 +99,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    158
+#define NUM_TAGS    159
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -273,6 +273,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin__expr);
         INSERT_TAG(jl_builtin_ifelse);
         INSERT_TAG(jl_builtin__typebody);
+        INSERT_TAG(jl_builtin__typector);
         INSERT_TAG(jl_builtin_donotdelete);
         INSERT_TAG(jl_builtin_compilerbarrier);
         INSERT_TAG(jl_builtin_getglobal);
@@ -447,7 +448,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
+    &jl_f__typebody, &jl_f__typector, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
     NULL };
