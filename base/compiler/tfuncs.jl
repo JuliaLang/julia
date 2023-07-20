@@ -877,13 +877,10 @@ function fieldcount_noerror(@nospecialize t)
         if t === nothing
             return nothing
         end
-        t = t::DataType
     elseif t === Union{}
         return 0
     end
-    if !(t isa DataType)
-        return nothing
-    end
+    t isa DataType || return nothing
     if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters
         if names isa Tuple
@@ -892,17 +889,16 @@ function fieldcount_noerror(@nospecialize t)
         if types isa DataType && types <: Tuple
             return fieldcount_noerror(types)
         end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
         return nothing
     end
     return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
 
-function try_compute_fieldidx(typ::DataType, @nospecialize(field))
+function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
+    typ = argument_datatype(typ)
+    typ === nothing && return nothing
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing

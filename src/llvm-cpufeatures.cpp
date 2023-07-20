@@ -110,7 +110,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
             I->eraseFromParent();
         }
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyModule(M, &errs()));
+        assert(!verifyLLVMIR(M));
 #endif
         return true;
     } else {

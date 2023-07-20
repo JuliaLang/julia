@@ -358,7 +358,7 @@ struct JuliaLICM : public JuliaPassContext {
             SE->forgetLoopDispositions(L);
         }
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(*L->getHeader()->getParent(), &errs()));
+        assert(!verifyLLVMIR(*L));
 #endif
         return changed;
     }

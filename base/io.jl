@@ -524,6 +524,7 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
 readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
+readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
 """
@@ -883,9 +884,9 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 8(4-leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
@@ -914,6 +915,10 @@ function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false)
 end
 
 # note: optimized methods of copyuntil for IOStreams and delim::UInt8 in iostream.jl
+#       and for IOBuffer with delim::UInt8 in iobuffer.jl
+copyuntil(out::IO, s::IO, delim; keep::Bool=false) = _copyuntil(out, s, delim, keep)
+
+# supports out::Union{IO, AbstractVector} for use with both copyuntil & readuntil
 function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
     output! = isa(out, IO) ? write : push!
     for c in readeach(s, T)
@@ -925,12 +930,6 @@ function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
     end
     return out
 end
-readuntil(s::IO, delim::T; keep::Bool=false) where T =
-    _copyuntil(Vector{T}(), s, delim, keep)
-readuntil(s::IO, delim::UInt8; keep::Bool=false) =
-    _copyuntil(resize!(StringVector(70), 0), s, delim, keep)
-copyuntil(out::IO, s::IO, delim::T; keep::Bool=false) where T =
-    _copyuntil(out, s, delim, keep)
 
 # requires that indices for target are the integer unit range from firstindex to lastindex
 # returns whether the delimiter was matched

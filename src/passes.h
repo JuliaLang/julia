@@ -146,4 +146,8 @@ MODULE_MARKER_PASS(BeforeCleanup)
 MODULE_MARKER_PASS(AfterCleanup)
 MODULE_MARKER_PASS(AfterOptimization)
 
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT;
+
 #endif
