@@ -2560,7 +2560,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     show_method_params(io, tv)
     str = String(take!(unwrapcontext(io)[1]))
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
-    if typelimitflag !== nothing
+    if typelimitflag isa RefValue{Bool}
         sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
