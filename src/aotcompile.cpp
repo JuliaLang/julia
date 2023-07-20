@@ -986,58 +986,61 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
     assert(!verifyLLVMIR(M));
 
-    timers.optimize.startTimer();
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+        timers.optimize.startTimer();
 
 #ifndef JL_USE_NEW_PM
-    legacy::PassManager optimizer;
-    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-    addMachinePasses(&optimizer, jl_options.opt_level);
+        legacy::PassManager optimizer;
+        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addMachinePasses(&optimizer, jl_options.opt_level);
 #else
 
-    auto PMTM = std::unique_ptr<TargetMachine>(
-        SourceTM.getTarget().createTargetMachine(
-            SourceTM.getTargetTriple().str(),
-            SourceTM.getTargetCPU(),
-            SourceTM.getTargetFeatureString(),
-            SourceTM.Options,
-            SourceTM.getRelocationModel(),
-            SourceTM.getCodeModel(),
-            SourceTM.getOptLevel()));
-    NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
+        auto PMTM = std::unique_ptr<TargetMachine>(
+            SourceTM.getTarget().createTargetMachine(
+                SourceTM.getTargetTriple().str(),
+                SourceTM.getTargetCPU(),
+                SourceTM.getTargetFeatureString(),
+                SourceTM.Options,
+                SourceTM.getRelocationModel(),
+                SourceTM.getCodeModel(),
+                SourceTM.getOptLevel()));
+        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
 #endif
-    optimizer.run(M);
-    assert(!verifyLLVMIR(M));
-    bool inject_aliases = false;
-    for (auto &F : M.functions()) {
-        if (!F.isDeclaration() && F.getName() != "_DllMainCRTStartup") {
-            inject_aliases = true;
-            break;
+        optimizer.run(M);
+        assert(!verifyLLVMIR(M));
+        bool inject_aliases = false;
+        for (auto &F : M.functions()) {
+            if (!F.isDeclaration() && F.getName() != "_DllMainCRTStartup") {
+                inject_aliases = true;
+                break;
+            }
         }
-    }
-    // no need to inject aliases if we have no functions
+        // no need to inject aliases if we have no functions
 
-    if (inject_aliases) {
+        if (inject_aliases) {
 #if JULIA_FLOAT16_ABI == 1
-        // We would like to emit an alias or an weakref alias to redirect these symbols
-        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
-        // So for now we inject a definition of these functions that calls our runtime
-        // functions. We do so after optimization to avoid cloning these functions.
-        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
-        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
-        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
-        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
-        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
-                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+            // We would like to emit an alias or an weakref alias to redirect these symbols
+            // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+            // So for now we inject a definition of these functions that calls our runtime
+            // functions. We do so after optimization to avoid cloning these functions.
+            injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
 #else
-        emitFloat16Wrappers(M, false);
+            emitFloat16Wrappers(M, false);
 #endif
+        }
+        timers.optimize.stopTimer();
     }
-    timers.optimize.stopTimer();
 
     if (opt) {
         timers.opt.startTimer();
@@ -1051,6 +1054,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
 
     if (obj) {
+        JL_TIMING(NATIVE_AOT, NATIVE_Compile);
         timers.obj.startTimer();
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
@@ -1062,6 +1066,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
 
     if (asm_) {
+        JL_TIMING(NATIVE_AOT, NATIVE_Compile);
         timers.asm_.startTimer();
         raw_svector_ostream OS(out.asm_);
         legacy::PassManager emitter;
@@ -1488,6 +1493,7 @@ void jl_dump_native_impl(void *native_code,
     SmallVector<AOTOutputs, 16> data_outputs;
     SmallVector<AOTOutputs, 16> metadata_outputs;
     if (z) {
+        JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
         Module sysimgM("sysimg", Context);
         sysimgM.setTargetTriple(TheTriple.str());
@@ -1526,6 +1532,7 @@ void jl_dump_native_impl(void *native_code,
     bool has_veccall = false;
 
     data->M.withModuleDo([&](Module &dataM) {
+        JL_TIMING(NATIVE_AOT, NATIVE_Setup);
         dataM.setTargetTriple(TheTriple.str());
         dataM.setDataLayout(DL);
         auto &Context = dataM.getContext();
@@ -1616,6 +1623,7 @@ void jl_dump_native_impl(void *native_code,
     }
 
     {
+        JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
         Module metadataM("metadata", Context);
         metadataM.setTargetTriple(TheTriple.str());
@@ -1690,32 +1698,37 @@ void jl_dump_native_impl(void *native_code,
         metadata_outputs = compile(metadataM, "data", 1, [](Module &) {});
     }
 
-    object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
-    if (fname) {\
-        std::vector<NewArchiveMember> archive; \
-        SmallVector<std::string, 16> filenames; \
-        SmallVector<StringRef, 16> buffers; \
-        for (size_t i = 0; i < threads; i++) { \
-            filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
-            buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
-        } \
-        filenames.push_back("metadata" prefix suffix); \
-        buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
-        if (z) { \
-            filenames.push_back("sysimg" prefix suffix); \
-            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
-        } \
-        for (size_t i = 0; i < filenames.size(); i++) { \
-            archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
-        } \
-        handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
-    }
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Write);
 
-    WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
-    WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
-    WRITE_ARCHIVE(obj_fname, obj, "", ".o");
-    WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
+        object::Archive::Kind Kind = getDefaultForHost(TheTriple);
+#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
+        if (fname) {\
+            std::vector<NewArchiveMember> archive; \
+            SmallVector<std::string, 16> filenames; \
+            SmallVector<StringRef, 16> buffers; \
+            for (size_t i = 0; i < threads; i++) { \
+                filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
+                buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
+            } \
+            filenames.push_back("metadata" prefix suffix); \
+            buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+            if (z) { \
+                filenames.push_back("sysimg" prefix suffix); \
+                buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
+            } \
+            for (size_t i = 0; i < filenames.size(); i++) { \
+                archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
+            } \
+            handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
+        }
+
+        WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
+        WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
+        WRITE_ARCHIVE(obj_fname, obj, "", ".o");
+        WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
+#undef WRITE_ARCHIVE
+    }
 }
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
