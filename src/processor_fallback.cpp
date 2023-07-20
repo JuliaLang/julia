@@ -2,8 +2,8 @@
 
 // Fallback processor detection and dispatch
 
-static constexpr FeatureName feature_names[] = {};
-static constexpr uint32_t nfeature_names = sizeof(feature_names) / sizeof(FeatureName);
+static constexpr FeatureName feature_names[0];
+static constexpr uint32_t nfeature_names = 0;
 
 namespace Fallback {
 
