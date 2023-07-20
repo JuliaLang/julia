@@ -1574,7 +1574,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
         }
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
-    if match.best_idx == -1
+    if (match.best_idx == -1)
         return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
