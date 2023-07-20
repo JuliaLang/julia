@@ -1380,6 +1380,11 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
 function Array{T,1}(r::AbstractRange{T}) where {T}
     a = Vector{T}(undef, length(r))
     i = 1
