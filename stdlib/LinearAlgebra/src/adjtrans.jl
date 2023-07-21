@@ -404,18 +404,47 @@ hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-map/broadcast
 #
-# note that the caller's operation f operates in the domain of the wrapped vectors' entries.
-# hence the adjoint->f->adjoint shenanigans applied to the parent vectors' entries.
-map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(avs)...))
-map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
-quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
-quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
-broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
-broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
-# Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
-Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
-Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
-# TODO unify and allow mixed combinations with a broadcast style
+struct AdjTransVecStyle{T} <: Broadcast.AbstractArrayStyle{2} end
+AdjTransVecStyle{T}(::Val{2}) where {T} = AdjTransVecStyle{T}()
+AdjTransVecStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
+
+Broadcast.BroadcastStyle(::Type{<:AdjointAbsVec}) = AdjTransVecStyle{Adjoint}()
+Broadcast.BroadcastStyle(::Type{<:TransposeAbsVec}) = AdjTransVecStyle{Transpose}()
+Broadcast.BroadcastStyle(::AdjTransVecStyle{Adjoint}, ::AdjTransVecStyle{Adjoint}) =
+    AdjTransVecStyle{Adjoint}()
+Broadcast.BroadcastStyle(::AdjTransVecStyle{Transpose}, ::AdjTransVecStyle{Transpose}) =
+    AdjTransVecStyle{Transpose}()
+Broadcast.BroadcastStyle(::AdjTransVecStyle, ::AdjTransVecStyle) =
+    AdjTransVecStyle{Adjoint}()
+Broadcast.BroadcastStyle(a::AdjTransVecStyle, ::Broadcast.DefaultArrayStyle{0}) = a
+Broadcast.BroadcastStyle(::AdjTransVecStyle, ::D) where D<:Broadcast.AbstractArrayStyle{1} =
+    D(Val(2))
+Broadcast.BroadcastStyle(::AdjTransVecStyle, d::Broadcast.DefaultArrayStyle) = d
+Broadcast.BroadcastStyle(::AdjTransVecStyle, a::Broadcast.AbstractArrayStyle) = a
+
+isadjtransdefined(::Type) = false
+isadjtransdefined(::Type{<:Number}) = true
+isadjtransdefined(::Type{<:AbstractArray{T}}) where T = isadjtransdefined(T)
+
+_adjtransbceltype(::Type{Adjoint}, ::Type{Adjoint{T,P}}) where {T,P} = P
+_adjtransbceltype(::Type{Transpose}, ::Type{Transpose{T,P}}) where {T,P} = P
+_adjtransbceltype(::Type{A}, ::Type{T}) where {A,T<:AbstractArray{1}} = A{T}
+_adjtransbceltype(::Type{A}, ::Type{T}) where {A,T} = T
+
+function Base.similar(bc::Broadcasted{AdjTransVecStyle{T}}, ::Type{ElType}) where {T,ElType}
+    if isadjtransdefined(ElType)
+        n = length(axes(bc)[2])
+        elt = _adjtransbceltype(T, ElType)
+        return T(Vector{elt}(undef, n))
+    end
+    return similar(convert(Broadcasted{DefaultArrayStyle{ndims(bc)}}, bc), ElType)
+end
+
+function map(f, A::AdjOrTransAbsVec, Bs::AdjOrTransAbsVec...)
+    sz = size(A)
+    all(map(B->size(B)==sz, Bs)) || throw(DimensionMismatch("dimensions must match"))
+    return f.(A, Bs...)
+end
 
 
 ### reductions
