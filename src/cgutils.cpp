@@ -3317,6 +3317,9 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         assert(jb->instance != NULL);
         return track_pjlvalue(ctx, literal_pointer_val(ctx, jb->instance));
     }
+    if (box) {
+        setName(ctx.emission_context, box, [&]() {return "box_" + std::string(jl_symbol_name(jb->name->name));});
+    }
     return box;
 }
 
