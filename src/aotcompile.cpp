@@ -309,6 +309,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
+        JL_TIMING(NATIVE_AOT, NATIVE_Codegen);
         params.world = compile_for[worlds];
         if (!params.world)
             continue;
@@ -390,37 +391,40 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
-    Linker L(*clone.getModuleUnlocked());
-    for (auto &def : emitted) {
-        jl_merge_module(clone, std::move(std::get<0>(def.second)));
-        jl_code_instance_t *this_code = def.first;
-        jl_llvm_functions_t decls = std::get<1>(def.second);
-        StringRef func = decls.functionObject;
-        StringRef cfunc = decls.specFunctionObject;
-        uint32_t func_id = 0;
-        uint32_t cfunc_id = 0;
-        if (func == "jl_fptr_args") {
-            func_id = -1;
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Merge);
+        Linker L(*clone.getModuleUnlocked());
+        for (auto &def : emitted) {
+            jl_merge_module(clone, std::move(std::get<0>(def.second)));
+            jl_code_instance_t *this_code = def.first;
+            jl_llvm_functions_t decls = std::get<1>(def.second);
+            StringRef func = decls.functionObject;
+            StringRef cfunc = decls.specFunctionObject;
+            uint32_t func_id = 0;
+            uint32_t cfunc_id = 0;
+            if (func == "jl_fptr_args") {
+                func_id = -1;
+            }
+            else if (func == "jl_fptr_sparam") {
+                func_id = -2;
+            }
+            else {
+                //Safe b/c context is locked by params
+                data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(func)));
+                func_id = data->jl_sysimg_fvars.size();
+            }
+            if (!cfunc.empty()) {
+                //Safe b/c context is locked by params
+                data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(cfunc)));
+                cfunc_id = data->jl_sysimg_fvars.size();
+            }
+            data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
         }
-        else if (func == "jl_fptr_sparam") {
-            func_id = -2;
+        if (params._shared_module) {
+            bool error = L.linkInModule(std::move(params._shared_module));
+            assert(!error && "Error linking in shared module");
+            (void)error;
         }
-        else {
-            //Safe b/c context is locked by params
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(func)));
-            func_id = data->jl_sysimg_fvars.size();
-        }
-        if (!cfunc.empty()) {
-            //Safe b/c context is locked by params
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(cfunc)));
-            cfunc_id = data->jl_sysimg_fvars.size();
-        }
-        data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
-    }
-    if (params._shared_module) {
-        bool error = L.linkInModule(std::move(params._shared_module));
-        assert(!error && "Error linking in shared module");
-        (void)error;
     }
 
     // now get references to the globals in the merged module
@@ -987,7 +991,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     assert(!verifyLLVMIR(M));
 
     {
-        JL_TIMING(NATIVE_AOT, NATIVE_Opt);
         timers.optimize.startTimer();
 
 #ifndef JL_USE_NEW_PM
@@ -1054,7 +1057,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
 
     if (obj) {
-        JL_TIMING(NATIVE_AOT, NATIVE_Compile);
         timers.obj.startTimer();
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
@@ -1066,7 +1068,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
 
     if (asm_) {
-        JL_TIMING(NATIVE_AOT, NATIVE_Compile);
         timers.asm_.startTimer();
         raw_svector_ostream OS(out.asm_);
         legacy::PassManager emitter;
@@ -1281,7 +1282,10 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        outputs[0] = add_output_impl(M, TM, timers[0], unopt_out, opt_out, obj_out, asm_out);
+        {
+            JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+            outputs[0] = add_output_impl(M, TM, timers[0], unopt_out, opt_out, obj_out, asm_out);
+        }
         output_timer.stopTimer();
         // Don't need M anymore
         module_released(M);
@@ -1319,40 +1323,43 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     output_timer.startTimer();
 
     // Start all of the worker threads
-    std::vector<std::thread> workers(threads);
-    for (unsigned i = 0; i < threads; i++) {
-        workers[i] = std::thread([&, i]() {
-            LLVMContext ctx;
-            // Lazily deserialize the entire module
-            timers[i].deserialize.startTimer();
-            auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
-            timers[i].deserialize.stopTimer();
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+        std::vector<std::thread> workers(threads);
+        for (unsigned i = 0; i < threads; i++) {
+            workers[i] = std::thread([&, i]() {
+                LLVMContext ctx;
+                // Lazily deserialize the entire module
+                timers[i].deserialize.startTimer();
+                auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
+                timers[i].deserialize.stopTimer();
 
-            timers[i].materialize.startTimer();
-            materializePreserved(*M, partitions[i]);
-            timers[i].materialize.stopTimer();
+                timers[i].materialize.startTimer();
+                materializePreserved(*M, partitions[i]);
+                timers[i].materialize.stopTimer();
 
-            timers[i].construct.startTimer();
-            construct_vars(*M, partitions[i]);
-            M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
-            // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
-            // or it may skip emitting debug info for that file. Here set it to ./julia#N
-            DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-            for (DICompileUnit *CU : M->debug_compile_units())
-                CU->replaceOperandWith(0, topfile);
-            timers[i].construct.stopTimer();
+                timers[i].construct.startTimer();
+                construct_vars(*M, partitions[i]);
+                M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
+                // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+                // or it may skip emitting debug info for that file. Here set it to ./julia#N
+                DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+                for (DICompileUnit *CU : M->debug_compile_units())
+                    CU->replaceOperandWith(0, topfile);
+                timers[i].construct.stopTimer();
 
-            timers[i].deletion.startTimer();
-            dropUnusedGlobals(*M);
-            timers[i].deletion.stopTimer();
+                timers[i].deletion.startTimer();
+                dropUnusedGlobals(*M);
+                timers[i].deletion.stopTimer();
 
-            outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
-        });
+                outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+            });
+        }
+
+        // Wait for all of the worker threads to finish
+        for (auto &w : workers)
+            w.join();
     }
-
-    // Wait for all of the worker threads to finish
-    for (auto &w : workers)
-        w.join();
 
     output_timer.stopTimer();
 
