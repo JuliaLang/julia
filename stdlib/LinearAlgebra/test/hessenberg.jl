@@ -178,7 +178,13 @@ let n = 10
         @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
         @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
-        @test b' / H ≈ b' / A ≈ complex.(b') / H
+        # see #50617
+        if eltya <: Complex
+            @test b' / H ≈ b' / A ≈ complex.(b') / H
+        else
+            @test b' / H ≈ b' / A #≈ complex.(b') / H
+            @test_broken b' / H ≈ b' / A ≈ complex.(b') / H
+        end
         @test B' / H ≈ B' / A ≈ complex(B') / H
         @test B' / (H - I) ≈ B' / (A - I)
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
