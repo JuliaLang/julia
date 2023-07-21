@@ -1071,5 +1071,3 @@ end
 
 @test names(TestNames) == [:TestNames, :exported, :publicized]
 @test names(TestNames, qualified=false) == [:TestNames, :exported]
-
-end
