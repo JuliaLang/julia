@@ -5099,3 +5099,16 @@ end
     refine_partial_struct2(42, s)
 end |> only === String
 # JET.test_call(s::AbstractString->Base._string(s, 'c'))
+
+# override const-prop' return type with the concrete-eval result
+# if concrete-eval returns non-inlineable constant
+Base.@assume_effects :foldable function continue_const_prop(i, j)
+    chars = map(Char, i:j)
+    String(chars)
+end
+@test Base.return_types() do
+    Val(length(continue_const_prop(1, 5)))
+end |> only === Val{5}
+@test fully_eliminated() do
+    length(continue_const_prop(1, 5))
+end
