@@ -732,26 +732,24 @@ Return an `Array` of all items in a collection or iterator. For dictionaries, re
 [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
-Used by comprehensions to turn a generator into an `Array`.
+Used by comprehensions to turn a generator into an `Array`. Thus the bracket notation
+of comprehensions can be used instead calling `collect` *on a generator* (see 2nd example).
+However in the general case of collections, `collect` is not interchangeable
+with the bracket notation (see 1st example).
 
 # Examples
 ```jldoctest
-julia> collect(1:2:13)
-7-element Vector{Int64}:
-  1
-  3
-  5
-  7
-  9
- 11
- 13
+julia> collect(1:3) # completely different from [1:3]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
 
-julia> [x^2 for x in 1:8 if isodd(x)]
-4-element Vector{Int64}:
-  1
-  9
- 25
- 49
+julia> collect(x^2 for x in 1:3) # same output as [x^2 for x in 1:3]
+3-element Vector{Int64}:
+ 1
+ 4
+ 9
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
