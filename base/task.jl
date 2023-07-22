@@ -755,6 +755,7 @@ function workqueue_for(tid::Int)
         return @inbounds qs[tid]
     end
     # slow path to allocate it
+    @assert tid > 0
     l = Workqueues_lock
     @lock l begin
         qs = Workqueues
