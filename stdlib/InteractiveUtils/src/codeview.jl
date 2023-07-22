@@ -170,15 +170,17 @@ const OC_MISMATCH_WARNING =
 
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool)
+                        optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        purity_assumptions::UInt32 = UInt32(0))
         params = CodegenParams(debug_info_kind=Cint(0),
                                safepoint_on_entry=raw, gcstack_arg=raw)
         _dump_function(f, t, native, wrapper, raw, dump_module, syntax,
-                       optimize, debuginfo, binary, params)
+                       optimize, debuginfo, binary, params, purity_assumptions)
 end
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool, params::CodegenParams)
+                        optimize::Bool, debuginfo::Symbol, binary::Bool, params::CodegenParams,
+                        purity_assumptions::UInt32 = UInt32(0))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -223,7 +225,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             str = _dump_function_native_disassembly(mi, world, wrapper, syntax, debuginfo, binary)
         end
     else
-        str = _dump_function_llvm(mi, world, wrapper, !raw, dump_module, optimize, debuginfo, params)
+        str = _dump_function_llvm(mi, world, purity_assumptions, wrapper, !raw, dump_module, optimize, debuginfo, params)
     end
     str = warning * str
     return str
@@ -247,7 +249,7 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, world::UInt,
                                         wrapper::Bool, syntax::Symbol, debuginfo::Symbol,
                                         binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump},mi::Any, world::UInt, wrapper::Bool,
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump},mi::Any, world::UInt, 0::UInt32, wrapper::Bool,
                              true::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
@@ -257,12 +259,12 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, world::UInt,
 end
 
 function _dump_function_llvm(
-        mi::Core.MethodInstance, world::UInt, wrapper::Bool,
+        mi::Core.MethodInstance, world::UInt, purity_assumptions::UInt32, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, world::UInt,
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, world::UInt, purity_assumptions::UInt32,
                              wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
@@ -282,18 +284,19 @@ To dump the entire module that encapsulates the function (with declarations), se
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
-                   dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false)
+                   dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
+                   purity_assumptions::UInt32 = UInt32(0))
+    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, purity_assumptions)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
     end
 end
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
-    code_llvm(io, f, types, raw, dump_module, optimize, debuginfo)
-code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
-    code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default, purity_assumptions=UInt32(0)) =
+    code_llvm(io, f, types, raw, dump_module, optimize, debuginfo, purity_assumptions)
+code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default, purity_assumptions=UInt32(0)) =
+    code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo, purity_assumptions)
 
 """
     code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)

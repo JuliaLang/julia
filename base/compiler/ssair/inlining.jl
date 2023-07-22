@@ -21,11 +21,13 @@ end
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
     return InliningTodo(mi, ir, linear_inline_eligible(ir), effects)
 end
+copy(todo::InliningTodo) = InliningTodo(todo.mi, copy(todo.ir), todo.linear_inline_eligible, todo.effects)
 
 struct ConstantCase
     val::Any
     ConstantCase(@nospecialize val) = new(val)
 end
+copy(cc::ConstantCase) = cc
 
 struct SomeCase
     val::Any
@@ -37,6 +39,7 @@ struct InvokeCase
     effects::Effects
     info::CallInfo
 end
+copy(ic::InvokeCase) = ic
 
 struct InliningCase
     sig  # Type
@@ -54,6 +57,14 @@ struct UnionSplit
     bbs::Vector{Int}
     UnionSplit(fully_covered::Bool, atype::DataType, cases::Vector{InliningCase}) =
         new(fully_covered, atype, cases, Int[])
+end
+
+struct EffectSplit
+    assume_case # Union{InliningTodo, InvokeCase, ConstantCase}
+    else_case # Union{InliningTodo, InvokeCase, ConstantCase}
+    check_case # Union{InliningTodo, InvokeCase, ConstantCase}
+    bbs::Vector{Int}
+    EffectSplit(@nospecialize(assume_case), @nospecialize(else_case), @nospecialize(check_case)) = new(assume_case, else_case, check_case, Int[])
 end
 
 struct InliningEdgeTracker
@@ -211,41 +222,16 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     return nothing
 end
 
-function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
-                                (; fully_covered, #=atype,=# cases, bbs)::UnionSplit,
-                                state::CFGInliningState,
-                                params::OptimizationParams)
+function ifelsesplit!(make_cases!, ir::IRCode, idx::Int, state::CFGInliningState, bbs::Vector{Int})
     inline_into_block!(state, block_for_inst(ir, idx))
-    from_bbs = Int[]
+
+    # Split the current block - we're adding an if/else nest
     delete!(state.split_targets, length(state.new_cfg_blocks))
     orig_succs = copy(state.new_cfg_blocks[end].succs)
     empty!(state.new_cfg_blocks[end].succs)
-    for i in 1:length(cases)
-        # The condition gets sunk into the previous block
-        # Add a block for the union-split body
-        push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
-        cond_bb = length(state.new_cfg_blocks)-1
-        push!(state.new_cfg_blocks[end].preds, cond_bb)
-        push!(state.new_cfg_blocks[cond_bb].succs, cond_bb+1)
-        case = cases[i].item
-        if isa(case, InliningTodo)
-            if !case.linear_inline_eligible
-                cfg_inline_item!(ir, idx, case, state, true)
-            end
-        end
-        push!(from_bbs, length(state.new_cfg_blocks))
-        # TODO: Right now we unconditionally generate a fallback block
-        # in case of subtyping errors - This is probably unnecessary.
-        if i != length(cases) || (!fully_covered)
-            # This block will have the next condition or the final else case
-            push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
-            push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
-            push!(state.new_cfg_blocks[end].preds, cond_bb)
-            push!(bbs, length(state.new_cfg_blocks))
-        end
-    end
-    # The edge from the fallback block.
-    fully_covered || push!(from_bbs, length(state.new_cfg_blocks))
+
+    from_bbs = make_cases!()
+
     # This block will be the block everyone returns to
     push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx), from_bbs, orig_succs))
     join_bb = length(state.new_cfg_blocks)
@@ -253,6 +239,69 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
     push!(bbs, join_bb)
     for bb in from_bbs
         push!(state.new_cfg_blocks[bb].succs, join_bb)
+    end
+end
+
+function make_split_case!(ir::IRCode, idx::Int, state::CFGInliningState, @nospecialize(case), cond_bb)
+    # The condition gets sunk into the previous block
+    # Add a block for the union-split body
+    push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
+    push!(state.new_cfg_blocks[end].preds, cond_bb)
+    push!(state.new_cfg_blocks[cond_bb].succs, cond_bb+1)
+    if isa(case, InliningTodo)
+        if !case.linear_inline_eligible
+            cfg_inline_item!(ir, idx, case, state, true)
+        end
+    end
+    return length(state.new_cfg_blocks)
+end
+
+
+function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
+                                (; fully_covered, #=atype,=# cases, bbs)::UnionSplit,
+                                state::CFGInliningState,
+                                params::OptimizationParams)
+    ifelsesplit!(ir, idx, state, bbs) do
+        from_bbs = Int[]
+        for i in 1:length(cases)
+            case = cases[i].item
+            next_bb = make_split_case!(ir, idx, state, case, length(state.new_cfg_blocks))
+            cond_bb = next_bb - 1
+            push!(from_bbs, next_bb)
+
+            # TODO: Right now we unconditionally generate a fallback block
+            # in case of subtyping errors - This is probably unnecessary.
+            if i != length(cases) || (!fully_covered)
+                # This block will have the next condition or the final else case
+                push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
+                push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
+                push!(state.new_cfg_blocks[end].preds, cond_bb)
+                push!(bbs, length(state.new_cfg_blocks))
+            end
+        end
+        # The edge from the fallback block.
+        fully_covered || push!(from_bbs, length(state.new_cfg_blocks))
+        return from_bbs
+    end
+end
+
+function cfg_inline_effectsplit!(ir::IRCode, idx::Int, (; check_case, assume_case, else_case, bbs)::EffectSplit, state::CFGInliningState, params::OptimizationParams)
+    inline_into_block!(state, block_for_inst(ir, idx))
+
+    # Handle check
+    if isa(check_case, InliningTodo) && !check_case.linear_inline_eligible
+        cfg_inline_item!(ir, idx, check_case, state, false)
+    end
+
+    # Split into true and fale calses
+    ifelsesplit!(ir, idx, state, bbs) do
+        from_bbs = Int[]
+        cond_bb = length(state.new_cfg_blocks)
+        from_bb = make_split_case!(ir, idx, state, assume_case, cond_bb)
+        push!(from_bbs, from_bb)
+        push!(bbs, from_bb+1)
+        push!(from_bbs, make_split_case!(ir, idx, state, else_case, cond_bb)-1)
+        return from_bbs
     end
 end
 
@@ -492,6 +541,21 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
     return newargexprs
 end
 
+function ir_inline_case_here!(@nospecialize(case), compact::IncrementalCompact, idx::Int,
+        argexprs::Vector{Any}, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+    typ, line = compact.result[idx][:type], compact.result[idx][:line]
+    if isa(case, InliningTodo)
+        return ir_inline_item!(compact, idx, argexprs, case, boundscheck, todo_bbs)
+    elseif isa(case, InvokeCase)
+        inst = Expr(:invoke, case.invoke, argexprs...)
+        flag = flags_for_effects(case.effects)
+        return insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
+    else
+        case = case::ConstantCase
+        return case.val
+    end
+end
+
 """
     ir_inline_unionsplit!
 
@@ -602,16 +666,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 end
             end
         end
-        if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs′, case, boundscheck, todo_bbs)
-        elseif isa(case, InvokeCase)
-            inst = Expr(:invoke, case.invoke, argexprs′...)
-            flag = flags_for_effects(case.effects)
-            val = insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
-        else
-            case = case::ConstantCase
-            val = case.val
-        end
+        val = ir_inline_case_here!(case, compact, idx, argexprs, boundscheck, todo_bbs)
         if !isempty(compact.cfg_transform.result_bbs[bb].preds)
             push!(pn.edges, bb)
             push!(pn.values, val)
@@ -637,12 +692,47 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
+function ir_inline_effectsplit!(compact::IncrementalCompact, idx::Int,
+        argexprs::Vector{Any},
+        (; check_case, assume_case, else_case, bbs)::EffectSplit,
+        boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}},
+        params::OptimizationParams)
+    stmt, typ, line = compact.result[idx][:inst], compact.result[idx][:type], compact.result[idx][:line]
+    next_cond_bb, join_bb = bbs
+
+    # Inline the check
+    check_argexprs = [nothing, argexprs[3:end]...]
+    val = ir_inline_case_here!(check_case, compact, idx, check_argexprs, boundscheck, todo_bbs)
+    insert_node_here!(compact, NewInstruction(GotoIfNot(val, next_cond_bb), Union{}, line))
+    finish_current_bb!(compact, 0)
+
+    # Allocate Phi node for join block
+    pn = PhiNode()
+
+    case_argexprs = argexprs[3:end]
+    val = ir_inline_case_here!(assume_case, compact, idx, case_argexprs, boundscheck, todo_bbs)
+    insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Union{}, line))
+    push!(pn.edges, next_cond_bb - 1)
+    push!(pn.values, val)
+    finish_current_bb!(compact, 0)
+
+    val = ir_inline_case_here!(else_case, compact, idx, case_argexprs, boundscheck, todo_bbs)
+    push!(pn.edges, join_bb - 1)
+    push!(pn.values, val)
+    finish_current_bb!(compact, 0)
+
+    # We're now in the join block.
+    return insert_node_here!(compact, NewInstruction(pn, typ, line))
+end
+
 function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, params::OptimizationParams)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for (idx, item) in todo
         if isa(item, UnionSplit)
             cfg_inline_unionsplit!(ir, idx, item, state, params)
+        elseif isa(item, EffectSplit)
+            cfg_inline_effectsplit!(ir, idx, item, state, params)
         else
             item = item::InliningTodo
             # A linear inline does not modify the CFG
@@ -698,6 +788,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
                     compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, params)
+                elseif isa(item, EffectSplit)
+                    compact.ssa_rename[old_idx] = ir_inline_effectsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, params)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -1084,70 +1176,67 @@ end
 
 function inline_apply!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, sig::Signature, state::InliningState)
-    while sig.f === Core._apply_iterate
-        info = ir.stmts[idx][:info]
-        if isa(info, UnionSplitApplyCallInfo)
-            if length(info.infos) != 1
-                # TODO: Handle union split applies?
-                new_info = info = NoCallInfo()
-            else
-                info = info.infos[1]
-                new_info = info.call
-            end
-        else
-            @assert info === NoCallInfo()
+    info = ir.stmts[idx][:info]
+    if isa(info, UnionSplitApplyCallInfo)
+        if length(info.infos) != 1
+            # TODO: Handle union split applies?
             new_info = info = NoCallInfo()
+        else
+            info = info.infos[1]
+            new_info = info.call
         end
-        arg_start = 3
-        argtypes = sig.argtypes
-        if arg_start > length(argtypes)
+    else
+        @assert info === NoCallInfo()
+        new_info = info = NoCallInfo()
+    end
+    arg_start = 3
+    argtypes = sig.argtypes
+    if arg_start > length(argtypes)
+        return nothing
+    end
+    ft = argtypes[arg_start]
+    if ft isa Const && ft.val === Core.tuple
+        # if one argument is a tuple already, and the rest are empty, we can just return it
+        # e.g. rewrite `((t::Tuple)...,)` to `t`
+        nonempty_idx = 0
+        𝕃ₒ = optimizer_lattice(state.interp)
+        for i = (arg_start + 1):length(argtypes)
+            ti = argtypes[i]
+            ⊑(𝕃ₒ, ti, Tuple{}) && continue
+            if ⊑(𝕃ₒ, ti, Tuple) && nonempty_idx == 0
+                nonempty_idx = i
+                continue
+            end
+            nonempty_idx = 0
+            break
+        end
+        if nonempty_idx != 0
+            ir.stmts[idx][:inst] = stmt.args[nonempty_idx]
             return nothing
         end
-        ft = argtypes[arg_start]
-        if ft isa Const && ft.val === Core.tuple
-            # if one argument is a tuple already, and the rest are empty, we can just return it
-            # e.g. rewrite `((t::Tuple)...,)` to `t`
-            nonempty_idx = 0
-            𝕃ₒ = optimizer_lattice(state.interp)
-            for i = (arg_start + 1):length(argtypes)
-                ti = argtypes[i]
-                ⊑(𝕃ₒ, ti, Tuple{}) && continue
-                if ⊑(𝕃ₒ, ti, Tuple) && nonempty_idx == 0
-                    nonempty_idx = i
-                    continue
-                end
-                nonempty_idx = 0
-                break
-            end
-            if nonempty_idx != 0
-                ir.stmts[idx][:inst] = stmt.args[nonempty_idx]
+    end
+    # Try to figure out the signature of the function being called
+    # and if rewrite_apply_exprargs can deal with this form
+    arginfos = MaybeAbstractIterationInfo[]
+    for i = (arg_start + 1):length(argtypes)
+        thisarginfo = nothing
+        if !is_valid_type_for_apply_rewrite(argtypes[i], OptimizationParams(state.interp))
+            isa(info, ApplyCallInfo) || return nothing
+            thisarginfo = info.arginfo[i-arg_start]
+            if thisarginfo === nothing || !thisarginfo.complete
                 return nothing
             end
         end
-        # Try to figure out the signature of the function being called
-        # and if rewrite_apply_exprargs can deal with this form
-        arginfos = MaybeAbstractIterationInfo[]
-        for i = (arg_start + 1):length(argtypes)
-            thisarginfo = nothing
-            if !is_valid_type_for_apply_rewrite(argtypes[i], OptimizationParams(state.interp))
-                isa(info, ApplyCallInfo) || return nothing
-                thisarginfo = info.arginfo[i-arg_start]
-                if thisarginfo === nothing || !thisarginfo.complete
-                    return nothing
-                end
-            end
-            push!(arginfos, thisarginfo)
-        end
-        # Independent of whether we can inline, the above analysis allows us to rewrite
-        # this apply call to a regular call
-        argtypes = rewrite_apply_exprargs!(todo,
-            ir, idx, stmt, argtypes, arginfos, arg_start, state)
-        ir.stmts[idx][:info] = new_info
-        has_free_typevars(ft) && return nothing
-        f = singleton_type(ft)
-        sig = Signature(f, ft, argtypes)
+        push!(arginfos, thisarginfo)
     end
-    sig
+    # Independent of whether we can inline, the above analysis allows us to rewrite
+    # this apply call to a regular call
+    argtypes = rewrite_apply_exprargs!(todo,
+        ir, idx, stmt, argtypes, arginfos, arg_start, state)
+    ir.stmts[idx][:info] = new_info
+    has_free_typevars(ft) && return nothing
+    f = singleton_type(ft)
+    sig = Signature(f, ft, argtypes)
 end
 
 # TODO: this test is wrong if we start to handle Unions of function types later
@@ -1260,9 +1349,15 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     sig = call_sig(ir, stmt)
     sig === nothing && return nothing
 
-    # Handle _apply_iterate
-    sig = inline_apply!(todo, ir, idx, stmt, sig, state)
-    sig === nothing && return nothing
+    while true
+        # Handle _apply_iterate
+        if sig.f === _apply_iterate
+            sig = inline_apply!(todo, ir, idx, stmt, sig, state)
+            sig === nothing && return nothing
+            continue
+        end
+        break
+    end
 
     # Check if we match any of the early inliners
     earlyres = early_inline_special_case(ir, stmt, rt, sig, state)
@@ -1279,7 +1374,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         end
     end
 
-    if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield!) &&
+    if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield! && sig.f !== Core.invoke_split_effects) &&
         is_builtin(optimizer_lattice(state.interp), sig)
         # No inlining for builtins (other invoke/apply/typeassert/finalizer)
         return nothing
@@ -1439,6 +1534,38 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     cases, all_covered, joint_effects = cases
     handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
         all_covered, joint_effects)
+end
+
+function handle_invoke_split_effects!(todo::Vector{Pair{Int,Any}},
+        ir::IRCode, idx::Int, stmt::Expr, info::InvokeSplitEffectsInfo, flag::UInt8, sig::Signature,
+        state::InliningState)
+
+    base_sig = Signature(singleton_type(sig.argtypes[3]), sig.argtypes[3], sig.argtypes[3:end])
+    base_cases = compute_inlining_cases(info.info, flag, base_sig, state)
+    base_cases === nothing && return false
+
+    check_sig = Signature(info.precond, Const(info.precond), Any[Const(info.precond), sig.argtypes[3:end]...])
+    check_cases = compute_inlining_cases(info.check_info, flag, check_sig, state)
+    if check_cases === nothing
+        error("TODO: Fall back to regular inlining")
+    end
+
+    base_cases, base_fully_covered, base_joint_effects = base_cases
+    check_cases, check_fully_covered, check_joint_effects = check_cases
+
+    if !(base_fully_covered && check_fully_covered && length(base_cases) == 1 && length(check_cases) == 1)
+        error("TODO: Fall back to regular inlining")
+    end
+
+    else_case = base_cases[1].item
+    if isa(else_case, InvokeCase)
+        assume_case = InvokeCase(else_case.invoke, apply_effects_overrides(else_case.effects, info.cond_effects), else_case.info)
+    else
+        assume_case = copy(else_case)
+    end
+
+    push!(todo, idx=>EffectSplit(assume_case, else_case, check_cases[1].item))
+    return true
 end
 
 function handle_match!(cases::Vector{InliningCase},
@@ -1672,7 +1799,9 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # handle special cased builtins
-        if isa(info, OpaqueClosureCallInfo)
+        if isa(info, InvokeSplitEffectsInfo)
+            handle_invoke_split_effects!(todo, ir, idx, stmt, info, flag, sig, state)
+        elseif isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, ModifyFieldInfo)
             handle_modifyfield!_call!(ir, idx, stmt, info, state)

@@ -1408,6 +1408,12 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
+JL_CALLABLE(jl_f_invoke_split_effects)
+{
+    JL_NARGSV(invoke_split_effecst, 2);
+    return jl_apply_generic(args[1], &args[2], nargs - 2);
+}
+
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
@@ -2021,6 +2027,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
     jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
+
+    // effect splitting
+    jl_builtin_invoke_split_effects = add_builtin_func("invoke_split_effects", jl_f_invoke_split_effects);
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);

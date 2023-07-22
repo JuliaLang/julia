@@ -455,7 +455,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     jl_code_instance_t *codeinst = NULL;
     JL_GC_PUSH2(&src, &codeinst);
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
+    jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world, 0);
     if (ci != jl_nothing)
         codeinst = (jl_code_instance_t*)ci;
     if (codeinst) {
@@ -638,7 +638,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
 
     // whatever, that didn't work - use the assembler output instead
     jl_llvmf_dump_t llvmf_dump;
-    jl_get_llvmf_defn(&llvmf_dump, mi, world, getwrapper, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, getwrapper, true, jl_default_cgparams);
     if (!llvmf_dump.F)
         return jl_an_empty_string;
     return jl_dump_function_asm(&llvmf_dump, emit_mc, asm_variant, debuginfo, binary, false);

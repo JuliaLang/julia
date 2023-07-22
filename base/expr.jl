@@ -711,7 +711,23 @@ macro assume_effects(args...)
     end
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
         (false, false, false, false, false, false, false, false)
+    preconditions = nothing
+    any_regular = false
     for org_setting in args[1:idx]
+        # Conditional effect assumptions
+        if isa(org_setting, Expr) && org_setting.head == :(&&)
+            any_conditional = true
+            setting = org_setting.args[2]
+            if setting !== QuoteNode(:nothrow)
+                error("Currently only :nothrow is supported in conditional effects")
+            end
+            preconditions === nothing && (preconditions = Expr(:call, Core.svec))
+            push!(preconditions.args, Core.Compiler.EffectsOverride(false, false, true, false, false, false, false))
+            push!(preconditions.args, org_setting.args[1])
+            continue
+        end
+        # Regular effect assumptions
+        any_regular = true
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -738,15 +754,37 @@ macro assume_effects(args...)
         end
     end
     if is_function_def(inner)
-        return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+        if any_regular
+            ex = pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly)
+        end
+        ex = esc(ex)
+        if preconditions !== nothing
+            argnames = collect_argnames(inner)
+            for i = 3:2:length(preconditions.args)
+                preconditions.args[i] = :(($(argnames...),)->$(preconditions.args[i]))
+            end
+            ex = quote
+                f = $(ex)
+                # HACK, there needs to be some builtin way to do this, this is just for demonstration
+                m = first(methods(f))
+                m.preconditions = $preconditions
+                f
+            end
+        end
+        return ex
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
+        if preconditions !== nothing
+            throw(ArgumentError("preconditions current unsupported on @assume_effects @ccall"))
+        end
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
             consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
         )))
         return esc(ex)
     else # anonymous function case
+        if preconditions !== nothing
+            throw(ArgumentError("preconditions current unsupported on anonymous functions"))
+        end
         return Expr(:meta, Expr(:purity,
             consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
     end
@@ -916,6 +954,21 @@ function is_short_function_def(@nospecialize(ex))
 end
 is_function_def(@nospecialize(ex)) =
     return isexpr(ex, :function) || is_short_function_def(ex) || isexpr(ex, :->)
+
+function collect_argnames(@nospecialize(ex))
+    if isexpr(ex, :function)
+        return map(ex.args[1].args) do arg
+            isa(arg, Symbol) && return arg
+            return (arg::Expr).args[1]
+        end
+    elseif is_short_function_def(ex)
+        error("TODO")
+    elseif isexpr(ex, :->)
+        error("TODO")
+    else
+        error("Not a function")
+    end
+end
 
 function findmeta(ex::Expr)
     if is_function_def(ex)

@@ -447,6 +447,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->def.value = NULL;
     mi->specTypes = NULL;
     mi->sparam_vals = jl_emptysvec;
+    mi->preconditions = jl_emptysvec;
     jl_atomic_store_relaxed(&mi->uninferred, NULL);
     mi->backedges = NULL;
     mi->callbacks = NULL;
@@ -800,6 +801,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->module = module;
     m->external_mt = NULL;
     m->source = NULL;
+    m->preconditions = jl_emptysvec;
     jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
     m->name = NULL;
