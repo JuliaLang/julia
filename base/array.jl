@@ -2466,41 +2466,6 @@ function findall(A)
     collect(first(p) for p in pairs(A) if last(p))
 end
 
-# Allocating result upfront is faster (possible only when collection can be iterated twice)
-function _findall(f::Function, A::AbstractArray{Bool})
-    n = count(f, A)
-    I = Vector{eltype(keys(A))}(undef, n)
-    isempty(I) && return I
-    _findall(f, I, A)
-end
-
-function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
-    cnt = 1
-    len = length(I)
-    for (k, v) in pairs(A)
-        @inbounds I[cnt] = k
-        cnt += f(v)
-        cnt > len && return I
-    end
-    I
-end
-
-function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
-    i = firstindex(A)
-    cnt = 1
-    len = length(I)
-    while cnt ≤ len
-        @inbounds I[cnt] = i
-        cnt += f(A[i])
-        i = nextind(A, i)
-    end
-    I
-end
-
-findall(f::Union{typeof(!), typeof(identity)}, A::AbstractArray{Bool}) = _findall(f, A)
-findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
-findall(A::AbstractArray{Bool}) = _findall(identity, A)
-
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
