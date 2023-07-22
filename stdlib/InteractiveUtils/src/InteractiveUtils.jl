@@ -99,8 +99,24 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    if Base.isdebugbuild()
-        println(io, "DEBUG build")
+    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+    if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
+        println(io, "Build Info:")
+        if Base.isdebugbuild()
+            println(io, "  DEBUG build")
+        end
+        if !isempty(Base.TAGGED_RELEASE_BANNER)
+            println(io, "  ", Base.TAGGED_RELEASE_BANNER)
+        end
+        if Base.GIT_VERSION_INFO.tagged_commit && !official_release
+            println(io,
+                """
+
+                    Note: This is an unofficial build.
+                    Official builds are available at https://julialang.org/downloads
+                """
+            )
+        end
     end
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
