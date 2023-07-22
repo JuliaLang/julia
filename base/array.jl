@@ -2420,7 +2420,7 @@ end
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall((testf.(A))::BitArray)
 
 """
     findall(A)
@@ -2465,6 +2465,7 @@ Int64[]
 function findall(A)
     collect(first(p) for p in pairs(A) if last(p))
 end
+findall(A::AbstractArray) = findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()

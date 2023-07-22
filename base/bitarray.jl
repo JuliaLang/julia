@@ -1683,7 +1683,6 @@ end
 @inline _toind(i1, irest::Tuple{}) = i1
 @inline _toind(i1, irest) = CartesianIndex(i1, irest...)
 
-
 function findall(B::BitArray)
     nnzB = count(B)
     I = Vector{eltype(keys(B))}(undef, nnzB)
