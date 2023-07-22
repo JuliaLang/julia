@@ -207,7 +207,7 @@ typedef struct _jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
-    std::map<void*, GlobalVariable*> globals;
+    std::map<void*, GlobalVariable*> global_targets;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;

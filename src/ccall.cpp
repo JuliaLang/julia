@@ -2092,8 +2092,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (symarg.fptr != NULL) {
         ++LiteralCCalls;
-        Type *funcptype = PointerType::get(functype, 0);
-        llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
+        Type *funcptype = functype->getPointerTo(0);
+        auto gv = julia_pgv(ctx, "ccall_fptr#", (void*)(uintptr_t)symarg.fptr);
+        auto casted = emit_bitcast(ctx, gv, funcptype->getPointerTo(0));
+        llvmf = ctx.builder.CreateAlignedLoad(funcptype, casted, Align(sizeof(void*)));
+        setName(ctx.emission_context, llvmf, "ccall_fptr");
         if (ctx.emission_context.imaging)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
