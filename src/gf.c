@@ -2316,8 +2316,10 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world) {
-            if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
+            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+            if (invoke != NULL) {
                 return codeinst;
+            }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
@@ -2859,20 +2861,19 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
+STATIC_INLINE jl_value_t *invoke_codeinst(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    jl_value_t *res = invoke(F, args, nargs, codeinst);
+    return verify_type(res);
+}
+
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
     // manually inlined copy of jl_method_compiled
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
-    while (codeinst) {
-        if (codeinst->min_world <= world && world <= codeinst->max_world) {
-            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-            if (invoke != NULL) {
-                jl_value_t *res = invoke(F, args, nargs, codeinst);
-                return verify_type(res);
-            }
-        }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
-    }
+    jl_code_instance_t *codeinst = jl_method_compiled(mfunc, world);
+    if (codeinst)
+        return invoke_codeinst(F, args, nargs, codeinst);
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -2885,9 +2886,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-    jl_value_t *res = invoke(F, args, nargs, codeinst);
-    return verify_type(res);
+    return invoke_codeinst(F, args, nargs, codeinst);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
