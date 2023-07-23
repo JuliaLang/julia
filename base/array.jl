@@ -2420,7 +2420,7 @@ end
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::F, A::AbstractArray) where {F<:Function} = findall((testf.(A))::BitArray)
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)
