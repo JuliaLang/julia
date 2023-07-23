@@ -20,4 +20,4 @@ LLVM_JULIA_DIFF_GITHUB_REPO := https://github.com/llvm/llvm-project
 # Base GitHub ref for generating the diff.
 LLVM_BASE_REF := llvm:llvmorg-15.0.7
 # Julia fork's GitHub ref for generating the diff.
-LLVM_JULIA_REF := JuliaLang:julia-15.0.7-5
+LLVM_JULIA_REF := JuliaLang:julia-15.0.7-7
