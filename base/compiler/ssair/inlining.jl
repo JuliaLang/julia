@@ -329,7 +329,7 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     # Append the linetable of the inlined function to our line table
     topline::Int32 = linetable_offset + Int32(1)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(inlinee_def.module, inlinee, inlinee_def.file, inlinee_def.line, inlined_at))
+    push!(linetable, LineInfoNode(inlinee_def.module, inlinee_def.name, inlinee_def.file, inlinee_def.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
     extra_coverage_line = zero(Int32)
     for oldline in eachindex(oldlinetable)

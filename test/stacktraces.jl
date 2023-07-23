@@ -91,9 +91,16 @@ trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
-    @test frame.linfo.def.module === which(func, (Any,)).module
-    @test frame.linfo.def === which(func, (Any,))
-    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
+    # broken until #50082 can be addressed
+    if inlined
+        @test frame.linfo.def.module === which(func, (Any,)).module broken=true
+        @test frame.linfo.def === which(func, (Any,)) broken=true
+        @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=true
+    else
+        @test frame.linfo.def.module === which(func, (Any,)).module
+        @test frame.linfo.def === which(func, (Any,))
+        @test frame.linfo.specTypes === Tuple{typeof(func), Int}
+    end
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
