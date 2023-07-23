@@ -447,22 +447,35 @@ false
 """
 function allunique(C)
     if haslength(C)
-        length(C) < 2 && return true
-        length(C) < 32 && return _indexed_allunique(collect(C))
+        len = length(C)
+        len < 2 && return true
+        len < 32 && return _indexed_allunique(collect(C), len)
+        return _hashed_allunique_haslength(C, len)
     end
-    return _hashed_allunique(C)
+    return _hashed_allunique_hasnolength(C)
 end
 
-function _hashed_allunique(C)
+function _hashed_allunique_hasnolength(C)
     seen = Set{eltype(C)}()
     x = iterate(C)
-    if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
+    while x !== nothing
+        v, s = x
+        in!(v, seen) && return false
+        x = iterate(C, s)
+    end
+    return true
+end
+
+function _hashed_allunique_haslength(C, len_or_ncodeunits)
+    seen = Set{eltype(C)}()
+    x = iterate(C)
+    if len_or_ncodeunits > 1000
+        for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
         end
-        sizehint!(seen, length(C))
+        sizehint!(seen, len_or_ncodeunits)
     end
     while x !== nothing
         v, s = x
@@ -476,10 +489,18 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+function allunique(S::String)
+    nunits = ncodeunits(S) # computing `length` for a string might be expensive
+    nunits < 32 ? _indexed_allunique(S, nunits) : _hashed_allunique_haslength(S, nunits)
+end
 
-function _indexed_allunique(A)
-    length(A) < 2 && return true
+function allunique(A::StridedArray) 
+    len = length(A)
+    len < 32 ? _indexed_allunique(A, len) : _hashed_allunique_haslength(A, len)
+end
+
+function _indexed_allunique(A, len_or_ncodeunits)
+    len_or_ncodeunits < 2 && return true
     iter = eachindex(A)
     I = iterate(iter)
     while I !== nothing
@@ -494,7 +515,8 @@ function _indexed_allunique(A)
 end
 
 function allunique(t::Tuple)
-    length(t) < 32 || return _hashed_allunique(t)
+    len = length(t)
+    len < 32 || return _hashed_allunique_haslength(t, len)
     a = afoldl(true, tail(t)...) do b, x
         b & !isequal(first(t), x)
     end
