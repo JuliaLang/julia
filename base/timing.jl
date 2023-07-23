@@ -128,12 +128,14 @@ function padded_nonzero_print(value, str, always_print = true)
     end
 end
 
-function format_bytes(bytes) # also used by InteractiveUtils
-    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+function format_bytes(bytes; binary=true) # also used by InteractiveUtils
+    units = binary ? _mem_units : _cnt_units
+    factor = binary ? 1024 : 1000
+    bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", units[mb], bytes==1 ? "" : "s")
     else
-        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
 end
 
