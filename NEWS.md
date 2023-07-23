@@ -31,6 +31,7 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
