@@ -38,6 +38,7 @@ DECLARE_BUILTIN(fieldtype);
 DECLARE_BUILTIN(getfield);
 DECLARE_BUILTIN(ifelse);
 DECLARE_BUILTIN(invoke);
+DECLARE_BUILTIN(invoke_split_effects);
 DECLARE_BUILTIN(is);
 DECLARE_BUILTIN(isa);
 DECLARE_BUILTIN(isdefined);

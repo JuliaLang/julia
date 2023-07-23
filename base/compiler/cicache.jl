@@ -49,11 +49,11 @@ WorldView(wvc::WorldView, wr::WorldRange) = WorldView(wvc.cache, wr)
 WorldView(wvc::WorldView, args...) = WorldView(wvc.cache, args...)
 
 function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
-    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt, UInt32), mi, first(wvc.worlds), last(wvc.worlds), 0) !== nothing
 end
 
 function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
-    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds))
+    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt, UInt32), mi, first(wvc.worlds), last(wvc.worlds), 0)
     if r === nothing
         return default
     end

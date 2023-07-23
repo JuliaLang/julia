@@ -70,6 +70,7 @@ mutable struct InferenceResult
     const linfo::MethodInstance
     const argtypes::Vector{Any}
     const overridden_by_const::BitVector
+    const effect_assumptions::EffectsOverride
     result                   # extended lattice element if inferred, nothing otherwise
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
@@ -77,18 +78,18 @@ mutable struct InferenceResult
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
-    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector, effect_assumptions::EffectsOverride=EffectsOverride())
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
+        return new(linfo, cache_argtypes, overridden_by_const, effect_assumptions, nothing, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
-InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
-InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice, effect_assumptions::EffectsOverride=EffectsOverride()) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)..., effect_assumptions)
+InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice, effect_assumptions::EffectsOverride=EffectsOverride()) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)..., effect_assumptions)
 
 """
     inf_params::InferenceParams

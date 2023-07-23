@@ -186,6 +186,16 @@ struct OpaqueClosureCreateInfo <: CallInfo
     end
 end
 
+"""
+    info::InvokeSplitEffectsInfo <: CallInfo
+"""
+struct InvokeSplitEffectsInfo <: CallInfo
+    info::CallInfo
+    precond::Any
+    cond_effects::EffectsOverride
+    check_info::CallInfo
+end
+
 # Stmt infos that are used by external consumers, but not by optimization.
 # These are not produced by default and must be explicitly opted into by
 # the AbstractInterpreter.

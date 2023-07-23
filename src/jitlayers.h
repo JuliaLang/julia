@@ -248,6 +248,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
+        uint32_t purity_assumptions,
         jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(

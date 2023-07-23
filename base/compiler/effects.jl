@@ -240,6 +240,7 @@ struct EffectsOverride
     notaskstate::Bool
     inaccessiblememonly::Bool
 end
+EffectsOverride() = decode_effects_override(0x00)
 
 function encode_effects_override(eo::EffectsOverride)
     e = 0x00

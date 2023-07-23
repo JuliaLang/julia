@@ -333,7 +333,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
         encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
-        relocatability)
+        relocatability, UInt32(encode_effects_override(result.effect_assumptions)))
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
@@ -432,6 +432,28 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
+function apply_effects_overrides(ipo_effects::Effects, override::EffectsOverride)
+    if is_effect_overridden(override, :consistent)
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :effect_free)
+        ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :nothrow)
+        ipo_effects = Effects(ipo_effects; nothrow=true)
+    end
+    if is_effect_overridden(override, :terminates_globally)
+        ipo_effects = Effects(ipo_effects; terminates=true)
+    end
+    if is_effect_overridden(override, :notaskstate)
+        ipo_effects = Effects(ipo_effects; notaskstate=true)
+    end
+    if is_effect_overridden(override, :inaccessiblememonly)
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
+    return ipo_effects
+end
+
 function adjust_effects(sv::InferenceState)
     ipo_effects = sv.ipo_effects
 
@@ -479,24 +501,7 @@ function adjust_effects(sv::InferenceState)
     def = sv.linfo.def
     if isa(def, Method)
         override = decode_effects_override(def.purity)
-        if is_effect_overridden(override, :consistent)
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=true)
-        end
-        if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=true)
-        end
-        if is_effect_overridden(override, :notaskstate)
-            ipo_effects = Effects(ipo_effects; notaskstate=true)
-        end
-        if is_effect_overridden(override, :inaccessiblememonly)
-            ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
-        end
+        ipo_effects = apply_effects_overrides(ipo_effects, override)
     end
 
     return ipo_effects

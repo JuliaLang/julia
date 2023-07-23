@@ -1969,6 +1969,43 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_apply(interp, argtypes, si, sv, max_methods)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, sv)
+        elseif f === invoke_split_effects
+            # First perform inference as usual. We may not need to use the precondition logic
+            # at all, (e.g. if we get a constant).
+            new_arginfo = ArgInfo(arginfo.fargs === nothing ? nothing : arginfo.fargs[3:end],
+                                  arginfo.argtypes[3:end])
+            r = abstract_call(interp, new_arginfo, si, sv, max_methods)
+            # Find applicable preconditions that we may be able to use
+            which = arginfo.argtypes[2]
+            if isa(which, Const)
+                if isa(r.info, MethodMatchInfo) && length(r.info.results) == 1 && which.val === :nothrow
+                    # Check for user-defined preconditions
+                    match = r.info.results[1]
+                    m = match.method
+
+                    for i = 1:2:length(m.preconditions)
+                        i + 1 <= length(m.preconditions) || break
+
+                        cond = m.preconditions[1]
+                        check = m.preconditions[2]
+
+                        isa(cond, EffectsOverride) || continue
+
+                        # TODO: Should depend on `which`
+                        cond.nothrow || continue
+
+                        check_arginfo = ArgInfo(nothing,
+                            Any[Const(check), arginfo.argtypes[3:end]...])
+                        rcheck = abstract_call(interp, check_arginfo, StmtInfo(true), sv, max_methods)
+                        rcheck.rt === Bool || continue
+                        is_foldable_nothrow(rcheck.effects) || continue
+
+                        # TODO: What to do if multiple preconditions match
+                        return CallMeta(r.rt, r.effects, InvokeSplitEffectsInfo(r.info, check, cond, rcheck.info))
+                    end
+                end
+            end
+            return r
         elseif f === modifyfield!
             return abstract_modifyfield!(interp, argtypes, si, sv)
         elseif f === Core.finalizer

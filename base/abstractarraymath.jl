@@ -468,7 +468,7 @@ function repeat_outer(a::AbstractMatrix, (m,n)::NTuple{2, Any})
         R = d:d+p-1
         for i=1:m
             c = (i-1)*o+1
-            @inbounds b[c:c+o-1, R] = a
+            b[c:c+o-1, R] = a
         end
     end
     return b

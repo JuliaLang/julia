@@ -1636,6 +1636,8 @@ public:
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
+    uint32_t purity_assumptions = 0;
+
     std::vector<std::unique_ptr<Module>> llvmcall_modules;
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
@@ -1765,7 +1767,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable=false);
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt, uint32_t purity_assumptions);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
@@ -3334,6 +3336,7 @@ static jl_llvm_functions_t
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
+        uint32_t purity_assumptions,
         jl_codegen_params_t &params);
 
 static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *type, jl_cgval_t name);
@@ -4382,7 +4385,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, uint32_t purity_assumptions)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
@@ -4396,10 +4399,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         if (argv[i].typ == jl_bottom_type)
             return jl_cgval_t();
     }
-    return emit_invoke(ctx, lival, argv.data(), nargs, rt);
+    return emit_invoke(ctx, lival, argv.data(), nargs, rt, purity_assumptions);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt, uint32_t purity_assumptions)
 {
     ++EmittedInvokes;
     bool handled = false;
@@ -4423,9 +4426,19 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+            jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world, purity_assumptions); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             if (ci != jl_nothing) {
+                if (// Nothrow assumption
+                    (ctx.purity_assumptions & 0x04) != 0 &&
+                    // But callee throws
+                    codeinst->rettype == jl_bottom_type &&
+                    // and terminates
+                    (codeinst->ipo_purity_bits & (1 << 6))) {
+                    // TODO: This probably should have been done on the julia side
+                    ctx.builder.CreateUnreachable();
+                    return jl_cgval_t();
+                }
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
                 if (invoke == jl_fptr_const_return_addr) {
@@ -5365,7 +5378,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.world, ctx.world);
+    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.world, ctx.world, 0);
 
     if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
         JL_GC_POP();
@@ -5385,7 +5398,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
             name_from_method_instance(mi), ctx.emission_context.tsctx,
             ctx.emission_context.imaging,
             jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
-    jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
+    jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, 0, ctx.emission_context);
 
     assert(closure_decls.functionObject != "jl_fptr_sparam");
     bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
@@ -5496,7 +5509,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
             jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
-        return emit_invoke(ctx, ex, expr_t);
+        uint8_t stmt_flag = jl_array_uint8_ref(ctx.source->ssaflags, ssaidx_0based);
+        uint8_t IR_FLAG_NOTHROW = 0x01 << 5;
+        uint32_t overrides = (stmt_flag & IR_FLAG_NOTHROW) ? 0x04 : 0x00;
+        return emit_invoke(ctx, ex, expr_t, overrides);
     }
     else if (head == jl_invoke_modify_sym) {
         assert(ssaidx_0based >= 0);
@@ -7205,6 +7221,7 @@ static jl_llvm_functions_t
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
+        uint32_t purity_assumptions,
         jl_codegen_params_t &params)
 {
     ++EmittedFunctions;
@@ -7215,6 +7232,7 @@ static jl_llvm_functions_t
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
     ctx.source = src;
+    ctx.purity_assumptions = purity_assumptions;
 
     std::map<int, BasicBlock*> labels;
     bool toplevel = false;
@@ -8268,7 +8286,9 @@ static jl_llvm_functions_t
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
-                CreateTrap(ctx.builder, false);
+                if (ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+                    CreateTrap(ctx.builder, false);
+                }
                 find_next_stmt(-1);
                 continue;
             }
@@ -8768,6 +8788,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
+        uint32_t purity_assumptions,
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
@@ -8778,7 +8799,7 @@ jl_llvm_functions_t jl_emit_code(
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        decls = emit_function(m, li, src, jlrettype, params);
+        decls = emit_function(m, li, src, jlrettype, purity_assumptions, params);
         auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
         if (stream) {
             jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
@@ -8852,7 +8873,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             return jl_llvm_functions_t(); // failed
         }
     }
-    jl_llvm_functions_t decls = jl_emit_code(m, codeinst->def, src, codeinst->rettype, params);
+    jl_llvm_functions_t decls = jl_emit_code(m, codeinst->def, src, codeinst->rettype, codeinst->purity_assumptions, params);
 
     const std::string &specf = decls.specFunctionObject;
     const std::string &f = decls.functionObject;
@@ -8974,7 +8995,7 @@ void jl_compile_workqueue(
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             original.getDataLayout(), Triple(original.getTargetTriple()));
-                        result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
+                        result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, codeinst->purity_assumptions, params);
                         result.first = std::move(result_m);
                     }
                 }

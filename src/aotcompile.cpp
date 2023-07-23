@@ -226,7 +226,7 @@ static void makeSafeName(GlobalObject &G)
 static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
 {
     ++CICacheLookups;
-    jl_value_t *ci = cgparams.lookup(mi, world, world);
+    jl_value_t *ci = cgparams.lookup(mi, world, world, 0);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing) {
@@ -342,7 +342,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                             params.tsctx, params.imaging,
                             clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
-                    jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
+                    jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, codeinst->purity_assumptions, params);
                     if (result_m)
                         emitted[codeinst] = {std::move(result_m), std::move(decls)};
                 }
@@ -2050,7 +2050,7 @@ void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int l
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, uint32_t purity_assumptions, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
@@ -2070,7 +2070,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
     }
     else {
-        jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
+        jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world, purity_assumptions);
         if (ci != jl_nothing) {
             codeinst = (jl_code_instance_t*)ci;
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -2117,7 +2117,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // No debug info = no variable names,
         // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
         output.debug_level = std::max(2, static_cast<int>(jl_options.debug_level));
-        auto decls = jl_emit_code(m, mi, src, jlrettype, output);
+        auto decls = jl_emit_code(m, mi, src, jlrettype, purity_assumptions, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 
         Function *F = NULL;

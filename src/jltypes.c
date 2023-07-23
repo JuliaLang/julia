@@ -3012,7 +3012,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(30,
+                        jl_perm_symsvec(31,
                             "name",
                             "module",
                             "file",
@@ -3033,6 +3033,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "ccallable", // !const
                             "invokes", // !const
                             "recursion_relation", // !const
+                            "preconditions", // !const
                             "nargs",
                             "called",
                             "nospecialize",
@@ -3043,7 +3044,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "max_varargs",
                             "purity"),
-                        jl_svec(30,
+                        jl_svec(31,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -3064,6 +3065,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_simplevector_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_simplevector_type,
                             jl_int32_type,
                             jl_int32_type,
                             jl_int32_type,
@@ -3082,7 +3084,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(10,
+                        jl_perm_symsvec(11,
                             "def",
                             "specTypes",
                             "sparam_vals",
@@ -3090,10 +3092,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "backedges",
                             "callbacks",
                             "cache",
+                            "preconditions",
                             "inInference",
                             "cache_with_orig",
                             "precompiled"),
-                        jl_svec(10,
+                        jl_svec(11,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
@@ -3101,6 +3104,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_simplevector_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
@@ -3108,7 +3112,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 3);
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1)|(1<<2);
-    const static uint32_t method_instance_atomicfields[1] = { 0x00000248 }; // (1<<3)|(1<<6)|(1<<9);
+    const static uint32_t method_instance_atomicfields[1] = { 0x00000448 }; // (1<<3)|(1<<6)|(1<<10);
     //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
@@ -3116,7 +3120,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(15,
+                        jl_perm_symsvec(16,
                             "def",
                             "next",
                             "min_world",
@@ -3129,8 +3133,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             "ipo_purity_bits", "purity_bits",
                             "argescapes",
                             "isspecsig", "precompile", "relocatability",
-                            "invoke", "specptr"), // function object decls
-                        jl_svec(15,
+                            "invoke", "specptr",
+                            "purity_assumptions"
+                            ), // function object decls
+                        jl_svec(16,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3145,12 +3151,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
-                            jl_any_type, jl_any_type), // fptrs
+                            jl_any_type, jl_any_type,
+                            jl_uint32_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001010110001 }; // Set fields 1, 5-6, 8, 10 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b110100101000010 }; // Set fields 2, 7, 9, 12, 14-15 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b0000001010110001 }; // Set fields 1, 5-6, 9, 11 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b0110100101000010 }; // Set fields 2, 7, 10, 13, 15-16 as atomic
     //Fields 3-4 are only operated on by construction and deserialization, so are const at runtime
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
