@@ -3261,17 +3261,6 @@ map(f) = f()
 
 ## 1 argument
 
-function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    Is = zip(eachindex(dest), eachindex(A))
-    @boundscheck length(Is) <= length(dest) ||
-        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
-    for (i,j) in Is
-        val = f(@inbounds A[j])
-        @inbounds dest[i] = val
-    end
-    return dest
-end
-
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
@@ -3306,33 +3295,14 @@ map(f, A) = collect(Generator(f,A)) # default to returning an Array for `map` on
 map(f, ::AbstractDict) = error("map is not defined on dictionaries")
 map(f, ::AbstractSet) = error("map is not defined on sets")
 
-## 2 argument
-function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    Is = zip(eachindex(dest), eachindex(A), eachindex(B))
-    @boundscheck length(Is) <= length(dest) ||
-        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
-    for (i, j, k) in Is
-        @inbounds a, b = A[j], B[k]
-        val = f(a, b)
-        @inbounds dest[i] = val
-    end
-    return dest
-end
-
 ## N argument
-
-@inline ith_all(i, ::Tuple{}) = ()
-function ith_all(i, as)
-    @_propagate_inbounds_meta
-    return (as[1][i], ith_all(i, tail(as))...)
-end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
     Is = zip(eachindex(dest), map(eachindex, As)...)
     @boundscheck length(Is) <= length(dest) ||
         throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
     for (i, js...) in Is
-        J = ntuple(d -> @inbounds(As[d][js[d]]), length(As))
+        J = ntuple(d -> @inbounds(As[d][js[d]]), Val(length(As)))
         val = f(J...)
         @inbounds dest[i] = val
     end
