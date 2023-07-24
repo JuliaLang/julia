@@ -121,8 +121,8 @@ static Value *stringConstPtr(
     Constant *Data = ConstantDataArray::get(irbuilder.getContext(), ctxt);
     ctxt.pop_back();
     // We use this for the name of the gv, so cap its size to avoid memory blowout
-    if (ctxt.size() > 25) {
-        ctxt.resize(25 + 3);
+    if (ctxt.size() > 28) {
+        ctxt.resize(28);
         ctxt[25] = ctxt[26] = ctxt[27] = '.';
     }
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);

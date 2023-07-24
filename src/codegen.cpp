@@ -1827,7 +1827,8 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
     };
     if (gv == nullptr) {
         gv = get_gv(name + "#" + Twine(emission_context.mergedConstants.size()));
-    } else if (gv->getParent() != &M) {
+    }
+    else if (gv->getParent() != &M) {
         StringRef gvname = gv->getName();
         gv = M.getNamedGlobal(gvname);
         if (!gv) {
