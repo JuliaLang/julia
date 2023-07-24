@@ -688,7 +688,7 @@ function hash(x::Real, h::UInt)
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
-    # If the real is an Int64, UInt64, or Float64, hash as those types.
+    # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1
         # left = ceil(log2(num*2^pow))
