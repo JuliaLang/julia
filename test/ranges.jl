@@ -1751,6 +1751,7 @@ Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 # required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
+Base.Int(x::Displacement) = x.val
 
 # Unsigned complement, for testing checked_length
 struct UPosition <: Unsigned
@@ -2404,4 +2405,23 @@ end
 
 	srl = StepRangeLen(PR49516(1), PR49516(2), 10)
 	@test sprint(show, srl) == "PR49516(1):PR49516(2):PR49516(19)"
+end
+
+@testset "collect with specialized vcat" begin
+    struct OneToThree <: AbstractUnitRange{Int} end
+    Base.size(r::OneToThree) = (3,)
+    Base.first(r::OneToThree) = 1
+    Base.length(r::OneToThree) = 3
+    Base.last(r::OneToThree) = 3
+    function Base.getindex(r::OneToThree, i::Int)
+        checkbounds(r, i)
+        i
+    end
+    Base.vcat(r::OneToThree) = r
+    r = OneToThree()
+    a = Array(r)
+    @test a isa Vector{Int}
+    @test a == r
+    @test collect(r) isa Vector{Int}
+    @test collect(r) == r
 end
