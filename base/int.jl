@@ -856,26 +856,11 @@ julia> floatmax(Float32)  # largest finite Float32 floating point number
 """
 function typemax end
 
-typemin(::Type{Int8  }) = Int8(-128)
-typemax(::Type{Int8  }) = Int8(127)
-typemin(::Type{UInt8 }) = UInt8(0)
-typemax(::Type{UInt8 }) = UInt8(255)
-typemin(::Type{Int16 }) = Int16(-32768)
-typemax(::Type{Int16 }) = Int16(32767)
-typemin(::Type{UInt16}) = UInt16(0)
-typemax(::Type{UInt16}) = UInt16(65535)
-typemin(::Type{Int32 }) = Int32(-2147483648)
-typemax(::Type{Int32 }) = Int32(2147483647)
-typemin(::Type{UInt32}) = UInt32(0)
-typemax(::Type{UInt32}) = UInt32(4294967295)
-typemin(::Type{Int64 }) = -9223372036854775808
-typemax(::Type{Int64 }) = 9223372036854775807
-typemin(::Type{UInt64}) = UInt64(0)
-typemax(::Type{UInt64}) = 0xffffffffffffffff
-@eval typemin(::Type{UInt128}) = $(convert(UInt128, 0))
-@eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
-@eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
-@eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
+typemin(::Type{T}) where {T<:BitUnsigned} = zero(T)::T
+typemax(::Type{T}) where {T<:BitUnsigned} = (~zero(T))::T
+
+typemin(::Type{T}) where {T<:BitSigned} = (one(T) << (8*sizeof(T) - 1))::T
+typemax(::Type{T}) where {T<:BitSigned} = (~zero(T) >>> 1)::T
 
 
 widen(::Type{Int8}) = Int16
