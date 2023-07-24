@@ -691,7 +691,7 @@ function hash(x::Real, h::UInt)
     # If the real is an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1
-        # left = ceil(log2(num)*2^pow)
+        # left = ceil(log2(num*2^pow))
         left = top_set_bit(abs(num)) + pow
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
