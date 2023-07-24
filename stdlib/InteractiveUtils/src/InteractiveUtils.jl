@@ -112,8 +112,9 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
             println(io,
                 """
 
-                    Note: This is an unofficial build.
-                    Official builds are available at https://julialang.org/downloads
+                    Note: This is an unofficial build, please report bugs to the project
+                    responsible for this build and not to the Julia project unless you can
+                    reproduce the issue using official builds available at https://julialang.org/downloads
                 """
             )
         end
