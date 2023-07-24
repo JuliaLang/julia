@@ -119,7 +119,7 @@ static Value *stringConstPtr(
     // null-terminate the string
     ctxt.push_back(0);
     Constant *Data = ConstantDataArray::get(irbuilder.getContext(), ctxt);
-    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_", *M);
+    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size() - 1), *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
     auto gep = irbuilder.CreateInBoundsGEP(gv->getValueType(),
@@ -1100,7 +1100,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                 if (justtag && jt->smalltag) {
                     ptr = ConstantInt::get(expr_type, jt->smalltag << 4);
                     if (ctx.emission_context.imaging)
-                        ptr = get_pointer_to_constant(ctx.emission_context, ptr, "_j_tag", *jl_Module);
+                        ptr = get_pointer_to_constant(ctx.emission_context, ptr, StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
                 }
                 else if (ctx.emission_context.imaging)
                     ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx, (jl_value_t*)jt), datatype_or_p->getType());

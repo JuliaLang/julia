@@ -1811,20 +1811,11 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
-static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, StringRef name, Module &M)
+static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, const Twine &name, Module &M)
 {
     GlobalVariable *&gv = emission_context.mergedConstants[val];
-    StringRef localname;
-    std::string ssno;
-    if (gv == nullptr) {
-        raw_string_ostream(ssno) << name << emission_context.mergedConstants.size();
-        localname = StringRef(ssno);
-    }
-    else {
-        localname = gv->getName();
-        if (gv->getParent() != &M)
-            gv = cast_or_null<GlobalVariable>(M.getNamedValue(localname));
-    }
+    if (gv && gv->getParent() != &M)
+        gv = M.getNamedGlobal(gv->getName());
     if (gv == nullptr) {
         gv = new GlobalVariable(
                 M,
@@ -1832,10 +1823,10 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
                 true,
                 GlobalVariable::PrivateLinkage,
                 val,
-                localname);
+                name + "#" + Twine(emission_context.mergedConstants.size()));
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
     }
-    assert(localname == gv->getName());
+    assert(name.str() == gv->getName());
     assert(val == gv->getInitializer());
     return gv;
 }
