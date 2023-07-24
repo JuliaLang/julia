@@ -913,7 +913,7 @@ if Core.sizeof(Int) == 4
         w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
         hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
         lo = w0 & 0xffffffff + (w1 << 32)
-        return Int128(hi) << 64 + Int128(lo)
+        return (Int128(hi) << 64) | Int128(lo)
     end
 
     function widemul(u::UInt64, v::UInt64)
@@ -928,7 +928,7 @@ if Core.sizeof(Int) == 4
         w1 = u0 * v1 + (t & 0xffffffff)
         hi = u1 * v1 + w2 + (w1 >>> 32)
         lo = w0 & 0xffffffff + (w1 << 32)
-        return UInt128(hi) << 64 + UInt128(lo)
+        return (UInt128(hi) << 64) | UInt128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -939,7 +939,7 @@ if Core.sizeof(Int) == 4
         hilo = widemul(u1, reinterpret(Int64, v0))
         t = reinterpret(UInt128, hilo) + (lolo >>> 64)
         w1 = reinterpret(UInt128, lohi) + (t & 0xffffffffffffffff)
-        return Int128(lolo & 0xffffffffffffffff) + reinterpret(Int128, w1) << 64
+        return Int128(lolo & 0xffffffffffffffff) | (reinterpret(Int128, w1) << 64)
     end
 
     function *(u::UInt128, v::UInt128)
@@ -950,7 +950,7 @@ if Core.sizeof(Int) == 4
         hilo = widemul(u1, v0)
         t = hilo + (lolo >>> 64)
         w1 = lohi + (t & 0xffffffffffffffff)
-        return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
+        return (lolo & 0xffffffffffffffff) | (UInt128(w1) << 64)
     end
 
     function _setbit(x::UInt128, i)
