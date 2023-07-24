@@ -139,4 +139,8 @@ impl Collection<JuliaVM> for VMCollection {
         _mutator: &T,
     ) {
     }
+
+    fn vm_live_bytes() -> usize {
+        crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
+    }
 }

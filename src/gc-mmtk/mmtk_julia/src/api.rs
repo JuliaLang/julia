@@ -25,7 +25,7 @@ use mmtk::util::{Address, ObjectReference, OpaquePointer};
 use mmtk::AllocationSemantics;
 use mmtk::Mutator;
 use std::ffi::CStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_init(
@@ -388,85 +388,9 @@ pub extern "C" fn mmtk_last_heap_address() -> Address {
     memory_manager::last_heap_address()
 }
 
+// Accessed from C to count the bytes we allocated with jl_gc_counted_malloc etc.
 #[no_mangle]
-pub extern "C" fn mmtk_counted_malloc(size: usize) -> Address {
-    memory_manager::counted_malloc::<JuliaVM>(&SINGLETON, size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_malloc(size: usize) -> Address {
-    memory_manager::malloc(size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
-    // allocate extra bytes to account for original memory that needs to be allocated and its size
-    let ptr_size = std::mem::size_of::<Address>();
-    let size_size = std::mem::size_of::<usize>();
-    assert!(align % ptr_size == 0 && align != 0 && (align / ptr_size).is_power_of_two());
-
-    let extra = (align - 1) + ptr_size + size_size;
-    let mem = memory_manager::counted_malloc(&SINGLETON, size + extra);
-
-    let result = (mem + extra) & !(align - 1);
-    let result = unsafe { Address::from_usize(result) };
-
-    unsafe {
-        (result - ptr_size).store::<Address>(mem);
-        (result - ptr_size - size_size).store::<usize>(size + extra);
-    }
-
-    return result;
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_counted_calloc(num: usize, size: usize) -> Address {
-    memory_manager::counted_calloc::<JuliaVM>(&SINGLETON, num, size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_calloc(num: usize, size: usize) -> Address {
-    memory_manager::calloc(num, size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_realloc_with_old_size(
-    addr: Address,
-    size: usize,
-    old_size: usize,
-) -> Address {
-    memory_manager::realloc_with_old_size::<JuliaVM>(&SINGLETON, addr, size, old_size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_realloc(addr: Address, size: usize) -> Address {
-    memory_manager::realloc(addr, size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_free_with_size(addr: Address, old_size: usize) {
-    memory_manager::free_with_size::<JuliaVM>(&SINGLETON, addr, old_size)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_free(addr: Address) {
-    memory_manager::free(addr)
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_free_aligned(addr: Address) {
-    let ptr_size = std::mem::size_of::<Address>();
-    let size_size = std::mem::size_of::<usize>();
-
-    let (addr, old_size) = unsafe {
-        (
-            (addr - ptr_size).load::<Address>(),
-            (addr - ptr_size - size_size).load::<usize>(),
-        )
-    };
-
-    memory_manager::free_with_size::<JuliaVM>(&SINGLETON, addr, old_size);
-}
+pub static JULIA_MALLOC_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
