@@ -688,14 +688,20 @@ function hash(x::Real, h::UInt)
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
-    # handle values representable as Int64, UInt64, Float64
+    # If the real is an Int64, UInt64, or Float64, hash as those types.
+    # To be an Integer the denominator must be 1 and the power must be positive.
+    # To be a Float64
     if den == 1
+        # left = ceil(log2(num)*2^pow)
         left = top_set_bit(abs(num)) + pow
+        # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
-            if pow >= 0
+            if pow >= 0 # if pow is negative, it isn't an integer
                 left <= 63 && return hash(Int64(num) << Int(pow), h)
                 left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
+            # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
+            # Float64s only have 53 mantisa bits (including implicit bit)
             left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     else
