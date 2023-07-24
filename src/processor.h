@@ -221,6 +221,8 @@ jl_image_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
+// Return the features of the host CPU as a julia string.
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);

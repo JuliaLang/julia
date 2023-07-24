@@ -342,9 +342,12 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
         if (O.getSpeedupLevel() >= 2) {
             JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
         }
+        // DCE must come before simplifycfg
+        // codegen can generate unused statements when generating builtin calls,
+        // and those dead statements can alter how simplifycfg optimizes the CFG
+        FPM.addPass(DCEPass());
         FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
         if (O.getSpeedupLevel() >= 1) {
-            FPM.addPass(DCEPass());
             FPM.addPass(SROAPass());
         }
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));

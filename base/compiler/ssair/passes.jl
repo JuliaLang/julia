@@ -810,10 +810,10 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    length(stmt.args) != 4 && return
+    length(stmt.args) != 3 && return
 
-    vec = stmt.args[3]
-    val = stmt.args[4]
+    vec = stmt.args[2]
+    val = stmt.args[3]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int

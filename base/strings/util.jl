@@ -700,12 +700,11 @@ _free_pat_replacer(x) = nothing
 _pat_replacer(x::AbstractChar) = isequal(x)
 _pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}) = in(x)
 
-function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(Int)) where N
-    count == 0 && return str
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    n = 1
-    e1 = nextind(str, lastindex(str)) # sizeof(str)
-    i = a = firstindex(str)
+    e1 = nextind(str, lastindex(str)) # sizeof(str)+1
+    a = firstindex(str)
     patterns = map(p -> _pat_replacer(first(p)), pat_repl)
     replaces = map(last, pat_repl)
     rs = map(patterns) do p
@@ -716,11 +715,14 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         r isa Int && (r = r:r) # findnext / performance fix
         return r
     end
-    if all(>(e1), map(first, rs))
-        foreach(_free_pat_replacer, patterns)
-        return str
-    end
-    out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
+    return e1, patterns, replaces, rs, all(>(e1), map(first, rs))
+end
+
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_finish(io::IO, str, count::Int,
+                         e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
+    n = 1
+    i = a = firstindex(str)
     while true
         p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
         r = rs[p]
@@ -728,9 +730,9 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         j > e1 && break
         if i == a || i <= k
             # copy out preserved portion
-            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
             # copy out replacement string
-            _replace(out, replaces[p], str, r, patterns[p])
+            _replace(io, replaces[p], str, r, patterns[p])
         end
         if k < j
             i = j
@@ -755,13 +757,39 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
-    write(out, SubString(str, i))
-    return String(take!(out))
+    write(io, SubString(str, i))
+    return io
 end
 
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_(io::IO, str, pat_repl::NTuple{N, Pair}, count::Int) where N
+    if count == 0
+        write(io, str)
+        return io
+    end
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    if notfound
+        foreach(_free_pat_replacer, patterns)
+        write(io, str)
+        return io
+    end
+    return _replace_finish(io, str, count, e1, patterns, replaces, rs)
+end
+
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
+    count == 0 && return String(str)
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    if notfound
+        foreach(_free_pat_replacer, patterns)
+        return String(str)
+    end
+    out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
+    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
+end
 
 """
-    replace(s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
+    replace([io::IO], s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
@@ -774,12 +802,20 @@ If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
+The return value is a new string after the replacements.  If the `io::IO` argument
+is supplied, the transformed string is instead written to `io` (returning `io`).
+(For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
+a pre-allocated buffer array in-place.)
+
 Multiple patterns can be specified, and they will be applied left-to-right
 simultaneously, so only one pattern will be applied to any character, and the
 patterns will only be applied to the input text, not the replacements.
 
 !!! compat "Julia 1.7"
     Support for multiple patterns requires version 1.7.
+
+!!! compat "Julia 1.10"
+    The `io::IO` argument requires version 1.10.
 
 # Examples
 ```jldoctest
@@ -799,8 +835,12 @@ julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 "bca"
 ```
 """
+replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
+    _replace_(io, String(s), pat_f, Int(count))
+
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    replace(String(s), pat_f..., count=count)
+    _replace_(String(s), pat_f, Int(count))
+
 
 # TODO: allow transform as the first argument to replace?
 

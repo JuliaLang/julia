@@ -2041,18 +2041,6 @@ function vcat(arrays::Vector{T}...) where T
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
 
-# disambiguation with LinAlg/special.jl
-# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
-# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
-hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
-hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
-vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
-vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
-    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
-    typed_hvcat(T, rows, xs...)
-
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
 ## find ##

@@ -131,8 +131,8 @@ static const char opts[]  =
     "                           interface if supported (Linux and Windows) or to the number of CPU\n"
     "                           threads if not supported (MacOS) or if process affinity is not\n"
     "                           configured, and sets M to 1.\n"
-    " --gcthreads=M[,N]         Use M threads for the mark phase of GC and N (0 or 1) threads for the concurrent sweeping phase of GC.\n"
-    "                           M is set to half of the number of compute threads and N is set to 0 if unspecified.\n"
+    " --gcthreads=N[,M]         Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.\n"
+    "                           N is set to half of the number of compute threads and M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -838,7 +838,7 @@ restart_switch:
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
-                    jl_errorf("julia: --gcthreads=<n>,<m>; n must be 0 or 1");
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
             break;

@@ -191,6 +191,7 @@
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
     XX(jl_gc_set_cb_notify_external_free) \
+    XX(jl_gc_set_cb_notify_gc_pressure) \
     XX(jl_gc_set_cb_post_gc) \
     XX(jl_gc_set_cb_pre_gc) \
     XX(jl_gc_set_cb_root_scanner) \
@@ -212,6 +213,7 @@
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
+    XX(jl_get_cpu_features) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -509,6 +511,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \

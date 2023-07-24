@@ -31,6 +31,7 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
@@ -67,6 +68,8 @@ New library features
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
 * `parent` and `parentindices` support `SubString`s
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
 
 Standard library changes
 ------------------------
