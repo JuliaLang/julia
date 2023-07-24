@@ -2558,3 +2558,7 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:BlasReal}
     for j=1:n for i=j+1+(sizes[j]==2):n A[i,j] = 0 end end
     return A
 end
+
+# Cube roots of a real-valued triangular matrices
+cbrt(A::UpperTriangular{T}) where {T<:Real} = UpperTriangular(_cbrt_quasi_triu!(Matrix{T}(A)))
+cbrt(A::LowerTriangular{T}) where {T<:Real} = LowerTriangular(_cbrt_quasi_triu!(Matrix{T}(A'))')

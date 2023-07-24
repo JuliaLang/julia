@@ -1229,4 +1229,58 @@ Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
     @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
 end
 
+@testset "cbrt(A::AbstractMatrix{T})" begin
+    N = 10
+
+    # Non-square
+    A = randn(N,N+2)
+    @test_throws DimensionMismatch cbrt(A)
+    A = complex.(randn(N,N+2), randn(N,N+2))
+    @test_throws DimensionMismatch cbrt(A)
+
+    # Real valued diagonal
+    D = Diagonal(randn(N))
+    T = cbrt(D)
+    @test T*T*T ≈ D
+    # Real valued triangular
+    U = UpperTriangular(randn(N,N))
+    T = cbrt(U)
+    @test T*T*T ≈ U
+    L = LowerTriangular(randn(N,N))
+    T = cbrt(L)
+    @test T*T*T ≈ L
+    # Real valued symmetric
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(S)
+    @test T*T*T ≈ S
+    # Real valued arbitrary
+    A = randn(N,N)
+    T = cbrt(A)
+    @test T*T*T ≈ A
+
+    # Complex valued diagonal
+    D = Diagonal(complex.(randn(N),randn(N)))
+    T = cbrt(D)
+    @test T*T*T ≈ D
+    # Complex valued triangular
+    U = UpperTriangular(complex.(randn(N,N),randn(N,N)))
+    T = cbrt(U)
+    @test T*T*T ≈ U
+    L = LowerTriangular(complex.(randn(N,N),randn(N,N)))
+    T = cbrt(L)
+    @test T*T*T ≈ L
+    # Complex valued symmetric
+    S =  (A -> (A+transpose(A))/2)(complex.(randn(N,N),randn(N,N)))
+    T = cbrt(S)
+    @test T*T*T ≈ S
+    # Complex valued Hermitian
+    H =  (A -> (A+A')/2)(complex.(randn(N,N),randn(N,N)))
+    T = cbrt(H)
+    @test T*T*T ≈ H
+    # Complex valued arbitrary
+    A = complex.(randn(N,N),randn(N,N))
+    T = cbrt(A)
+    @test T*T*T ≈ A
+end
+
 end # module TestDense

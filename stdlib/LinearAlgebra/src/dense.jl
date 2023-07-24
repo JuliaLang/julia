@@ -907,6 +907,25 @@ end
 sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
 sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
+# Cube root for complex-valued matrices
+cbrt(A::AbstractMatrix) = A^(1//3)
+
+# Cube root for real valued matrices
+function cbrt(A::AbstractMatrix{T}) where {T<:Real}
+    if checksquare(A) == 0
+        return copy(A)
+    elseif issymmetric(A)
+        return cbrt(Symmetric(A, :U))
+    else
+        S = schur(A)
+        return S.Z * _cbrt_quasi_triu!(S.T) * S.Z'
+    end
+end
+
+# Cube roots of adjoint and transpose
+cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
+cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
+
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
     if istriu(A)
