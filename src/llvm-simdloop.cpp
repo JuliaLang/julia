@@ -21,6 +21,7 @@
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
+#include <llvm/Analysis/MemorySSA.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
@@ -73,7 +74,7 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFE
 /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
 /// mark the ops as permitting reassociation/commuting.
 /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -84,7 +85,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
         // Find the user of instruction I that is within loop L.
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
-            if (L->contains(U)) {
+            if (L.contains(U)) {
                 if (J) {
                     LLVM_DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
                     REMARK([&]() {
@@ -157,122 +158,86 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
     MaxChainLength.updateMax(length);
 }
 
-static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI) JL_NOTSAFEPOINT
+static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 {
-    bool Changed = false;
-    std::vector<Instruction*> ToDelete;
-    for (User *U : marker->users()) {
-        ++TotalMarkedLoops;
-        Instruction *I = cast<Instruction>(U);
-        ToDelete.push_back(I);
+    MDNode *LoopID = L.getLoopID();
+    if (!LoopID)
+        return false;
+    bool simd = false;
+    bool ivdep = false;
 
-        BasicBlock *B = I->getParent();
-        OptimizationRemarkEmitter ORE(B->getParent());
-        LoopInfo &LI = GetLI(*B->getParent());
-        Loop *L = LI.getLoopFor(B);
-        if (!L) {
-            I->removeFromParent();
-            continue;
+    BasicBlock *Lh = L.getHeader();
+    LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
+
+    if (LoopID->getNumOperands() <= 1) {
+        LLVM_DEBUG(dbgs() << "LSL: Returning early due to few operands" << *LoopID << "\n");
+        return false;
+    }
+    MDNode *MDs = dyn_cast<MDNode>(LoopID->getOperand(1));
+
+    if (!MDs) {
+        LLVM_DEBUG(dbgs() << "LSL: Returning early due to no Metadata attached" << *LoopID << "\n");
+        return false;
+    }
+
+    for (unsigned i = 0, ie = MDs->getNumOperands(); i < ie; ++i) {
+        Metadata *Op = MDs->getOperand(i);
+        const MDString *S = dyn_cast<MDString>(Op);
+        if (S) {
+            LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
+            if (S->getString().startswith("julia")) {
+                if (S->getString().equals("julia.simdloop"))
+                    simd = true;
+                if (S->getString().equals("julia.ivdep"))
+                    ivdep = true;
+                continue;
+            }
         }
+    }
 
-        LLVM_DEBUG(dbgs() << "LSL: loopinfo marker found\n");
-        bool simd = false;
-        bool ivdep = false;
-        SmallVector<Metadata *, 8> MDs;
+    LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
+    if (!simd && !ivdep)
+        return false;
 
-        BasicBlock *Lh = L->getHeader();
-        LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
+    // TODO: Can we drop `julia.simdloop` and `julia.ivdep`?
 
-        // Reserve first location for self reference to the LoopID metadata node.
-        TempMDTuple TempNode = MDNode::getTemporary(Lh->getContext(), None);
-        MDs.push_back(TempNode.get());
+    // REMARK([=]() {
+    //     return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getLoopLatch()->getTerminator()->getDebugLoc(), L)
+    //         << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
+    // });
 
-        // Walk `julia.loopinfo` metadata and filter out `julia.simdloop` and `julia.ivdep`
-        if (I->hasMetadataOtherThanDebugLoc()) {
-            MDNode *JLMD= I->getMetadata("julia.loopinfo");
-            if (JLMD) {
-                LLVM_DEBUG(dbgs() << "LSL: has julia.loopinfo metadata with " << JLMD->getNumOperands() <<" operands\n");
-                for (unsigned i = 0, ie = JLMD->getNumOperands(); i < ie; ++i) {
-                    Metadata *Op = JLMD->getOperand(i);
-                    const MDString *S = dyn_cast<MDString>(Op);
-                    if (S) {
-                        LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
-                        if (S->getString().startswith("julia")) {
-                            if (S->getString().equals("julia.simdloop"))
-                                simd = true;
-                            if (S->getString().equals("julia.ivdep"))
-                                ivdep = true;
-                            continue;
-                        }
-                    }
-                    MDs.push_back(Op);
+    // If ivdep is true we assume that there is no memory dependency between loop iterations
+    // This is a fairly strong assumption and does often not hold true for generic code.
+    if (ivdep) {
+        ++IVDepLoops;
+        MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(LoopID));
+        // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
+        for (BasicBlock *BB : L.blocks()) {
+            for (Instruction &I : *BB) {
+                if (I.mayReadOrWriteMemory()) {
+                    ++IVDepInstructions;
+                    I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
                 }
             }
         }
-
-        LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
-
-        REMARK([=]() {
-            return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", I->getDebugLoc(), B)
-                << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
-        });
-
-        MDNode *n = L->getLoopID();
-        if (n) {
-            // Loop already has a LoopID so copy over Metadata
-            // original loop id is operand 0
-            for (unsigned i = 1, ie = n->getNumOperands(); i < ie; ++i) {
-                Metadata *Op = n->getOperand(i);
-                MDs.push_back(Op);
-            }
-        }
-        MDNode *LoopID = MDNode::getDistinct(Lh->getContext(), MDs);
-        // Replace the temporary node with a self-reference.
-        LoopID->replaceOperandWith(0, LoopID);
-        L->setLoopID(LoopID);
-        assert(L->getLoopID());
-
-        MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(LoopID));
-
-        // If ivdep is true we assume that there is no memory dependency between loop iterations
-        // This is a fairly strong assumption and does often not hold true for generic code.
-        if (ivdep) {
-            ++IVDepLoops;
-            // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
-            for (BasicBlock *BB : L->blocks()) {
-               for (Instruction &I : *BB) {
-                   if (I.mayReadOrWriteMemory()) {
-                       ++IVDepInstructions;
-                       I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
-                   }
-               }
-            }
-            assert(L->isAnnotatedParallel());
-        }
-
-        if (simd) {
-            ++SimdLoops;
-            // Mark floating-point reductions as okay to reassociate/commute.
-            for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
-                if (PHINode *Phi = dyn_cast<PHINode>(I))
-                    enableUnsafeAlgebraIfReduction(Phi, L, ORE);
-                else
-                    break;
-            }
-        }
-
-        I->removeFromParent();
-
-        Changed = true;
+        assert(L.isAnnotatedParallel());
     }
 
-    for (Instruction *I : ToDelete)
-        I->deleteValue();
-    marker->eraseFromParent();
+    if (simd) {
+        ++SimdLoops;
+        // Mark floating-point reductions as okay to reassociate/commute.
+        for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
+            if (PHINode *Phi = dyn_cast<PHINode>(I))
+                enableUnsafeAlgebraIfReduction(Phi, L, ORE);
+            else
+                break;
+        }
+    }
+
 #ifdef JL_VERIFY_PASSES
     assert(!verifyLLVMIR(M));
 #endif
-    return Changed;
+    return true;
 }
 
 } // end anonymous namespace
@@ -283,23 +248,19 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 /// prevent SIMDization.
 
 
-PreservedAnalyses LowerSIMDLoopPass::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses LowerSIMDLoopPass::run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U)
+
 {
-    Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
-
-    if (!loopinfo_marker)
-        return PreservedAnalyses::all();
-
-    FunctionAnalysisManager &FAM =
-      AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
-
-    auto GetLI = [&FAM](Function &F) -> LoopInfo & {
-        return FAM.getResult<LoopAnalysis>(F);
-    };
-
-    if (markLoopInfo(M, loopinfo_marker, GetLI)) {
-        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
-        preserved.preserve<LoopAnalysis>();
+    OptimizationRemarkEmitter ORE(L.getHeader()->getParent());
+    if (processLoop(L, ORE)) {
+#ifdef JL_DEBUG_BUILD
+        if (AR.MSSA)
+            AR.MSSA->verifyMemorySSA();
+#endif
+        auto preserved = getLoopPassPreservedAnalyses();
+        preserved.preserveSet<CFGAnalyses>();
+        preserved.preserve<MemorySSAAnalysis>();
         return preserved;
     }
 
@@ -307,37 +268,23 @@ PreservedAnalyses LowerSIMDLoopPass::run(Module &M, ModuleAnalysisManager &AM)
 }
 
 namespace {
-class LowerSIMDLoopLegacy : public ModulePass {
-    //LowerSIMDLoop Impl;
+class LowerSIMDLoopLegacy : public LoopPass {
 
 public:
-  static char ID;
+    static char ID;
 
-  LowerSIMDLoopLegacy() : ModulePass(ID) {
-  }
+    LowerSIMDLoopLegacy() : LoopPass(ID) {
+    }
 
-  bool runOnModule(Module &M) override {
-    bool Changed = false;
+    bool runOnLoop(Loop *L, LPPassManager &LPM) override
+    {
+        OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
+        return processLoop(*L, ORE);
+    }
 
-    Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
-
-    auto GetLI = [this](Function &F) JL_NOTSAFEPOINT -> LoopInfo & {
-        return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
-    };
-
-    if (loopinfo_marker)
-        Changed |= markLoopInfo(M, loopinfo_marker, GetLI);
-
-    return Changed;
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override
-  {
-      ModulePass::getAnalysisUsage(AU);
-      AU.addRequired<LoopInfoWrapperPass>();
-      AU.addPreserved<LoopInfoWrapperPass>();
-      AU.setPreservesCFG();
-  }
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+        getLoopAnalysisUsage(AU);
+    }
 };
 
 } // end anonymous namespace
