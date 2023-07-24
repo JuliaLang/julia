@@ -690,7 +690,6 @@ function hash(x::Real, h::UInt)
     pow += num_z - den_z
     # If the real is an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be positive.
-    # To be a Float64
     if den == 1
         # left = ceil(log2(num)*2^pow)
         left = top_set_bit(abs(num)) + pow
