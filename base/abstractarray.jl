@@ -3262,8 +3262,10 @@ map(f) = f()
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    @boundscheck checkbounds(dest, LinearIndices(A))
-    for (i,j) in zip(eachindex(dest),eachindex(A))
+    Is = zip(eachindex(dest), eachindex(A))
+    @boundscheck length(Is) <= length(dest) ||
+        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
+    for (i,j) in Is
         val = f(@inbounds A[j])
         @inbounds dest[i] = val
     end
@@ -3306,8 +3308,10 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    @boundscheck checkbounds(dest, intersect(LinearIndices(A), LinearIndices(B)))
-    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
+    Is = zip(eachindex(dest), eachindex(A), eachindex(B))
+    @boundscheck length(Is) <= length(dest) ||
+        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
+    for (i, j, k) in Is
         @inbounds a, b = A[j], B[k]
         val = f(a, b)
         @inbounds dest[i] = val
@@ -3324,17 +3328,12 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    # determine the smallest range of linear indices to iterate over
-    i0, i1 = firstindex(As[1]), lastindex(As[1])
-    for A in As[2:end]
-        i0 = max(firstindex(A), i0)
-        i1 = min(lastindex(A), i1)
-    end
-    @boundscheck checkbounds(dest, i0:i1)
-
-    for i = i0:i1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
+    Is = zip(eachindex(dest), map(eachindex, As)...)
+    @boundscheck length(Is) <= length(dest) ||
+        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
+    for (i, js...) in Is
+        J = ntuple(d -> @inbounds(As[d][js[d]]), length(As))
+        val = f(J...)
         @inbounds dest[i] = val
     end
     return dest
