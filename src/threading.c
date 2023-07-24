@@ -638,6 +638,8 @@ void jl_init_threading(void)
             if (errno != 0 || endptr == cp || nthreads <= 0)
                 nthreads = 1;
             cp = endptr;
+            if (nthreads == 1)
+                nthreadsi = 0;
         }
         if (*cp == ',') {
             cp++;
