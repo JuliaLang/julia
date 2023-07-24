@@ -695,7 +695,7 @@ function hash(x::Real, h::UInt)
         left = top_set_bit(abs(num)) + pow
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
-            if pow >= 0 # if pow is negative, it isn't an integer
+            if 0 <= pow # if pow is non-negative, it is an integer
                 left <= 63 && return hash(Int64(num) << Int(pow), h)
                 left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
