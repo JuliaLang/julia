@@ -2768,7 +2768,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     steal : {
         // Try to steal chunk from random GC thread
         for (int i = 0; i < 4 * jl_n_markthreads; i++) {
-            uint32_t v = gc_first_tid + cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_markthreads;
+            uint32_t v = gc_first_tid + cong(jl_n_markthreads,  &ptls->rngseed);
             jl_gc_markqueue_t *mq2 = &gc_all_tls_states[v]->mark_queue;
             c = gc_chunkqueue_steal_from(mq2);
             if (c.cid != GC_empty_chunk) {
@@ -2795,7 +2795,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
         }
         // Try to steal pointer from random GC thread
         for (int i = 0; i < 4 * jl_n_markthreads; i++) {
-            uint32_t v = gc_first_tid + cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_markthreads;
+            uint32_t v = gc_first_tid + cong(jl_n_markthreads, &ptls->rngseed);
             jl_gc_markqueue_t *mq2 = &gc_all_tls_states[v]->mark_queue;
             new_obj = gc_ptr_queue_steal_from(mq2);
             if (new_obj != NULL)
