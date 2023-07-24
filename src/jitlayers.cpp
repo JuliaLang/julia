@@ -690,7 +690,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress) JL_NOTSAFEPOINT;
+                            std::function<void *(void *)> lookupWriteAddress);
 
 namespace {
 
@@ -1214,12 +1214,13 @@ namespace {
                     }
                 }
 
-                JL_TIMING(LLVM_OPT, LLVM_OPT);
-
-                //Run the optimization
-                assert(!verifyModule(M, &errs()));
-                (***PMs).run(M);
-                assert(!verifyModule(M, &errs()));
+                {
+                    JL_TIMING(LLVM_JIT, JIT_Opt);
+                    //Run the optimization
+                    assert(!verifyLLVMIR(M));
+                    (***PMs).run(M);
+                    assert(!verifyLLVMIR(M));
+                }
 
                 uint64_t end_time = 0;
                 {
@@ -1272,6 +1273,7 @@ namespace {
             : orc::IRCompileLayer::IRCompiler(MO), TMs(TMCreator(TM, optlevel)) {}
 
         Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
+            JL_TIMING(LLVM_JIT, JIT_Compile);
             return orc::SimpleCompiler(***TMs)(M);
         }
 
@@ -1459,7 +1461,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
-    JL_TIMING(LLVM_ORC, LLVM_ORC);
+    JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {

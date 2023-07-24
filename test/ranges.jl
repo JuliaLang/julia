@@ -2498,3 +2498,12 @@ end
     # a case that using mul_with_overflow & add_with_overflow might get wrong:
     @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
 end
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+end

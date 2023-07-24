@@ -4,7 +4,7 @@ New language features
 ---------------------
 
 * JuliaSyntax.jl is now used as the default parser, providing better diagnostics and faster
-  parsing. Set environment variable `JULIA_USE_NEW_PARSER` to `0` to switch back to the old
+  parsing. Set environment variable `JULIA_USE_FLISP_PARSER` to `1` to switch back to the old
   parser if necessary (and if you find this necessary, please file an issue) ([#46372]).
 * `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
   may now be used as binary operators with arrow precedence. ([#45962])

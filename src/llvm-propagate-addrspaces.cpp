@@ -306,7 +306,7 @@ struct PropagateJuliaAddrspacesLegacy : FunctionPass {
     bool runOnFunction(Function &F) override {
         bool modified = propagateJuliaAddrspaces(F);
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
+        assert(!verifyLLVMIR(F));
 #endif
         return modified;
     }
@@ -323,7 +323,7 @@ PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysi
     bool modified = propagateJuliaAddrspaces(F);
 
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

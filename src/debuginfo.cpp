@@ -372,9 +372,18 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 codeinst_in_flight.erase(codeinst_it);
             }
         }
+        jl_method_instance_t *mi = NULL;
+        if (codeinst) {
+            mi = codeinst->def;
+            // Non-opaque-closure MethodInstances are considered globally rooted
+            // through their methods, but for OC, we need to create a global root
+            // here.
+            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+        }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-            if (codeinst)
-                linfomap[Addr] = std::make_pair(Size, codeinst->def);
+            if (mi)
+                linfomap[Addr] = std::make_pair(Size, mi);
             if (first) {
                 objectmap[SectionLoadAddr] = {&Object,
                     (size_t)SectionSize,
@@ -390,7 +399,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress) JL_NOTSAFEPOINT
+                            std::function<void *(void *)> lookupWriteAddress)
 {
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
 }

@@ -314,6 +314,7 @@ public:
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
                             std::unique_ptr<MemoryBuffer> O) override {
+            JL_TIMING(LLVM_JIT, JIT_Link);
 #ifndef JL_USE_JITLINK
             std::lock_guard<std::mutex> lock(EmissionMutex);
 #endif

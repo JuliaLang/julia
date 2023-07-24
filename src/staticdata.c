@@ -1234,6 +1234,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_binding_t *b = (jl_binding_t*)v;
                 if (b->globalref == NULL || jl_object_in_image((jl_value_t*)b->globalref->mod))
                     jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
+                // Assign type Any to any owned bindings that don't have a type.
+                // We don't want these accidentally managing to diverge later in different compilation units.
+                if (jl_atomic_load_relaxed(&b->owner) == b) {
+                    jl_value_t *old_ty = NULL;
+                    jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+                }
             }
         }
 

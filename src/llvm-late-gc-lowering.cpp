@@ -38,6 +38,7 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 #include <map>
+#include <string>
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -2218,14 +2219,14 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size,
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
+    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, T_size, V);
     auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0));
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2296,7 +2297,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     if (T_prjlvalue) {
         T_pprjlvalue = T_prjlvalue->getPointerTo();
         Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
-            ConstantInt::get(T_int32, maxframeargs), "", StartOff);
+            ConstantInt::get(T_int32, maxframeargs), "jlcallframe", StartOff);
     }
     std::vector<CallInst*> write_barriers;
     for (BasicBlock &BB : F) {
@@ -2594,7 +2595,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "", InsertBefore);
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
@@ -2666,7 +2667,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
             slotAddress->insertAfter(gcframe);
             slotAddress->takeName(AI);
 
@@ -2711,7 +2712,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             for (unsigned i = 0; i < Store.second; ++i) {
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
@@ -2772,7 +2773,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
     bool modified = lateLowerGCFrame.runOnFunction(F);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }
@@ -2786,7 +2787,7 @@ PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
     bool CFGModified = false;
     bool modified = lateLowerGCFrame.runOnFunction(F, &CFGModified);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         if (CFGModified) {
