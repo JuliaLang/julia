@@ -1814,19 +1814,27 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, const Twine &name, Module &M)
 {
     GlobalVariable *&gv = emission_context.mergedConstants[val];
-    if (gv && gv->getParent() != &M)
-        gv = M.getNamedGlobal(gv->getName());
-    if (gv == nullptr) {
-        gv = new GlobalVariable(
+    auto get_gv = [&](const Twine &name) {
+        auto gv = new GlobalVariable(
                 M,
                 val->getType(),
                 true,
                 GlobalVariable::PrivateLinkage,
                 val,
-                name + "#" + Twine(emission_context.mergedConstants.size()));
+                name);
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+        return gv;
+    };
+    if (gv == nullptr) {
+        gv = get_gv(name + "#" + Twine(emission_context.mergedConstants.size()));
+    } else if (gv->getParent() != &M) {
+        StringRef gvname = gv->getName();
+        gv = M.getNamedGlobal(gvname);
+        if (!gv) {
+            gv = get_gv(gvname);
+        }
     }
-    assert(name.str() == gv->getName());
+    assert(gv->getName().startswith(name.str()));
     assert(val == gv->getInitializer());
     return gv;
 }

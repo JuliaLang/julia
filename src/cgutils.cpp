@@ -119,7 +119,13 @@ static Value *stringConstPtr(
     // null-terminate the string
     ctxt.push_back(0);
     Constant *Data = ConstantDataArray::get(irbuilder.getContext(), ctxt);
-    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size() - 1), *M);
+    ctxt.pop_back();
+    // We use this for the name of the gv, so cap its size to avoid memory blowout
+    if (ctxt.size() > 25) {
+        ctxt.resize(25 + 3);
+        ctxt[25] = ctxt[26] = ctxt[27] = '.';
+    }
+    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
     auto gep = irbuilder.CreateInBoundsGEP(gv->getValueType(),
