@@ -1099,6 +1099,18 @@ static const auto jlgetnthfieldchecked_func = new JuliaFunction<TypeFnContextAnd
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
+static const auto jlfieldindex_func = new JuliaFunction<>{
+    XSTR(jl_field_index),
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(getInt32Ty(C),
+            {T_prjlvalue, T_prjlvalue, getInt32Ty(C)}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::NoUnwind, Attribute::ReadOnly, Attribute::WillReturn}),
+            AttributeSet(),
+            None); }, // This function can error if the third argument is 1 so don't do that.
+};
 static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_field_isdefined_checked),
     [](LLVMContext &C, Type *T_size) {
@@ -3828,9 +3840,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
         }
-        else if (fld.typ == (jl_value_t*)jl_symbol_type) {
-            if (jl_is_datatype(utt) && !jl_is_namedtuple_type(utt)) { // TODO: Look into this for NamedTuple
-                if (jl_struct_try_layout(utt) && (jl_datatype_nfields(utt) == 1)) {
+        else if (fld.typ == (jl_value_t*)jl_symbol_type) { // Known type but unknown symbol
+            if (jl_is_datatype(utt) && (utt != jl_module_type) && jl_struct_try_layout(utt)) {
+                if ((jl_datatype_nfields(utt) == 1 && !jl_is_namedtuple_type(utt))) {
                     jl_svec_t *fn = jl_field_names(utt);
                     assert(jl_svec_len(fn) == 1);
                     Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
@@ -3839,9 +3851,17 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = emit_getfield_knownidx(ctx, obj, 0, utt, order);
                     return true;
                 }
+                else {
+                    Value *index = ctx.builder.CreateCall(prepare_call(jlfieldindex_func),
+                            {emit_typeof(ctx, obj, false, false), boxed(ctx, fld), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)});
+                    Value *cond = ctx.builder.CreateICmpNE(index, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1));
+                    emit_hasnofield_error_ifnot(ctx, cond, utt->name->name, fld);
+                    Value *idx2 = ctx.builder.CreateAdd(ctx.builder.CreateIntCast(index, ctx.types().T_size, false), ConstantInt::get(ctx.types().T_size, 1)); // getfield_unknown is 1 based
+                    if (emit_getfield_unknownidx(ctx, ret, obj, idx2, utt, jl_false, order))
+                        return true;
+                }
             }
         }
-        // TODO: generic getfield func with more efficient calling convention
         return false;
     }
 
@@ -9093,6 +9113,7 @@ static void init_jit_functions(void)
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);
+    add_named_global(jlfieldindex_func, &jl_field_index);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
     add_named_global(jlarray_data_owner_func, &jl_array_data_owner);
