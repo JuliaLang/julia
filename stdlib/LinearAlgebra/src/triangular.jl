@@ -2529,29 +2529,32 @@ end
 # Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
-function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:BlasReal}
+function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     m, n = size(A)
     (m == n) || throw(ArgumentError("_cbrt_quasi_triu!: Matrix A must be square."))
     A, I2, I1 = _cbrt_blkdiag_1x1_2x2!(A)
     sizes = [if i ∈ I1 1 elseif i ∈ I2 2 else 0 end for i=1:n]
     for k = 1:n-1
-        for i = filter(i -> sizes[i] > 0 && sizes[i+k] > 0, 1:n-k)
-            (i₁, i₂, j₁, j₂, s₁, s₂) = (i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k])
+        for i = 1:n-k
+            if sizes[i] == 0 || sizes[i+k] == 0 continue end
+            i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
             Bᵢⱼ⁽⁰⁾ = zeros(T,s₁,s₂)
             Bᵢⱼ⁽¹⁾ = zeros(T,s₁,s₂)
-            for k₁ = filter(k -> sizes[k] > 0, i+1:i+k-1)
+            for k₁ = i+1:i+k-1
+                if sizes[k₁] == 0 continue end
                 k₂ = k₁+sizes[k₁]-1
-                # Bᵢⱼ⁽⁰⁾ = Bᵢⱼ⁽⁰⁾ + A[i₁:i₂,k₁:k₂]*A[k₁:k₂,j₁:j₂]
-                @views BLAS.gemm!('N', 'N', 1.0, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, Bᵢⱼ⁽⁰⁾)
+                @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, 1.0)
                 # Retreive Rᵢⱼ[i,i+k] as A[i+k,i]'
-                # Bᵢⱼ⁽¹⁾ = Bᵢⱼ⁽¹⁾ + A[i₁:i₂,k₁:k₂]*A[j₁:j₂,k₁:k₂]'
-                @views BLAS.gemm!('N', 'T', 1.0, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂], 1.0, Bᵢⱼ⁽¹⁾)
+                @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
             end
             @views L = kron(I(s₂), A[i₁:i₂,i₁:i₂]^2) + kron(A[j₁:j₂,j₁:j₂]', A[i₁:i₂,i₁:i₂]) + kron((A[j₁:j₂,j₁:j₂]^2)', I(s₁))
-            @views R = A[i₁:i₂,j₁:j₂] - A[i₁:i₂,i₁:i₂]*Bᵢⱼ⁽⁰⁾ - Bᵢⱼ⁽¹⁾
-            @views A[i₁:i₂,j₁:j₂] = reshape(L \ R[:], s₁, s₂)
+            @views mul!(A[i₁:i₂,j₁:j₂], A[i₁:i₂,i₁:i₂], Bᵢⱼ⁽⁰⁾, -1.0, 1.0)
+            @views A[i₁:i₂,j₁:j₂] -= Bᵢⱼ⁽¹⁾
+            @views ldiv!(lu!(L), A[i₁:i₂,j₁:j₂][:])
             # Store Rᵢⱼ[i,i+k]' in A[i+k,i]
-            @views A[j₁:j₂,i₁:i₂] = A[i₁:i₂,j₁:j₂]'*A[i₁:i₂,i₁:i₂]' + A[j₁:j₂,j₁:j₂]'*A[i₁:i₂,j₁:j₂]' + Bᵢⱼ⁽⁰⁾'
+            @views mul!(A[j₁:j₂,i₁:i₂], A[i₁:i₂,j₁:j₂]', A[i₁:i₂,i₁:i₂]', 1.0, 0)
+            @views mul!(A[j₁:j₂,i₁:i₂], A[j₁:j₂,j₁:j₂]', A[i₁:i₂,j₁:j₂]', 1.0, 1.0)
+            @views A[j₁:j₂,i₁:i₂] += Bᵢⱼ⁽⁰⁾'
         end
     end
     # Make quasi triangular
