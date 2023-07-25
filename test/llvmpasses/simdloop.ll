@@ -21,7 +21,7 @@ loop:
   store double %cval, double *%bptr
   %nexti = add i64 %i, 1
   %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop, !llvm.loop !2
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !1
 loopdone:
   ret void
 }
@@ -40,7 +40,7 @@ loop:
 ; CHECK: fsub reassoc contract double %v, %aval
   %nexti = add i64 %i, 1
   %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop, !llvm.loop !2
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !1
 loopdone:
   ret double %nextv
 }
@@ -79,17 +79,14 @@ for.body:                                         ; preds = %for.body, %entry
   %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
   %exitcond = icmp eq i64 %indvars.iv.next, 48
 ; CHECK: br {{.*}} !llvm.loop [[LOOP:![0-9]+]]
-  br i1 %exitcond, label %for.end, label %for.body, !llvm.loop !4
+  br i1 %exitcond, label %for.end, label %for.body, !llvm.loop !2
 
 for.end:                                          ; preds = %for.body
   %1 = load i32, i32* %a, align 4
   ret i32 %1
 }
 
-!0 = distinct !{!0, !1}
-!1 = !{!"julia.simdloop"}
-!2 = distinct !{!2, !3}
-!3 = !{!"julia.simdloop", !"julia.ivdep"}
-!4 = distinct !{!4, !5}
-!5 = !{!"julia.simdloop", !"julia.ivdep", !6}
-!6 = !{!"llvm.loop.vectorize.disable", i1 0}
+!0 = distinct !{!0, !"julia.simdloop"}
+!1 = distinct !{!1, !"julia.simdloop", !"julia.ivdep"}
+!2 = distinct !{!2, !"julia.simdloop", !"julia.ivdep", !3}
+!3 = !{!"llvm.loop.vectorize.disable", i1 0}

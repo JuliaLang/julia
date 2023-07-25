@@ -169,19 +169,8 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
     BasicBlock *Lh = L.getHeader();
     LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
 
-    if (LoopID->getNumOperands() <= 1) {
-        LLVM_DEBUG(dbgs() << "LSL: Returning early due to few operands" << *LoopID << "\n");
-        return false;
-    }
-    MDNode *MDs = dyn_cast<MDNode>(LoopID->getOperand(1));
-
-    if (!MDs) {
-        LLVM_DEBUG(dbgs() << "LSL: Returning early due to no Metadata attached" << *LoopID << "\n");
-        return false;
-    }
-
-    for (unsigned i = 0, ie = MDs->getNumOperands(); i < ie; ++i) {
-        Metadata *Op = MDs->getOperand(i);
+    for (unsigned i = 0, ie = LoopID->getNumOperands(); i < ie; ++i) {
+        Metadata *Op = LoopID->getOperand(i);
         const MDString *S = dyn_cast<MDString>(Op);
         if (S) {
             LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
