@@ -2093,8 +2093,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (symarg.fptr != NULL) {
         ++LiteralCCalls;
         Type *funcptype = functype->getPointerTo(0);
-        Type *funcptype = PointerType::get(functype, 0);
-         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
+        llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
         setName(ctx.emission_context, llvmf, "ccall_fptr");
         if (ctx.emission_context.imaging)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
