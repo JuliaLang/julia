@@ -151,7 +151,10 @@ end
 (\)(F::AdjointFactorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
     @invoke \(F::typeof(F), B::VecOrMat)
 
-function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where {T<:BlasReal}
+function (/)(
+    B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}}},
+    F::Factorization{T}
+) where {T<:BlasReal}
     require_one_based_indexing(B)
     x = rdiv!(copy(reinterpret(T, B)), F)
     return copy(reinterpret(Complex{T}, x))
@@ -175,6 +178,8 @@ function (/)(B::AbstractMatrix, F::Factorization)
     rdiv!(copy_similar(B, TFB), F)
 end
 (/)(A::AbstractMatrix, F::AdjointFactorization) = adjoint(adjoint(F) \ adjoint(A))
+(/)(A::Adjoint{Complex{T},Vector{Complex{T}}}, F::AdjointFactorization) where {T} =
+    adjoint(adjoint(F) \ adjoint(A))
 (/)(A::AbstractMatrix, F::TransposeFactorization) = transpose(transpose(F) \ transpose(A))
 
 function ldiv!(Y::AbstractVector, A::Factorization, B::AbstractVector)
