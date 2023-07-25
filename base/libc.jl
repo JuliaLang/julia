@@ -487,6 +487,5 @@ geteuid() = ccall(:jl_geteuid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")
-using .Libdl
 
 end # module
