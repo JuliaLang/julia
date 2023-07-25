@@ -8421,14 +8421,15 @@ static jl_llvm_functions_t
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
+            Instruction *br;
             if (ifnot == ifso)
-                ctx.builder.CreateBr(ifnot);
+                br = ctx.builder.CreateBr(ifnot);
             else
-                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+                br = ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
 
             if (ctx.LoopID) {
+                br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
                 ctx.LoopID = NULL;
-                jl_error("LoopInfo found for gotoifnot branch");
             }
             find_next_stmt(cursor + 1);
             continue;
