@@ -2540,6 +2540,8 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
             Bᵢⱼ⁽⁰⁾ = zeros(T,s₁,s₂)
             Bᵢⱼ⁽¹⁾ = zeros(T,s₁,s₂)
+            L₀ = zeros(T,s₁*s₂,s₁*s₂)
+            L₁ = zeros(T,s₁*s₂,s₁*s₂)
             for k₁ = i+1:i+k-1
                 if sizes[k₁] == 0 continue end
                 k₂ = k₁+sizes[k₁]-1
@@ -2547,14 +2549,16 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
                 # Retreive Rᵢⱼ[i,i+k] as A[i+k,i]'
                 @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
             end
-            @views L = kron(I(s₂), A[i₁:i₂,i₁:i₂]^2) + kron(A[j₁:j₂,j₁:j₂]', A[i₁:i₂,i₁:i₂]) + kron((A[j₁:j₂,j₁:j₂]^2)', I(s₁))
+            @views kron!(L₀, I(s₂), A[i₁:i₂,i₁:i₂]^2)
+            @views L₀ .+= kron!(L₁, A[j₁:j₂,j₁:j₂]', A[i₁:i₂,i₁:i₂])
+            @views L₀ .+= kron!(L₁, (A[j₁:j₂,j₁:j₂]^2)', I(s₁))
             @views mul!(A[i₁:i₂,j₁:j₂], A[i₁:i₂,i₁:i₂], Bᵢⱼ⁽⁰⁾, -1.0, 1.0)
-            @views A[i₁:i₂,j₁:j₂] -= Bᵢⱼ⁽¹⁾
-            @views ldiv!(lu!(L), A[i₁:i₂,j₁:j₂][:])
+            @views A[i₁:i₂,j₁:j₂] .-= Bᵢⱼ⁽¹⁾
+            @views ldiv!(lu!(L₀), A[i₁:i₂,j₁:j₂][:])
             # Store Rᵢⱼ[i,i+k]' in A[i+k,i]
             @views mul!(A[j₁:j₂,i₁:i₂], A[i₁:i₂,j₁:j₂]', A[i₁:i₂,i₁:i₂]', 1.0, 0)
             @views mul!(A[j₁:j₂,i₁:i₂], A[j₁:j₂,j₁:j₂]', A[i₁:i₂,j₁:j₂]', 1.0, 1.0)
-            @views A[j₁:j₂,i₁:i₂] += Bᵢⱼ⁽⁰⁾'
+            @views A[j₁:j₂,i₁:i₂] .+= Bᵢⱼ⁽⁰⁾'
         end
     end
     # Make quasi triangular
