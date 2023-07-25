@@ -151,17 +151,19 @@ end
 (\)(F::AdjointFactorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
     @invoke \(F::typeof(F), B::VecOrMat)
 
-function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where {T<:BlasReal}
+function (/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}}}, F::Factorization{T}) where {T<:BlasReal}
     require_one_based_indexing(B)
     x = rdiv!(copy(reinterpret(T, B)), F)
     return copy(reinterpret(Complex{T}, x))
 end
 # don't do the reinterpretation for [Adjoint/Transpose]Factorization
-(/)(B::VecOrMat{Complex{T}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
-    conj!(adjoint(parent(F)) \ conj.(B))
-(/)(B::VecOrMat{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
-    @invoke /(B::VecOrMat{Complex{T}}, F::Factorization{T})
-
+(/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
+    @invoke /(B::AbstractMatrix, F::Factorization)
+(/)(B::Matrix{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
+    @invoke /(B::AbstractMatrix, F::Factorization)
+(/)(B::Adjoint{Complex{T},Vector{Complex{T}}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
+    (F' \ B')'
+    
 function (\)(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
