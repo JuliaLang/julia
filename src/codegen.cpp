@@ -1608,8 +1608,6 @@ public:
     IRBuilder<> builder;
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
-    std::map<void*, GlobalVariable*> &global_targets;
-    std::map<std::tuple<jl_code_instance_t*, bool>, GlobalVariable*> &external_calls;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -1654,8 +1652,6 @@ public:
       : builder(llvmctx),
         emission_context(params),
         call_targets(),
-        global_targets(params.globals),
-        external_calls(params.external_fns),
         world(params.world),
         use_cache(params.cache),
         external_linkage(params.external_linkage),
@@ -4318,7 +4314,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(TheCallee->getType()),
                                     namep);
-            ctx.external_calls[std::make_tuple(fromexternal, true)] = GV;
+            ctx.emission_context.external_fns[std::make_tuple(fromexternal, true)] = GV;
         }
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         TheCallee = ai.decorateInst(ctx.builder.CreateAlignedLoad(TheCallee->getType(), GV, Align(sizeof(void*))));
@@ -4388,7 +4384,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(pfunc),
                                     namep);
-            ctx.external_calls[std::make_tuple(fromexternal, false)] = GV;
+            ctx.emission_context.external_fns[std::make_tuple(fromexternal, false)] = GV;
         }
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         theFptr = ai.decorateInst(ctx.builder.CreateAlignedLoad(pfunc, GV, Align(sizeof(void*))));

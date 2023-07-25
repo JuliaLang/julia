@@ -214,7 +214,7 @@ static jl_callptr_t _jl_compile_codeinst(
         if (!params.imaging) {
             StringMap<orc::ThreadSafeModule*> NewExports;
             StringMap<void*> NewGlobals;
-            for (auto &global : params.globals) {
+            for (auto &global : params.global_targets) {
                 NewGlobals[global.second->getName()] = global.first;
             }
             for (auto &def : emitted) {
@@ -243,7 +243,7 @@ static jl_callptr_t _jl_compile_codeinst(
                 assert(Queued.empty() && Stack.empty() && !M);
             }
         } else {
-            jl_jit_globals(params.globals);
+            jl_jit_globals(params.global_targets);
             auto main = std::move(emitted[codeinst].first);
             for (auto &def : emitted) {
                 if (def.first != codeinst) {
@@ -372,7 +372,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             success = false;
         }
         if (success && p == NULL) {
-            jl_jit_globals(params.globals);
+            jl_jit_globals(params.global_targets);
             assert(params.workqueue.empty());
             if (params._shared_module)
                 jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));

@@ -356,13 +356,13 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
-    std::vector<std::string> gvars(params.globals.size());
-    data->jl_value_to_llvm.resize(params.globals.size());
+    std::vector<std::string> gvars(params.global_targets.size());
+    data->jl_value_to_llvm.resize(params.global_targets.size());
     StringSet<> gvars_names;
     DenseSet<GlobalValue *> gvars_set;
 
     size_t idx = 0;
-    for (auto &global : params.globals) {
+    for (auto &global : params.global_targets) {
         gvars[idx] = global.second->getName().str();
         assert(gvars_set.insert(global.second).second && "Duplicate gvar in params!");
         assert(gvars_names.insert(gvars[idx]).second && "Duplicate gvar name in params!");
@@ -2123,11 +2123,28 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         Function *F = NULL;
         if (m) {
             // if compilation succeeded, prepare to return the result
-            // For imaging mode, global constants are currently private without initializer
-            // which isn't legal. Convert them to extern linkage so that the code can compile
-            // and will better match what's actually in sysimg.
-            for (auto &global : output.globals)
-                global.second->setLinkage(GlobalValue::ExternalLinkage);
+            // Similar to jl_link_global from jitlayers.cpp,
+            // so that code_llvm shows similar codegen to the jit
+            for (auto &global : output.global_targets) {
+                if (jl_options.image_codegen) {
+                    global.second->setLinkage(GlobalValue::ExternalLinkage);
+                } else {
+                    auto p = literal_static_pointer_val(global.first, global.second->getValueType());
+                    Type *elty;
+                    if (p->getType()->isOpaquePointerTy()) {
+                        elty = PointerType::get(output.getContext(), 0);
+                    } else {
+                        elty = p->getType()->getNonOpaquePointerElementType();
+                    }
+                    // For pretty printing, when LLVM inlines the global initializer into its loads
+                    auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, m.getModuleUnlocked());
+                    global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));
+                    global.second->setConstant(true);
+                    global.second->setLinkage(GlobalValue::PrivateLinkage);
+                    global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+                    global.second->setVisibility(GlobalValue::DefaultVisibility);
+                }
+            }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
 #ifndef JL_USE_NEW_PM
