@@ -802,7 +802,14 @@ Stacktrace:
 [...]
 ```
 
-Note that the symbol following `catch` will always be interpreted as a name for the exception,
+Note that the specific type of exception thrown of Julia code in Base and the
+standard libraries, (in this case, a `DomainError` or a `BoundsError`)
+is considered an internal implementation detail and may change across minor
+versions of Julia.
+Therefore, users are adviced not to write code like the code above which relies
+on specific exception types, unless they are explicitly documented.
+
+In `catch` statements, the symbol following `catch` will always be interpreted as a name for the exception,
 so care is needed when writing `try/catch` expressions on a single line. The following code will
 *not* work to return the value of `x` in case of an error:
 

@@ -737,6 +737,12 @@ Note that `@test_throws` does not support a trailing keyword form.
 !!! compat "Julia 1.8"
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
+!!! note
+    The type and text of thrown exceptions is considered an implementation detail,
+    and may change in minor versions of Julia.
+    The generic `@test_throws Exception expr` may be used to test for exceptions
+    generally.
+
 # Examples
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
