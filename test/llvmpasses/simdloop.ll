@@ -1,12 +1,10 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='loop(LowerSIMDLoop)' -S %s | FileCheck %s
 
 ; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -LowerSIMDLoop -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S %s | FileCheck %s
-
-declare void @julia.loopinfo_marker()
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='loop(LowerSIMDLoop)' -S %s | FileCheck %s
 
 ; CHECK-LABEL: @simd_test(
 define void @simd_test(double *%a, double *%b) {
@@ -22,9 +20,8 @@ loop:
   %cval = fadd double %aval, %bval
   store double %cval, double *%bptr
   %nexti = add i64 %i, 1
-  call void @julia.loopinfo_marker(), !julia.loopinfo !3
   %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !2
 loopdone:
   ret void
 }
@@ -42,9 +39,8 @@ loop:
   %nextv = fsub double %v, %aval
 ; CHECK: fsub reassoc contract double %v, %aval
   %nexti = add i64 %i, 1
-  call void @julia.loopinfo_marker(), !julia.loopinfo !3
   %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !2
 loopdone:
   ret double %nextv
 }
@@ -61,9 +57,8 @@ loop:
   %nextv = fsub double %v, %aval
 ; CHECK: fsub reassoc contract double %v, %aval
   %nexti = add i64 %i, 1
-  call void @julia.loopinfo_marker(), !julia.loopinfo !2
   %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !0
 loopdone:
   ret double %nextv
 }
@@ -82,20 +77,19 @@ for.body:                                         ; preds = %for.body, %entry
   %arrayidx2 = getelementptr inbounds i32, i32* %a, i64 %indvars.iv
   store i32 %add, i32* %arrayidx2, align 4
   %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
-  call void @julia.loopinfo_marker(), !julia.loopinfo !4
   %exitcond = icmp eq i64 %indvars.iv.next, 48
 ; CHECK: br {{.*}} !llvm.loop [[LOOP:![0-9]+]]
-  br i1 %exitcond, label %for.end, label %for.body
+  br i1 %exitcond, label %for.end, label %for.body, !llvm.loop !4
 
 for.end:                                          ; preds = %for.body
   %1 = load i32, i32* %a, align 4
   ret i32 %1
 }
 
-!1 = !{}
-!2 = !{!"julia.simdloop"}
+!0 = distinct !{!0, !1}
+!1 = !{!"julia.simdloop"}
+!2 = distinct !{!2, !3}
 !3 = !{!"julia.simdloop", !"julia.ivdep"}
-!4 = !{!"julia.simdloop", !"julia.ivdep", !5}
-!5 = !{!"llvm.loop.vectorize.disable", i1 0}
-; CHECK: [[LOOP]] = distinct !{[[LOOP]], [[LOOP_DISABLE:![0-9]+]]}
-; CHECK-NEXT: [[LOOP_DISABLE]] = !{!"llvm.loop.vectorize.disable", i1 false}
+!4 = distinct !{!4, !5}
+!5 = !{!"julia.simdloop", !"julia.ivdep", !6}
+!6 = !{!"llvm.loop.vectorize.disable", i1 0}
