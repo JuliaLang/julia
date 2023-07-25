@@ -3,13 +3,13 @@ use crate::edges::JuliaVMEdge;
 use crate::julia_scanning::process_edge;
 #[cfg(feature = "scan_obj_c")]
 use crate::julia_scanning::process_offset_edge;
-use crate::FINALIZER_ROOTS;
 use crate::{ROOT_EDGES, ROOT_NODES, SINGLETON, UPCALLS};
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::ObjectReference;
 use mmtk::vm::EdgeVisitor;
+use mmtk::vm::ObjectTracerContext;
 use mmtk::vm::RootsWorkFactory;
 use mmtk::vm::Scanning;
 use mmtk::vm::VMBinding;
@@ -50,19 +50,6 @@ impl Scanning<JuliaVM> for VMScanning {
         for obj in roots.drain() {
             roots_to_scan.push(obj);
         }
-
-        let fin_roots = FINALIZER_ROOTS.read().unwrap();
-
-        // processing finalizer roots
-        for obj in fin_roots.iter() {
-            if !obj.2 {
-                // not a void pointer
-                let obj_ref = ObjectReference::from_raw_address((*obj).1);
-                roots_to_scan.push(obj_ref);
-            }
-            roots_to_scan.push((*obj).0);
-        }
-
         factory.create_process_node_roots_work(roots_to_scan);
 
         let roots: Vec<JuliaVMEdge> = ROOT_EDGES
@@ -83,7 +70,6 @@ impl Scanning<JuliaVM> for VMScanning {
         process_object(object, edge_visitor);
     }
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
-        // Specific to JikesRVM - using it to load the work for sweeping malloced arrays
         let sweep_malloced_arrays_work = SweepMallocedArrays::new();
         memory_manager::add_work_packet(
             &SINGLETON,
@@ -97,6 +83,21 @@ impl Scanning<JuliaVM> for VMScanning {
 
     fn prepare_for_roots_re_scanning() {
         unimplemented!()
+    }
+
+    fn process_weak_refs(
+        _worker: &mut GCWorker<JuliaVM>,
+        tracer_context: impl ObjectTracerContext<JuliaVM>,
+    ) -> bool {
+        let single_thread_process_finalizer = ScanFinalizersSingleThreaded { tracer_context };
+        memory_manager::add_work_packet(
+            &SINGLETON,
+            WorkBucketStage::VMRefClosure,
+            single_thread_process_finalizer,
+        );
+
+        // We have pushed work. No need to repeat this method.
+        false
     }
 }
 
@@ -132,5 +133,17 @@ impl<VM: VMBinding> GCWork<VM> for SweepMallocedArrays {
         // call sweep malloced arrays from UPCALLS
         unsafe { ((*UPCALLS).mmtk_sweep_malloced_array)() }
         self.swept = true;
+    }
+}
+
+pub struct ScanFinalizersSingleThreaded<C: ObjectTracerContext<JuliaVM>> {
+    tracer_context: C,
+}
+
+impl<C: ObjectTracerContext<JuliaVM>> GCWork<JuliaVM> for ScanFinalizersSingleThreaded<C> {
+    fn do_work(&mut self, worker: &mut GCWorker<JuliaVM>, _mmtk: &'static MMTK<JuliaVM>) {
+        self.tracer_context.with_tracer(worker, |tracer| {
+            crate::julia_finalizer::scan_finalizers_in_rust(tracer);
+        });
     }
 }

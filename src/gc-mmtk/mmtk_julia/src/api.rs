@@ -1,18 +1,13 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use crate::reference_glue::JuliaFinalizableObject;
 use crate::JuliaVM;
 use crate::Julia_Upcalls;
 use crate::BLOCK_FOR_GC;
-use crate::FINALIZER_ROOTS;
 use crate::JULIA_HEADER_SIZE;
 use crate::SINGLETON;
 use crate::UPCALLS;
-use crate::{
-    set_julia_obj_header_size, BUILDER, DISABLED_GC, FINALIZERS_RUNNING, MUTATORS,
-    USER_TRIGGERED_GC,
-};
+use crate::{set_julia_obj_header_size, BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
 use crate::{ROOT_EDGES, ROOT_NODES};
 
 use libc::c_char;
@@ -322,51 +317,6 @@ pub extern "C" fn mmtk_harness_end(_tls: OpaquePointer) {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_register_finalizer(
-    obj: ObjectReference,
-    finalizer_fn: Address,
-    is_obj_ptr: bool,
-) {
-    memory_manager::add_finalizer(
-        &SINGLETON,
-        JuliaFinalizableObject(obj, finalizer_fn, is_obj_ptr),
-    );
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_run_finalizers_for_obj(obj: ObjectReference) {
-    let finalizers_running = AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst);
-
-    if !finalizers_running {
-        AtomicBool::store(&FINALIZERS_RUNNING, true, Ordering::SeqCst);
-    }
-
-    let finalizable_objs = memory_manager::get_finalizers_for(&SINGLETON, obj);
-
-    for obj in finalizable_objs.iter() {
-        // if the finalizer function triggers GC you don't want the object to be GC-ed
-        {
-            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-            let inserted = fin_roots.insert(*obj);
-            assert!(inserted);
-        }
-    }
-
-    for obj in finalizable_objs {
-        unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
-        {
-            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-            let removed = fin_roots.remove(&obj);
-            assert!(removed);
-        }
-    }
-
-    if !finalizers_running {
-        AtomicBool::store(&FINALIZERS_RUNNING, false, Ordering::SeqCst);
-    }
-}
-
-#[no_mangle]
 pub extern "C" fn mmtk_process(name: *const c_char, value: *const c_char) -> bool {
     let name_str: &CStr = unsafe { CStr::from_ptr(name) };
     let value_str: &CStr = unsafe { CStr::from_ptr(value) };
@@ -509,66 +459,6 @@ pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 0;
 #[no_mangle]
 #[cfg(feature = "stickyimmix")]
 pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 1;
-
-#[no_mangle]
-pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
-    AtomicBool::store(&FINALIZERS_RUNNING, true, Ordering::SeqCst);
-
-    if at_exit {
-        let mut all_finalizable = memory_manager::get_all_finalizers(&SINGLETON);
-
-        {
-            // if the finalizer function triggers GC you don't want the objects to be GC-ed
-            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-
-            for obj in all_finalizable.iter() {
-                let inserted = fin_roots.insert(*obj);
-                assert!(inserted);
-            }
-        }
-
-        loop {
-            let to_be_finalized = all_finalizable.pop();
-
-            match to_be_finalized {
-                Some(obj) => unsafe {
-                    ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2);
-                    {
-                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-                        let removed = fin_roots.remove(&obj);
-                        assert!(removed);
-                    }
-                },
-                None => break,
-            }
-        }
-    } else {
-        loop {
-            let to_be_finalized = memory_manager::get_finalized_object(&SINGLETON);
-
-            match to_be_finalized {
-                Some(obj) => {
-                    {
-                        // if the finalizer function triggers GC you don't want the objects to be GC-ed
-                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-
-                        let inserted = fin_roots.insert(obj);
-                        assert!(inserted);
-                    }
-                    unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
-                    {
-                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-                        let removed = fin_roots.remove(&obj);
-                        assert!(removed);
-                    }
-                }
-                None => break,
-            }
-        }
-    }
-
-    AtomicBool::store(&FINALIZERS_RUNNING, false, Ordering::SeqCst);
-}
 
 #[no_mangle]
 pub extern "C" fn mmtk_object_is_managed_by_mmtk(addr: usize) -> bool {

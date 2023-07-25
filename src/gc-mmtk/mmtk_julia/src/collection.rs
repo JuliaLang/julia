@@ -144,3 +144,10 @@ impl Collection<JuliaVM> for VMCollection {
         crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
     }
 }
+
+pub fn is_current_gc_nursery() -> bool {
+    match crate::SINGLETON.get_plan().generational() {
+        Some(gen) => gen.is_current_gc_nursery(),
+        None => false,
+    }
+}
