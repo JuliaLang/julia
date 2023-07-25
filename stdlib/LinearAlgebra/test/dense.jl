@@ -1242,45 +1242,56 @@ end
     D = Diagonal(randn(N))
     T = cbrt(D)
     @test T*T*T ≈ D
+    @test eltype(D) == eltype(T)
     # Real valued triangular
     U = UpperTriangular(randn(N,N))
     T = cbrt(U)
     @test T*T*T ≈ U
+    @test eltype(U) == eltype(T)
     L = LowerTriangular(randn(N,N))
     T = cbrt(L)
     @test T*T*T ≈ L
+    @test eltype(L) == eltype(T)
     # Real valued symmetric
     S =  (A -> (A+A')/2)(randn(N,N))
     T = cbrt(S)
     @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
     # Real valued arbitrary
     A = randn(N,N)
     T = cbrt(A)
     @test T*T*T ≈ A
+    @test eltype(A) == eltype(T)
 
     # Complex valued diagonal
     D = Diagonal(complex.(randn(N),randn(N)))
     T = cbrt(D)
     @test T*T*T ≈ D
+    @test eltype(D) == eltype(T)
     # Complex valued triangular
     U = UpperTriangular(complex.(randn(N,N),randn(N,N)))
     T = cbrt(U)
     @test T*T*T ≈ U
+    @test eltype(U) == eltype(T)
     L = LowerTriangular(complex.(randn(N,N),randn(N,N)))
     T = cbrt(L)
     @test T*T*T ≈ L
+    @test eltype(L) == eltype(T)
     # Complex valued symmetric
     S =  (A -> (A+transpose(A))/2)(complex.(randn(N,N),randn(N,N)))
     T = cbrt(S)
     @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
     # Complex valued Hermitian
     H =  (A -> (A+A')/2)(complex.(randn(N,N),randn(N,N)))
     T = cbrt(H)
     @test T*T*T ≈ H
+    @test eltype(H) == eltype(T)
     # Complex valued arbitrary
     A = complex.(randn(N,N),randn(N,N))
     T = cbrt(A)
     @test T*T*T ≈ A
+    @test eltype(A) == eltype(T)
 end
 
 end # module TestDense
