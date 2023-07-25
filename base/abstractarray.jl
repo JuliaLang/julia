@@ -3339,6 +3339,7 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    @_propagate_inbounds_meta
     isempty(As) && throw(ArgumentError(
         """map! requires at least one "source" argument"""))
     map_n!(f, dest, As)
