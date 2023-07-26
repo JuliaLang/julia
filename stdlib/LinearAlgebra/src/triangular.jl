@@ -2542,7 +2542,7 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     for k = 1:n-1
         for i = 1:n-k
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
-            k₁, k₂ = i+1+(sizes[i+1]≤0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]≤0)
+            k₁, k₂ = i+1+(sizes[i+1]==0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]==0)
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
             S₁ = zeros(T,s₁,s₁)
             S₂ = zeros(T,s₂,s₂)
