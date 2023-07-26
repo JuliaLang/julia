@@ -685,21 +685,18 @@ static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
     return std::distance(F.begin(), F.end());
 }
 
-// Whether the Function is an llvm or julia intrinsic.
-static bool isIntrinsicFunction(GlobalObject &GO) JL_NOTSAFEPOINT
-{
-    auto F = dyn_cast<Function>(&GO);
-    if (!F)
-        return false;
-    return F->isIntrinsic() || F->getName().startswith("julia.");
-}
-
 static constexpr size_t N_optlevels = 4;
 
 static Expected<orc::ThreadSafeModule> validateExternRelocations(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
 #if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
+    auto isIntrinsicFunction = [](GlobalObject &GO) JL_NOTSAFEPOINT {
+        auto F = dyn_cast<Function>(&GO);
+        if (!F)
+            return false;
+        return F->isIntrinsic() || F->getName().startswith("julia.");
+    };
     // validate the relocations for M (only for RuntimeDyld, JITLink performs its own symbol validation)
-    auto Err = TSM.withModuleDo([](Module &M) {
+    auto Err = TSM.withModuleDo([isIntrinsicFunction](Module &M) JL_NOTSAFEPOINT {
         Error Err = Error::success();
         for (auto &GO : make_early_inc_range(M.global_objects())) {
             if (GO.isDeclaration()) {
