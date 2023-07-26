@@ -2493,7 +2493,7 @@ for (tritype, comptritype) in ((:LowerTriangular, :UpperTriangular),
 end
 
 # Cube root of a 2x2 real-valued matrix with complex conjugate eigenvalues and equal diagonal values.
-# Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
+# Reference [1]: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
 function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
@@ -2526,7 +2526,7 @@ function _cbrt_blkdiag_1x1_2x2!(A::AbstractMatrix{T}) where {T<:Real}
 end
 
 # Cube root of a quasi upper triangular matrix (output of Schur decomposition)
-# Reference: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
+# Reference [1]: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
 function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
@@ -2535,6 +2535,7 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     A, I₂, I₁ = _cbrt_blkdiag_1x1_2x2!(A)
     sizes = [if i ∈ I₁ 1 elseif i ∈ I₂ 2 else 0 end for i=1:n]
     Σ = cumsum(sizes)
+    # Algorithm 4.3 in Reference [1]
     Δ = I(4)
     L₀ᴹ = zeros(T,4,4)
     L₁ᴹ = zeros(T,4,4)
