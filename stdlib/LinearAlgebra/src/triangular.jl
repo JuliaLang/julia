@@ -2534,12 +2534,14 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     (m == n) || throw(ArgumentError("_cbrt_quasi_triu!: Matrix A must be square."))
     A, I₂, I₁ = _cbrt_blkdiag_1x1_2x2!(A)
     sizes = [if i ∈ I₁ 1 elseif i ∈ I₂ 2 else 0 end for i=1:n]
+    Σ = cumsum(sizes)
     Δ = I(4)
     L₀ᴹ = zeros(T,4,4)
     L₁ᴹ = zeros(T,4,4)
     for k = 1:n-1
         for i = 1:n-k
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
+            k₁, k₂ = i+1+(sizes[i+1]≤0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]≤0)
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
             S₁ = zeros(T,s₁,s₁)
             S₂ = zeros(T,s₂,s₂)
@@ -2547,13 +2549,9 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
             Bᵢⱼ⁽¹⁾ = zeros(T,s₁,s₂)
             @views L₀ = L₀ᴹ[1:s₁*s₂,1:s₁*s₂]
             @views L₁ = L₁ᴹ[1:s₁*s₂,1:s₁*s₂]
-            for k₁ = i+1:i+k-1
-                if sizes[k₁] == 0 continue end
-                k₂ = k₁+sizes[k₁]-1
-                @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, 1.0)
-                # Retreive Rᵢⱼ[i,i+k] as A[i+k,i]'
-                @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
-            end
+            @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, 1.0)
+            # Retreive Rᵢⱼ[i,i+k] as A[i+k,i]'
+            @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
             @views mul!(S₁, A[i₁:i₂,i₁:i₂], A[i₁:i₂,i₁:i₂])
             @views mul!(S₂, A[j₁:j₂,j₁:j₂], A[j₁:j₂,j₁:j₂])
             @views kron!(L₀, Δ[1:s₂,1:s₂], S₁)
