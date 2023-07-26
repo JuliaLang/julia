@@ -141,11 +141,12 @@ void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
     ++LinkedGlobals;
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
+    GV->setDSOLocal(true);
     if (jl_options.image_codegen) {
         // If we are forcing imaging mode codegen for debugging,
         // emit external non-const symbol to avoid LLVM optimizing the code
         // similar to non-imaging mode.
-        GV->setLinkage(GlobalValue::ExternalLinkage);
+        assert(GV->hasExternalLinkage());
     }
     else {
         GV->setConstant(true);
@@ -160,6 +161,23 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
     for (auto &global : globals) {
         jl_link_global(global.second, global.first);
     }
+}
+
+// used for image_codegen, where we keep all the gvs external
+// so we can't jit them directly into each module
+static orc::ThreadSafeModule jl_get_globals_module(orc::ThreadSafeContext &ctx, bool imaging_mode, const DataLayout &DL, const Triple &T, std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
+{
+    auto lock = ctx.getLock();
+    auto GTSM = jl_create_ts_module("globals", ctx, imaging_mode, DL, T);
+    auto GM = GTSM.getModuleUnlocked();
+    for (auto &global : globals) {
+        auto GV = global.second;
+        auto GV2 = new GlobalVariable(*GM, GV->getValueType(), GV->isConstant(), GlobalValue::ExternalLinkage, literal_static_pointer_val(global.first, GV->getValueType()), GV->getName(), nullptr, GV->getThreadLocalMode(), GV->getAddressSpace(), false);
+        GV2->copyAttributesFrom(GV);
+        GV2->setDSOLocal(true);
+        GV2->setAlignment(GV->getAlign());
+    }
+    return GTSM;
 }
 
 // this generates llvm code for the lambda info
@@ -211,22 +229,20 @@ static jl_callptr_t _jl_compile_codeinst(
 
         if (params._shared_module)
             jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
-        if (!params.imaging) {
-            StringMap<orc::ThreadSafeModule*> NewExports;
+
+        // In imaging mode, we can't inline global variable initializers in order to preserve
+        // the fiction that we don't know what loads from the global will return. Thus, we
+        // need to emit a separate module for the globals before any functions are compiled,
+        // to ensure that the globals are defined when they are compiled.
+        if (params.imaging) {
+            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging, params.DL, params.TargetTriple, params.global_targets));
+        } else {
             StringMap<void*> NewGlobals;
             for (auto &global : params.global_targets) {
                 NewGlobals[global.second->getName()] = global.first;
             }
             for (auto &def : emitted) {
-                orc::ThreadSafeModule &TSM = std::get<0>(def.second);
-                //The underlying context object is still locked because params is not destroyed yet
-                auto M = TSM.getModuleUnlocked();
-                for (auto &F : M->global_objects()) {
-                    if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                        NewExports[F.getName()] = &TSM;
-                    }
-                }
-                // Let's link all globals here also (for now)
+                auto M = std::get<0>(def.second).getModuleUnlocked();
                 for (auto &GV : M->globals()) {
                     auto InitValue = NewGlobals.find(GV.getName());
                     if (InitValue != NewGlobals.end()) {
@@ -234,23 +250,32 @@ static jl_callptr_t _jl_compile_codeinst(
                     }
                 }
             }
-            DenseMap<orc::ThreadSafeModule*, int> Queued;
-            std::vector<orc::ThreadSafeModule*> Stack;
-            for (auto &def : emitted) {
-                // Add the results to the execution engine now
-                orc::ThreadSafeModule &M = std::get<0>(def.second);
-                jl_add_to_ee(M, NewExports, Queued, Stack);
-                assert(Queued.empty() && Stack.empty() && !M);
-            }
-        } else {
-            jl_jit_globals(params.global_targets);
-            auto main = std::move(emitted[codeinst].first);
-            for (auto &def : emitted) {
-                if (def.first != codeinst) {
-                    jl_merge_module(main, std::move(def.second.first));
+        }
+
+        // Collect the exported functions from the emitted modules,
+        // which form dependencies on which functions need to be
+        // compiled first. Cycles of functions are compiled together.
+        // (essentially we compile a DAG of SCCs in reverse topological order,
+        // if we treat declarations of external functions as edges from declaration
+        // to definition)
+        StringMap<orc::ThreadSafeModule*> NewExports;
+        for (auto &def : emitted) {
+            orc::ThreadSafeModule &TSM = std::get<0>(def.second);
+            //The underlying context object is still locked because params is not destroyed yet
+            auto M = TSM.getModuleUnlocked();
+            for (auto &F : M->global_objects()) {
+                if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                    NewExports[F.getName()] = &TSM;
                 }
             }
-            jl_ExecutionEngine->addModule(std::move(main));
+        }
+        DenseMap<orc::ThreadSafeModule*, int> Queued;
+        std::vector<orc::ThreadSafeModule*> Stack;
+        for (auto &def : emitted) {
+            // Add the results to the execution engine now
+            orc::ThreadSafeModule &M = std::get<0>(def.second);
+            jl_add_to_ee(M, NewExports, Queued, Stack);
+            assert(Queued.empty() && Stack.empty() && !M);
         }
         ++CompiledCodeinsts;
         MaxWorkqueueSize.updateMax(emitted.size());
