@@ -450,26 +450,15 @@ function allunique(C)
         len = length(C)
         len < 2 && return true
         len < 32 && return _indexed_allunique(collect(C), len)
-        return _hashed_allunique_haslength(C, len)
+        return _hashed_allunique(C, len)
     end
-    return _hashed_allunique_hasnolength(C)
+    return _hashed_allunique(C, nothing)
 end
 
-function _hashed_allunique_hasnolength(C)
+function _hashed_allunique(C, len_or_ncodeunits = nothing)
     seen = Set{eltype(C)}()
     x = iterate(C)
-    while x !== nothing
-        v, s = x
-        in!(v, seen) && return false
-        x = iterate(C, s)
-    end
-    return true
-end
-
-function _hashed_allunique_haslength(C, len_or_ncodeunits)
-    seen = Set{eltype(C)}()
-    x = iterate(C)
-    if len_or_ncodeunits > 1000
+    if !isnothing(len_or_ncodeunits) && len_or_ncodeunits > 1000
         for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
@@ -491,16 +480,18 @@ allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 function allunique(S::String)
     nunits = ncodeunits(S) # computing `length` for a string might be expensive
-    nunits < 32 ? _indexed_allunique(S, nunits) : _hashed_allunique_haslength(S, nunits)
+    nunits < 32 ? _indexed_allunique(S, nunits) : _hashed_allunique(S, nunits)
 end
 
 function allunique(A::StridedArray) 
     len = length(A)
-    len < 32 ? _indexed_allunique(A, len) : _hashed_allunique_haslength(A, len)
+    len < 32 ? _indexed_allunique(A, len) : _hashed_allunique(A, len)
 end
 
-function _indexed_allunique(A, len_or_ncodeunits)
-    len_or_ncodeunits < 2 && return true
+function _indexed_allunique(A, len_or_ncodeunits = nothing)
+    if !isnothing(len_or_ncodeunits) && len_or_ncodeunits < 2
+        return true
+    end
     iter = eachindex(A)
     I = iterate(iter)
     while I !== nothing
@@ -516,7 +507,7 @@ end
 
 function allunique(t::Tuple)
     len = length(t)
-    len < 32 || return _hashed_allunique_haslength(t, len)
+    len < 32 || return _hashed_allunique(t, len)
     a = afoldl(true, tail(t)...) do b, x
         b & !isequal(first(t), x)
     end
