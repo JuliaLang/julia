@@ -1260,13 +1260,15 @@ namespace {
                     uint64_t insts;
                     uint64_t bbs;
 
-                    void dump(ios_t *stream) {
+                    void dump(ios_t *stream) JL_NOTSAFEPOINT {
                         ios_printf(stream, "    \"%s\":\n", name.c_str());
                         ios_printf(stream, "        instructions: %u\n", insts);
                         ios_printf(stream, "        basicblocks: %zd\n", bbs);
                     }
 
-                    Stat(Function &F) : name(F.getName().str()), insts(F.getInstructionCount()), bbs(countBasicBlocks(F)) {}
+                    Stat(Function &F) JL_NOTSAFEPOINT : name(F.getName().str()), insts(F.getInstructionCount()), bbs(countBasicBlocks(F)) {}
+
+                    ~Stat() JL_NOTSAFEPOINT = default;
                 };
                 SmallVector<Stat, 8> before_stats;
                 {
