@@ -2,6 +2,7 @@ name = "Random"
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [deps]
+dSFMT_jll = "05ff407c-b0c1-5878-9df8-858cc2e60c36"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [extras]
