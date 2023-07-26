@@ -1821,21 +1821,22 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
             assert(dest.getDataLayout() == src.getDataLayout() && "Cannot merge modules with different data layouts!");
             assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
 
-            for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
-                GlobalVariable *sG = &*I;
-                GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));
-                ++I;
+            for (auto &SG : make_early_inc_range(src.globals())) {
+                GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(SG.getName()));
+                if (SG.hasLocalLinkage()) {
+                    dG = nullptr;
+                }
                 // Replace a declaration with the definition:
-                if (dG) {
-                    if (sG->isDeclaration()) {
-                        sG->replaceAllUsesWith(dG);
-                        sG->eraseFromParent();
+                if (dG && !dG->hasLocalLinkage()) {
+                    if (SG.isDeclaration()) {
+                        SG.replaceAllUsesWith(dG);
+                        SG.eraseFromParent();
                         continue;
                     }
                     //// If we start using llvm.used, we need to enable and test this
-                    //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && sG->hasAppendingLinkage()) {
+                    //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && SG.hasAppendingLinkage()) {
                     //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
-                    //    auto *sCA = cast<ConstantArray>(sG->getInitializer());
+                    //    auto *sCA = cast<ConstantArray>(SG.getInitializer());
                     //    SmallVector<Constant *, 16> Init;
                     //    for (auto &Op : dCA->operands())
                     //        Init.push_back(cast_or_null<Constant>(Op));
@@ -1847,67 +1848,69 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                     //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
                     //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
                     //    GV->copyAttributesFrom(dG);
-                    //    sG->replaceAllUsesWith(GV);
+                    //    SG.replaceAllUsesWith(GV);
                     //    dG->replaceAllUsesWith(GV);
-                    //    GV->takeName(sG);
-                    //    sG->eraseFromParent();
+                    //    GV->takeName(SG);
+                    //    SG.eraseFromParent();
                     //    dG->eraseFromParent();
                     //    continue;
                     //}
                     else {
-                        assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
-                        dG->replaceAllUsesWith(sG);
+                        assert(dG->isDeclaration() || dG->getInitializer() == SG.getInitializer());
+                        dG->replaceAllUsesWith(&SG);
                         dG->eraseFromParent();
                     }
                 }
                 // Reparent the global variable:
-                sG->removeFromParent();
-                dest.getGlobalList().push_back(sG);
+                SG.removeFromParent();
+                dest.getGlobalList().push_back(&SG);
                 // Comdat is owned by the Module
-                sG->setComdat(nullptr);
+                SG.setComdat(nullptr);
             }
 
-            for (Module::iterator I = src.begin(), E = src.end(); I != E;) {
-                Function *sG = &*I;
-                Function *dG = cast_or_null<Function>(dest.getNamedValue(sG->getName()));
-                ++I;
+            for (auto &SG : make_early_inc_range(src)) {
+                Function *dG = cast_or_null<Function>(dest.getNamedValue(SG.getName()));
+                if (SG.hasLocalLinkage()) {
+                    dG = nullptr;
+                }
                 // Replace a declaration with the definition:
-                if (dG) {
-                    if (sG->isDeclaration()) {
-                        sG->replaceAllUsesWith(dG);
-                        sG->eraseFromParent();
+                if (dG && !dG->hasLocalLinkage()) {
+                    if (SG.isDeclaration()) {
+                        SG.replaceAllUsesWith(dG);
+                        SG.eraseFromParent();
                         continue;
                     }
                     else {
                         assert(dG->isDeclaration());
-                        dG->replaceAllUsesWith(sG);
+                        dG->replaceAllUsesWith(&SG);
                         dG->eraseFromParent();
                     }
                 }
                 // Reparent the global variable:
-                sG->removeFromParent();
-                dest.getFunctionList().push_back(sG);
+                SG.removeFromParent();
+                dest.getFunctionList().push_back(&SG);
                 // Comdat is owned by the Module
-                sG->setComdat(nullptr);
+                SG.setComdat(nullptr);
             }
 
-            for (Module::alias_iterator I = src.alias_begin(), E = src.alias_end(); I != E;) {
-                GlobalAlias *sG = &*I;
-                GlobalAlias *dG = cast_or_null<GlobalAlias>(dest.getNamedValue(sG->getName()));
-                ++I;
-                if (dG) {
+            for (auto &SG : make_early_inc_range(src.aliases())) {
+                GlobalAlias *dG = cast_or_null<GlobalAlias>(dest.getNamedValue(SG.getName()));
+                if (SG.hasLocalLinkage()) {
+                    dG = nullptr;
+                }
+                if (dG && !dG->hasLocalLinkage()) {
                     if (!dG->isDeclaration()) { // aliases are always definitions, so this test is reversed from the above two
-                        sG->replaceAllUsesWith(dG);
-                        sG->eraseFromParent();
+                        SG.replaceAllUsesWith(dG);
+                        SG.eraseFromParent();
                         continue;
                     }
                     else {
-                        dG->replaceAllUsesWith(sG);
+                        dG->replaceAllUsesWith(&SG);
                         dG->eraseFromParent();
                     }
                 }
-                sG->removeFromParent();
-                dest.getAliasList().push_back(sG);
+                SG.removeFromParent();
+                dest.getAliasList().push_back(&SG);
             }
 
             // metadata nodes need to be explicitly merged not just copied

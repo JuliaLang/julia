@@ -1797,8 +1797,11 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
     if (!local) {
         // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
         GlobalVariable *proto = new GlobalVariable(*M, G->getValueType(),
-                G->isConstant(), GlobalVariable::ExternalLinkage,
+                G->isConstant(), G->getLinkage(),
                 nullptr, G->getName(), nullptr, G->getThreadLocalMode());
+        if (proto->hasLocalLinkage()) {
+            proto->setInitializer(G->getInitializer());
+        }
         proto->copyAttributesFrom(G);
         // DLLImport only needs to be set for the shadow module
         // it just gets annoying in the JIT
