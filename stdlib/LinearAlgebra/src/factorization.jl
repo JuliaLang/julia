@@ -187,18 +187,20 @@ function (/)(B::AbstractMatrix, F::Factorization)
     rdiv!(copy_similar(B, TFB), F)
 end
 # reinterpretation trick for complex lhs and real factorization
-function (/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}}}, F::Factorization{T}) where {T<:BlasReal}
+function (/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}},Transpose{Complex{T},Vector{Complex{T}}}}, F::Factorization{T}) where {T<:BlasReal}
     require_one_based_indexing(B)
     x = rdiv!(copy(reinterpret(T, B)), F)
     return copy(reinterpret(Complex{T}, x))
 end
 # don't do the reinterpretation for [Adjoint/Transpose]Factorization
-(/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
+(/)(B::Union{Matrix{Complex{T}},Adjoint{Complex{T},Vector{Complex{T}}},Transpose{Complex{T},Vector{Complex{T}}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
     @invoke /(B::AbstractMatrix, F::Factorization)
 (/)(B::Matrix{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
     @invoke /(B::AbstractMatrix, F::Factorization)
 (/)(B::Adjoint{Complex{T},Vector{Complex{T}}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
     (F' \ B')'
+(/)(B::Transpose{Complex{T},Vector{Complex{T}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
+    transpose(transpose(F) \ transpose(B))
 
 rdiv!(B::AbstractMatrix, A::TransposeFactorization) = transpose(ldiv!(A.parent, transpose(B)))
 rdiv!(B::AbstractMatrix, A::AdjointFactorization) = adjoint(ldiv!(A.parent, adjoint(B)))
