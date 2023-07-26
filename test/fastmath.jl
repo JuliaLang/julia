@@ -293,3 +293,8 @@ end
     @test x == [1, 1]
     @test i == 1
 end
+
+@testset "@fastmath-related crash (#49907)" begin
+    x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
+    @test x == Float16(3)
+end

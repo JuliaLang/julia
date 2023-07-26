@@ -679,12 +679,6 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # BlasFloat routines #
 ######################
 
-# legacy stuff, to be removed
-_multrimat!(C, A, B) = _trimul!(C, A, B)
-_mulmattri!(C, A, B) = _trimul!(C, A, B)
-_uconvert_copyto!(c, b, oA) = (c .= Ref(oA) .\ b)
-_uconvert_copyto!(c::AbstractArray{T}, b::AbstractArray{T}, _) where {T} = copyto!(c, b)
-
 # which triangle to use of the underlying data
 uplo_char(::UpperOrUnitUpperTriangular) = 'U'
 uplo_char(::LowerOrUnitLowerTriangular) = 'L'
