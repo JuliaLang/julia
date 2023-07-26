@@ -245,7 +245,7 @@ static GlobalVariable *emit_plt_thunk(
     std::string fname;
     raw_string_ostream(fname) << "jlplt_" << f_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
     Function *plt = Function::Create(functype,
-                                     GlobalVariable::ExternalLinkage,
+                                     GlobalVariable::PrivateLinkage,
                                      fname, M);
     plt->setAttributes(attrs);
     if (cc != CallingConv::C)
