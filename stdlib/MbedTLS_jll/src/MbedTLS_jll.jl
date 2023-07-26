@@ -26,7 +26,6 @@ const libmbedx509_path = BundledLazyLibraryPath(libmbedx509_name)
 
 const libmbedcrypto = LazyLibrary(libmbedcrypto_path)
 const libmbedx509 = LazyLibrary(libmbedx509_path; dependencies=[libmbedcrypto])
-libmbedtls_stack = Any[]
-const libmbedtls = LazyLibrary(libmbedtls_path; dependencies=[libmbedcrypto, libmbedx509], on_load_callback = () -> push!(libmbedtls_stack, stacktrace()))
+const libmbedtls = LazyLibrary(libmbedtls_path; dependencies=[libmbedcrypto, libmbedx509])
 
 end  # module MbedTLS_jll

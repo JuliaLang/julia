@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
-using Base, Libdl, Base.BinaryPlatforms
+using Base, Libdl, Base.BinaryPlatforms, CompilerSupportLibraries_jll
 export libopenblas
 
 if Base.USE_BLAS64
@@ -13,17 +13,11 @@ end
 
 if Sys.iswindows()
     const libopenblas_name = "bin/libopenblas$(libsuffix).dll"
-    const libgfortran_name = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
 elseif Sys.isapple()
     const libopenblas_name = "lib/libopenblas$(libsuffix).dylib"
-    const libgfortran_name = string("lib/libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
 else
     const libopenblas_name = "lib/libopenblas$(libsuffix).so"
-    const libgfortran_name = string("lib/libgfortran.so.", libgfortran_version(HostPlatform()).major)
 end
-
-const libgfortran_path = BundledLazyLibraryPath(libgfortran_name)
-const libgfortran = LazyLibrary(libgfortran_path)
 
 const libopenblas_path = BundledLazyLibraryPath(libopenblas_name)
 const libopenblas = LazyLibrary(libopenblas_path; dependencies=[libgfortran])
