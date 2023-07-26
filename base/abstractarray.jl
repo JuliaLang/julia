@@ -3297,10 +3297,12 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## N argument
 
-function map_n!(f::F, dest::AbstractArray, As) where F
+@noinline throw_map_mismatch(ndest, nvals) =
+    throw(DimensionMismatch("map! over $nvals values, but destination only has length $ndest"))
+
+@inline function map_n!(f::F, dest::AbstractArray, As) where F
     Is = zip(map(eachindex, As)...)
-    @boundscheck length(Is) <= length(dest) ||
-        throw(DimensionMismatch("map! over $(length(Is)) values, but destination only has length $(length(dest))"))
+    @boundscheck length(Is) <= length(dest) || throw_map_mismatch(length(dest), length(Is))
     for (i, js...) in zip(eachindex(dest), map(eachindex, As)...)
         J = ntuple(d -> @inbounds(As[d][js[d]]), Val(length(As)))
         val = f(J...)
