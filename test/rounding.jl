@@ -57,7 +57,7 @@ end
         @test pu - pd == eps(pz)
     end
 
-    for T in [Float32,Float64]
+    for T in [Float16,Float32,Float64]
         for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
                   prevfloat(big(1.0)),nextfloat(big(0.0)),prevfloat(big(0.0)),
                   pi,ℯ,eulergamma,catalan,golden,
@@ -349,5 +349,70 @@ end
         @test rounding(T) == RoundToZero
         @test round(T(2.7)) == T(2.0)
         Base.Rounding.setrounding_raw(T, Base.Rounding.to_fenv(old))
+    end
+end
+
+const MPFRRM = Base.MPFR.MPFRRoundingMode
+
+function mpfr_to_ieee(::Type{Float32}, x::BigFloat, r::MPFRRM)
+    ccall((:mpfr_get_flt, Base.MPFR.libmpfr), Float32, (Ref{BigFloat}, MPFRRM), x, r)
+end
+function mpfr_to_ieee(::Type{Float64}, x::BigFloat, r::MPFRRM)
+    ccall((:mpfr_get_d, Base.MPFR.libmpfr), Float64, (Ref{BigFloat}, MPFRRM), x, r)
+end
+
+function mpfr_to_ieee(::Type{G}, x::BigFloat, r::RoundingMode) where {G}
+    mpfr_to_ieee(G, x, convert(MPFRRM, r))
+end
+
+const mpfr_rounding_modes = map(
+    Base.Fix1(convert, MPFRRM),
+    (RoundNearest, RoundToZero, RoundFromZero, RoundDown, RoundUp)
+)
+
+sample_float(::Type{T}, e::Integer) where {T<:AbstractFloat} = ldexp(rand(T) + true, e)::T
+
+function float_samples(::Type{T}, exponents, n::Int) where {T<:AbstractFloat}
+    ret = T[]
+    for e ∈ exponents, i ∈ 1:n
+        push!(ret, sample_float(T, e), -sample_float(T, e))
+    end
+    ret
+end
+
+@testset "IEEEFloat(::BigFloat) against MPFR" begin
+    for pr ∈ 1:200
+        setprecision(BigFloat, pr) do
+            exp = exponent(floatmax(Float64)) + 10
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            for mpfr_rm ∈ mpfr_rounding_modes, bf ∈ bf_samples, F ∈ (Float32, Float64)
+                @test (
+                    mpfr_to_ieee(F, bf, mpfr_rm) ===
+                    F(bf, mpfr_rm) === F(bf, convert(RoundingMode, mpfr_rm))
+                )
+            end
+        end
+    end
+end
+
+const native_rounding_modes = (
+    RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp,
+    RoundToZero, RoundFromZero, RoundUp, RoundDown
+)
+
+# Checks that each rounding mode is faithful.
+@testset "IEEEFloat(::BigFloat) faithful rounding" begin
+    for pr ∈ 1:200
+        setprecision(BigFloat, pr) do
+            exp = 500
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
+                      native_rounding_modes...),
+                bf ∈ bf_samples,
+                F ∈ (Float16, Float32, Float64)
+                f = F(bf, rm)
+                @test (f === F(bf, RoundDown)) | (f === F(bf, RoundUp))
+            end
+        end
     end
 end
