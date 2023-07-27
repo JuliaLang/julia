@@ -2537,22 +2537,30 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     Σ = cumsum(sizes)
     # Algorithm 4.3 in Reference [1]
     Δ = I(4)
-    L₀ᴹ = zeros(T,4,4)
-    L₁ᴹ = zeros(T,4,4)
+    M_S₁ = zeros(T,2,2)
+    M_S₂ = zeros(T,2,2)
+    M_L₀ = zeros(T,4,4)
+    M_L₁ = zeros(T,4,4)
+    M_Bᵢⱼ⁽⁰⁾ = zeros(T,2,2)
+    M_Bᵢⱼ⁽¹⁾ = zeros(T,2,2)
     for k = 1:n-1
         for i = 1:n-k
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
             k₁, k₂ = i+1+(sizes[i+1]==0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]==0)
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
-            S₁ = zeros(T,s₁,s₁)
-            S₂ = zeros(T,s₂,s₂)
-            Bᵢⱼ⁽⁰⁾ = zeros(T,s₁,s₂)
-            Bᵢⱼ⁽¹⁾ = zeros(T,s₁,s₂)
-            @views L₀ = L₀ᴹ[1:s₁*s₂,1:s₁*s₂]
-            @views L₁ = L₁ᴹ[1:s₁*s₂,1:s₁*s₂]
+            @views S₁ = reshape(M_S₁, s₁, :)[:, 1:s₁]
+            @views S₂ = reshape(M_S₂, s₂, :)[:, 1:s₂]
+            @views L₀ = reshape(M_L₀, s₁*s₂, :)[:,1:s₁*s₂]
+            @views L₁ = reshape(M_L₁, s₁*s₂, :)[:,1:s₁*s₂]
+            @views Bᵢⱼ⁽⁰⁾ = reshape(M_Bᵢⱼ⁽⁰⁾, s₁, :)[:, 1:s₂]
+            @views Bᵢⱼ⁽¹⁾ = reshape(M_Bᵢⱼ⁽¹⁾, s₁, :)[:, 1:s₂]
+            # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
+            fill!(Bᵢⱼ⁽⁰⁾, 0)
+            fill!(Bᵢⱼ⁽¹⁾, 0)
             @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, 1.0)
-            # Retreive Rᵢⱼ[i,i+k] as A[i+k,i]'
+            # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
             @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
+            # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
             @views mul!(S₁, A[i₁:i₂,i₁:i₂], A[i₁:i₂,i₁:i₂])
             @views mul!(S₂, A[j₁:j₂,j₁:j₂], A[j₁:j₂,j₁:j₂])
             @views kron!(L₀, Δ[1:s₂,1:s₂], S₁)
@@ -2561,7 +2569,7 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
             @views mul!(A[i₁:i₂,j₁:j₂], A[i₁:i₂,i₁:i₂], Bᵢⱼ⁽⁰⁾, -1.0, 1.0)
             @views A[i₁:i₂,j₁:j₂] .-= Bᵢⱼ⁽¹⁾
             @views ldiv!(lu!(L₀), A[i₁:i₂,j₁:j₂][:])
-            # Store Rᵢⱼ[i,i+k]' in A[i+k,i]
+            # Compute and store Rᵢ,ᵢ₊ₖ' in A[i+k,i]
             @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,i₁:i₂], A[i₁:i₂,j₁:j₂], 1.0, 1.0)
             @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,j₁:j₂], A[j₁:j₂,j₁:j₂], 1.0, 1.0)
             @views A[j₁:j₂,i₁:i₂] .= Bᵢⱼ⁽⁰⁾'
