@@ -713,7 +713,7 @@ for f in (:exp, :cis, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
-# Cube root for real valued matrices
+# Cube root of a real-valued diagonal matrix
 cbrt(A::Diagonal{T}) where {T<:Real} = Diagonal(cbrt.(A.diag))
 
 function inv(D::Diagonal{T}) where T

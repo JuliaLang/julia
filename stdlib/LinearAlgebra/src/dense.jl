@@ -907,10 +907,10 @@ end
 sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
 sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
-# Cube root for complex-valued matrices
+# Cube root of a complex-valued matrix
 cbrt(A::AbstractMatrix) = A^(1//3)
 
-# Cube root for real valued matrices
+# Cube root of a real-valued matrix
 function cbrt(A::AbstractMatrix{T}) where {T<:Real}
     if checksquare(A) == 0
         return copy(A)
@@ -922,7 +922,7 @@ function cbrt(A::AbstractMatrix{T}) where {T<:Real}
     end
 end
 
-# Cube roots of adjoint and transpose
+# Cube roots of adjoint and transpose matrices
 cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
 cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
