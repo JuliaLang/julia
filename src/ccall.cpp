@@ -663,8 +663,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 f_lib = jl_symbol_name((jl_sym_t*)t1);
             else if (jl_is_string(t1))
                 f_lib = jl_string_data(t1);
-            else
-                f_name = NULL;
+            else {
+                out.lib_expr = t1;
+            }
         }
     }
 }

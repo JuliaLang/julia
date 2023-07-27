@@ -314,6 +314,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
@@ -328,11 +334,9 @@ const liblapack_name = libblas_name
 include("logging.jl")
 using .CoreLogging
 
-# Concurrency
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
