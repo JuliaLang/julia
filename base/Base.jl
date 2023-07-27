@@ -291,6 +291,7 @@ include("iobuffer.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
+include("base_jll_adapters.jl")
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
@@ -496,6 +497,9 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+
+# Finish up by inserting lazy libraries for the JLLS that must be loaded during bootstrap
+include(@__MODULE__, "base_jll_insertion.jl")
 
 end_base_include = time_ns()
 

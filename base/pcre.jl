@@ -8,18 +8,17 @@ import ..RefValue
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
-
-const PCRE_LIB = "libpcre2-8"
+using .Base.JLLAdapters: get_libpcre2_8
 
 function create_match_context()
     JIT_STACK_START_SIZE = 32768
     JIT_STACK_MAX_SIZE = 1048576
-    jit_stack = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
+    jit_stack = ccall((:pcre2_jit_stack_create_8, get_libpcre2_8()), Ptr{Cvoid},
                       (Csize_t, Csize_t, Ptr{Cvoid}),
                       JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
-    ctx = ccall((:pcre2_match_context_create_8, PCRE_LIB),
+    ctx = ccall((:pcre2_match_context_create_8, get_libpcre2_8()),
                 Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
-    ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
+    ccall((:pcre2_jit_stack_assign_8, get_libpcre2_8()), Cvoid,
           (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), ctx, C_NULL, jit_stack)
     return ctx
 end
@@ -128,7 +127,7 @@ const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = RefValue{T}()
-    ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Cint,
+    ret = ccall((:pcre2_pattern_info_8, get_libpcre2_8()), Cint,
                 (Ptr{Cvoid}, UInt32, Ptr{Cvoid}),
                 regex, what, buf)
     if ret != 0
@@ -141,13 +140,13 @@ function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
 end
 
 function ovec_length(match_data)
-    n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
+    n = ccall((:pcre2_get_ovector_count_8, get_libpcre2_8()), UInt32,
               (Ptr{Cvoid},), match_data)
     return 2Int(n)
 end
 
 function ovec_ptr(match_data)
-    ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
+    ptr = ccall((:pcre2_get_ovector_pointer_8, get_libpcre2_8()), Ptr{Csize_t},
                 (Ptr{Cvoid},), match_data)
     return ptr
 end
@@ -158,7 +157,7 @@ function compile(pattern::AbstractString, options::Integer)
     end
     errno = RefValue{Cint}(0)
     erroff = RefValue{Csize_t}(0)
-    re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Cvoid},
+    re_ptr = ccall((:pcre2_compile_8, get_libpcre2_8()), Ptr{Cvoid},
                    (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Cvoid}),
                    pattern, ncodeunits(pattern), options, errno, erroff, C_NULL)
     if re_ptr == C_NULL
@@ -168,7 +167,7 @@ function compile(pattern::AbstractString, options::Integer)
 end
 
 function jit_compile(regex::Ptr{Cvoid})
-    errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
+    errno = ccall((:pcre2_jit_compile_8, get_libpcre2_8()), Cint,
                   (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
     errno == 0 && return true
     errno == ERROR_JIT_BADOPTION && return false
@@ -176,20 +175,20 @@ function jit_compile(regex::Ptr{Cvoid})
 end
 
 free_match_data(match_data) =
-    ccall((:pcre2_match_data_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), match_data)
+    ccall((:pcre2_match_data_free_8, get_libpcre2_8()), Cvoid, (Ptr{Cvoid},), match_data)
 
 free_re(re) =
-    ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
+    ccall((:pcre2_code_free_8, get_libpcre2_8()), Cvoid, (Ptr{Cvoid},), re)
 
 free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
+    ccall((:pcre2_jit_stack_free_8, get_libpcre2_8()), Cvoid, (Ptr{Cvoid},), stack)
 
 free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
+    ccall((:pcre2_match_context_free_8, get_libpcre2_8()), Cvoid, (Ptr{Cvoid},), context)
 
 function err_message(errno::Integer)
     buffer = Vector{UInt8}(undef, 1024)
-    ret = ccall((:pcre2_get_error_message_8, PCRE_LIB), Cint,
+    ret = ccall((:pcre2_get_error_message_8, get_libpcre2_8()), Cint,
                 (Cint, Ptr{UInt8}, Csize_t), errno, buffer, length(buffer))
     ret == ERROR_BADDATA && error("PCRE error: invalid errno ($errno)")
     # TODO: seems like there should be a better way to get this string
@@ -200,7 +199,7 @@ function exec(re, subject, offset, options, match_data)
     if !(subject isa Union{String,SubString{String}})
         subject = String(subject)
     end
-    rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_match_8, get_libpcre2_8()), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
@@ -222,21 +221,21 @@ function exec_r_data(re, subject, offset, options)
 end
 
 function create_match_data(re)
-    p = ccall((:pcre2_match_data_create_from_pattern_8, PCRE_LIB),
+    p = ccall((:pcre2_match_data_create_from_pattern_8, get_libpcre2_8()),
               Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), re, C_NULL)
     p == C_NULL && error("PCRE error: could not allocate memory")
     return p
 end
 
 function substring_number_from_name(re, name)
-    n = ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
+    n = ccall((:pcre2_substring_number_from_name_8, get_libpcre2_8()), Cint,
                (Ptr{Cvoid}, Cstring), re, name)
     return Int(n)
 end
 
 function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
-    rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_substring_length_bynumber_8, get_libpcre2_8()), Cint,
                (Ptr{Cvoid}, Cint, Ref{Csize_t}), match_data, number, s)
     if rc < 0
         rc == ERROR_UNSET && return 0
@@ -247,7 +246,7 @@ end
 
 function substring_copy_bynumber(match_data, number, buf, buf_size)
     s = RefValue{Csize_t}(buf_size)
-    rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_substring_copy_bynumber_8, get_libpcre2_8()), Cint,
                (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
                match_data, number, buf, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")

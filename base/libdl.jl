@@ -11,6 +11,8 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
     dlpath, find_library, dlext, dllist, LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
+using .Base.JLLAdapters: LazyLibraryPath, BundledLazyLibraryPath
+
 """
     DL_LOAD_PATH
 
@@ -319,44 +321,6 @@ end
 
 
 """
-    LazyLibraryPath
-
-Helper type for lazily constructed library paths for use with `LazyLibrary`.
-Arguments are passed to `joinpath()`.  Arguments must be able to have
-`string()` called on them.
-
-```
-libfoo = LazyLibrary(LazyLibraryPath(prefix, "lib/libfoo.so.1.2.3"))
-```
-"""
-struct LazyLibraryPath
-    pieces::Vector
-    LazyLibraryPath(pieces::Vector) = new(pieces)
-end
-LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
-Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)
-Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
-# Define `print` so that we can wrap this in a `LazyString`
-Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
-
-# Helper to get `Sys.BINDIR` at runtime
-struct SysBindirGetter; end
-Base.string(::SysBindirGetter) = dirname(Sys.BINDIR)
-
-"""
-    BundledLazyLibraryPath
-
-Helper type for lazily constructed library paths that are stored within the
-bundled Julia distribution, primarily for use by Base modules.
-
-```
-libfoo = LazyLibrary(BundledLazyLibraryPath("lib/libfoo.so.1.2.3"))
-```
-"""
-BundledLazyLibraryPath(subpath) = LazyLibraryPath(SysBindirGetter(), subpath)
-
-
-"""
     LazyLibrary(name, flags = <default dlopen flags>,
                 dependencies = LazyLibrary[], on_load_callback = nothing)
 
@@ -445,7 +409,8 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
 
     return handle
 end
-dlopen(x::Any) = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibrary}, x))
+dlopen(llp::LazyLibraryPath, args...; kwargs...) = dlopen(string(llp), args...; kwargs...)
+dlopen(x::Any) = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibraryPath,LazyLibrary}, x))
 dlsym(ll::LazyLibrary, args...; kwargs...) = dlsym(dlopen(ll), args...; kwargs...)
 dlpath(ll::LazyLibrary) = dlpath(dlopen(ll))
 end # module Libdl
