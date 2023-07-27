@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 long JULIA_HEADER_SIZE = 0;
+unsigned long JULIA_BUFF_TAG = 0;
 
 extern void mmtk_start_spawned_worker_thread(void*, void*);
 extern void mmtk_start_spawned_controller_thread(void*, void*);
@@ -49,6 +50,7 @@ void spawn_collector_thread(void *tls, void *ctx, int kind) {
     }
 }
 
-void set_julia_obj_header_size(long size) {
+void set_julia_obj_header_size_and_buffer_tag(long size, long tag) {
     JULIA_HEADER_SIZE = size;
+    JULIA_BUFF_TAG = tag; 
 }

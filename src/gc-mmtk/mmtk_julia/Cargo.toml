@@ -10,7 +10,7 @@ edition = "2018"
 [package.metadata.julia]
 # Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
 julia_repo = "https://github.com/mmtk/julia.git"
-julia_version = "73411572e118d7cfd0110da46663b34cb82eb520"
+julia_version = "5733c287d803316e6da1771db35e49c767804112"
 
 [lib]
 crate-type = ["cdylib"]
@@ -42,7 +42,7 @@ chrono = "*"
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 
 [features]
-default = ["scan_obj_c", "mmtk/vm_space"]
+default = ["mmtk/vm_space", "julia_copy_stack"]
 
 # Plans
 nogc = []
@@ -52,6 +52,4 @@ marksweep = []
 
 # TODO remove this when we properly support moving
 non_moving_immix = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
-
-# FIXME update and use rust object scanner as default for immix
-scan_obj_c = []
+julia_copy_stack = []

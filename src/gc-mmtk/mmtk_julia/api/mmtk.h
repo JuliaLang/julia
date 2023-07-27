@@ -9,15 +9,10 @@
 extern "C" {
 #endif
 
-
-typedef struct {
-    void* a;
-    void* b;
-} closure_pointer;
 typedef void* MMTk_Mutator;
 typedef void* MMTk_TraceLocal;
-typedef void (*ProcessEdgeFn)(closure_pointer closure, void* slot);
-typedef void (*ProcessOffsetEdgeFn)(closure_pointer closure, void* slot, int offset);
+typedef void (*ProcessEdgeFn)(void* closure, void* slot);
+typedef void (*ProcessOffsetEdgeFn)(void* closure, void* slot, int offset);
 
 /**
  * Allocation
@@ -36,7 +31,7 @@ extern void mmtk_post_alloc(MMTk_Mutator mutator, void* refer,
     size_t bytes, int allocator);
 
 extern void mmtk_add_object_to_mmtk_roots(void *obj);
-extern void mmtk_process_root_edges(closure_pointer c, void* slot);
+extern void mmtk_process_root_edges(void* c, void* slot);
 
 extern bool mmtk_is_live_object(void* ref);
 extern bool mmtk_is_mapped_object(void* ref);
@@ -65,15 +60,11 @@ extern uintptr_t JULIA_MALLOC_BYTES;
 // * int is 4 bytes
 // * size_t is 8 bytes
 typedef struct {
-    void (* scan_julia_obj) (void* obj, closure_pointer closure, ProcessEdgeFn process_edge, ProcessOffsetEdgeFn process_offset_edge);
-    void (* scan_julia_exc_obj) (void* obj, closure_pointer closure, ProcessEdgeFn process_edge);
+    void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessEdgeFn process_edge);
     void* (* get_stackbase) (int16_t tid);
     void (* calculate_roots) (void* tls);
     int (* get_jl_last_err) (void);
     void (* set_jl_last_err) (int e);
-    size_t (* get_lo_size) (void* obj);
-    size_t (* get_so_size) (void* obj);
-    void* (* get_obj_start_ref) (void* obj);
     void (* wait_for_the_world) (void);
     int8_t (* set_gc_initial_state) (void* tls);
     void (* set_gc_final_state) (int8_t old_state);
@@ -96,7 +87,7 @@ typedef struct {
 /**
  * Misc
  */
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, Julia_Upcalls *calls, uintptr_t header_size);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, Julia_Upcalls *calls, uintptr_t header_size, uintptr_t tag);
 extern bool mmtk_will_never_move(void* object);
 extern bool mmtk_process(char* name, char* value);
 extern void mmtk_scan_region(void);
@@ -111,6 +102,7 @@ extern void mmtk_register_finalizer(void* obj, void* function, bool is_ptr);
 extern void mmtk_run_finalizers_for_obj(void* obj);
 extern void mmtk_run_finalizers(bool at_exit);
 extern void mmtk_gc_poll(void *tls);
+extern void mmtk_julia_copy_stack_check(int copy_stack);
 
 /**
  * VM Accounting

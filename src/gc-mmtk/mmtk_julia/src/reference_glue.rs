@@ -7,7 +7,7 @@ use mmtk::vm::Finalizable;
 use mmtk::vm::ReferenceGlue;
 
 extern "C" {
-    static jl_nothing: *mut mmtk_jl_value_t;
+    pub static jl_nothing: *mut mmtk_jl_value_t;
 }
 
 #[derive(Copy, Clone, Eq, Hash, PartialOrd, PartialEq, Debug)]

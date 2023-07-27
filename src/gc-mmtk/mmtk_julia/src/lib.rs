@@ -8,7 +8,6 @@ use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::util::ObjectReference;
-use mmtk::vm::EdgeVisitor;
 use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
 use mmtk::Mutator;
@@ -71,6 +70,7 @@ lazy_static! {
 #[link(kind = "static", name = "runtime_gc_c")]
 extern "C" {
     pub static JULIA_HEADER_SIZE: usize;
+    pub static JULIA_BUFF_TAG: usize;
 }
 
 #[no_mangle]
@@ -104,39 +104,23 @@ lazy_static! {
 #[allow(improper_ctypes)]
 extern "C" {
     pub fn spawn_collector_thread(tls: VMThread, ctx: *mut GCWorker<JuliaVM>, kind: i32);
-    pub fn set_julia_obj_header_size(size: usize);
+    pub fn set_julia_obj_header_size_and_buffer_tag(size: usize, tag: usize);
     pub fn reset_mutator_count();
     pub fn get_next_julia_mutator() -> usize;
     pub fn get_mutator_ref(mutator: *mut Mutator<JuliaVM>) -> ObjectReference;
     pub fn get_mutator_from_ref(mutator: ObjectReference) -> *mut Mutator<JuliaVM>;
 }
 
-type ProcessEdgeFn =
-    *const extern "C" fn(closure: &mut dyn EdgeVisitor<JuliaVMEdge>, slot: Address);
-
-type ProcessOffsetEdgeFn =
-    *const extern "C" fn(closure: &mut dyn EdgeVisitor<JuliaVMEdge>, slot: Address, offset: usize);
+type ProcessEdgeFn = *const extern "C" fn(closure: Address, slot: Address);
 
 #[repr(C)]
 pub struct Julia_Upcalls {
-    pub scan_julia_obj: extern "C" fn(
-        obj: Address,
-        closure: &mut dyn EdgeVisitor<JuliaVMEdge>,
-        process_edge: ProcessEdgeFn,
-        process_offset_edge: ProcessOffsetEdgeFn,
-    ),
-    pub scan_julia_exc_obj: extern "C" fn(
-        obj: Address,
-        closure: &mut dyn EdgeVisitor<JuliaVMEdge>,
-        process_edge: ProcessEdgeFn,
-    ),
+    pub scan_julia_exc_obj:
+        extern "C" fn(obj: Address, closure: Address, process_edge: ProcessEdgeFn),
     pub get_stackbase: extern "C" fn(tid: u16) -> usize,
     pub calculate_roots: extern "C" fn(tls: OpaquePointer),
     pub get_jl_last_err: extern "C" fn() -> u32,
     pub set_jl_last_err: extern "C" fn(errno: u32),
-    pub get_lo_size: extern "C" fn(object: ObjectReference) -> usize,
-    pub get_so_size: extern "C" fn(object: ObjectReference) -> usize,
-    pub get_object_start_ref: extern "C" fn(object: ObjectReference) -> Address,
     pub wait_for_the_world: extern "C" fn(),
     pub set_gc_initial_state: extern "C" fn(tls: OpaquePointer) -> i8,
     pub set_gc_final_state: extern "C" fn(old_state: i8),
