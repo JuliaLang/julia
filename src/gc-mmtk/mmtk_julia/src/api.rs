@@ -104,6 +104,30 @@ pub extern "C" fn mmtk_gc_init(
     assert!(!crate::MMTK_INITIALIZED.load(Ordering::SeqCst));
     // Make sure we initialize MMTk here
     lazy_static::initialize(&SINGLETON);
+
+    // Assert to make sure our fastpath allocation is correct.
+    {
+        // If the assertion failed, check the allocation fastpath in Julia
+        // - runtime fastpath: mmtk_immix_alloc_fast and mmtk_immortal_alloc_fast in julia.h
+        // - compiler inserted fastpath: llvm-final-gc-lowering.cpp
+        use mmtk::util::alloc::AllocatorSelector;
+        let default_allocator = memory_manager::get_allocator_mapping::<JuliaVM>(
+            &SINGLETON,
+            AllocationSemantics::Default,
+        );
+        assert_eq!(default_allocator, AllocatorSelector::Immix(0));
+        let immortal_allocator = memory_manager::get_allocator_mapping::<JuliaVM>(
+            &SINGLETON,
+            AllocationSemantics::Immortal,
+        );
+        assert_eq!(immortal_allocator, AllocatorSelector::BumpPointer(0));
+    }
+
+    // Assert to make sure alignment used in C is correct
+    {
+        // If the assertion failed, check MMTK_MIN_ALIGNMENT in julia.h
+        assert_eq!(<JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT, 4);
+    }
 }
 
 #[no_mangle]
@@ -446,19 +470,6 @@ pub extern "C" fn mmtk_object_reference_write_slow(
 #[no_mangle]
 pub static MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address =
     mmtk::util::metadata::side_metadata::GLOBAL_SIDE_METADATA_VM_BASE_ADDRESS;
-
-#[no_mangle]
-pub static MMTK_NO_BARRIER: u8 = 0;
-#[no_mangle]
-pub static MMTK_OBJECT_BARRIER: u8 = 1;
-
-#[no_mangle]
-#[cfg(feature = "immix")]
-pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 0;
-
-#[no_mangle]
-#[cfg(feature = "stickyimmix")]
-pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 1;
 
 #[no_mangle]
 pub extern "C" fn mmtk_object_is_managed_by_mmtk(addr: usize) -> bool {
