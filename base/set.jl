@@ -478,7 +478,7 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-function allunique(S::String)
+function allunique(S::AbstractString)
     nunits = ncodeunits(S) # computing `length` for a string might be expensive
     nunits < 32 ? _indexed_allunique(S, nunits) : _hashed_allunique(S, nunits)
 end
