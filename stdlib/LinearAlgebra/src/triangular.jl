@@ -2555,11 +2555,9 @@ function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
             @views Bᵢⱼ⁽⁰⁾ = reshape(M_Bᵢⱼ⁽⁰⁾, s₁, :)[:, 1:s₂]
             @views Bᵢⱼ⁽¹⁾ = reshape(M_Bᵢⱼ⁽¹⁾, s₁, :)[:, 1:s₂]
             # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
-            fill!(Bᵢⱼ⁽⁰⁾, 0)
-            fill!(Bᵢⱼ⁽¹⁾, 0)
-            @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂], 1.0, 1.0)
+            @views mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂])
             # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
-            @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]', 1.0, 1.0)
+            @views mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]')
             # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
             @views mul!(S₁, A[i₁:i₂,i₁:i₂], A[i₁:i₂,i₁:i₂])
             @views mul!(S₂, A[j₁:j₂,j₁:j₂], A[j₁:j₂,j₁:j₂])
