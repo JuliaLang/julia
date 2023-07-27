@@ -325,7 +325,10 @@ public:
         std::mutex EmissionMutex;
     };
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::IRTransformLayer OptSelLayerT;
+    typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -437,30 +440,6 @@ public:
 
         std::unique_ptr<WNMutex> mutex;
     };
-    struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
-        CompileLayerT CompileLayer;
-        OptimizeLayerT OptimizeLayer;
-    };
-
-    struct OptSelLayerT : orc::IRLayer {
-
-        template<size_t N>
-        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers) JL_NOTSAFEPOINT
-            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
-                optimizers[0]->OptimizeLayer.getManglingOptions()),
-            optimizers(optimizers.data()),
-            count(N) {
-            static_assert(N > 0, "Expected array with at least one optimizer!");
-        }
-        ~OptSelLayerT() JL_NOTSAFEPOINT = default;
-
-        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
-
-        private:
-        const std::unique_ptr<PipelineT> * const optimizers;
-        size_t count;
-    };
 
 private:
     // Custom object emission notification handler for the JuliaOJIT
@@ -529,10 +508,9 @@ public:
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }
-private:
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
-    void shareStrings(Module &M) JL_NOTSAFEPOINT;
+private:
 
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;
@@ -563,8 +541,11 @@ private:
 #endif
     ObjLayerT ObjectLayer;
     LockLayerT LockLayer;
-    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
+    CompileLayerT CompileLayer;
+    JITPointersLayerT JITPointersLayer;
+    OptimizeLayerT OptimizeLayer;
     OptSelLayerT OptSelLayer;
+    DepsVerifyLayerT DepsVerifyLayer;
     CompileLayerT ExternalCompileLayer;
 
 };
@@ -600,11 +581,5 @@ Pass *createLowerSimdLoopPass() JL_NOTSAFEPOINT;
 
 // NewPM
 #include "passes.h"
-
-// Whether the Function is an llvm or julia intrinsic.
-static inline bool isIntrinsicFunction(Function *F) JL_NOTSAFEPOINT
-{
-    return F->isIntrinsic() || F->getName().startswith("julia.");
-}
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
