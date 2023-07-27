@@ -2061,3 +2061,7 @@ let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes())
         (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
     end == 1
 end
+
+# https://github.com/JuliaLang/julia/issues/50612
+f50612(x) = UInt32(x)
+@test all(!isinvoke(:UInt32),get_code(f50612,Tuple{Char}))
