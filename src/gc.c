@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #ifdef __GLIBC__
@@ -3323,7 +3324,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         old_mut_time = mutator_time;
         old_freed_diff = freed_diff;
         old_pause_time = pause;
-        old_heap_size = heap_size;
+        old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
         thrashing = gc_time > mutator_time * 98 ? 1 : 0;
         if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
             double alloc_rate = alloc_mem/alloc_time;
@@ -3331,7 +3332,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
         }
     }
-    int bad_result = target_allocs > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Something went wrong
+    int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
         target_allocs = 2*sqrt((double)heap_size/min_interval);
     uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
