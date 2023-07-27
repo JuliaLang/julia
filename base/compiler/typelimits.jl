@@ -116,15 +116,32 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             return Union{a, b}
         end
     elseif isa(t, DataType)
-        if isType(t) # see equivalent case in type_more_complex
-            tt = unwrap_unionall(t.parameters[1])
-            if isa(tt, Union) || isa(tt, TypeVar) || isType(tt)
-                is_derived_type_from_any(tt, sources, depth + 1) && return t
-            else
-                isType(c) && (c = unwrap_unionall(c.parameters[1]))
-                type_more_complex(tt, c, sources, depth, 0, 0) || return t
+        if isType(t)
+            # Type is fairly important, so do not widen it as fast as other types if avoidable
+            tt = t.parameters[1]
+            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            # must forbid nesting through this if we detect that potentially occurring
+            # we already know !is_derived_type_from_any so refuse to recurse here
+            if !isa(ttu, DataType)
+                return Type
+            elseif isType(ttu)
+                return Type{<:Type}
             end
-            return Type
+            # try to peek into c to get a comparison object, but if we can't perhaps t is already simple enough on its own
+            # (this is slightly more permissive than type_more_complex implements for the same case).
+            if isType(c)
+                ct = c.parameters[1]
+            else
+                ct = Union{}
+            end
+            Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
+            Qt === Any && return Type
+            Qt === tt && return t
+            # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
+            # enough, since this moves Qt outside of Type for is_derived_type_from_any
+            Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
+            Qt === Any && return Type
+            return Type{<:Qt}
         elseif isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
@@ -157,6 +174,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             end
         end
         if allowed_tuplelen < 1 && t.name === Tuple.name
+            # forbid nesting Tuple{Tuple{Tuple...}} through this
             return Any
         end
         widert = t.name.wrapper
@@ -247,18 +265,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     # base case for data types
     if isa(t, DataType)
         tP = t.parameters
-        if isType(t)
-            # Treat Type{T} and T as equivalent to allow taking typeof any
-            # source type (DataType) anywhere as Type{...}, as long as it isn't
-            # nesting as Type{Type{...}}
-            tt = unwrap_unionall(t.parameters[1])
-            if isa(tt, Union) || isa(tt, TypeVar) || isType(tt)
-                return !is_derived_type_from_any(tt, sources, depth + 1)
-            else
-                isType(c) && (c = unwrap_unionall(c.parameters[1]))
-                return type_more_complex(tt, c, sources, depth, 0, 0)
-            end
-        elseif isa(c, DataType) && t.name === c.name
+        if isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
             isempty(tP) && return false
