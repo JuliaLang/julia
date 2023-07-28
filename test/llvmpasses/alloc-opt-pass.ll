@@ -1,14 +1,18 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
+
+; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}
 
 ; Test that the gc_preserve intrinsics are deleted directly.
 
 ; CHECK-LABEL: @preserve_branches
-; CHECK: call {}*** @julia.ptls_states()
+; TYPED: call {}*** @julia.ptls_states()
+; OPAQUE: call ptr @julia.ptls_states()
 ; CHECK: L1:
 ; CHECK-NOT: @llvm.julia.gc_preserve_begin
 ; CHECK-NEXT: @external_function()
@@ -41,9 +45,11 @@ L3:
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @preserve_branches2
-; CHECK: call {}*** @julia.ptls_states()
+; TYPED: call {}*** @julia.ptls_states()
+; OPAQUE: call ptr @julia.ptls_states()
 ; CHECK: L1:
-; CHECK-NEXT: @llvm.julia.gc_preserve_begin{{.*}}{} addrspace(10)* %v2
+; TYPED-NEXT: @llvm.julia.gc_preserve_begin{{.*}}{} addrspace(10)* %v2
+; OPAQUE-NEXT: @llvm.julia.gc_preserve_begin{{.*}}ptr addrspace(10) %v2
 ; CHECK-NEXT: @external_function()
 ; CHECK-NEXT: br i1 %b2, label %L2, label %L3
 
@@ -97,16 +103,21 @@ declare {}*** @julia.get_pgcstack()
 declare noalias {} addrspace(10)* @julia.gc_alloc_obj(i8*, i64, {} addrspace(10)*)
 declare {}* @julia.pointer_from_objref({} addrspace(11)*)
 declare void @llvm.memcpy.p11i8.p0i8.i64(i8 addrspace(11)* nocapture writeonly, i8* nocapture readonly, i64, i32, i1)
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture writeonly, i8* nocapture readonly, i64, i1)
 declare token @llvm.julia.gc_preserve_begin(...)
 declare void @llvm.julia.gc_preserve_end(token)
 
 ; CHECK-LABEL: @memref_collision
-; CHECK: call {}*** @julia.ptls_states()
-; CHECK-NOT: store {}
+; TYPED: call {}*** @julia.ptls_states()
+; OPAQUE: call ptr @julia.ptls_states()
+; TYPED-NOT: store {}
+; OPAQUE-NOT: store ptr
 ; CHECK: store i
-; CHECK-NOT: store {}
+; TYPED-NOT: store {}
+; OPAQUE-NOT: store ptr
 ; CHECK: L1:
-; CHECK: load {}
+; TYPED: load {}
+; OPAQUE: load ptr
 ; CHECK: L2:
 ; CHECK: load i
 define void @memref_collision(i64 %x) {
@@ -126,6 +137,28 @@ L1:
 L2:
   %v2 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
   %v2_x = load i64, i64 addrspace(10)* %v2
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; CHECK-LABEL: @lifetime_no_preserve_end
+; CHECK: alloca
+; CHECK-NOT: call token(...) @llvm.julia.gc_preserve_begin
+; CHECK: call void @llvm.lifetime.start
+; CHECK-NOT: call void @llvm.lifetime.end
+define void @lifetime_no_preserve_end({}* noalias nocapture noundef nonnull sret({}) %0) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+  %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, {} addrspace(10)* @tag)
+  %token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v)
+  %v_derived = addrspacecast {} addrspace(10)* %v to {} addrspace(11)*
+  %ptr = call nonnull {}* @julia.pointer_from_objref({} addrspace(11)* %v_derived)
+  %ptr_raw = bitcast {}* %ptr to i8*
+  call void @external_function() ; safepoint
+  %ret_raw = bitcast {}* %0 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 %ret_raw, i8 * align 8 %ptr_raw, i64 0, i1 false)
+  %ret_raw2 = bitcast {}* %0 to i8*
   ret void
 }
 ; CHECK-LABEL: }{{$}}

@@ -38,6 +38,7 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 #include <map>
+#include <string>
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -702,8 +703,11 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
-        if (FalseElem->getType() != TrueElem->getType())
+        if (FalseElem->getType() != TrueElem->getType()) {
+            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+            assert(FalseElem->getContext().supportsTypedPointers());
             FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
+        }
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -776,6 +780,8 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
             else
                 BaseElem = IncomingBases[i];
             if (BaseElem->getType() != T_prjlvalue) {
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(BaseElem->getContext().supportsTypedPointers());
                 auto &remap = CastedRoots[i][BaseElem];
                 if (!remap) {
                     if (auto constant = dyn_cast<Constant>(BaseElem)) {
@@ -2213,14 +2219,14 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size,
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
+    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, T_size, V);
     auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0));
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2291,7 +2297,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     if (T_prjlvalue) {
         T_pprjlvalue = T_prjlvalue->getPointerTo();
         Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
-            ConstantInt::get(T_int32, maxframeargs), "", StartOff);
+            ConstantInt::get(T_int32, maxframeargs), "jlcallframe", StartOff);
     }
     std::vector<CallInst*> write_barriers;
     for (BasicBlock &BB : F) {
@@ -2589,14 +2595,17 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "", InsertBefore);
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
-    if (Val->getType() != T_prjlvalue)
+    if (Val->getType() != T_prjlvalue) {
+        // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+        assert(Val->getContext().supportsTypedPointers());
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertBefore);
+    }
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
@@ -2658,7 +2667,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
             slotAddress->insertAfter(gcframe);
             slotAddress->takeName(AI);
 
@@ -2677,6 +2686,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             }
             if (slotAddress->getType() != AI->getType()) {
                 // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(slotAddress->getContext().supportsTypedPointers());
                 auto BCI  = new BitCastInst(slotAddress, AI->getType());
                 BCI->insertAfter(slotAddress);
                 slotAddress = BCI;
@@ -2701,12 +2712,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             for (unsigned i = 0; i < Store.second; ++i) {
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
+                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
-                if (Elem->getType() != T_prjlvalue)
+                if (Elem->getType() != T_prjlvalue) {
+                    // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                    assert(Elem->getContext().supportsTypedPointers());
                     Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
+                }
                 //auto Idxs = makeArrayRef(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
@@ -2759,7 +2773,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
     bool modified = lateLowerGCFrame.runOnFunction(F);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }
@@ -2773,7 +2787,7 @@ PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
     bool CFGModified = false;
     bool modified = lateLowerGCFrame.runOnFunction(F, &CFGModified);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         if (CFGModified) {

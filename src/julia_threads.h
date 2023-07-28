@@ -130,12 +130,12 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
-    _Atomic(int64_t) freed;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
     _Atomic(uint64_t) poolalloc;
     _Atomic(uint64_t) bigalloc;
-    _Atomic(uint64_t) freecall;
+    _Atomic(int64_t) free_acc;
+    _Atomic(uint64_t) alloc_acc;
 } jl_thread_gc_num_t;
 
 typedef struct {
@@ -198,6 +198,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+struct _jl_gc_pagemeta_t;
 
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
@@ -260,6 +261,8 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    struct _jl_gc_pagemeta_t *page_metadata_allocd;
+    struct _jl_gc_pagemeta_t *page_metadata_lazily_freed;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;

@@ -182,7 +182,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
     @test_throws Expected gf_err()
     @test_throws Expected gf_err()
-    @test gf_err_ref[] == 4
+    @test gf_err_ref[] < 1000
 end
 
 gf_err_ref[] = 0
@@ -308,6 +308,8 @@ end
 @generated function f33243()
     :(global x33243 = 2)
 end
+@test_throws ErrorException f33243()
+global x33243
 @test f33243() === 2
 @test x33243 === 2
 

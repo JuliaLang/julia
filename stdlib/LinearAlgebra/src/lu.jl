@@ -79,7 +79,7 @@ transpose(F::LU{<:Real}) = TransposeFactorization(F)
 # the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
-    lpt = LAPACK.getrf!(A)
+    lpt = LAPACK.getrf!(A; check)
     check && checknonsingular(lpt[3])
     return LU{T,typeof(lpt[1]),typeof(lpt[2])}(lpt[1], lpt[2], lpt[3])
 end
@@ -133,7 +133,7 @@ lu!(A::AbstractMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype
     generic_lufact!(A, pivot; check = check)
 function generic_lufact!(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
                          check::Bool = true) where {T}
-    LAPACK.chkfinite(A)
+    check && LAPACK.chkfinite(A)
     # Extract values
     m, n = size(A)
     minmn = min(m,n)

@@ -149,7 +149,8 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
             return OptimizationRemark(DEBUG_TYPE, "MarkedUnsafeAlgebra", *K)
                    << "marked unsafe algebra on " << ore::NV("Instruction", *K);
         });
-        (*K)->setFast(true);
+        (*K)->setHasAllowReassoc(true);
+        (*K)->setHasAllowContract(true);
         ++length;
     }
     ReductionChainLength += length;
@@ -269,7 +270,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         I->deleteValue();
     marker->eraseFromParent();
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     return Changed;
 }

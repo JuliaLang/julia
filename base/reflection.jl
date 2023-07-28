@@ -529,8 +529,10 @@ function ismutabletype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.flags & 0x2 == 0x2
+    return isa(t, DataType) && ismutabletypename(t.name)
 end
+
+ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 """
     isstructtype(T) -> Bool
@@ -820,9 +822,19 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
+end
+
+function _fieldindex_maythrow(T::DataType, name::Symbol)
     @_foldable_meta
     @noinline
-    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, true)+1)
+end
+
+function _fieldindex_nothrow(T::DataType, name::Symbol)
+    @_total_meta
+    @noinline
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, false)+1)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
@@ -1194,6 +1206,7 @@ struct CodegenParams
     gnu_pubnames::Cint
     debug_info_kind::Cint
     safepoint_on_entry::Cint
+    gcstack_arg::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1203,6 +1216,7 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
+                   gcstack_arg::Bool=true,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
                    generic_context = nothing)
         return new(
@@ -1210,6 +1224,7 @@ struct CodegenParams
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             Cint(safepoint_on_entry),
+            Cint(gcstack_arg),
             lookup, generic_context)
     end
 end
@@ -1656,7 +1671,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
             empty!(cst)
             resize!(cst, length(code.code))
             sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
-            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -2144,15 +2159,15 @@ end
 """
     @invokelatest f(args...; kwargs...)
 
-Provides a convenient way to call [`Base.invokelatest`](@ref).
+Provides a convenient way to call [`invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
 
 It also supports the following syntax:
 - `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
 - `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
-- `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
-- `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
+- `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
 ```jldoctest
 julia> @macroexpand @invokelatest f(x; kw=kwv)
@@ -2174,8 +2189,11 @@ julia> @macroexpand @invokelatest xs[i] = v
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
 
+!!! compat "Julia 1.9"
+    Prior to Julia 1.9, this macro was not exported, and was called as `Base.@invokelatest`.
+
 !!! compat "Julia 1.10"
-    The additional syntax is supported as of Julia 1.10.
+    The additional `x.f` and `xs[i]` syntax requires Julia 1.10.
 """
 macro invokelatest(ex)
     topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally

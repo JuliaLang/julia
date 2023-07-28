@@ -41,7 +41,7 @@
 // However, JITLink is a relatively young library and lags behind in platform
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64.
+// for Mac/aarch64 and Linux/aarch64.
 // #define JL_FORCE_JITLINK
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
@@ -49,16 +49,21 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
+#if defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
+#else
+# if defined(_CPU_AARCH64_)
+#  if defined(_OS_LINUX_) && JL_LLVM_VERSION < 150000
+#   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
+#  else
+#   define JL_USE_JITLINK
+#  endif
+# endif
 #endif
 
-#ifdef JL_USE_JITLINK
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-#else
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
-#endif
 
 using namespace llvm;
 
@@ -202,7 +207,7 @@ typedef struct _jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
-    std::map<void*, GlobalVariable*> globals;
+    std::map<void*, GlobalVariable*> global_targets;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
@@ -232,6 +237,7 @@ typedef struct _jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging;
+    int debug_level;
     _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
         : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
             DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
@@ -308,6 +314,7 @@ public:
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
                             std::unique_ptr<MemoryBuffer> O) override {
+            JL_TIMING(LLVM_JIT, JIT_Link);
 #ifndef JL_USE_JITLINK
             std::lock_guard<std::mutex> lock(EmissionMutex);
 #endif
@@ -318,7 +325,10 @@ public:
         std::mutex EmissionMutex;
     };
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::IRTransformLayer OptSelLayerT;
+    typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -430,30 +440,6 @@ public:
 
         std::unique_ptr<WNMutex> mutex;
     };
-    struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
-        CompileLayerT CompileLayer;
-        OptimizeLayerT OptimizeLayer;
-    };
-
-    struct OptSelLayerT : orc::IRLayer {
-
-        template<size_t N>
-        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers) JL_NOTSAFEPOINT
-            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
-                optimizers[0]->OptimizeLayer.getManglingOptions()),
-            optimizers(optimizers.data()),
-            count(N) {
-            static_assert(N > 0, "Expected array with at least one optimizer!");
-        }
-        ~OptSelLayerT() JL_NOTSAFEPOINT = default;
-
-        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
-
-        private:
-        const std::unique_ptr<PipelineT> * const optimizers;
-        size_t count;
-    };
 
 private:
     // Custom object emission notification handler for the JuliaOJIT
@@ -522,10 +508,9 @@ public:
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }
-private:
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
-    void shareStrings(Module &M) JL_NOTSAFEPOINT;
+private:
 
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;
@@ -556,8 +541,11 @@ private:
 #endif
     ObjLayerT ObjectLayer;
     LockLayerT LockLayer;
-    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
+    CompileLayerT CompileLayer;
+    JITPointersLayerT JITPointersLayer;
+    OptimizeLayerT OptimizeLayer;
     OptSelLayerT OptSelLayer;
+    DepsVerifyLayerT DepsVerifyLayer;
     CompileLayerT ExternalCompileLayer;
 
 };
@@ -593,11 +581,5 @@ Pass *createLowerSimdLoopPass() JL_NOTSAFEPOINT;
 
 // NewPM
 #include "passes.h"
-
-// Whether the Function is an llvm or julia intrinsic.
-static inline bool isIntrinsicFunction(Function *F) JL_NOTSAFEPOINT
-{
-    return F->isIntrinsic() || F->getName().startswith("julia.");
-}
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;

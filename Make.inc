@@ -188,15 +188,17 @@ JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.
 JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'+' -f 1 | cut -d'.' -f 3)
 
 # libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
-# SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
-# v1.0.0, SOMAJOR will be simply the major version number, e.g. libjulia.so.1
+# somajor was a two-decimal value (e.g. libjulia.so.0.5). During v1.0.x - v1.9.x,
+# somajor was simply the major version number (e.g. libjulia.so.1). Starting in
+# v1.10.0, somajor is major.minor again (e.g. libjulia.so.1.10)
 # The file itself will ultimately symlink to libjulia.so.$(SOMAJOR).$(SOMINOR)
-ifeq ($(JULIA_MAJOR_VERSION),0)
 SOMAJOR := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
 SOMINOR := $(JULIA_PATCH_VERSION)
-else
-SOMAJOR := $(JULIA_MAJOR_VERSION)
-SOMINOR := $(JULIA_MINOR_VERSION)
+
+# This suffix affects libjulia's SONAME and the symbol version associated with
+# all of its exported symbols.
+ifdef SYMBOL_VERSION_SUFFIX
+SOMAJOR := $(SOMAJOR)_$(SYMBOL_VERSION_SUFFIX)
 endif
 
 ifneq ($(NO_GIT), 1)
@@ -488,7 +490,7 @@ endif
 
 JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
-JCFLAGS_GCC       := $(JCFLAGS_COMMON)
+JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
@@ -497,7 +499,7 @@ JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
 
 JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
-JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON)
+JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
 DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
@@ -601,15 +603,15 @@ endif
 
 ifeq ($(OS),WINNT)
 define versioned_libname
-$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else ifeq ($(OS),Darwin)
 define versioned_libname
-$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else
 define versioned_libname
-$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
 endef
 endif
 
@@ -723,7 +725,7 @@ endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
-SANITIZE_LDFLAGS += -fsanitize=address
+SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
@@ -1317,7 +1319,7 @@ ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
 JLDFLAGS += -Wl,-Bdynamic
-OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.expmap
 ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
@@ -1342,7 +1344,7 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # See #21788
 OSLIBS += -lgcc_s
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
 endif
 
@@ -1357,7 +1359,7 @@ endif
 
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
@@ -1499,6 +1501,12 @@ endef
 
 # Overridable in Make.user
 WINE ?= wine
+
+ifeq ($(BINARY),32)
+HEAPLIM := --heap-size-hint=500M
+else
+HEAPLIM :=
+endif
 
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS

@@ -1213,6 +1213,11 @@ end
     @test exp(log(A2)) ≈ A2
 end
 
+@testset "sqrt of empty Matrix of type $T" for T in [Int,Float32,Float64,ComplexF32,ComplexF64]
+    @test sqrt(Matrix{T}(undef, 0, 0)) == Matrix{T}(undef, 0, 0)
+    @test_throws DimensionMismatch sqrt(Matrix{T}(undef, 0, 3))
+end
+
 struct TypeWithoutZero end
 Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
 struct TypeWithZero end

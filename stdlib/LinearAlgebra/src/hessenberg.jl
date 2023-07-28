@@ -132,11 +132,11 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = _mulmattri!(_initarray(*, eltype(H), eltype(U), H), H, U)
+    HH = mul!(_initarray(*, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = _multrimat!(_initarray(*, eltype(U), eltype(H), H), U, H)
+    HH = mul!(_initarray(*, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 
@@ -449,8 +449,7 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 
 julia> F = hessenberg(A)
 Hessenberg{Float64, UpperHessenberg{Float64, Matrix{Float64}}, Matrix{Float64}, Vector{Float64}, Bool}
-Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}
+Q factor: 3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}
 H factor:
 3×3 UpperHessenberg{Float64, Matrix{Float64}}:
   4.0      -11.3137       -1.41421
@@ -477,7 +476,7 @@ function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     if !iszero(F.μ)
         print("\nwith shift μI for μ = ", F.μ)
     end
-    println(io, "\nQ factor:")
+    print(io, "\nQ factor: ")
     show(io, mime, F.Q)
     println(io, "\nH factor:")
     show(io, mime, F.H)

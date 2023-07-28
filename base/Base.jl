@@ -314,6 +314,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
@@ -328,11 +334,9 @@ const liblapack_name = libblas_name
 include("logging.jl")
 using .CoreLogging
 
-# Concurrency
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
@@ -489,6 +493,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+
 end_base_include = time_ns()
 
 const _sysimage_modules = PkgId[]
@@ -597,8 +605,12 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+        JuliaSyntax.enable_in_core!()
+    end
     nothing
 end
 
