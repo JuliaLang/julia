@@ -148,8 +148,8 @@ end
 
 _trimdocs(md, brief::Bool) = md, false
 
-const INTERNAL_WARNING = Markdown.Paragraph("Warning: this symbol may be internal. \
-    Behavior documented here might change in future versions.")
+const INTERNAL_WARNING = Markdown.Admonition("warning", "Warning", Any[Markdown.Paragraph(Any[
+    "This symbol may be internal. Behavior documented here might change in future versions."])])
 
 """
     Docs.doc(binding, sig)
