@@ -1,4 +1,4 @@
 JULIASYNTAX_BRANCH = scoped-export
-JULIASYNTAX_SHA1 = 22754c8d6bf2c12f780e7d2cd9625a4d19688c3c
+JULIASYNTAX_SHA1 = 19d306c59163604248f1a95c6581059956345cda
 JULIASYNTAX_GIT_URL := https://github.com/LilithHafner/JuliaSyntax.jl.git
 JULIASYNTAX_TAR_URL = https://api.github.com/repos/LilithHafner/JuliaSyntax.jl/tarball/$1
