@@ -34,7 +34,7 @@ macro gensym(names...)
 end
 
 ## line numbers ##
-convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(lin.line, lin.file)
+convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
 
 ## expressions ##
 
