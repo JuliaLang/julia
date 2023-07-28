@@ -256,7 +256,13 @@ function summarize(binding::Binding, sig)
     io = IOBuffer()
     if defined(binding)
         binding_res = resolve(binding)
-        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        if !isa(binding_res, Module)
+            if Base.ispublic(binding.mod, binding.var)
+                println(io, "No documentation found for public symbol.\n")
+            else
+                println(io, "No documentation found for private symbol.\n")
+            end
+        end
         summarize(io, binding_res, binding)
     else
         println(io, "No documentation found.\n")
@@ -348,10 +354,11 @@ function find_readme(m::Module)::Union{String, Nothing}
 end
 function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
+    public = Base.ispublic(binding.mod, binding.var) ? "public" : "internal"
     if isnothing(readme_path)
-        println(io, "No docstring or readme file found for module `$m`.\n")
+        println(io, "No docstring or readme file found for $public module `$m`.\n")
     else
-        println(io, "No docstring found for module `$m`.")
+        println(io, "No docstring found for $public module `$m`.")
     end
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
