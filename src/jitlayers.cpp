@@ -699,18 +699,26 @@ static Expected<orc::ThreadSafeModule> validateExternRelocations(orc::ThreadSafe
     auto Err = TSM.withModuleDo([isIntrinsicFunction](Module &M) JL_NOTSAFEPOINT {
         Error Err = Error::success();
         for (auto &GO : make_early_inc_range(M.global_objects())) {
-            if (GO.isDeclaration()) {
-                if (GO.use_empty())
-                    GO.eraseFromParent();
-                else if (!isIntrinsicFunction(GO) &&
-                        !jl_ExecutionEngine->findUnmangledSymbol(GO.getName()) &&
-                        !SectionMemoryManager::getSymbolAddressInProcess(
-                            jl_ExecutionEngine->getMangledName(GO.getName()))) {
-                    Err = joinErrors(std::move(Err), make_error<StringError>(
-                        "Symbol \"" + GO.getName().str() + "\" not found",
-                        inconvertibleErrorCode()));
-                }
+            if (!GO.isDeclarationForLinker())
+                continue;
+            if (GO.use_empty()) {
+                GO.eraseFromParent();
+                continue;
             }
+            if (isIntrinsicFunction(GO))
+                continue;
+            auto sym = jl_ExecutionEngine->findUnmangledSymbol(GO.getName());
+            if (sym)
+                continue;
+            // TODO have we ever run into this check? It's been guaranteed to not
+            // fire in an assert build, since previously LLVM would abort due to
+            // not handling the error if we didn't find the unmangled symbol
+            if (SectionMemoryManager::getSymbolAddressInProcess(
+                            jl_ExecutionEngine->getMangledName(GO.getName()))) {
+                consumeError(sym.takeError());
+                continue;
+            }
+            Err = joinErrors(std::move(Err), sym.takeError());
         }
         return Err;
     });
@@ -749,6 +757,18 @@ static Expected<orc::ThreadSafeModule> selectOptLevel(orc::ThreadSafeModule TSM,
         M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
     });
     return std::move(TSM);
+}
+
+static void recordDebugTSM(orc::MaterializationResponsibility &, orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
+    auto ptr = TSM.withModuleDo([](Module &M) -> orc::ThreadSafeModule * {
+        auto md = M.getModuleFlag("julia.__jit_debug_tsm_addr");
+        if (!md)
+            return nullptr;
+        return reinterpret_cast<orc::ThreadSafeModule *>(cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue());
+    });
+    if (ptr) {
+        *ptr = std::move(TSM);
+    }
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
@@ -1288,7 +1308,6 @@ namespace {
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
                     //Run the optimization
-                    assert(!verifyLLVMIR(M));
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
                 }
@@ -1507,6 +1526,7 @@ JuliaOJIT::JuliaOJIT()
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
+    CompileLayer.setNotifyCompiled(recordDebugTSM);
 
     std::string ErrorStr;
 
@@ -1624,15 +1644,38 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
                 NewExports.add(std::move(Name));
             }
         }
+        assert(!verifyLLVMIR(M));
+        auto jit_debug_tsm_addr = ConstantInt::get(Type::getIntNTy(M.getContext(), sizeof(void*) * CHAR_BIT), (uintptr_t) &TSM);
+        M.addModuleFlag(Module::Error, "julia.__jit_debug_tsm_addr", jit_debug_tsm_addr);
     });
 
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, std::move(TSM)));
+    auto Err = DepsVerifyLayer.add(JD, std::move(TSM));
+    if (Err) {
+        ES.reportError(std::move(Err));
+        errs() << "Failed to add module to JIT!\n";
+        if (TSM) {
+            TSM.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
+        } else {
+            errs() << "Module unavailable to be printed\n";
+        }
+        abort();
+    }
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    for (auto &sym : cantFail(ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports))) {
-        assert(sym.second);
-        (void) sym;
+    auto Lookups = ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports);
+    if (!Lookups) {
+        ES.reportError(Lookups.takeError());
+        errs() << "Failed to lookup symbols in module!";
+        if (TSM) {
+            TSM.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
+        } else {
+            errs() << "Module unavailable to be printed\n";
+        }
+    }
+    for (auto &Sym : *Lookups) {
+        assert(Sym.second);
+        (void) Sym;
     }
 }
 
