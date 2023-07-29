@@ -325,12 +325,15 @@ register_kinds!(JuliaSyntax, 0, [
     "-->"   # syntactic arrow
     ":"     # used for quoting
     "+"     # used in numeric constants
+    "+%"    # wrapping addition
     "++"    # special chaining syntax
     "*"     # special chaining syntax
+    "*%"    # wrapping multiplication
     "<"     # recovery path for :<
     ">"     # recovery path for :>
     "\$"    # interpolation
     "-"     # negated constants
+    "-%"    # wrapping subtraction
     "&"     # syntactic unary
     "∈"     # iteration syntax
     # all syntactic unary
@@ -656,9 +659,9 @@ is_prec_pipe_lt(x)     = _is_op_prec(x, PREC_PIPE_LT)
 is_prec_pipe_gt(x)     = _is_op_prec(x, PREC_PIPE_GT)
 is_prec_pipe(x)        = is_prec_pipe_lt(x) || is_prec_pipe_gt(x)
 is_prec_colon(x)       = _is_op_prec(x, PREC_COLON) || kind(x) == K".."
-is_prec_plus(x)        = _is_op_prec(x, PREC_PLUS) || kind(x) in KSet"+ - ± ∓ $ ++"
+is_prec_plus(x)        = _is_op_prec(x, PREC_PLUS) || kind(x) in KSet"+ +% - -% ± ∓ $ ++"
 is_prec_bitshift(x)    = _is_op_prec(x, PREC_BITSHIFT)
-is_prec_times(x)       = _is_op_prec(x, PREC_TIMES) || kind(x) in KSet"* ⋆ &"
+is_prec_times(x)       = _is_op_prec(x, PREC_TIMES) || kind(x) in KSet"* *% ⋆ &"
 is_prec_rational(x)    = _is_op_prec(x, PREC_RATIONAL)
 is_prec_power(x)       = _is_op_prec(x, PREC_POWER)
 is_prec_decl(x)        = _is_op_prec(x, PREC_DECL) || kind(x) == K"::"
@@ -666,7 +669,7 @@ is_prec_where(x)       = _is_op_prec(x, PREC_WHERE) || kind(x) == K"where"
 is_prec_dot(x)         = _is_op_prec(x, PREC_DOT) || kind(x) == K"."
 is_prec_quote(x)       = _is_op_prec(x, PREC_QUOTE) || kind(x) == K"'"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
-is_prec_compound_assign(x) = _is_op_prec(x, PREC_COMPOUND_ASSIGN)
+is_prec_compound_assign(x) = is_operator(x) && numeric_flags(head(x)) == Int(PREC_COMPOUND_ASSIGN)
 
 function is_string_delim(x)
     kind(x) in (K"\"", K"\"\"\"")

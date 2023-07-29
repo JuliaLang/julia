@@ -1485,8 +1485,8 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             if is_root_module(M) && PkgId(M) == pkg
                 register && register_root_module(M)
                 if timing_imports
-                    elapsed_time = time_ns() - t_before
-                    comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
+                    elapsed_time = time_ns() -% t_before
+                    comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), t_comp_before)
                     print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
                 end
                 return M
@@ -1610,9 +1610,9 @@ function run_module_init(mod::Module, i::Int=1)
 
         ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
 
-        elapsed_time = time_ns() - elapsed_time
+        elapsed_time = time_ns() -% elapsed_time
         cumulative_compile_timing(false);
-        comp_time, recomp_time = cumulative_compile_time_ns() .- compile_elapsedtimes
+        comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes)
 
         print_time_imports_report_init(mod, i, elapsed_time, comp_time, recomp_time)
     end
@@ -2696,7 +2696,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     finally
         if track
             _precompile_dep_load_depth[] -= 1
-            _precompile_dep_load_depth[] == 0 && (_precompile_dep_load_ns[] += time_ns() - t0)
+            _precompile_dep_load_depth[] == 0 && (_precompile_dep_load_ns[] = _precompile_dep_load_ns[] +% (time_ns() -% t0))
         end
     end
 end
@@ -3312,9 +3312,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
         _precompile_track_dep_load[] = false
         if Base.get_bool_env("JULIA_PRECOMP_REPORT_TIMING", false)
             println(stderr, PRECOMPILE_VERBOSE_TIMING_MARKER,
-                    " include_ns=", t_include_end - t_include_start,
+                    " include_ns=", t_include_end -% t_include_start,
                     " deps_ns=", _precompile_dep_load_ns[],
-                    " compilation_ns=", t_comp_after - t_comp_before,
+                    " compilation_ns=", t_comp_after -% t_comp_before,
                     " methods=", length(newly_inferred))
         end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)

@@ -68,7 +68,7 @@ Base.@assume_effects :total function rand_uniform_max_int32(max::UInt32, seed::U
     # Multiplying this by the range gives us a number on [0, upper).
     # The high word of the multiplication result represents the integral part
     # This is not completely unbiased as it's missing the fractional part of the original implementation but it's good enough for our purposes
-    seed = UInt64(69069) * seed + UInt64(362437)
+    seed = UInt64(69069) *% seed +% UInt64(362437)
     prod = (UInt64(max)) * (seed % UInt32) # 64 bit product
     i = prod >> 32 % UInt32 # integral part
     return i % UInt32, seed

@@ -87,6 +87,11 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+(-%)(x::BitInteger)                    = neg_int(x)
+(-%)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
+(+%)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
+(*%)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
+
 negate(x) = -x
 negate(x::Unsigned) = -convert(Signed, x)
 #widenegate(x) = -convert(widen(signed(typeof(x))), x)
@@ -131,7 +136,7 @@ end
 function mul_hi(a::Int128, b::Int128)
     shift = sizeof(a)*8 - 1
     t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
-    (mul_hi(a % UInt128, b % UInt128) - t1 - t2) % Int128
+    (mul_hi(a % UInt128, b % UInt128) -% t1 -% t2) % Int128
 end
 
 """
@@ -897,13 +902,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >> 32
         v0 = v & 0xffffffff; v1 = v >> 32
-        w0 = u0 * v0
-        t = reinterpret(UInt64, u1) * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = reinterpret(UInt64, u1) *% v0 +% (w0 >>> 32)
         w2 = reinterpret(Int64, t) >> 32
-        w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return Int128(hi) << 64 + Int128(lo)
+        w1 = u0 *% reinterpret(UInt64, v1) +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (reinterpret(Int64, w1) >> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (Int128(hi) << 64) +% Int128(lo)
     end
 
     function widemul(u::UInt64, v::UInt64)
@@ -912,13 +917,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >>> 32
         v0 = v & 0xffffffff; v1 = v >>> 32
-        w0 = u0 * v0
-        t = u1 * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = u1 *% v0 +% (w0 >>> 32)
         w2 = t >>> 32
-        w1 = u0 * v1 + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return UInt128(hi) << 64 + UInt128(lo)
+        w1 = u0 *% v1 +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (w1 >>> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (UInt128(hi) << 64) +% UInt128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -927,9 +932,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64, u0), v1)
         hilo = widemul(u1, reinterpret(Int64, v0))
-        t = reinterpret(UInt128, hilo) + (lolo >>> 64)
-        w1 = reinterpret(UInt128, lohi) + (t & 0xffffffffffffffff)
-        return Int128(lolo & 0xffffffffffffffff) + reinterpret(Int128, w1) << 64
+        t = reinterpret(UInt128, hilo) +% (lolo >>> 64)
+        w1 = reinterpret(UInt128, lohi) +% (t & 0xffffffffffffffff)
+        return Int128(lolo & 0xffffffffffffffff) +% (reinterpret(Int128, w1) << 64)
     end
 
     function *(u::UInt128, v::UInt128)
@@ -938,9 +943,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
-        t = hilo + (lolo >>> 64)
-        w1 = lohi + (t & 0xffffffffffffffff)
-        return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
+        t = hilo +% (lolo >>> 64)
+        w1 = lohi +% (t & 0xffffffffffffffff)
+        return (lolo & 0xffffffffffffffff) +% (UInt128(w1) << 64)
     end
 
     function _setbit(x::UInt128, i)
@@ -1050,7 +1055,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, :&, :|, :xor)
+for op in (:+, :-, :*, :&, :|, :xor, Symbol("+%"), Symbol("-%"), Symbol("*%"))
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         aT, bT = a % T, b % T

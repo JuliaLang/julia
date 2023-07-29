@@ -93,7 +93,9 @@ function _incomplete_tag(theerror::ErrorSpec, codelen)
         return :block
     elseif kp in KSet"for while function if"
         return i == 1 ? :other : :block
-    elseif kp in KSet"module struct"
+    elseif kp == K"module"
+        return i <= 2 ? :other : :block
+    elseif kp == K"struct"
         return i == 1 ? :other : :block
     elseif kp == K"do"
         return i < 3  ? :other : :block
@@ -161,7 +163,7 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.14")
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
