@@ -240,6 +240,7 @@ namespace jl_intrinsics {
 namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc_instrumented);
     static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc_instrumented);
+    static const char *GC_RECORD_ALLOC_TO_PROFILE_NAME = XSTR(jl_maybe_record_alloc_to_profile);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
@@ -275,6 +276,27 @@ namespace jl_well_known {
                 GC_POOL_ALLOC_NAME);
             poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
             return addGCAllocAttributes(poolAllocFunc);
+        });
+
+    const WellKnownFunctionDescription GCRecordAllocToProfile(
+        GC_RECORD_ALLOC_TO_PROFILE_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto recordAllocFunc = Function::Create(
+                FunctionType::get(
+                    T_prjlvalue,
+                    {
+                        T_size,
+                        Type::getInt32Ty(ctx),
+                        T_size,
+                        Type::getInt8Ty(ctx)  // TODO: How to pass an enum!?
+                    },
+                    false),
+                Function::ExternalLinkage,
+                GC_RECORD_ALLOC_TO_PROFILE_NAME);
+            recordAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return addGCAllocAttributes(recordAllocFunc);
         });
 
     const WellKnownFunctionDescription GCQueueRoot(

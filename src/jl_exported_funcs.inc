@@ -187,6 +187,7 @@
     XX(jl_gc_num) \
     XX(jl_gc_pool_alloc) \
     XX(jl_gc_pool_alloc_instrumented) \
+    XX(jl_maybe_record_alloc_to_profile) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
     XX(jl_gc_safepoint) \
