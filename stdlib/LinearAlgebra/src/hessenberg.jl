@@ -600,7 +600,6 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
 end
 
 ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

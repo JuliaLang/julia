@@ -391,6 +391,15 @@ end
         B = randn(elty, 5, 5)
         @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
     end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
+    end
 end
 
 @testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
