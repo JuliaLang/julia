@@ -8,7 +8,7 @@
 Write to `io` (or to the default output stream [`stdout`](@ref)
 if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
-avoid Julia-specific details.
+avoid Julia-specific details. The output stream is not flushed unlike with `println`.
 
 `print` falls back to calling `show`, so most types should just define
 `show`. Define `print` if your type has a separate "plain" representation.
@@ -55,6 +55,10 @@ end
     println([io::IO], xs...)
 
 Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
+Then the output stream is flushed (since 1.11), which has pros and cons, and
+if no flushing, buffered I/O, is desired, then rather do:
+print("My text\n")
+
 If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
 
 See also [`printstyled`](@ref) to add colors etc.
@@ -72,7 +76,10 @@ julia> String(take!(io))
 "Hello, world.\\n"
 ```
 """
-println(io::IO, xs...) = print(io, xs..., "\n")
+function println(io::IO, xs...)
+    print(io, xs..., '\n')
+    flush(io)
+end
 
 ## conversion of general objects to strings ##
 
@@ -91,6 +98,8 @@ tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
 attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
 is a suggested size (in bytes) to allocate for the buffer used to write the
 string.
+
+If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
 
 !!! compat "Julia 1.7"
     Passing a tuple to keyword `context` requires Julia 1.7 or later.
