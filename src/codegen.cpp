@@ -5721,7 +5721,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             if (jl_is_concrete_type(env_t)) {
                 jl_tupletype_t *argt_typ = (jl_tupletype_t*)argt.constant;
                 Function *F, *specF;
-                std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, (jl_datatype_t*)env_t, argt_typ, ub.constant);
+                std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, (jl_tupletype_t*)env_t, argt_typ, ub.constant);
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
@@ -5731,7 +5731,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                     if (specF)
                         fptr = mark_julia_type(ctx, specF, false, jl_voidpointer_type);
                     else
-                        fptr = mark_julia_type(ctx, (llvm::Value*)Constant::getNullValue(ctx.types().T_size), false, jl_voidpointer_type);
+                        fptr = mark_julia_type(ctx, Constant::getNullValue(ctx.types().T_size), false, jl_voidpointer_type);
 
                     // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
                     jl_cgval_t env = emit_new_struct(ctx, env_t, nargs-4, &argv.data()[4]);
@@ -8963,12 +8963,8 @@ void jl_compile_workqueue(
             }
         }
         else {
-            auto &result = params.compiled_functions[codeinst];
-            jl_llvm_functions_t *decls = NULL;
-            if (std::get<0>(result)) {
-                decls = &std::get<1>(result);
-            }
-            else {
+            auto it = params.compiled_functions.find(codeinst);
+            if (it == params.compiled_functions.end()) {
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
@@ -8979,8 +8975,9 @@ void jl_compile_workqueue(
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             original.getDataLayout(), Triple(original.getTargetTriple()));
-                        result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
-                        result.first = std::move(result_m);
+                        auto decls = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
+                        if (result_m)
+                            it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
                     }
                 }
                 else {
@@ -8988,20 +8985,18 @@ void jl_compile_workqueue(
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             original.getDataLayout(), Triple(original.getTargetTriple()));
-                    result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);
-                    result.first = std::move(result_m);
+                    auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
+                    if (result_m)
+                        it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
                 }
-                if (std::get<0>(result))
-                    decls = &std::get<1>(result);
-                else
-                    params.compiled_functions.erase(codeinst); // undo the insert above
             }
-            if (decls) {
-                if (decls->functionObject == "jl_fptr_args") {
-                    preal_decl = decls->specFunctionObject;
+            if (it != params.compiled_functions.end()) {
+                auto &decls = it->second.second;
+                if (decls.functionObject == "jl_fptr_args") {
+                    preal_decl = decls.specFunctionObject;
                 }
-                else if (decls->functionObject != "jl_fptr_sparam") {
-                    preal_decl = decls->specFunctionObject;
+                else if (decls.functionObject != "jl_fptr_sparam") {
+                    preal_decl = decls.specFunctionObject;
                     preal_specsig = true;
                 }
             }
