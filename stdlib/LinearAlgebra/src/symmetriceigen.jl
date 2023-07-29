@@ -224,6 +224,25 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
+# LU based solution for generalized eigenvalues and eigenvectors
+function eigen(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigen!(copy(A), copy(F); sortby)
+end
+function eigen!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    LAPACK.lapmr!(A, F.p, true)
+    ldiv!(L, A)
+    rdiv!(A, U)
+    vals, vecs = eigen!(A; sortby)
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    U = UpperTriangular{eltype(vecs)}(U)
+    ldiv!(U, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
 # Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
 UtiAUi!(A, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
@@ -289,5 +308,18 @@ function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
     ldiv!(M, A)
     rdiv!(A, M')
     ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
+    return eigvals!(A; sortby)
+end
+
+# LU based solution for generalized eigenvalues
+function eigvals(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigvals!(copy(A), copy(F); sortby)
+end
+function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    LAPACK.lapmr!(A, F.p, true)
+    ldiv!(L, A)
+    rdiv!(A, U)
     return eigvals!(A; sortby)
 end

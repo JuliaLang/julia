@@ -96,10 +96,20 @@ end
     e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
     @test e0 ≈ e
     @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
     # eigvals
     e0 = eigvals(A,BH; sortby=sf)
     el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
     eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+    el = eigvals(A,lu(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,lu(Hermitian(BH,:U)); sortby=sf)
     @test e0 ≈ el
     @test e0 ≈ eu
 
@@ -117,10 +127,20 @@ end
     e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
     @test e0 ≈ e
     @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
     # eigvals
     e0 = eigvals(A,BH; sortby=sf)
     el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
     eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+    el = eigvals(A,lu(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,lu(Hermitian(BH,:U)); sortby=sf)
     @test e0 ≈ el
     @test e0 ≈ eu
 end
