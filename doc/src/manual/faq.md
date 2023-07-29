@@ -49,10 +49,6 @@ Package authors are encouraged to define their public API similarly.
 Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
 will not be removed or receive meaningful breaking changes before Julia 2.0.
 
-### When is Julia 2.0 coming out?
-
-2047
-
 ### There is a useful undocumented function/type/constant. Can I use it?
 
 Updating Julia may break your code if you use non-public API.  If the code is
