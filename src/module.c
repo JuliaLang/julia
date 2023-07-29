@@ -180,6 +180,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
+    b->publicp = 0;
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
