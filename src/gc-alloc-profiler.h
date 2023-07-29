@@ -37,6 +37,9 @@ typedef enum {
     JL_alloc_resize_buffer,
     JL_alloc_box_args_dynamic_dispatch,
     JL_alloc_box_return_value_dynamic_dispatch,
+    JL_alloc_box_return_value_static_dispatch_to_type_unstable,
+    JL_alloc_box_unknown_reason,
+    JL_alloc_compiler_internal, // method internals? codegen internals?
     JL_big_alloc_unkown,
 } jl_alloc_reason;
 

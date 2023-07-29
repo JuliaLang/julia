@@ -131,7 +131,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         size_t doffs = tsz;
         tsz += tot;
         // jl_array_t is large enough that objects will always be aligned 16
-        a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+        a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype, JL_alloc_unkown);
         assert(((size_t)a & 15) == 0);
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
@@ -141,7 +141,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         data = jl_gc_managed_malloc(tot);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
-        a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+        a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype, JL_alloc_unkown);
         // No allocation or safepoint allowed after this
         a->flags.how = 2;
         jl_gc_track_malloced_array(ct->ptls, a);
@@ -231,7 +231,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t *dims = (size_t*)_dims;
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*);
-    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype, JL_alloc_resize_buffer);
     // No allocation or safepoint allowed after this
     // copy data (except dims) from the old object
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -286,7 +286,7 @@ JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
 
     int ndimwords = jl_array_ndimwords(1);
     int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*);
-    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
+    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type, JL_alloc_new_object);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = 1;
     a->offset = 0;
@@ -331,7 +331,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
 
     int ndimwords = jl_array_ndimwords(1);
     int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
-    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype, JL_alloc_unkown);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
@@ -396,7 +396,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
-    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype, JL_alloc_unkown);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;

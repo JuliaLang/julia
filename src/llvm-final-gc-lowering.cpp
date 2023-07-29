@@ -195,6 +195,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    auto reason = target->getArgOperand(3);
     Attribute derefAttr;
 
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
@@ -205,19 +206,19 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         if (offset < 0) {
             newI = builder.CreateCall(
                 bigAllocFunc,
-                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
+                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type, reason });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
         }
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
+            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type, reason });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type, reason });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -234,7 +235,6 @@ bool FinalLowerGC::doInitialization(Module &M) {
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
-    recordAllocFunc = getOrDeclare(jl_well_known::GCRecordAllocToProfile);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = M.getDataLayout().getIntPtrType(M.getContext());
 

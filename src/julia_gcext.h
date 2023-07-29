@@ -71,7 +71,7 @@ typedef struct {
 } jl_fielddescdyn_t;
 
 // Allocate an object of a foreign type.
-JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty);
+JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty, jl_alloc_reason r);
 
 // Queue an object or array of objects for scanning by the garbage collector.
 // These functions must only be called from within a root scanner callback

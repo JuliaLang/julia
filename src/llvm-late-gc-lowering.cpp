@@ -2396,6 +2396,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
                 auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
+                auto reason = ConstantInt::get(Type::getInt8Ty(F.getContext()), JL_alloc_unkown);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {
@@ -2405,6 +2406,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                             allocBytesIntrinsic->getFunctionType()->getParamType(1),
                             false),
                         builder.CreatePtrToInt(tag, T_size),
+                        reason
                     });
                 newI->takeName(CI);
 
@@ -2421,26 +2423,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-
-                auto recordAllocIntrinsic = getOrDeclare(jl_well_known::GCRecordAllocToProfile);
-                auto value = newI;
-                auto reason = ConstantInt::get(Type::getInt8Ty(F.getContext()), JL_alloc_unkown);
-                //auto record_alloc =
-                builder.CreateCall(
-                    recordAllocIntrinsic,
-                    {
-                        value,
-                        builder.CreateIntCast(
-                            CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
-                            false),
-                        tag,
-                        reason
-                    });
-                // TODO: is this needed? What is it?
-                //record_alloc->setOrdering(AtomicOrdering::Unordered);
-                //record_alloc->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.

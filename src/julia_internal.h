@@ -454,7 +454,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
-STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
+STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty, jl_alloc_reason reason)
 {
     jl_value_t *v;
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
@@ -472,7 +472,8 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
-    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty, JL_alloc_new_object);
+    // Should this always be JL_alloc_new_object?
+    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty, reason);
     return v;
 }
 
@@ -482,15 +483,15 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
  * the JL_GC_PUSH macro until the value has been initialized, any accidental
  * safepoints will be caught by the GC analyzer.
  */
-JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
+JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty, jl_alloc_reason r);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
-#  define jl_gc_alloc(ptls, sz, ty)  \
+#  define jl_gc_alloc(ptls, sz, ty, reason)  \
     (__builtin_constant_p(sz) ?      \
-     jl_gc_alloc_(ptls, sz, ty) :    \
-     (jl_gc_alloc)(ptls, sz, ty))
+     jl_gc_alloc_(ptls, sz, ty, reason) :    \
+     (jl_gc_alloc)(ptls, sz, ty, reason))
 #else
-#  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
+#  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty, reason)
 #endif
 
 // jl_buff_tag must be an actual pointer here, so it cannot be confused for an actual type reference.
@@ -502,7 +503,7 @@ JL_DLLEXPORT uintptr_t jl_get_buff_tag(void);
 typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 {
-    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
+    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag, JL_alloc_new_object);
 }
 
 STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT

@@ -37,7 +37,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 2,
-                                           jl_simplevector_type);
+                                           jl_simplevector_type, JL_alloc_unkown);
     jl_set_typetagof(v, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(v, 1);
     jl_svec_data(v)[0] = (jl_value_t*)a;
@@ -48,7 +48,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 3,
-                                           jl_simplevector_type);
+                                           jl_simplevector_type, JL_alloc_unkown);
     jl_set_typetagof(v, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(v, 2);
     jl_svec_data(v)[0] = (jl_value_t*)a;
@@ -61,7 +61,7 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
     jl_task_t *ct = jl_current_task;
     if (n == 0) return jl_emptysvec;
     jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ct->ptls, (n + 1) * sizeof(void*),
-                                            jl_simplevector_type);
+                                            jl_simplevector_type, JL_alloc_unkown);
     jl_set_typetagof(jv, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(jv, n);
     return jv;

@@ -811,7 +811,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
     if (osize <= sizeof(cnt)) {
         return jl_new_bits(ty, &cnt);
     }
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, osize, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, osize, ty, JL_alloc_unkown);
     // perform zext, if needed
     memset((char*)jl_data_ptr(newv) + sizeof(cnt), 0, osize - sizeof(cnt));
     memcpy(jl_data_ptr(newv), &cnt, sizeof(cnt));
@@ -874,7 +874,7 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
     if (!jl_is_primitivetype(ty))
         jl_errorf("%s: type is not a primitive type", name);
     unsigned sz2 = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz2, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz2, ty, JL_alloc_unkown);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
     unsigned sz = jl_datatype_size(jl_typeof(a));
     switch (sz) {
@@ -1036,7 +1036,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_task_t *ct = jl_current_task;
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp, JL_alloc_unkown);
 
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
@@ -1070,7 +1070,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty, JL_alloc_box_unknown_reason); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
@@ -1133,7 +1133,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty, JL_alloc_unkown); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \

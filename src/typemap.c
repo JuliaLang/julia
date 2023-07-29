@@ -1296,7 +1296,8 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     jl_task_t *ct = jl_current_task;
     jl_typemap_level_t *cache =
         (jl_typemap_level_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_level_t),
-                                         jl_typemap_level_type);
+                                         // internal
+                                         jl_typemap_level_type, JL_alloc_unkown);
     jl_atomic_store_relaxed(&cache->arg1, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&cache->targ, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&cache->name1, (jl_array_t*)jl_an_empty_vec_any);
@@ -1510,7 +1511,8 @@ jl_typemap_entry_t *jl_typemap_alloc(
 
     jl_typemap_entry_t *newrec =
         (jl_typemap_entry_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_entry_t),
-                                         jl_typemap_entry_type);
+                                         // TODO(PR): Compiler internal?
+                                         jl_typemap_entry_type, JL_alloc_unkown);
     newrec->sig = type;
     newrec->simplesig = simpletype;
     newrec->func.value = newvalue;
