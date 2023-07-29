@@ -12,13 +12,16 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2; debug=true)
+function docstrings_equal(d1, d2; debug=true, private_warning=false)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
+    if private_warning
+        s2 = "!!! warning\n    This symbol may be internal. Behavior documented here might change in future versions.\n\n\n" * s2
+    end
     if debug && s1 != s2
         print(s1)
         println("--------------------------------------------------------------------------------")
@@ -27,7 +30,7 @@ function docstrings_equal(d1, d2; debug=true)
     end
     return s1 == s2
 end
-docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
+docstrings_equal(d1::DocStr, d2; kw...) = docstrings_equal(parsedoc(d1), d2; kw...)
 
 function docstring_startswith(d1, d2)
     io1 = IOBuffer()
@@ -38,6 +41,7 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
+public C74685
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
 @test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
@@ -72,13 +76,14 @@ function break_me_docs end
 # issue #11548
 
 module ModuleMacroDoc
+public @m
 macro m() end
 end
 
 @doc "I am a module" ModuleMacroDoc
 @doc "I am a macro"  :@ModuleMacroDoc.m
 
-@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
+@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module", private_warning=true)
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # issue #38819
@@ -312,13 +317,13 @@ let fns = @var(DocsTest.fnospecialize)
     @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
-@test docstrings_equal(@doc(DocsTest.TA), doc"TA")
+@test docstrings_equal(@doc(DocsTest.TA), doc"TA", private_warning=true)
 
-@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()")
-@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()")
-@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)")
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)")
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)")
+@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)", private_warning=true)
 let m = doc"""
         @mac()
 
@@ -328,31 +333,31 @@ let m = doc"""
 
         :@mac
         """
-    @test docstrings_equal(@doc(:@DocsTest.mac), m)
-    @test docstrings_equal(@doc(:(DocsTest.@mac)), m)
+    @test docstrings_equal(@doc(:@DocsTest.mac), m, private_warning=true)
+    @test docstrings_equal(@doc(:(DocsTest.@mac)), m, private_warning=true)
 end
 
-@test docstrings_equal(@doc(DocsTest.G), doc"G")
-@test docstrings_equal(@doc(DocsTest.K), doc"K")
+@test docstrings_equal(@doc(DocsTest.G), doc"G", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.K), doc"K", private_warning=true)
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2)
+    @test docstrings_equal(d1,d2,private_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2)
+    @test docstrings_equal(d1,d2,private_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::Int, ::Any)),
     d2 = doc"t-2"
-    @test docstrings_equal(d1,d2)
+    @test docstrings_equal(d1,d2,private_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
-    @test docstrings_equal(d1,d2)
+    @test docstrings_equal(d1,d2,private_warning=true)
 end
 
 let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
@@ -365,8 +370,12 @@ let a = @doc(DocsTest.multidoc),
     @test docstrings_equal(a, b)
 end
 
+public BareModule
+
 "BareModule"
 baremodule BareModule
+
+public f, g, h, @m, C, A
 
 "f/1"
 f(x) = x
@@ -402,7 +411,7 @@ end
 @test docstrings_equal(@doc(BareModule.@m), doc"@m")
 @test docstrings_equal(@doc(BareModule.C), doc"C")
 @test docstrings_equal(@doc(BareModule.A), doc"A")
-@test docstrings_equal(@doc(BareModule.T), doc"T")
+@test docstrings_equal(@doc(BareModule.T), doc"T", private_warning=true)
 
 @test_throws ErrorException @doc("...", "error")
 @test_throws ErrorException @doc("...", @time 0)
@@ -623,6 +632,7 @@ end
 
 let d = @doc(I15424.LazyHelp)
     @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    # (no internal warning is inserted for non-markdown content)
 end
 
 # Issue #13385.
