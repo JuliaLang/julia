@@ -184,8 +184,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
         else
-            while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+            while UInt8('0') <= b <= UInt8('9')
+                width = 10 * width + (b - UInt8('0'))
                 b = bytes[pos]
                 pos += 1
                 pos > len && break
@@ -208,7 +208,7 @@ function Format(f::AbstractString)
                     pos += 1
                 else
                     precision = 0
-                    while b - UInt8('0') < 0x0a
+                    while UInt8('0') <= b <= UInt8('9')
                         precision = 10precision + (b - UInt8('0'))
                         b = bytes[pos]
                         pos += 1

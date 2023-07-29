@@ -2749,8 +2749,11 @@
    '&      (lambda (e) (error (string "invalid syntax " (deparse e))))
 
    '+=     lower-update-op
+   '+%=    lower-update-op
    '-=     lower-update-op
+   '-%=    lower-update-op
    '*=     lower-update-op
+   '*%=    lower-update-op
    '.*=    lower-update-op
    '/=     lower-update-op
    './=    lower-update-op

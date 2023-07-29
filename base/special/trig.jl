@@ -634,7 +634,7 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     ypw = poshighword(y)
     xpw = poshighword(x)
     # compute y/x for Float32
-    k = reinterpret(Int32, ypw-xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
 
     if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
         z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)

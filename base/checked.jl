@@ -21,7 +21,7 @@ import Core.Intrinsics:
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@inline, ..@noinline, ..checked_length
+import ..no_op_err, ..@inline, ..@noinline, ..checked_length, ..BitInteger
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -98,7 +98,7 @@ throw_overflowerr_negation(x) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
-    r = -x
+    r = -%(x)
     (x<0) & (r<0) && throw_overflowerr_negation(x)
     r
 end
@@ -140,11 +140,11 @@ Calculates `r = x+y`, with the flag `f` indicating whether overflow has occurred
 function add_with_overflow end
 add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
-add_with_overflow(x::Bool, y::Bool) = (x+y, false)
+add_with_overflow(x::Bool, y::Bool) = (x +% y, false)
 
 if BrokenSignedInt != Union{}
 function add_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x + y
+    r = x +% y
     # x and y have the same sign, and the result has a different sign
     f = (x<0) == (y<0) != (r<0)
     r, f
@@ -154,7 +154,7 @@ if BrokenUnsignedInt != Union{}
 function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     # x + y > typemax(T)
     # Note: ~y == -y-1
-    x + y, x > ~y
+    x +% y, x > ~y
 end
 end
 
@@ -171,7 +171,11 @@ The overflow protection may impose a perceptible performance penalty.
 """
 function checked_add(x::T, y::T) where T<:Integer
     @inline
-    z, b = add_with_overflow(x, y)
+    zb = add_with_overflow(x, y)
+    # Avoid use of tuple destructuring, which uses aritmetic internally,
+    # so that this can be used as a replacement for +
+    z = getfield(zb, 1)
+    b = getfield(zb, 2)
     b && throw_overflowerr_binaryop(:+, x, y)
     z
 end
@@ -206,7 +210,7 @@ sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
 
 if BrokenSignedInt != Union{}
 function sub_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x - y
+    r = x -% y
     # x and y have different signs, and the result has a different sign than x
     f = (x<0) != (y<0) == (r<0)
     r, f
@@ -215,7 +219,7 @@ end
 if BrokenUnsignedInt != Union{}
 function sub_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     # x - y < 0
-    x - y, x < y
+    x -% y, x < y
 end
 end
 
@@ -242,7 +246,7 @@ Calculates `r = x*y`, with the flag `f` indicating whether overflow has occurred
 function mul_with_overflow end
 mul_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_smul_int(x, y)
 mul_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_umul_int(x, y)
-mul_with_overflow(x::Bool, y::Bool) = (x*y, false)
+mul_with_overflow(x::Bool, y::Bool) = (x *% y, false)
 
 if BrokenSignedIntMul != Union{} && BrokenSignedIntMul != Int128
 function mul_with_overflow(x::T, y::T) where T<:BrokenSignedIntMul
@@ -273,14 +277,14 @@ if Int128 <: BrokenSignedIntMul
         else
             false
         end
-        x*y, f
+        x *% y, f
     end
 end
 if UInt128 <: BrokenUnsignedIntMul
     # Avoid BigInt
     function mul_with_overflow(x::T, y::T) where T<:UInt128
         # x * y > typemax(T)
-        x * y, y > 0 && x > fld(typemax(T), y)
+        x *% y, y > 0 && x > fld(typemax(T), y)
     end
 end
 

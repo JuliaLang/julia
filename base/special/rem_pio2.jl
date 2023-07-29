@@ -188,9 +188,9 @@ Base.@assume_effects :consistent function paynehanek(x::Float64)
     #
     # (i.e. ignoring integer and lowest bit parts of result)
 
-    w1 = UInt128(X*a1) << 64 # overflow becomes integer
-    w2 = widemul(X,a2)
-    w3 = widemul(X,a3) >> 64
+    w1 = UInt128(X *% a1) << 64 # overflow becomes integer
+    w2 = widemul(X, a2)
+    w3 = widemul(X, a3) >> 64
     w = w1 + w2 + w3         # quotient fraction after division by 2π
 
     # adjust for sign of x

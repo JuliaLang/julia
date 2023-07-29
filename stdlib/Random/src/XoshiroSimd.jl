@@ -17,7 +17,7 @@ simdThreshold(::Type{Bool}) = 640
 @inline _rotl45(x::UInt64) = (x<<45)|(x>>19)
 @inline _shl17(x::UInt64) = x<<17
 @inline _rotl23(x::UInt64) = (x<<23)|(x>>41)
-@inline _plus(x::UInt64,y::UInt64) = x+y
+@inline _plus(x::UInt64,y::UInt64) = x +% y
 @inline _xor(x::UInt64,y::UInt64) = xor(x,y)
 @inline _and(x::UInt64, y::UInt64) = x & y
 @inline _or(x::UInt64, y::UInt64) = x | y
@@ -128,10 +128,10 @@ function forkRand(rng::Union{TaskLocalRNG, Xoshiro}, ::Val{N}) where N
     # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
     # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
     # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    s0 = ntuple(i->VecElement(0x02011ce34bce797f * rand(rng, UInt64)), Val(N))
-    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 * rand(rng, UInt64)), Val(N))
-    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 * rand(rng, UInt64)), Val(N))
-    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 * rand(rng, UInt64)), Val(N))
+    s0 = ntuple(i->VecElement(0x02011ce34bce797f *% rand(rng, UInt64)), Val(N))
+    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 *% rand(rng, UInt64)), Val(N))
+    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 *% rand(rng, UInt64)), Val(N))
+    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 *% rand(rng, UInt64)), Val(N))
     (s0, s1, s2, s3)
 end
 

@@ -87,6 +87,11 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+(-%)(x::BitInteger)                    = neg_int(x)
+(-%)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
+(+%)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
+(*%)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
+
 negate(x) = -x
 negate(x::Unsigned) = -convert(Signed, x)
 #widenegate(x) = -convert(widen(signed(typeof(x))), x)

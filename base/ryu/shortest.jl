@@ -14,7 +14,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     #  mf * 2^ef == f
     mf = (one(U) << significand_bits(T)) | m
     ef = e - exponent_bias(T) - significand_bits(T)
-    f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
+    f_isinteger = mf & ((one(U) << -ef) -% one(U)) == 0
 
     if ef > 0 || ef < -Base.significand_bits(T) || !f_isinteger
         # fixup subnormals
@@ -56,7 +56,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
                 end
             end
             if q <= qinvbound(T)
-                if ((v % UInt32) - 5 * div(v, 5)) == 0
+                if ((v % UInt32) -% 5 * div(v, 5)) == 0
                     b_allzero = pow5(v, q)
                 elseif mf_iseven
                     a_allzero = pow5(u, q)
@@ -99,9 +99,9 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
                 if c_div10 <= a_div10
                     break
                 end
-                a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                a_mod10 = (a % UInt32) -% UInt32(10) *% (a_div10 % UInt32)
                 b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                 a_allzero &= a_mod10 == 0
                 b_allzero &= b_lastdigit == 0
                 b_lastdigit = b_mod10 % UInt8
@@ -113,13 +113,13 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             if a_allzero
                 while true
                     a_div10 = div(a, 10)
-                    a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                    a_mod10 = (a % UInt32) -% UInt32(10) *% (a_div10 % UInt32)
                     if a_mod10 != 0 && (maxsignif === nothing || b < maxsignif)
                         break
                     end
                     c_div10 = div(c, 10)
                     b_div10 = div(b, 10)
-                    b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                    b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                     b_allzero &= b_lastdigit == 0
                     b_lastdigit = b_mod10 % UInt8
                     b = b_div10
@@ -139,7 +139,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             a_div100 = div(a, 100)
             if c_div100 > a_div100
                 b_div100 = div(b, 100)
-                b_mod100 = (b % UInt32) - UInt32(100) * (b_div100 % UInt32)
+                b_mod100 = (b % UInt32) -% UInt32(100) *% (b_div100 % UInt32)
                 roundup = b_mod100 >= 50
                 b = b_div100
                 c = c_div100
@@ -153,7 +153,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
                     break
                 end
                 b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                 roundup = b_mod10 >= 5
                 b = b_div10
                 c = c_div10
@@ -166,7 +166,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             # reduce to max significant digits
             while true
                 b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                 if b <= maxsignif
                     break
                 end
@@ -180,7 +180,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             # remove trailing zeros
             while true
                 b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                 if b_mod10 != 0
                     break
                 end
@@ -200,7 +200,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             # reduce to max significant digits
             while true
                 b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
                 if b <= maxsignif
                     break
                 end
@@ -213,7 +213,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         end
         while true
             b_div10 = div(b, 10)
-            b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+            b_mod10 = (b % UInt32) -% UInt32(10) *% (b_div10 % UInt32)
             if b_mod10 != 0
                 break
             end
@@ -353,7 +353,7 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
     ptr2 = pointer(DIGIT_TABLE)
     if (output >> 32) != 0
         q = output ÷ 100000000
-        output2 = (output % UInt32) - UInt32(100000000) * (q % UInt32)
+        output2 = (output % UInt32) -% UInt32(100000000) *% (q % UInt32)
         output = q
 
         c = output2 % UInt32(10000)

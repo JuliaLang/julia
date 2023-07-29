@@ -650,7 +650,7 @@ function hash(x::Float64, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, x)) - 3h
+    return hash_uint64(bitcast(UInt64, x)) -% (3 *% h)
 end
 
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
@@ -665,7 +665,7 @@ function hash(x::Float16, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+    return hash_uint64(bitcast(UInt64, Float64(x))) - (3 *% h)
 end
 
 ## generic hashing for rational values ##

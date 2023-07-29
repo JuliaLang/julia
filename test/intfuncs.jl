@@ -53,14 +53,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
             @test_throws OverflowError gcd(typemin(T), T(0))
             @test_throws OverflowError gcd(T(0), typemin(T))
         else
+            negtmax = one(T)
             # For Unsigned Integer types, -typemax(T) == 1.
-            @test gcd(-typemax(T), T(1)) === T(1)
-            @test gcd(T(1), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), T(0)) === T(1)
-            @test gcd(T(0), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), typemax(T)) === T(1)
-            @test gcd(typemax(T), -typemax(T)) === T(1)
+            @test gcd(negtmax, T(1)) === T(1)
+            @test gcd(T(1), negtmax) === T(1)
+            @test gcd(negtmax, T(0)) === T(1)
+            @test gcd(T(0), negtmax) === T(1)
+            @test gcd(negtmax, negtmax) === T(1)
+            @test gcd(negtmax, typemax(T)) === T(1)
+            @test gcd(typemax(T), negtmax) === T(1)
 
             # For Unsigned Integer types, typemin(T) == 0.
             @test gcd(typemin(T), T(1)) === T(1)
@@ -126,14 +127,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
             @test_throws OverflowError lcm(typemin(T), typemin(T)+T(1)) # lcm(n, n+1) = n*(n+1).
             @test_throws OverflowError lcm(typemin(T), typemin(T))
         else
+            negtmax = one(T)
             # For Unsigned Integer types, -typemax(T) == 1.
-            @test lcm(-typemax(T), T(1)) === T(1)
-            @test lcm(T(1), -typemax(T)) === T(1)
-            @test lcm(-typemax(T), T(0)) === T(0)
-            @test lcm(T(0), -typemax(T)) === T(0)
-            @test lcm(-typemax(T), -typemax(T)) === T(1)
-            @test lcm(-typemax(T), typemax(T)) === typemax(T)
-            @test lcm(typemax(T), -typemax(T)) === typemax(T)
+            @test lcm(negtmax, T(1)) === T(1)
+            @test lcm(T(1), negtmax) === T(1)
+            @test lcm(negtmax, T(0)) === T(0)
+            @test lcm(T(0), negtmax) === T(0)
+            @test lcm(negtmax, negtmax) === T(1)
+            @test lcm(negtmax, typemax(T)) === typemax(T)
+            @test lcm(typemax(T), negtmax) === typemax(T)
 
             # For Unsigned Integer types, typemin(T) == 0.
             @test lcm(typemin(T), T(1)) === lcm(T(0), T(1)) === T(0)
