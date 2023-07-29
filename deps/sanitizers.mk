@@ -6,12 +6,12 @@ SANITIZER_LIB_PATH := $(dir $(shell LANG=C $(CC) -print-file-name=libasan.so))
 endif
 
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
-define pathsearch
+define pathsearch_all
 $(wildcard $(addsuffix /$(1),$(subst :, ,$(2))))
 endef
 
 define copy_sanitizer_lib
-install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_shlibdir)
+install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_shlibdir)
 $$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(SANITIZER_LIB_PATH)/,$(2)) | $$(build_shlibdir)
 	-cp $$< $$@
 endef

@@ -13,6 +13,7 @@
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
+#include <stdint.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Orc.h>
@@ -1216,15 +1217,18 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 //--------------------------------------------------
 // congruential random number generator
 // for a small amount of thread-local randomness
-STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias) JL_NOTSAFEPOINT
+
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
 {
-    *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
-}
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed) JL_NOTSAFEPOINT
-{
-    while ((*seed = 69069 * (*seed) + 362437) > unbias)
-        ;
-    return *seed % max;
+    uint64_t mask = ~(uint64_t)0;
+    --max;
+    mask >>= __builtin_clzll(max|1);
+    uint64_t x;
+    do {
+        *seed = 69069 * (*seed) + 362437;
+        x = *seed & mask;
+    } while (x > max);
+    return x;
 }
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
