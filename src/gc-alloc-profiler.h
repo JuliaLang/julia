@@ -32,7 +32,7 @@ JL_DLLEXPORT void jl_free_alloc_profile(void);
 // ---------------------------------------------------------------------
 
 typedef enum {
-    JL_alloc_unkown = 0,
+    JL_alloc_unknown = 0,
     JL_alloc_new_object,
     JL_alloc_resize_buffer,
     JL_alloc_box_args_dynamic_dispatch,
@@ -40,7 +40,6 @@ typedef enum {
     JL_alloc_box_return_value_static_dispatch_to_type_unstable,
     JL_alloc_box_unknown_reason,
     JL_alloc_compiler_internal, // method internals? codegen internals?
-    JL_big_alloc_unkown,
 } jl_alloc_reason;
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *typ, jl_alloc_reason r) JL_NOTSAFEPOINT;

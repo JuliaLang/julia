@@ -161,7 +161,7 @@ JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
 static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_binding_t *b)
 {
     jl_task_t *ct = jl_current_task;
-    jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type, JL_alloc_unkown);
+    jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type, JL_alloc_unknown);
     g->mod = mod;
     jl_gc_wb(g, g->mod);
     g->name = name;
@@ -174,7 +174,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     jl_task_t *ct = jl_current_task;
     assert(jl_is_module(mod) && jl_is_symbol(name));
     // TODO(PR): new object?
-    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc(ct->ptls, sizeof(jl_binding_t), jl_binding_type, JL_alloc_unkown);
+    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc(ct->ptls, sizeof(jl_binding_t), jl_binding_type, JL_alloc_unknown);
     jl_atomic_store_relaxed(&b->value, NULL);
     jl_atomic_store_relaxed(&b->owner, NULL);
     jl_atomic_store_relaxed(&b->ty, NULL);

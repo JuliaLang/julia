@@ -2396,7 +2396,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
                 auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
-                auto reason = ConstantInt::get(Type::getInt8Ty(F.getContext()), JL_alloc_unkown);
+                auto reason = ConstantInt::get(Type::getInt8Ty(F.getContext()), JL_alloc_unknown);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {

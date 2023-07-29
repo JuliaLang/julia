@@ -483,7 +483,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_task_t *ct = jl_current_task;
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
-            jl_code_instance_type, JL_alloc_unkown);
+            jl_code_instance_type, JL_alloc_unknown);
     codeinst->def = mi;
     codeinst->min_world = min_world;
     codeinst->max_world = max_world;
@@ -3228,7 +3228,7 @@ enum SIGNATURE_FULLY_COVERS {
 static jl_method_match_t *make_method_match(jl_tupletype_t *spec_types, jl_svec_t *sparams, jl_method_t *method, enum SIGNATURE_FULLY_COVERS fully_covers)
 {
     jl_task_t *ct = jl_current_task;
-    jl_method_match_t *match = (jl_method_match_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_match_t), jl_method_match_type, JL_alloc_unkown);
+    jl_method_match_t *match = (jl_method_match_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_match_t), jl_method_match_type, JL_alloc_unknown);
     match->spec_types = spec_types;
     match->sparams = sparams;
     match->method = method;

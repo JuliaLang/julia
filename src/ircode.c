@@ -610,7 +610,7 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_GC_DISABLED
 static jl_value_t *jl_decode_value_any(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
     int32_t sz = (tag == TAG_SHORT_GENERAL ? read_uint8(s->s) : read_int32(s->s));
-    jl_value_t *v = jl_gc_alloc(s->ptls, sz, NULL, JL_alloc_unkown);
+    jl_value_t *v = jl_gc_alloc(s->ptls, sz, NULL, JL_alloc_unknown);
     jl_set_typeof(v, (void*)(intptr_t)0xf50);
     jl_datatype_t *dt = (jl_datatype_t*)jl_decode_value(s);
     if (dt->smalltag)

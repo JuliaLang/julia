@@ -443,7 +443,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_task_t *ct = jl_current_task;
     jl_method_instance_t *mi =
         (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
-                                           jl_method_instance_type, JL_alloc_unkown);
+                                           jl_method_instance_type, JL_alloc_unknown);
     mi->def.value = NULL;
     mi->specTypes = NULL;
     mi->sparam_vals = jl_emptysvec;
@@ -462,7 +462,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     jl_task_t *ct = jl_current_task;
     jl_code_info_t *src =
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
-                                       jl_code_info_type, JL_alloc_unkown);
+                                       jl_code_info_type, JL_alloc_unknown);
     src->code = NULL;
     src->codelocs = NULL;
     src->ssavaluetypes = NULL;
@@ -649,7 +649,7 @@ JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
     jl_task_t *ct = jl_current_task;
     jl_code_info_t *newsrc =
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
-                                       jl_code_info_type, JL_alloc_unkown);
+                                       jl_code_info_type, JL_alloc_unknown);
     *newsrc = *src;
     return newsrc;
 }
@@ -789,7 +789,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_task_t *ct = jl_current_task;
     jl_method_t *m =
         // internal? new?
-        (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type, JL_alloc_unkown);
+        (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type, JL_alloc_unknown);
     jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_array_t*)jl_an_empty_vec_any);
     m->sig = NULL;

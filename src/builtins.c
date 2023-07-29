@@ -870,7 +870,7 @@ JL_CALLABLE(jl_f_tuple)
     if (tt->instance != NULL)
         return tt->instance;
     jl_task_t *ct = jl_current_task;
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt, JL_alloc_unkown);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt, JL_alloc_unknown);
     for (i = 0; i < nargs; i++)
         set_nth_field(tt, jv, i, args[i], 0);
     return jv;
@@ -1416,7 +1416,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     jl_array_t *ar = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
-                                            jl_expr_type, JL_alloc_unkown);
+                                            jl_expr_type, JL_alloc_unknown);
     ex->head = head;
     ex->args = ar;
     JL_GC_POP();
@@ -1433,7 +1433,7 @@ JL_CALLABLE(jl_f__expr)
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
-                                            jl_expr_type, JL_alloc_unkown);
+                                            jl_expr_type, JL_alloc_unknown);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
     JL_GC_POP();
@@ -1449,7 +1449,7 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     // TODO(PR): Maybe the reason should be "compiler internal?"
-    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type, JL_alloc_unkown);
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type, JL_alloc_unknown);
     jl_set_typetagof(tv, jl_tvar_tag, 0);
     tv->name = name;
     tv->lb = lb;

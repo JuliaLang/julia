@@ -45,7 +45,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_task_t *ct = jl_current_task;
     jl_methtable_t *mt =
         (jl_methtable_t*)jl_gc_alloc(ct->ptls, sizeof(jl_methtable_t),
-                                     jl_methtable_type, JL_alloc_unkown);
+                                     jl_methtable_type, JL_alloc_unknown);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     jl_atomic_store_relaxed(&mt->defs, jl_nothing);
@@ -64,7 +64,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_task_t *ct = jl_current_task;
     jl_typename_t *tn =
         (jl_typename_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typename_t),
-                                    jl_typename_type, JL_alloc_unkown);
+                                    jl_typename_type, JL_alloc_unknown);
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
@@ -95,7 +95,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_dat
 jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_task_t *ct = jl_current_task;
-    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ct->ptls, sizeof(jl_datatype_t), jl_datatype_type, JL_alloc_unkown);
+    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ct->ptls, sizeof(jl_datatype_t), jl_datatype_type, JL_alloc_unknown);
     jl_set_typetagof(t, jl_datatype_tag, 0);
     t->hash = 0;
     t->hasfreetypevars = 0;
@@ -967,7 +967,7 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
 
     assert(!bt->smalltag);
     jl_task_t *ct = jl_current_task;
-    jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt, JL_alloc_unkown);
+    jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt, JL_alloc_unknown);
     memcpy(jl_assume_aligned(v, sizeof(void*)), data, nb);
     return v;
 }
@@ -993,7 +993,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
 
     assert(!bt->smalltag);
     jl_task_t *ct = jl_current_task;
-    jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt, JL_alloc_unkown);
+    jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt, JL_alloc_unknown);
     // data is aligned to the power of two,
     // we will write too much of v, but the padding should exist
     if (nb == 1)
@@ -1061,7 +1061,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
 
     assert(!bt->smalltag);
     jl_task_t *ct = jl_current_task;
-    jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt, JL_alloc_unkown);
+    jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt, JL_alloc_unknown);
     if (nb == 1)
         *(uint8_t*)v = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
     else if (nb == 2)
@@ -1128,7 +1128,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t
     // n.b.: this does not spuriously fail if there are padding bits
     jl_task_t *ct = jl_current_task;
     int isptr = jl_field_isptr(rettyp, 0);
-    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : jl_datatype_size(rettyp), isptr ? dt : rettyp, JL_alloc_unkown);
+    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : jl_datatype_size(rettyp), isptr ? dt : rettyp, JL_alloc_unknown);
     int success;
     jl_datatype_t *et = (jl_datatype_t*)jl_typeof(expected);
     if (nb == 0) {
@@ -1217,7 +1217,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t
     }
     if (isptr) {
         JL_GC_PUSH1(&y);
-        jl_value_t *z = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp, JL_alloc_unkown);
+        jl_value_t *z = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp, JL_alloc_unknown);
         *(jl_value_t**)z = y;
         JL_GC_POP();
         y = z;
@@ -1232,7 +1232,7 @@ JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_datatype_t *bt)
 {
     uint64_t data = 0xffffffffffffffffULL;
     jl_task_t *ct = jl_current_task;
-    jl_value_t *v = jl_gc_alloc(ct->ptls, sizeof(size_t), bt, JL_alloc_unkown);
+    jl_value_t *v = jl_gc_alloc(ct->ptls, sizeof(size_t), bt, JL_alloc_unknown);
     if (bt->smalltag)
         jl_set_typetagof(v, bt->smalltag, 0);
     memcpy(v, &data, sizeof(size_t));
@@ -1516,7 +1516,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
     size_t size = jl_datatype_size(type);
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type, JL_alloc_unkown);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type, JL_alloc_unknown);
     if (type->smalltag) // TODO: do we need this?
         jl_set_typetagof(jv, type->smalltag, 0);
     if (size > 0)
@@ -1590,7 +1590,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     }
     else if (needlock) {
         jl_task_t *ct = jl_current_task;
-        r = jl_gc_alloc(ct->ptls, fsz, ty, JL_alloc_unkown);
+        r = jl_gc_alloc(ct->ptls, fsz, ty, JL_alloc_unknown);
         jl_lock_value(v);
         memcpy((char*)r, (char*)v + offs, fsz);
         jl_unlock_value(v);
@@ -1734,7 +1734,7 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
         else {
             if (needlock) {
                 jl_task_t *ct = jl_current_task;
-                r = jl_gc_alloc(ct->ptls, fsz, ty, JL_alloc_unkown);
+                r = jl_gc_alloc(ct->ptls, fsz, ty, JL_alloc_unknown);
                 jl_lock_value(v);
                 memcpy((char*)r, (char*)v + offs, fsz);
                 memcpy((char*)v + offs, (char*)rhs, fsz);
@@ -1896,7 +1896,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
                 rty = jl_nth_union_component(rty, *psel);
             }
             assert(!jl_field_isptr(rettyp, 0));
-            r = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), (jl_value_t*)rettyp, JL_alloc_unkown);
+            r = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), (jl_value_t*)rettyp, JL_alloc_unknown);
             int success = (rty == jl_typeof(expected));
             if (needlock)
                 jl_lock_value(v);

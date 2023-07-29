@@ -950,7 +950,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
                                                 jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
-                                                  jl_weakref_type, JL_alloc_unkown);
+                                                  jl_weakref_type, JL_alloc_unknown);
     wr->value = value;  // NOTE: wb not needed here
     arraylist_push(&ptls->heap.weak_refs, wr);
     return wr;
@@ -4011,31 +4011,31 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_alloc(ptls, sz, NULL, JL_alloc_unkown);
+    return jl_gc_alloc(ptls, sz, NULL, JL_alloc_unknown);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_alloc(ptls, 0, NULL, JL_alloc_unkown);
+    return jl_gc_alloc(ptls, 0, NULL, JL_alloc_unknown);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_alloc(ptls, sizeof(void*), NULL, JL_alloc_unkown);
+    return jl_gc_alloc(ptls, sizeof(void*), NULL, JL_alloc_unknown);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_alloc(ptls, sizeof(void*) * 2, NULL, JL_alloc_unkown);
+    return jl_gc_alloc(ptls, sizeof(void*) * 2, NULL, JL_alloc_unknown);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL, JL_alloc_unkown);
+    return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL, JL_alloc_unknown);
 }
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
