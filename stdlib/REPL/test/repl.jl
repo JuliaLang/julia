@@ -1249,6 +1249,7 @@ let emptyH1 = Markdown.parse("# "),
 end
 
 module BriefExtended
+public f, f_plain
 """
     f()
 
