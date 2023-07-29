@@ -12,14 +12,14 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2; debug=true, private_warning=false)
+function docstrings_equal(d1, d2; debug=true, internal_warning=false)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    if private_warning
+    if internal_warning
         s2 = "!!! warning\n    This symbol may be internal. Behavior documented here might change in future versions.\n\n\n" * s2
     end
     if debug && s1 != s2
@@ -83,7 +83,7 @@ end
 @doc "I am a module" ModuleMacroDoc
 @doc "I am a macro"  :@ModuleMacroDoc.m
 
-@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module", private_warning=true)
+@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module", internal_warning=true)
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # issue #38819
@@ -317,13 +317,13 @@ let fns = @var(DocsTest.fnospecialize)
     @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
-@test docstrings_equal(@doc(DocsTest.TA), doc"TA", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.TA), doc"TA", internal_warning=true)
 
-@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()", private_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()", private_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)", private_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)", private_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)", internal_warning=true)
 let m = doc"""
         @mac()
 
@@ -333,31 +333,31 @@ let m = doc"""
 
         :@mac
         """
-    @test docstrings_equal(@doc(:@DocsTest.mac), m, private_warning=true)
-    @test docstrings_equal(@doc(:(DocsTest.@mac)), m, private_warning=true)
+    @test docstrings_equal(@doc(:@DocsTest.mac), m, internal_warning=true)
+    @test docstrings_equal(@doc(:(DocsTest.@mac)), m, internal_warning=true)
 end
 
-@test docstrings_equal(@doc(DocsTest.G), doc"G", private_warning=true)
-@test docstrings_equal(@doc(DocsTest.K), doc"K", private_warning=true)
+@test docstrings_equal(@doc(DocsTest.G), doc"G", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.K), doc"K", internal_warning=true)
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2,private_warning=true)
+    @test docstrings_equal(d1,d2,internal_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2,private_warning=true)
+    @test docstrings_equal(d1,d2,internal_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::Int, ::Any)),
     d2 = doc"t-2"
-    @test docstrings_equal(d1,d2,private_warning=true)
+    @test docstrings_equal(d1,d2,internal_warning=true)
 end
 
 let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
-    @test docstrings_equal(d1,d2,private_warning=true)
+    @test docstrings_equal(d1,d2,internal_warning=true)
 end
 
 let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
@@ -411,7 +411,7 @@ end
 @test docstrings_equal(@doc(BareModule.@m), doc"@m")
 @test docstrings_equal(@doc(BareModule.C), doc"C")
 @test docstrings_equal(@doc(BareModule.A), doc"A")
-@test docstrings_equal(@doc(BareModule.T), doc"T", private_warning=true)
+@test docstrings_equal(@doc(BareModule.T), doc"T", internal_warning=true)
 
 @test_throws ErrorException @doc("...", "error")
 @test_throws ErrorException @doc("...", @time 0)
@@ -644,7 +644,7 @@ const i13385 = I13385(true)
 @test @doc(i13385) !== nothing
 
 # Issue #12700.
-@test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
+@test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m", internal_warning=true)
 
 # issue 11993
 # Check if we are documenting the expansion of the macro
@@ -660,7 +660,7 @@ end
 let d = (@doc :@m2_11993),
     macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found.
+    No documentation found for private symbol.
 
     $macro_doc""")
 end
@@ -859,7 +859,7 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
+No docstring or readme file found for internal module `$(curmod_prefix)Undocumented`.
 
 # Exported names
 
@@ -875,7 +875,7 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -891,7 +891,7 @@ $(curmod_prefix)Undocumented.C
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -911,7 +911,7 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -926,7 +926,7 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 ```
@@ -948,7 +948,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 
@@ -968,7 +968,7 @@ $(curmod_prefix)Undocumented.st4{T<:Number, N}
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -991,7 +991,7 @@ $(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1010,7 +1010,7 @@ $(curmod_prefix)Undocumented.st4{Int64, N}
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 
@@ -1027,7 +1027,7 @@ $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Un
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1050,7 +1050,7 @@ $(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1072,7 +1072,7 @@ $(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N}
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1093,7 +1093,7 @@ $(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1114,7 +1114,7 @@ $(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1128,7 +1128,7 @@ No documentation found.
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1144,7 +1144,7 @@ No documentation found.
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1163,7 +1163,7 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
@@ -1173,7 +1173,7 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)
@@ -1286,6 +1286,8 @@ begin
     f15684(x) = 1
 end
 
+public f15684
+
 @test string(@doc f15684) == "abc\n"
 
 # Dynamic docstrings
@@ -1360,6 +1362,8 @@ end
 # issue 21016
 module I21016
 
+public Struct
+
 struct Struct{T}
 end
 
@@ -1424,7 +1428,7 @@ end
 # issue 22098
 "an empty macro"
 macro mdoc22098 end
-@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro", internal_warning=true)
 
 # issue #24468
 let ex = try
@@ -1468,26 +1472,28 @@ Docs for calling `f::MyParametricFunc{T}`.
 @test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
-""")
+""",
+internal_warning=true)
 
 @test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
 doc"""
 Docs for calling `f::MyParametricFunc{T}`.
-""")
+""",
+internal_warning=true)
 
 struct A_20087 end
 
 """a"""
 (a::A_20087)() = a
 
-@test docstrings_equal(@doc(A_20087()), doc"a")
+@test docstrings_equal(@doc(A_20087()), doc"a", internal_warning=true)
 
 struct B_20087 end
 
 """b"""
 (::B_20087)() = a
 
-@test docstrings_equal(@doc(B_20087()), doc"b")
+@test docstrings_equal(@doc(B_20087()), doc"b", internal_warning=true)
 
 # issue #27832
 
@@ -1512,11 +1518,11 @@ Core.atdoc!(_last_atdoc)
 Test.collect_test_logs() do                          # suppress printing of any warning
     eval(quote "Second docstring" Module29432 end)   # requires toplevel
 end
-@test docstrings_equal(@doc(Module29432), doc"Second docstring")
+@test docstrings_equal(@doc(Module29432), doc"Second docstring", internal_warning=true)
 
 # Issue #13109
 eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
-@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...", internal_warning=true)
 
 # issue #41727
 "struct docstring"
