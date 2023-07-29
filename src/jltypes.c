@@ -2783,7 +2783,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_true  = jl_permbox8(jl_bool_type, jl_bool_tag, 1);
 
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
-    jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
+    jl_abstract_dense_string_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractDenseString"), core, jl_abstractstring_type, jl_emptysvec);
+    jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstract_dense_string_type, jl_emptysvec,
                                      jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0);
     XX(string);
     jl_string_type->instance = NULL;

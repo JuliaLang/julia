@@ -32,7 +32,7 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
 """
-    String <: AbstractString
+    String <: AbstractDenseString <: AbstractString
 
 The default string type in Julia, used by e.g. string literals.
 
@@ -147,7 +147,7 @@ typemin(::String) = typemin(String)
 
 ## thisind, nextind ##
 
-@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
+@propagate_inbounds thisind(s::AbstractDenseString, i::Int) = _thisind_str(s, i)
 
 # s should be String or SubString{String}
 @inline function _thisind_str(s, i::Int)
@@ -168,7 +168,7 @@ typemin(::String) = typemin(String)
     return i
 end
 
-@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
+@propagate_inbounds nextind(s::AbstractDenseString, i::Int) = _nextind_str(s, i)
 
 # s should be String or SubString{String}
 @inline function _nextind_str(s, i::Int)
@@ -330,7 +330,7 @@ const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in th
     return (state)
 end
 
-@inline function  _find_nonascii_chunk(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
+@inline function _find_nonascii_chunk(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
     while n <= last - chunk_size
         _isascii(cu,n,n+chunk_size-1) || return n
@@ -387,8 +387,8 @@ function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int
     return ifelse(state == _UTF8_DFA_ACCEPT,2,0)
 end
 
-isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = (@inline byte_string_classify(bytes)) ≠ 0
-isvalid(::Type{String}, s::AbstractString) =  (@inline byte_string_classify(s)) ≠ 0
+isvalid(::Type{<:AbstractDenseString}, bytes::AbstractVector{UInt8}) = (@inline byte_string_classify(bytes)) ≠ 0
+isvalid(::Type{<:AbstractDenseString}, s::AbstractString) =  (@inline byte_string_classify(s)) ≠ 0
 
 @inline isvalid(s::AbstractString) = @inline isvalid(String, codeunits(s))
 
@@ -396,7 +396,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@inline function iterate(s::String, i::Int=firstindex(s))
+@inline function iterate(s::AbstractDenseString, i::Int=firstindex(s))
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
@@ -404,7 +404,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return iterate_continued(s, i, u)
 end
 
-function iterate_continued(s::String, i::Int, u::UInt32)
+function iterate_continued(s::AbstractDenseString, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -426,14 +426,14 @@ function iterate_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u), i
 end
 
-@propagate_inbounds function getindex(s::String, i::Int)
+@propagate_inbounds function getindex(s::AbstractDenseString, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u)
     return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, u::UInt32)
+function getindex_continued(s::AbstractDenseString, i::Int, u::UInt32)
     if u < 0xc0000000
         # called from `getindex` which checks bounds
         @inbounds isvalid(s, i) && @goto ret
@@ -459,9 +459,9 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+getindex(s::AbstractDenseString, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
-@inline function getindex(s::String, r::UnitRange{Int})
+@inline function getindex(s::AbstractDenseString, r::UnitRange{Int})
     isempty(r) && return ""
     i, j = first(r), last(r)
     @boundscheck begin
@@ -477,10 +477,10 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
 end
 
 # nothrow because we know the start and end indices are valid
-@assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+@assume_effects :nothrow length(s::AbstractDenseString) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 # effects needed because @inbounds
-@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
+@assume_effects :consistent :effect_free @inline function length(s::AbstractDenseString, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -491,7 +491,7 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::AbstractDenseString, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true
@@ -518,9 +518,9 @@ end
 
 ## overload methods for efficiency ##
 
-isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
+isvalid(s::AbstractDenseString, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-isascii(s::String) = isascii(codeunits(s))
+isascii(s::AbstractDenseString) = isascii(codeunits(s))
 
 # don't assume effects for general integers since we cannot know their implementation
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)

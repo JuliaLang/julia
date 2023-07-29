@@ -4,6 +4,7 @@
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
     XX(jl_abstractstring_type) \
+    XX(jl_abstract_dense_string_type) \
     XX(jl_an_empty_string) \
     XX(jl_an_empty_vec_any) \
     XX(jl_anytuple_type) \

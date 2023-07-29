@@ -803,6 +803,7 @@ extern JL_DLLIMPORT jl_unionall_t *jl_array_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_array_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_weakref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_abstractstring_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_abstract_dense_string_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_string_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_errorexception_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_argumenterror_type JL_GLOBALLY_ROOTED;

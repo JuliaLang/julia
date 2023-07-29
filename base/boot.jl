@@ -181,7 +181,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    AbstractChar, Char, AbstractString, String, IO,
+    AbstractChar, Char, AbstractString, AbstractDenseString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,

@@ -13,7 +13,7 @@ abstract type AbstractPattern end
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::AbstractDenseString, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
@@ -38,7 +38,7 @@ findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
-function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+function _search(a::Union{AbstractDenseString,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
     end
@@ -60,7 +60,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::AbstractDenseString, i::Integer)
     c = pred.x
     c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
     b = first_utf8_byte(c)
@@ -81,7 +81,7 @@ findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
 findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
-function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
+function _rsearch(a::Union{AbstractDenseString,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end

@@ -208,7 +208,7 @@ eltype(::Type{Cwstring}) = Cwchar_t
 
 containsnul(p::Ptr, len) =
     C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
-containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::AbstractDenseString) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
 function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})

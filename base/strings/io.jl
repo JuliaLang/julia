@@ -245,9 +245,9 @@ function show(
 end
 
 # optimized methods to avoid iterating over chars
-write(io::IO, s::Union{String,SubString{String}}) =
+write(io::IO, s::Union{AbstractDenseString,SubString{<:AbstractDenseString}}) =
     GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
-print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
+print(io::IO, s::Union{AbstractDenseString,SubString{<:AbstractDenseString}}) = (write(io, s); nothing)
 
 """
     repr(x; context=nothing)
@@ -305,8 +305,8 @@ julia> String(take!(io))
 "Haho"
 ```
 """
-IOBuffer(str::String) = IOBuffer(unsafe_wrap(Vector{UInt8}, str))
-IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::AbstractDenseString) = IOBuffer(unsafe_wrap(Vector{UInt8}, str))
+IOBuffer(s::SubString{<:AbstractDenseString}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
 

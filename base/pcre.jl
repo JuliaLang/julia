@@ -153,7 +153,7 @@ function ovec_ptr(match_data)
 end
 
 function compile(pattern::AbstractString, options::Integer)
-    if !(pattern isa Union{String,SubString{String}})
+    if !(pattern isa Union{AbstractDenseString,SubString{<:AbstractDenseString}})
         pattern = String(pattern)
     end
     errno = RefValue{Cint}(0)
@@ -197,7 +197,7 @@ function err_message(errno::Integer)
 end
 
 function exec(re, subject, offset, options, match_data)
-    if !(subject isa Union{String,SubString{String}})
+    if !(subject isa Union{AbstractDenseString,SubString{<:AbstractDenseString}})
         subject = String(subject)
     end
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,

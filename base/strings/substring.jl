@@ -63,7 +63,7 @@ convert(::Type{Union{String, SubString{String}}}, s::String) = s
 convert(::Type{Union{String, SubString{String}}}, s::SubString{String}) = s
 convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)::String
 
-function String(s::SubString{String})
+function String(s::SubString{<:AbstractDenseString})
     parent = s.string
     copy = GC.@preserve parent unsafe_string(pointer(parent, s.offset+1), s.ncodeunits)
     return copy
@@ -167,7 +167,7 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is a
 "ex̂a"
 ```
 """
-function reverse(s::Union{String,SubString{String}})::String
+function reverse(s::Union{AbstractDenseString,SubString{<:AbstractDenseString}})::String
     # Read characters forwards from `s` and write backwards to `out`
     out = _string_n(sizeof(s))
     offs = sizeof(s) + 1
@@ -181,7 +181,7 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
-function Symbol(s::SubString{String})
+function Symbol(s::SubString{<:AbstractDenseString})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
 end
 
@@ -203,13 +203,13 @@ end
     return n
 end
 
-@assume_effects :nothrow @inline function __unsafe_string!(out, s::String, offs::Integer)
+@assume_effects :nothrow @inline function __unsafe_string!(out, s::AbstractDenseString, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
 end
 
-@inline function __unsafe_string!(out, s::SubString{String}, offs::Integer)
+@inline function __unsafe_string!(out, s::SubString{<:AbstractDenseString}, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
@@ -222,20 +222,20 @@ end
 end
 
 # nothrow needed here because for v in a can't prove the indexing is inbounds.
-@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
+@assume_effects :foldable :nothrow string(a::Union{Char, AbstractDenseString, Symbol}...) = _string(a...)
 
-string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
+string(a::Union{Char, AbstractDenseString, SubString{<:AbstractDenseString}, Symbol}...) = _string(a...)
 
-function _string(a::Union{Char, String, SubString{String}, Symbol}...)
+function _string(a::Union{Char, AbstractDenseString, SubString{<:AbstractDenseString}, Symbol}...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually
         # and allow one specializable call site per concrete type
         if v isa Char
             n += ncodeunits(v)
-        elseif v isa String
+        elseif v isa AbstractDenseString
             n += sizeof(v)
-        elseif v isa SubString{String}
+        elseif v isa SubString{<:AbstractDenseString}
             n += sizeof(v)
         else
             n += sizeof(v::Symbol)
@@ -246,7 +246,7 @@ function _string(a::Union{Char, String, SubString{String}, Symbol}...)
     for v in a
         if v isa Char
             offs += __unsafe_string!(out, v, offs)
-        elseif v isa String || v isa SubString{String}
+        elseif v isa AbstractDenseString || v isa SubString{<:AbstractDenseString}
             offs += __unsafe_string!(out, v, offs)
         else
             offs += __unsafe_string!(out, v::Symbol, offs)
@@ -257,9 +257,9 @@ end
 
 # don't assume effects for general integers since we cannot know their implementation
 # not nothrow because r<0 throws
-@assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
+@assume_effects :foldable repeat(s::AbstractDenseString, r::BitInteger) = @invoke repeat(s::AbstractDenseString, r::Integer)
 
-function repeat(s::Union{String, SubString{String}}, r::Integer)
+function repeat(s::Union{AbstractDenseString, SubString{<:AbstractDenseString}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     r == 0 && return ""
     r == 1 && return String(s)
@@ -276,7 +276,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     return out
 end
 
-function filter(f, s::Union{String, SubString{String}})
+function filter(f, s::Union{AbstractDenseString, SubString{<:AbstractDenseString}})
     out = StringVector(sizeof(s))
     offset = 1
     for c in s

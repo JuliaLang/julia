@@ -55,8 +55,8 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::Union{String, SubString{String}},
-                    b::Union{String, SubString{String}})
+function startswith(a::Union{AbstractDenseString, SubString{<:AbstractDenseString}},
+                    b::Union{AbstractDenseString, SubString{<:AbstractDenseString}})
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
@@ -78,7 +78,7 @@ function Base.startswith(io::IO, prefix::Base.Chars)
     reset(io)
     return c in prefix
 end
-function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+function Base.startswith(io::IO, prefix::Union{AbstractDenseString,SubString{<:AbstractDenseString}})
     mark(io)
     s = read(io, ncodeunits(prefix))
     reset(io)
@@ -86,8 +86,8 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
 end
 Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
-function endswith(a::Union{String, SubString{String}},
-                  b::Union{String, SubString{String}})
+function endswith(a::Union{AbstractDenseString, SubString{<:AbstractDenseString}},
+                  b::Union{AbstractDenseString, SubString{<:AbstractDenseString}})
     cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
@@ -252,8 +252,8 @@ function chopprefix(s::AbstractString, prefix::AbstractString)
     end
 end
 
-function chopprefix(s::Union{String, SubString{String}},
-                    prefix::Union{String, SubString{String}})
+function chopprefix(s::Union{AbstractDenseString, SubString{<:AbstractDenseString}},
+                    prefix::Union{AbstractDenseString, SubString{<:AbstractDenseString}})
     if startswith(s, prefix)
         SubString(s, 1 + ncodeunits(prefix))
     else
@@ -294,8 +294,8 @@ function chopsuffix(s::AbstractString, suffix::AbstractString)
     end
 end
 
-function chopsuffix(s::Union{String, SubString{String}},
-                    suffix::Union{String, SubString{String}})
+function chopsuffix(s::Union{AbstractDenseString, SubString{<:AbstractDenseString}},
+                    suffix::Union{AbstractDenseString, SubString{<:AbstractDenseString}})
     if !isempty(suffix) && endswith(s, suffix)
         astart = ncodeunits(s) - ncodeunits(suffix) + 1
         @inbounds SubString(s, firstindex(s), prevind(s, astart))
@@ -325,7 +325,7 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
+function chomp(s::AbstractDenseString)
     i = lastindex(s)
     if i < 1 || codeunit(s,i) != 0x0a
         return @inbounds SubString(s, 1, i)
@@ -982,7 +982,7 @@ function bytes2hex(io::IO, itr)
 end
 
 # check for pure ASCII-ness
-function ascii(s::String)
+function ascii(s::AbstractDenseString)
     for i in 1:sizeof(s)
         @inbounds codeunit(s, i) < 0x80 || __throw_invalid_ascii(s, i)
     end
@@ -1011,7 +1011,7 @@ julia> ascii("abcdefgh")
 """
 ascii(x::AbstractString) = ascii(String(x))
 
-Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
+Base.rest(s::Union{AbstractDenseString,SubString{<:AbstractDenseString}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)
     io = IOBuffer()
     for c in Iterators.rest(s, st...)

@@ -2120,6 +2120,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 #endif
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
+    add_builtin("AbstractDenseString", (jl_value_t*)jl_abstract_dense_string_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
 }
 

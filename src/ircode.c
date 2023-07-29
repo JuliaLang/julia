@@ -1110,7 +1110,7 @@ void jl_init_serializer(void)
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
                      jl_methtable_type, jl_typemap_level_type,
-                     jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
+                     jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type, jl_abstract_dense_string_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
                      jl_typeofbottom_type, jl_typeofbottom_type->super,

@@ -306,7 +306,7 @@ tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int
 
 ## string to complex functions ##
 
-function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::Union{AbstractDenseString,SubString{<:AbstractDenseString}}, i::Int, e::Int, raise::Bool) where {T<:Real}
     # skip initial whitespace
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)
@@ -363,7 +363,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     return Complex{T}(re, s[i₊]=='-' ? -im : im)
 end
 
-# the ±1 indexing above for ascii chars is specific to String, so convert:
+# the ±1 indexing above for ascii chars is specific to AbstractDenseString, so convert:
 tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
