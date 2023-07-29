@@ -510,7 +510,7 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
         s = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typetagof(s, jl_string_tag, 0);
-    maybe_record_alloc_to_profile(s, len, jl_string_type);
+    maybe_record_alloc_to_profile(s, len, jl_string_type, JL_alloc_new_object);
     *(size_t*)s = len;
     jl_string_data(s)[len] = 0;
     return s;
