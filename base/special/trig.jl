@@ -895,7 +895,6 @@ Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large
 
 See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-
 function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
