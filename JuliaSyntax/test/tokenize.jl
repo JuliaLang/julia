@@ -932,6 +932,7 @@ const all_kws = Set([
     "local",
     "macro",
     "module",
+    "public",
     "quote",
     "return",
     "struct",

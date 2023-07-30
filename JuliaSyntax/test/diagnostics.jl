@@ -1,5 +1,5 @@
-function diagnostic(str; only_first=false, allow_multiple=false, rule=:all)
-    stream = ParseStream(str)
+function diagnostic(str; only_first=false, allow_multiple=false, rule=:all, version=v"1.6")
+    stream = ParseStream(str; version=version)
     parse!(stream, rule=rule)
     if allow_multiple
         stream.diagnostics
@@ -127,8 +127,12 @@ end
         Diagnostic(10, 13, :warning, "parentheses are not required here")
     @test diagnostic("export (x)") ==
         Diagnostic(8, 10, :warning, "parentheses are not required here")
-    @test diagnostic("export :x") == 
+    @test diagnostic("export :x") ==
         Diagnostic(8, 9, :error, "expected identifier")
+    @test diagnostic("public = 4", version=v"1.11") ==
+        diagnostic("public[7] = 5", version=v"1.11") ==
+        diagnostic("public() = 6", version=v"1.11") ==
+        Diagnostic(1, 6, :warning, "using public as an identifier is deprecated")
 end
 
 @testset "diagnostics for literal parsing" begin
