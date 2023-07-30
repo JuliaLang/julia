@@ -267,7 +267,7 @@ end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
-function banner(io::IO = stdout; short=false)
+function banner(io::IO = stdout; short = false)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)

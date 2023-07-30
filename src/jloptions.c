@@ -140,7 +140,7 @@ static const char opts[]  =
     // interactive options
     " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|auto*|short}\n"
+    " --banner={yes|no|short|auto*}\n"
     "                            Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
     " --history-file={yes*|no}   Load or save history\n\n"
