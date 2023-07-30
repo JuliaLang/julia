@@ -307,6 +307,16 @@ function isapprox(x::Number, y::Number;
     x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
 end
 
+function isapprox(x::Integer, y::Integer;
+                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  nans::Bool=false, norm::Function=abs)
+    if norm === abs && atol < 1 && rtol == 0
+        return x == y
+    else
+        return norm(x - y) <= max(atol, rtol*max(norm(x), norm(y)))
+    end
+end
+
 """
     isapprox(x; kwargs...) / ≈(x; kwargs...)
 
