@@ -303,7 +303,7 @@ namespace jl_well_known {
                     T_prjlvalue,
                     { Type::getInt8PtrTy(ctx),
                         T_size,
-                        Type::getInt8PtrTy(ctx) },
+                        T_size }, // type
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_NAME);
