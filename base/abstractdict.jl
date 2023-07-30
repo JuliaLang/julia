@@ -2,6 +2,14 @@
 
 # generic operations on dictionaries
 
+abstract type AbstractDictSlot end
+
+has_slots(::Type{<:AbstractDict}) = false
+has_slots(x) = has_slots(typeof(x))
+
+getindex(slot)
+setindex!(h::AbstractDict, v, key) = (setpair!(getslot(h, key), key => v); h)
+
 """
     KeyError(key)
 
@@ -17,11 +25,16 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 haskey(d::AbstractDict, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
-    v = get(a, p.first, secret_table_token)
-    if v !== secret_table_token
-        return valcmp(v, p.second)
+    if has_slots(a)
+        slot = getslot(a, p.first)
+        isassigned(slot) ? valcmp(slot[].second, p.second) : false
+    else
+        v = get(a, p.first, secret_table_token)
+        if v !== secret_table_token
+            return valcmp(v, p.second)
+        end
+        return false
     end
-    return false
 end
 
 function in(p, a::AbstractDict)
@@ -68,7 +81,13 @@ end
 
 copy(v::KeySet) = copymutable(v)
 
-in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
+function in(k, v::KeySet)
+    if has_slots(v.dict)
+        isdefined(getslot(v.dict, k))
+    else
+        get(v.dict, k, secret_table_token) !== secret_table_token
+    end
+end
 
 """
     keys(iterator)
@@ -279,7 +298,12 @@ end
 
 function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
     for (k, v) in d2
-        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
+        if has_slots(d1)
+            slot = getslot(d1, k)
+            slot[] = isdefined(slot) ? combine(slot[], v) : v
+        else
+            d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
+        end
     end
     return d1
 end
@@ -442,9 +466,13 @@ function filter!(f, d::AbstractDict)
 end
 
 function filter_in_one_pass!(f, d::AbstractDict)
-    for pair in d
-        if !f(pair)
-            delete!(d, pair.first)
+    if has_slots(d)
+        for slot in eachslot(d)
+            f(getpair(slot)) || delete!(slot)
+        end
+    else
+        for pair in d
+            f(pair) || delete!(d, pair.first)
         end
     end
     return d
@@ -537,11 +565,17 @@ function hash(a::AbstractDict, h::UInt)
 end
 
 function getindex(t::AbstractDict{<:Any,V}, key) where V
-    v = get(t, key, secret_table_token)
-    if v === secret_table_token
-        throw(KeyError(key))
+    if has_slots(t)
+        slot = getslot(t, key)
+        isdefined(slot) || throw(KeyError(key))
+        slot[]::V
+    else
+        v = get(t, key, secret_table_token)
+        if v === secret_table_token
+            throw(KeyError(key))
+        end
+        v::V
     end
-    return v::V
 end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
@@ -552,10 +586,19 @@ setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
     key = convert(K, key)
-    if haskey(t, key)
-        return t[key]
+    if has_slots(t)
+        slot = getslot(t, key)
+        if isdefined(slot)
+            slot[]
+        else
+            slot[] = convert(V, default())
+        end
     else
-        return t[key] = convert(V, default())
+        if haskey(t, key)
+            t[key]
+        else
+            t[key] = convert(V, default())
+        end
     end
 end
 
@@ -614,11 +657,15 @@ ValueIterator for a Dict{Symbol, Int64} with 2 entries. Values:
 ```
 """
 function map!(f, iter::ValueIterator)
-    # This is the naive fallback which requires hash evaluations
-    # Contrary to the example Dict has an implementation which does not require hash evaluations
-    dict = iter.dict
-    for (key, val) in pairs(dict)
-        dict[key] = f(val)
+    if has_slots(iter.dict)
+        for slot in eachslot(iter.dict)
+            slot[] = f(slot[])
+        end
+    else
+        dict = iter.dict
+        for (key, val) in pairs(dict)
+            dict[key] = f(val)
+        end
+        iter
     end
-    return iter
 end

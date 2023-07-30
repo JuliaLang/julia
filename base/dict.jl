@@ -358,7 +358,13 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     nothing
 end
 
-function setindex!(h::Dict{K,V}, v0, key0) where V where K
+struct DictSlot{K, V, D::Dict{K, V}} <: AbstractDictSlot{K, V}
+    dict::D
+    index::Int
+    shorthash::UInt8
+end
+
+function getslot(h::Dict{K,V}, key0) where {K, V}
     if key0 isa K
         key = key0
     else
@@ -367,39 +373,25 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
             throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
         end
     end
-    setindex!(h, v0, key)
+    getslot(h, key)
 end
 
-function setindex!(h::Dict{K,V}, v0, key::K) where V where K
-    v = v0 isa V ? v0 : convert(V, v0)::V
-    index, sh = ht_keyindex2_shorthash!(h, key)
+function getslot(h::Dict{K,V}, v0, key::K) where {K, V}
+    DictSlot(t, ht_keyindex2_shorthash!(h, key)...)
+end
 
-    if index > 0
+isassigned(slot::DictSlot) = slot.index > 0
+getpair(slot::DictSlot) = @inbounds slot.dict.keys[abs(slot.index)] => slot.dict.vals[abs(slot.index)]
+function setpair!(slot::DictSlot, (key, v)::Pair)
+    @inbounds if isassigned(slot)
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        h.keys[index] = key
+        h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        _setindex!(h, v, key, -index, sh)
     end
-
-    return h
+    slot
 end
-
-function setindex!(h::Dict{K,Any}, v, key::K) where K
-    @nospecialize v
-    index, sh = ht_keyindex2_shorthash!(h, key)
-
-    if index > 0
-        h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
-    else
-        @inbounds _setindex!(h, v, key, -index, sh)
-    end
-
-    return h
-end
-
 
 """
     get!(collection, key, default)
