@@ -760,10 +760,10 @@ static Expected<orc::ThreadSafeModule> selectOptLevel(orc::ThreadSafeModule TSM,
 }
 
 static void recordDebugTSM(orc::MaterializationResponsibility &, orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
-    auto ptr = TSM.withModuleDo([](Module &M) -> orc::ThreadSafeModule * {
+    auto ptr = TSM.withModuleDo([](Module &M) JL_NOTSAFEPOINT {
         auto md = M.getModuleFlag("julia.__jit_debug_tsm_addr");
         if (!md)
-            return nullptr;
+            return static_cast<orc::ThreadSafeModule *>(nullptr);
         return reinterpret_cast<orc::ThreadSafeModule *>(cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue());
     });
     if (ptr) {
@@ -1637,6 +1637,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
+    orc::ThreadSafeModule CurrentlyCompiling;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
@@ -1645,7 +1646,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
             }
         }
         assert(!verifyLLVMIR(M));
-        auto jit_debug_tsm_addr = ConstantInt::get(Type::getIntNTy(M.getContext(), sizeof(void*) * CHAR_BIT), (uintptr_t) &TSM);
+        auto jit_debug_tsm_addr = ConstantInt::get(Type::getIntNTy(M.getContext(), sizeof(void*) * CHAR_BIT), (uintptr_t) &CurrentlyCompiling);
         M.addModuleFlag(Module::Error, "julia.__jit_debug_tsm_addr", jit_debug_tsm_addr);
     });
 
@@ -1654,8 +1655,8 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     if (Err) {
         ES.reportError(std::move(Err));
         errs() << "Failed to add module to JIT!\n";
-        if (TSM) {
-            TSM.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
+        if (CurrentlyCompiling) {
+            CurrentlyCompiling.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {
             errs() << "Module unavailable to be printed\n";
         }
