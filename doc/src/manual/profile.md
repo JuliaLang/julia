@@ -391,11 +391,11 @@ julia> using PProf  # Now, visualize with an external tool, like PProf or Profil
 
 julia> PProf.Allocs.pprof(prof; from_c=false)  # You can optionally pass in a previously fetched profile result.
 Analyzing 1515 allocation samples... 100%|████████████████████████████████| Time: 0:00:00
-"alloc-profile.pb.gz"
-
-julia> Main binary filename not available.
+Main binary filename not available.
 Serving web UI on http://localhost:62261
+"alloc-profile.pb.gz"
 ```
+Then you can view the profile by navigating to http://localhost:62261. See PProf package for more options.
 
 ##### Allocation Profiling Tips
 
