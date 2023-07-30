@@ -327,8 +327,8 @@ function exec_options(opts)
     if repl || is_interactive::Bool
         b = opts.banner
         auto = b == -1
-        banner = b == 0 || (auto && !interative) ? :no  :
-                 b == 1 || (auto && interactive) ? :yes :
+        banner = b == 0 || (auto && !interactiveinput) ? :no  :
+                 b == 1 || (auto && interactiveinput)  ? :yes :
                  :short # b == 2
         run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
     end
