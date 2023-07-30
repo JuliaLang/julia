@@ -482,7 +482,7 @@ end
 # flisp: parse-stmts
 function parse_stmts(ps::ParseState)
     mark = position(ps)
-    do_emit = parse_Nary(ps, parse_docstring, (K";",), (K"NewlineWs",))
+    do_emit = parse_Nary(ps, parse_public, (K";",), (K"NewlineWs",))
     # check for unparsed junk after an expression
     junk_mark = position(ps)
     while peek(ps) ∉ KSet"EndMarker NewlineWs"
@@ -497,6 +497,24 @@ function parse_stmts(ps::ParseState)
     if do_emit
         emit(ps, mark, K"toplevel", TOPLEVEL_SEMICOLONS_FLAG)
     end
+end
+
+# Parse `public foo, bar`
+#
+# We *only* call this from toplevel contexts (file and module level) for
+# compatibility. In the future we should probably make public a full fledged
+# keyword like `export`.
+function parse_public(ps::ParseState)
+    if ps.stream.version >= (1, 11) && peek(ps) == K"public"
+        if peek(ps, 2) ∈ KSet"( = ["
+            # this branch is for compatibility with use of public as a non-keyword.
+            # it should be removed at some point.
+            emit_diagnostic(ps, warning="using public as an identifier is deprecated")
+        else
+            return parse_resword(ps)
+        end
+    end
+    parse_docstring(ps)
 end
 
 # Parse docstrings attached by a space or single newline
@@ -1958,11 +1976,11 @@ function parse_resword(ps::ParseState)
         end
         # module A \n a \n b \n end  ==>  (module A (block a b))
         # module A \n "x"\na \n end  ==>  (module A (block (doc (string "x") a)))
-        parse_block(ps, parse_docstring)
+        parse_block(ps, parse_public)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"module",
              word == K"baremodule" ? BARE_MODULE_FLAG : EMPTY_FLAGS)
-    elseif word == K"export"
+    elseif word in KSet"export public"
         # export a         ==>  (export a)
         # export @a        ==>  (export @a)
         # export a, \n @b  ==>  (export a @b)
@@ -1971,7 +1989,7 @@ function parse_resword(ps::ParseState)
         # export \$a, \$(a*b) ==> (export (\$ a) (\$ (parens (call-i a * b))))
         bump(ps, TRIVIA_FLAG)
         parse_comma_separated(ps, x->parse_atsym(x, false))
-        emit(ps, mark, K"export")
+        emit(ps, mark, word)
     elseif word in KSet"import using"
         parse_imports(ps)
     elseif word == K"do"

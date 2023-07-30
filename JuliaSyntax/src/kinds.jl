@@ -69,6 +69,7 @@ const _kind_names =
             "mutable"
             "outer"
             "primitive"
+            "public"
             "type"
             "var"
         "END_CONTEXTUAL_KEYWORDS"
