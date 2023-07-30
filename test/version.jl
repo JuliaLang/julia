@@ -224,6 +224,8 @@ import Base.banner
 io = IOBuffer()
 @test banner(io) === nothing
 @test length(String(take!(io))) > 50
+@test banner(io; short=true) === nothing
+@test length(String(take!(io))) < 50
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
