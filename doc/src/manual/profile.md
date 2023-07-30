@@ -395,7 +395,8 @@ Main binary filename not available.
 Serving web UI on http://localhost:62261
 "alloc-profile.pb.gz"
 ```
-Then you can view the profile by navigating to http://localhost:62261. See PProf package for more options.
+Then you can view the profile by navigating to http://localhost:62261, and the profile is saved to disk.
+See PProf package for more options.
 
 ##### Allocation Profiling Tips
 
