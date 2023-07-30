@@ -233,7 +233,7 @@ end
         @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
         @test !isapprox(typemin(T)+T(10), 10, atol=1)
 
-        @test_broken isapprox(typemin(T), 0.0, rtol=1)
+        @test isapprox(typemin(T), 0.0, rtol=1)
     end
     for T in (Int, Int64, Int128)
         @test !isapprox(typemin(T), T(0))
@@ -250,6 +250,6 @@ end
         @test_broken !isapprox(typemin(T)+T(10), T(10), atol=1)
         @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
 
-        @test_broken isapprox(typemin(T), 0.0, rtol=1)
+        @test isapprox(typemin(T), 0.0, rtol=1)
     end
 end

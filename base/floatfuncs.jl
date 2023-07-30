@@ -304,7 +304,10 @@ true
 function isapprox(x::Number, y::Number;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
+    x′, y′ = promote(x, y) # to avoid integer overflow
+    x == y ||
+        (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x′), norm(y′)))) ||
+         (nans && isnan(x) && isnan(y))
 end
 
 function isapprox(x::Integer, y::Integer;
