@@ -353,9 +353,20 @@ https://www.youtube.com/watch?v=BFvpwC8hEWQ
 
 ##### Allocation Profiler Example
 
-Here is an example of how to invoke the Allocation profiler. A good number of samples to aim
-for is around 1 - 10 thousand. Too many, and the profile visualizer can get overwhelmed, and
-profiling will be slow. Too few, and you don't have a representative sample.
+In this simple example, we use PProf to visualize the alloc profile. You could use another
+visualization tool instead. We collect the profile (specifying a sample rate), then we visualize it.
+```julia
+using Profile, PProf
+Profile.Allocs.clear()
+Profile.Allocs.@profile sample_rate=0.0001 my_function()
+PProf.Allocs.pprof()
+```
+
+Here is a more in-depth example, showing how we can tune the sample rate. A
+good number of samples to aim for is around 1 - 10 thousand. Too many, and the
+profile visualizer can get overwhelmed, and profiling will be slow. Too few,
+and you don't have a representative sample.
+
 
 ```julia-repl
 julia> import Profile
@@ -371,17 +382,18 @@ julia> Profile.Allocs.@profile sample_rate=0.001 begin   # 1.5 M * 0.001 = ~1.5K
        end
 500000
 
-julia> prof = Profile.Allocs.fetch();
+julia> prof = Profile.Allocs.fetch();  # If you want, you can also manually inspect the results.
 
 julia> length(prof.allocs)  # Confirm we have expected number of allocations.
-1410
+1515
 
 julia> using PProf  # Now, visualize with an external tool, like PProf or ProfileCanvas.
 
-julia> PProf.Allocs.pprof(prof; from_c=false)
-Analyzing 1410 allocation samples... 100%|████████████████████████████████| Time: 0:00:16
+julia> PProf.Allocs.pprof(prof; from_c=false)  # You can optionally pass in a previously fetched profile result.
+Analyzing 1515 allocation samples... 100%|████████████████████████████████| Time: 0:00:00
 "alloc-profile.pb.gz"
 
+julia> Main binary filename not available.
 Serving web UI on http://localhost:62261
 ```
 
