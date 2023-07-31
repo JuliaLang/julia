@@ -142,6 +142,8 @@ The following is a complete list of command-line switches available when launchi
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
 |`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
 |`--image-codegen`                      |Force generate code in imaging mode|
+|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than that value. The memory hint might be
+                                         specified in megabytes (500M) or gigabytes (1.5G)|
 
 
 !!! compat "Julia 1.1"
