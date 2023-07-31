@@ -33,6 +33,9 @@ macro gensym(names...)
     return blk
 end
 
+## line numbers ##
+convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
+
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
