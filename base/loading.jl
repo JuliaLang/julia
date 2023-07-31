@@ -371,7 +371,7 @@ its `PkgId`, or `nothing` if it cannot be found.
 If only the `name` argument is provided, it searches each environment in the
 stack and its named direct dependencies.
 
-There `where` argument provides the context from where to search for the
+The `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
@@ -1660,7 +1660,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, mtime, fsize, hash, depot_alias) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
@@ -1671,8 +1671,12 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-        push!(_require_dependencies, (mod, path, mtime(path),
-                                      path[1] == '\0' ? path : replace_depot_path(path)))
+            fsize, hash = if isfile(path)
+                UInt64(filesize(path)), open(_crc32c, path, "r")
+            else
+                UInt64(0), UInt32(0)
+            end
+            push!(_require_dependencies, (mod, path, mtime(path), fsize, hash, replace_depot_path(path)))
         end
     end
     return path, prev
@@ -1789,8 +1793,7 @@ function __require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, path, 0.0,
-                                          path[1] == '\0' ? path : replace_depot_path(path)))
+            push!(_require_dependencies, (into, path, 0.0, UInt64(0), UInt32(0), replace_depot_path(path)))
         end
         return _require_prelocked(uuidkey, env)
     finally
@@ -2587,6 +2590,8 @@ struct CacheHeaderIncludes
     id::PkgId
     filename::String
     mtime::Float64
+    fsize::UInt64
+    hash::UInt32
     modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
@@ -2616,6 +2621,10 @@ function parse_cache_header(f::IO)
         totbytes -= n2
         mtime = read(f, Float64)
         totbytes -= 8
+        fsize = read(f, UInt64)
+        totbytes -= 8
+        hash = read(f, UInt32)
+        totbytes -= 4
         n1 = read(f, Int32)
         totbytes -= 4
         # map ids to keys
@@ -2635,10 +2644,8 @@ function parse_cache_header(f::IO)
         end
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
-        elseif depname[1] == '@'
-            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), mtime, modpath))
         else
-            push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), mtime, fsize, hash, modpath))
         end
     end
     prefs = String[]
@@ -3212,7 +3219,7 @@ end
                 end
             end
             for chi in includes
-                f, ftime_req = chi.filename, chi.mtime
+                f, ftime_req, fsize_req, hash_req = chi.filename, chi.mtime, chi.fsize, chi.hash
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
@@ -3220,6 +3227,16 @@ end
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
+                    return true
+                end
+                fsize = filesize(f)
+                if fsize != chi.fsize
+                    @debug "Rejecting stale cache file $cachefile (file size $fsize_req) because file $f (file size $fsize) has changed"
+                    return true
+                end
+                hash = open(_crc32c, f, "r")
+                if hash != chi.hash
+                    @debug "Rejecting stale cache file $cachefile (hash $hash_req) because file $f (hash $hash) has changed"
                     return true
                 end
                 ftime = mtime(f)

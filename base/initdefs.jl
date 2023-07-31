@@ -115,8 +115,8 @@ function init_depot_path()
     nothing
 end
 
-# replace leading dirname with `@depot, @stdlib` if `path` is located withiin any of
-# DEPOT_PATH/compiled or Sys.STDLIB
+# replace leading dirname with `@depot, @stdlib` if `path` is located within any of
+# DEPOT_PATH or Sys.STDLIB
 # return normalized path otherwise
 function replace_depot_path(_path::AbstractString)
     path = normpath(_path)
@@ -125,8 +125,13 @@ function replace_depot_path(_path::AbstractString)
         return joinpath("@stdlib", path[2+length(Sys.STDLIB):end])
     end
     for depot in DEPOT_PATH
-        if startswith(path, joinpath(depot, "compiled"))
-            return joinpath("@depot", path[2+length(depot):end])
+        if startswith(path, depot) # joinpath(depot, "compiled"))
+            subpath = path[1+length(depot):end]
+            if startswith(subpath, "/")
+                subpath = subpath[2:end]
+            end
+            return joinpath("@depot", subpath)
+            # return joinpath("@depot", path[1+length(depot):end])
         end
     end
     return path
@@ -142,12 +147,13 @@ function resolve_depot_path(_path::AbstractString)
         fullpath = joinpath(Sys.STDLIB, path[2+length("@stdlib"):end])
         ispath(fullpath) && return fullpath
         throw(ErrorException("Failed to resolve `$path` to a stdlib path in `$(Sys.STDLIB)`."))
-    elseif startswith(path, joinpath("@depot", "compiled"))
+    elseif startswith(path, joinpath("@depot")) #, "compiled"))
         dir = path[2+length("@depot"):end]
         for depot in DEPOT_PATH
             fullpath = joinpath(depot, dir)
             ispath(fullpath) && return fullpath
         end
+        # TODO Why IOBuffer here?
         io = IOBuffer()
         print(io, "Failed to resolve `$path` to a valid path for any depot in `DEPOT_PATH = ",
               DEPOT_PATH, "`.")

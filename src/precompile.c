@@ -53,7 +53,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                               depstr);
                     continue;
                 }
-                jl_value_t *depalias = jl_fieldref(deptuple, 3);  // file @depot alias
+                jl_value_t *depalias = jl_fieldref(deptuple, 5);  // file @depot alias
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
                 ios_write(f, jl_string_data(depalias), slen);

@@ -713,11 +713,13 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_len(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *depalias = jl_fieldref(deptuple, 3);        // file @depot alias
+        jl_value_t *depalias = jl_fieldref(deptuple, 5);        // file @depot alias
         size_t slen = jl_string_len(depalias);
         write_int32(s, slen);
         ios_write(s, jl_string_data(depalias), slen);
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
+        write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 3)));    // fsize
+        write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 4)));    // hash
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
