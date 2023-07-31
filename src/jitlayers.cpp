@@ -1404,9 +1404,9 @@ namespace {
 
     struct JITPointersT {
 
-        JITPointersT(orc::ExecutionSession &ES) : ES(ES) {}
+        JITPointersT(orc::ExecutionSession &ES) JL_NOTSAFEPOINT : ES(ES) {}
 
-        Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
+        Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
             TSM.withModuleDo([&](Module &M) {
                 for (auto &GV : make_early_inc_range(M.globals())) {
                     if (auto *Shared = getSharedBytes(GV)) {
@@ -1458,6 +1458,166 @@ namespace {
 
         orc::ExecutionSession &ES;
     };
+
+    struct DLSymOptimizer {
+        DLSymOptimizer(bool named) JL_NOTSAFEPOINT {
+            this->named = named;
+            symbols_mutex = std::make_unique<std::mutex>();
+#define INIT_RUNTIME_LIBRARY(libname, handle) \
+            do { \
+                auto libidx = (uintptr_t) libname; \
+                if (libidx >= runtime_symbols.size()) { \
+                    runtime_symbols.resize(libidx + 1); \
+                } \
+                runtime_symbols[libidx].first = handle; \
+            } while (0)
+
+            INIT_RUNTIME_LIBRARY(NULL, jl_RTLD_DEFAULT_handle);
+            INIT_RUNTIME_LIBRARY(JL_EXE_LIBNAME, jl_exe_handle);
+            INIT_RUNTIME_LIBRARY(JL_LIBJULIA_INTERNAL_DL_LIBNAME, jl_libjulia_internal_handle);
+            INIT_RUNTIME_LIBRARY(JL_LIBJULIA_DL_LIBNAME, jl_libjulia_handle);
+
+#undef INIT_RUNTIME_LIBRARY
+        }
+
+        void *lookup_symbol(void *libhandle, const char *fname) JL_NOTSAFEPOINT {
+            void *addr;
+            jl_dlsym(libhandle, fname, &addr, 0);
+            return addr;
+        }
+
+        void *lookup(const char *libname, const char *fname) JL_NOTSAFEPOINT {
+            StringRef lib(libname);
+            StringRef f(fname);
+            std::lock_guard<std::mutex> lock(*symbols_mutex);
+            auto uit = user_symbols.find(lib);
+            if (uit == user_symbols.end()) {
+                void *handle = jl_get_library_(libname, 0);
+                if (!handle)
+                    return nullptr;
+                uit = user_symbols.insert(std::make_pair(lib, std::make_pair(handle, StringMap<void*>()))).first;
+            }
+            auto &symmap = uit->second.second;
+            auto it = symmap.find(f);
+            if (it != symmap.end()) {
+                return it->second;
+            }
+            void *handle = lookup_symbol(uit->second.first, fname);
+            symmap[f] = handle;
+            return handle;
+        }
+
+        void *lookup(uintptr_t libidx, const char *fname) JL_NOTSAFEPOINT {
+            std::lock_guard<std::mutex> lock(*symbols_mutex);
+            runtime_symbols.resize(std::max(runtime_symbols.size(), libidx + 1));
+            auto it = runtime_symbols[libidx].second.find(fname);
+            if (it != runtime_symbols[libidx].second.end()) {
+                return it->second;
+            }
+            auto handle = lookup_symbol(runtime_symbols[libidx].first, fname);
+            runtime_symbols[libidx].second[fname] = handle;
+            return handle;
+        }
+
+        void operator()(Module &M) JL_NOTSAFEPOINT {
+            for (auto &GV : M.globals()) {
+                auto Name = GV.getName();
+                if (Name.startswith("jlplt") && Name.endswith("got")) {
+                    auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
+                    void *addr;
+                    if (GV.hasAttribute("julia.libname")) {
+                        auto libname = GV.getAttribute("julia.libname").getValueAsString().str();
+                        addr = lookup(libname.data(), fname.data());
+                    } else {
+                        assert(GV.hasAttribute("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
+                        auto libidx = (uintptr_t)std::stoull(GV.getAttribute("julia.libidx").getValueAsString().str());
+                        addr = lookup(libidx, fname.data());
+                    }
+                    if (addr) {
+                        Function *Thunk = nullptr;
+                        if (!GV.isDeclaration()) {
+                            Thunk = cast<Function>(GV.getInitializer()->stripPointerCasts());
+                            assert(++Thunk->uses().begin() == Thunk->uses().end() && "Thunk should only have one use in PLT initializer!");
+                            assert(Thunk->hasLocalLinkage() && "Thunk should not have non-local linkage!");
+                        } else {
+                            GV.setLinkage(GlobalValue::PrivateLinkage);
+                        }
+                        auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), GV.getValueType());
+                        if (named) {
+                            auto T = GV.getValueType();
+                            assert(T->isPointerTy());
+                            if (!T->isOpaquePointerTy()) {
+                                T = T->getNonOpaquePointerElementType();
+                            }
+                            init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
+                        }
+                        GV.setInitializer(init);
+                        GV.setConstant(true);
+                        GV.setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+                        if (Thunk) {
+                            Thunk->eraseFromParent();
+                        }
+                    }
+                }
+            }
+
+            for (auto &F : M) {
+                for (auto &BB : F) {
+                    for (auto &I : make_early_inc_range(BB)) {
+                        auto CI = dyn_cast<CallInst>(&I);
+                        if (!CI)
+                            continue;
+                        auto Callee = CI->getCalledFunction();
+                        if (!Callee || Callee->getName() != XSTR(jl_load_and_lookup))
+                            continue;
+                        auto fname = CI->getFnAttr("julia.fname").getValueAsString().str();
+                        void *addr;
+                        if (CI->hasFnAttr("julia.libname")) {
+                            auto libname = CI->getFnAttr("julia.libname").getValueAsString().str();
+                            addr = lookup(libname.data(), fname.data());
+                        } else {
+                            assert(CI->hasFnAttr("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
+                            auto libidx = (uintptr_t)std::stoull(CI->getFnAttr("julia.libidx").getValueAsString().str());
+                            addr = lookup(libidx, fname.data());
+                        }
+                        if (addr) {
+                            auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), CI->getType());
+                            if (named) {
+                                auto T = CI->getType();
+                                assert(T->isPointerTy());
+                                if (!T->isOpaquePointerTy()) {
+                                    T = T->getNonOpaquePointerElementType();
+                                }
+                                init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
+                            }
+                            CI->replaceAllUsesWith(init);
+                            CI->eraseFromParent();
+                        }
+                    }
+                }
+            }
+        }
+
+        Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
+            TSM.withModuleDo([this](Module &M) JL_NOTSAFEPOINT {
+                // Don't optimize these out in imaging mode
+                if (M.getModuleFlag("julia.imaging_mode"))
+                    return;
+                (*this)(M);
+            });
+
+            return std::move(TSM);
+        }
+
+        std::unique_ptr<std::mutex> symbols_mutex;
+        StringMap<std::pair<void *, StringMap<void *>>> user_symbols;
+        SmallVector<std::pair<void *, StringMap<void *>>> runtime_symbols;
+        bool named;
+    };
+}
+
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT {
+    DLSymOptimizer(true)(M);
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -1499,7 +1659,8 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer(ES, LockLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     JITPointersLayer(ES, CompileLayer, orc::IRTransformLayer::TransformFunction(JITPointersT(ES))),
     OptimizeLayer(ES, JITPointersLayer, orc::IRTransformLayer::TransformFunction(OptimizerT<N_optlevels>(*TM, PrintLLVMTimers))),
-    OptSelLayer(ES, OptimizeLayer, orc::IRTransformLayer::TransformFunction(selectOptLevel)),
+    DLSymOptLayer(ES, OptimizeLayer, orc::IRTransformLayer::TransformFunction(DLSymOptimizer(false))),
+    OptSelLayer(ES, DLSymOptLayer, orc::IRTransformLayer::TransformFunction(selectOptLevel)),
     DepsVerifyLayer(ES, OptSelLayer, orc::IRTransformLayer::TransformFunction(validateExternRelocations)),
     ExternalCompileLayer(ES, LockLayer,
         std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM))

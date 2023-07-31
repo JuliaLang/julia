@@ -334,6 +334,7 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::IRTransformLayer DLSymOptLayerT;
     typedef orc::IRTransformLayer OptSelLayerT;
     typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
@@ -551,6 +552,7 @@ private:
     CompileLayerT CompileLayer;
     JITPointersLayerT JITPointersLayer;
     OptimizeLayerT OptimizeLayer;
+    DLSymOptLayerT DLSymOptLayer;
     OptSelLayerT OptSelLayer;
     DepsVerifyLayerT DepsVerifyLayer;
     CompileLayerT ExternalCompileLayer;
@@ -569,6 +571,8 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     }
     return *_shared_module;
 }
+
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT;
 
 Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;
 Pass *createCombineMulAddPass() JL_NOTSAFEPOINT;

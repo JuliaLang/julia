@@ -2144,6 +2144,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setVisibility(GlobalValue::DefaultVisibility);
                 }
             }
+            if (!jl_options.image_codegen) {
+                optimizeDLSyms(*m.getModuleUnlocked());
+            }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
 #ifndef JL_USE_NEW_PM
