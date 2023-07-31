@@ -720,7 +720,9 @@ function CyclePadding(T::DataType)
     a, s = datatype_alignment(T), sizeof(T)
     as = s + (a - (s % a)) % a
     pad = padding(T)
-    s != as && push!(pad, Padding(s, as - s))
+    if s != as
+        pad = Core.svec(pad..., Padding(s, as - s))
+    end
     CyclePadding(pad, as)
 end
 
