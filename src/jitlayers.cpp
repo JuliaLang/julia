@@ -1656,7 +1656,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         ES.reportError(std::move(Err));
         errs() << "Failed to add module to JIT!\n";
         if (CurrentlyCompiling) {
-            CurrentlyCompiling.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
+            CurrentlyCompiling.withModuleDo([](Module &M) JL_NOTSAFEPOINT { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {
             errs() << "Module unavailable to be printed\n";
         }
@@ -1668,8 +1668,8 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     if (!Lookups) {
         ES.reportError(Lookups.takeError());
         errs() << "Failed to lookup symbols in module!";
-        if (TSM) {
-            TSM.withModuleDo([](Module &M) { errs() << "Dumping failing module\n" << M << "\n"; });
+        if (CurrentlyCompiling) {
+            CurrentlyCompiling.withModuleDo([](Module &M) JL_NOTSAFEPOINT { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {
             errs() << "Module unavailable to be printed\n";
         }
