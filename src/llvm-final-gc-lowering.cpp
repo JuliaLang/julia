@@ -243,25 +243,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
 
-    DenseMap<Value *, void(FinalLowerGC::*)(CallInst *, Function &)> intrinsic_map;
-#define LOWER_INTRINSIC(INTRINSIC, LOWER_INTRINSIC_FUNC) \
-    do { \
-        auto intrinsic = getOrNull(jl_intrinsics::INTRINSIC); \
-        if (intrinsic) { \
-            intrinsic_map[intrinsic] = &FinalLowerGC::LOWER_INTRINSIC_FUNC; \
-        } \
-    } while (0)
-
-    LOWER_INTRINSIC(newGCFrame, lowerNewGCFrame);
-    LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
-    LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
-    LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
-    LOWER_INTRINSIC(GCAllocBytes, lowerGCAllocBytes);
-    LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
-    LOWER_INTRINSIC(safepoint, lowerSafepoint);
-
-#undef LOWER_INTRINSIC
-
     // Lower all calls to supported intrinsics.
     for (auto &BB : F) {
         for (auto &I : make_early_inc_range(BB)) {
@@ -271,12 +252,24 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
-            
-            auto it = intrinsic_map.find(callee);
-            if (it == intrinsic_map.end())
-                continue;
-            
-            (this->*(it->second))(CI, F);
+
+#define LOWER_INTRINSIC(INTRINSIC, LOWER_INTRINSIC_FUNC) \
+            do { \
+                auto intrinsic = getOrNull(jl_intrinsics::INTRINSIC); \
+                if (intrinsic == callee) { \
+                    LOWER_INTRINSIC_FUNC(CI, F); \
+                } \
+            } while (0)
+
+            LOWER_INTRINSIC(newGCFrame, lowerNewGCFrame);
+            LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
+            LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
+            LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
+            LOWER_INTRINSIC(GCAllocBytes, lowerGCAllocBytes);
+            LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
+            LOWER_INTRINSIC(safepoint, lowerSafepoint);
+
+#undef LOWER_INTRINSIC
         }
     }
 
