@@ -215,16 +215,15 @@ static jl_callptr_t _jl_compile_codeinst(
     params.world = world;
     params.imaging = imaging_default();
     params.debug_level = jl_options.debug_level;
-    jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
             jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging, params.DL, params.TargetTriple);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
-            emitted[codeinst] = {std::move(result_m), std::move(decls)};
+            params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
         {
             auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.getContext(), params.imaging);
-            jl_compile_workqueue(emitted, *temp_module, params, CompilationPolicy::Default);
+            jl_compile_workqueue(params, *temp_module, CompilationPolicy::Default);
         }
 
         if (params._shared_module)
@@ -241,7 +240,7 @@ static jl_callptr_t _jl_compile_codeinst(
             for (auto &global : params.global_targets) {
                 NewGlobals[global.second->getName()] = global.first;
             }
-            for (auto &def : emitted) {
+            for (auto &def : params.compiled_functions) {
                 auto M = std::get<0>(def.second).getModuleUnlocked();
                 for (auto &GV : M->globals()) {
                     auto InitValue = NewGlobals.find(GV.getName());
@@ -252,14 +251,14 @@ static jl_callptr_t _jl_compile_codeinst(
             }
         }
 
-        // Collect the exported functions from the emitted modules,
+        // Collect the exported functions from the params.compiled_functions modules,
         // which form dependencies on which functions need to be
         // compiled first. Cycles of functions are compiled together.
         // (essentially we compile a DAG of SCCs in reverse topological order,
         // if we treat declarations of external functions as edges from declaration
         // to definition)
         StringMap<orc::ThreadSafeModule*> NewExports;
-        for (auto &def : emitted) {
+        for (auto &def : params.compiled_functions) {
             orc::ThreadSafeModule &TSM = std::get<0>(def.second);
             //The underlying context object is still locked because params is not destroyed yet
             auto M = TSM.getModuleUnlocked();
@@ -271,19 +270,19 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         DenseMap<orc::ThreadSafeModule*, int> Queued;
         std::vector<orc::ThreadSafeModule*> Stack;
-        for (auto &def : emitted) {
+        for (auto &def : params.compiled_functions) {
             // Add the results to the execution engine now
             orc::ThreadSafeModule &M = std::get<0>(def.second);
             jl_add_to_ee(M, NewExports, Queued, Stack);
             assert(Queued.empty() && Stack.empty() && !M);
         }
         ++CompiledCodeinsts;
-        MaxWorkqueueSize.updateMax(emitted.size());
-        IndirectCodeinsts += emitted.size() - 1;
+        MaxWorkqueueSize.updateMax(params.compiled_functions.size());
+        IndirectCodeinsts += params.compiled_functions.size() - 1;
     }
 
     size_t i = 0;
-    for (auto &def : emitted) {
+    for (auto &def : params.compiled_functions) {
         jl_code_instance_t *this_code = def.first;
         if (i < jl_timing_print_limit)
             jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_DEFAULT_BLOCK);
