@@ -18,7 +18,7 @@ declare noalias nonnull {} addrspace(10)** @julia.new_gc_frame(i32)
 declare void @julia.push_gc_frame({} addrspace(10)**, i32)
 declare {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)**, i32)
 declare void @julia.pop_gc_frame({} addrspace(10)**)
-declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8*, i64) #0
+declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8*, i64, i64) #0
 
 attributes #0 = { allocsize(1) }
 
@@ -80,9 +80,9 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
-; TYPED: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc
-; OPAQUE: %v = call noalias nonnull dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc
-  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
+; TYPED: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc_instrumented
+; OPAQUE: %v = call noalias nonnull dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc_instrumented
+  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8, i64 12341234)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1
   store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0
@@ -96,9 +96,9 @@ top:
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
 ; CHECK: %0 = add i64 %size, 8
-; TYPED: %v = call noalias nonnull dereferenceable(8) {} addrspace(10)* @ijl_gc_alloc_typed(i8* %ptls_i8, i64 %0, i8* null)
-; OPAQUE: %v = call noalias nonnull dereferenceable(8) ptr addrspace(10) @ijl_gc_alloc_typed(ptr %ptls_i8, i64 %0, ptr null)
-  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 %size)
+; TYPED: %v = call noalias nonnull dereferenceable(8) {} addrspace(10)* @ijl_gc_alloc_typed(i8* %ptls_i8, i64 %0, i64 12341234)
+; OPAQUE: %v = call noalias nonnull dereferenceable(8) ptr addrspace(10) @ijl_gc_alloc_typed(ptr %ptls_i8, i64 %0, i64 12341234)
+  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 %size, i64 12341234)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1
   store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0
