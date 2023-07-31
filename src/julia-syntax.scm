@@ -3812,8 +3812,6 @@ f(x) = yt(x)
              (let ((prev  (table.clone live))
                    (decl- (table.clone decl)))
                (let ((result (eager-any visit (cdr e))))
-                 (if (eq? (car e) '_while)
-                     (kill))  ;; body might not have run
                  (leave-loop! decl-)
                  (if result
                      #t

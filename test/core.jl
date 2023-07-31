@@ -5403,6 +5403,21 @@ function g37690()
 end
 @test g37690().x === 0
 
+# issue #48889
+function f48889()
+    let j=0, f, i
+        while j < 3
+            i = j + 1
+            if j == 0
+                f = ()->i
+            end
+            j += 1
+        end
+        f
+    end
+end
+@test f48889()() == 3
+
 function _assigns_and_captures_arg(a)
     a = a
     return ()->a
