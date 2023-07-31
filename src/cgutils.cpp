@@ -919,7 +919,7 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
         if (val)
-            data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment((jl_datatype_t*)jl_typeof(x.constant))), "_j_const", *jl_Module);
+            data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment(jl_typeof(x.constant))), "_j_const", *jl_Module);
         else
             data = literal_pointer_val(ctx, x.constant);
     }
