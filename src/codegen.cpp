@@ -1944,7 +1944,8 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), Align(jl_is_datatype(typ) && jl_struct_try_layout((jl_datatype_t*)typ) ? julia_alignment(typ) : JL_HEAP_ALIGNMENT), "_j_const", *jl_Module);
+        assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
+        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), Align(julia_alignment(typ)), "_j_const", *jl_Module);
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());
@@ -7684,7 +7685,7 @@ static jl_llvm_functions_t
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
-                nullptr, Align(jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt) ? julia_alignment(jt) : JL_HEAP_ALIGNMENT), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+                nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.topalloca);
             varinfo.boxroot = av;
