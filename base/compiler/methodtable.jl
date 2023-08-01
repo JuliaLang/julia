@@ -167,7 +167,9 @@ end
 # This query is not cached
 findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)
 
-isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
+isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
 isoverlayed(::InternalMethodTable) = false
-isoverlayed(::OverlayMethodTable)  = true
+isoverlayed(::OverlayMethodTable) = true
 isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
+isoverlayed(m::Method) = isdefined(m, :external_mt)
+is_nonoverlayed(m::Method) = !isoverlayed(m)
