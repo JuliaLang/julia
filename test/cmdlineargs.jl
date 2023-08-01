@@ -528,7 +528,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
-        withenv("JULIA_LLVM_ARGS" => "--print-before=FinalLowerGC") do
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]

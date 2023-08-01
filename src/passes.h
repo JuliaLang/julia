@@ -46,6 +46,11 @@ struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
     static bool isRequired() { return true; }
 };
 
+struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
+};
+
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
@@ -58,11 +63,6 @@ struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
 };
 
 struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
