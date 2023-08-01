@@ -3332,9 +3332,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         double collect_smooth_factor = 0.5;
         double tuning_factor = 0.03;
         double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor);
+        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
         double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
-        double gc_time = jl_gc_smooth(old_pause_time, pause, collect_smooth_factor);
+        double gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
         old_alloc_diff = alloc_diff;
         old_mut_time = mutator_time;
         old_freed_diff = freed_diff;
@@ -3613,10 +3613,10 @@ void jl_gc_init(void)
     total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
-        total_mem = constrained_mem;
+        jl_gc_set_max_memory(constrained_mem - 250*1024*1024); // LLVM + other libraries need some amount of memory
 #endif
     if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint);
+        jl_gc_set_max_memory(jl_options.heap_size_hint - 250*1024*1024);
 
     t_start = jl_hrtime();
 }
