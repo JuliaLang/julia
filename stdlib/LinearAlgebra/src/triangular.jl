@@ -2497,15 +2497,14 @@ end
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
 #   https://doi.org/10.1137/s0895479801392697
 function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
-    m, n = size(A)
-    (m == 2 && n == 2) || throw(ArgumentError("_cbrt_2x2!: Matrix A must be 2x2."))
+    @assert checksquare(A) == 2
     (A[1,1] == A[2,2]) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have equal diagonal values."))
     (A[1,2]*A[2,1] < 0) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have complex conjugate eigenvalues."))
-    μ = sqrt(-4*A[1,2]*A[2,1])/2
+    μ = sqrt(-A[1,2]*A[2,1])
     r = cbrt(hypot(A[1,1], μ))
     θ = atan(μ, A[1,1])
-    α = r*cos(θ/3)
-    β′ = r*sin(θ/3)/µ
+    s, c = sincos(θ/3)
+    α, β′ = r*c, r*s/µ
     A[1,1] = α
     A[2,2] = α
     A[1,2] = β′*A[1,2]

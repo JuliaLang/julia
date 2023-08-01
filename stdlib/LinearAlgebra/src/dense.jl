@@ -907,11 +907,8 @@ end
 sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
 sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
-# Cube root of a complex-valued matrix
-cbrt(A::AbstractMatrix) = A^(1//3)
-
 # Cube root of a real-valued matrix
-function cbrt(A::AbstractMatrix{T}) where {T<:Real}
+function cbrt(A::AbstractMatrix{<:Real})
     if checksquare(A) == 0
         return copy(A)
     elseif issymmetric(A)
