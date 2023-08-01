@@ -2514,18 +2514,6 @@ function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     return A
 end
 
-# Cube root of a block diagonal matrix with 1x1 and 2x2 blocks (output of Schur decomposition)
-function _cbrt_blkdiag_1x1_2x2!(A::AbstractMatrix{T}) where {T<:Real}
-    m, n = size(A)
-    (m == n) || throw(ArgumentError("_cbrt_blkdiag_1x1_2x2!: Matrix A must be square."))
-    # 2x2 and 1x1 blocks
-    I₂ = findall(x -> !iszero(x), diag(A,-1))
-    I₁ = setdiff(1:n, vcat(I₂, I₂.+1))
-    for i in I₂ @views _cbrt_2x2!(A[i:i+1,i:i+1]) end
-    for i in I₁ @views A[i,i] = cbrt(A[i,i]) end
-    return A, I₂, I₁
-end
-
 # Cube root of a quasi upper triangular matrix (output of Schur decomposition)
 # Reference [1]: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
 #   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
@@ -2533,8 +2521,21 @@ end
 @views function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
     m, n = size(A)
     (m == n) || throw(ArgumentError("_cbrt_quasi_triu!: Matrix A must be square."))
-    A, I₂, I₁ = _cbrt_blkdiag_1x1_2x2!(A)
-    sizes = [if i ∈ I₁ 1 elseif i ∈ I₂ 2 else 0 end for i=1:n]
+    # Cube roots of 1x1 and 2x2 diagonal blocks
+    i = 1
+    sizes = ones(Int,n)
+    while i < n
+        if !iszero(A[i+1,i])
+            _cbrt_2x2!(A[i:i+1,i:i+1])
+            sizes[i] = 2
+            sizes[i+1] = 0
+            i += 2
+        else
+            A[i,i] = cbrt(A[i,i])
+            i += 1
+        end
+    end
+    if sizes[n] == 1 A[n,n] = cbrt(A[n,n]) end
     Σ = cumsum(sizes)
     # Algorithm 4.3 in Reference [1]
     Δ = I(4)
