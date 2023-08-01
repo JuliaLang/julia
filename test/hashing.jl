@@ -310,3 +310,18 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
 @test Type{AUnionParam.body}.hash == 0
 @test Type{Base.Broadcast.Broadcasted}.hash != 0
+
+
+@testset "issue 50628" begin
+    # test hashing of rationals that equal floats are equal to the float hash
+    @test hash(5//2) == hash(big(5)//2) == hash(2.5)
+    # test hashing of rational that are integers hash to the integer
+    @test hash(Int64(5)^25) == hash(big(5)^25) == hash(Int64(5)^25//1) == hash(big(5)^25//1)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash(Int64(5)^25) != hash(5.0^25)
+    @test hash((Int64(5)//2)^25) == hash(big(5//2)^25)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash((Int64(5)//2)^25) != hash(2.5^25)
+    # test hashing of rational with odd denominator
+    @test hash(5//3) == hash(big(5)//3)
+end

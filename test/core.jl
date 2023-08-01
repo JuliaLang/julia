@@ -1897,7 +1897,7 @@ function f4528(A, B)
     end
 end
 @test f4528(false, Int32(12)) === nothing
-@test_throws ArgumentError f4528(true, Int32(12))
+@test_throws ErrorException f4528(true, Int32(12))
 
 # issue #4518
 f4518(x, y::Union{Int32,Int64}) = 0
@@ -8039,4 +8039,12 @@ baz50293(x::Union{Type, Core.Const}) = Base.issingletontype(x)
 bar50293(@nospecialize(u)) = (Base.issingletontype(u.a), baz50293(u.a))
 let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
     @test ab[1] == ab[2] == false
+end
+
+# `SimpleVector`-operations should be concrete-eval eligible
+@test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
+
+let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
+    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
 end

@@ -1757,7 +1757,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     if m == 0
         _deleteat!(a, i, 1)
     elseif m == 1
-        a[i] = ins[1]
+        a[i] = only(ins)
     else
         _growat!(a, i, m-1)
         k = 1
@@ -2040,18 +2040,6 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
-
-# disambiguation with LinAlg/special.jl
-# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
-# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
-hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
-hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
-vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
-vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
-    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
-    typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2445,9 +2433,8 @@ julia> findall(x -> x >= 0, d)
 ```
 """
 function findall(testf::Function, A)
-    T = eltype(keys(A))
     gen = (first(p) for p in pairs(A) if testf(last(p)))
-    isconcretetype(T) ? collect(T, gen) : collect(gen)
+    @default_eltype(gen) === Union{} ? collect(@default_eltype(keys(A)), gen) : collect(gen)
 end
 
 # Broadcasting is much faster for small testf, and computing

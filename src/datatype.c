@@ -1558,8 +1558,7 @@ JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
         }
     }
     if (err)
-        jl_errorf("type %s has no field %s", jl_symbol_name(t->name->name),
-                  jl_symbol_name(fld));
+        jl_has_no_field_error(t->name->name, fld);
     return -1;
 }
 

@@ -297,3 +297,35 @@ for f in (const_int, const_int_barrier)
         @test_throws TypeError eval_oc_spec(oc_mismatch)
     end
 end
+
+
+# Attempting to construct an opaque closure backtrace after the oc is GC'ed
+f_oc_throws() = error("oops")
+@noinline function make_oc_and_collect_bt()
+    did_gc = Ref{Bool}(false)
+    bt = let ir = first(only(Base.code_ircode(f_oc_throws, ())))
+        sentinel = Ref{Any}(nothing)
+        oc = OpaqueClosure(ir, sentinel)
+        finalizer(sentinel) do x
+            did_gc[] = true
+        end
+        try
+            oc()
+            @test false
+        catch e
+            bt = catch_backtrace()
+            @test isa(e, ErrorException)
+            bt
+        end
+    end
+    return bt, did_gc
+end
+let (bt, did_gc) = make_oc_and_collect_bt()
+    GC.gc(true); GC.gc(true); GC.gc(true);
+    @test did_gc[]
+    @test any(stacktrace(bt)) do frame
+        isa(frame.linfo, Core.MethodInstance) || return false
+        isa(frame.linfo.def, Method) || return false
+        return frame.linfo.def.is_for_opaque_closure
+    end
+end

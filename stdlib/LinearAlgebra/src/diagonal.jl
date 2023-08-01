@@ -150,6 +150,16 @@ end
     r
 end
 
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
+end
+
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j

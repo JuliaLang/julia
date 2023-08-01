@@ -143,7 +143,7 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a fixed total order (defined together with
-[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
+[`isequal`](@ref)). `isless` is not defined for pairs `(x, y)` of all types. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -154,13 +154,13 @@ Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
-This is the default comparison used by [`sort`](@ref).
+This is the default comparison used by [`sort!`](@ref).
 
 # Implementation
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-See the documentation on [Alternate orderings](@ref) for how to define alternate
+See the documentation on [Alternate Orderings](@ref) for how to define alternate
 ordering methods that can be used in sorting and related functions.
 
 # Examples
@@ -334,6 +334,8 @@ a partial order.
 New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
+
+See also [`isunordered`](@ref).
 
 # Examples
 ```jldoctest
@@ -1352,7 +1354,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref).
+See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1390,8 +1392,6 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
-
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

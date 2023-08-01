@@ -20,7 +20,7 @@ are supported on all primitive numeric types:
 | `x ÷ y`    | integer divide | x / y, truncated to an integer          |
 | `x \ y`    | inverse divide | equivalent to `y / x`                   |
 | `x ^ y`    | power          | raises `x` to the `y`th power           |
-| `x % y`    | remainder      | equivalent to `rem(x,y)`                |
+| `x % y`    | remainder      | equivalent to `rem(x, y)`               |
 
 A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
@@ -171,15 +171,15 @@ The updating versions of all the binary arithmetic and bitwise operators are:
 For *every* binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
 to perform `^` element-by-element on arrays. For example,
-`[1,2,3] ^ 3` is not defined, since there is no standard
+`[1, 2, 3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" a (non-square) array, but
-`[1,2,3] .^ 3` is defined as computing the elementwise
+`[1, 2, 3] .^ 3` is defined as computing the elementwise
 (or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
 
 ```jldoctest
-julia> [1,2,3] .^ 3
+julia> [1, 2, 3] .^ 3
 3-element Vector{Int64}:
   1
   8
@@ -524,30 +524,30 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Division functions
 
-| Function                  | Description                                                                                               |
-|:------------------------- |:--------------------------------------------------------------------------------------------------------- |
-| [`div(x,y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
-| [`fld(x,y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
-| [`cld(x,y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
-| [`rem(x,y)`](@ref), `x%y` | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
-| [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
-| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
-| [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
-| [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
-| [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
-| [`lcm(x,y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
+| Function                   | Description                                                                                               |
+|:-------------------------- |:--------------------------------------------------------------------------------------------------------- |
+| [`div(x, y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x, y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x, y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x, y)`](@ref), `x%y` | remainder; satisfies `x == div(x, y)*y + rem(x, y)`; sign matches `x`                                     |
+| [`mod(x, y)`](@ref)        | modulus; satisfies `x == fld(x, y)*y + mod(x, y)`; sign matches `y`                                       |
+| [`mod1(x, y)`](@ref)       | `mod` with offset 1; returns `r∈(0, y]` for `y>0` or `r∈[y, 0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod2pi(x)`](@ref)        | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
+| [`divrem(x, y)`](@ref)     | returns `(div(x, y),rem(x, y))`                                                                           |
+| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y),mod(x, y ))`                                                                          |
+| [`gcd(x, y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x, y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
 ### Sign and absolute value functions
 
-| Function                | Description                                                |
-|:----------------------- |:---------------------------------------------------------- |
-| [`abs(x)`](@ref)        | a positive value with the magnitude of `x`                 |
-| [`abs2(x)`](@ref)       | the squared magnitude of `x`                               |
-| [`sign(x)`](@ref)       | indicates the sign of `x`, returning -1, 0, or +1          |
-| [`signbit(x)`](@ref)    | indicates whether the sign bit is on (true) or off (false) |
-| [`copysign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `y`      |
-| [`flipsign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `x*y`    |
+| Function                 | Description                                                |
+|:------------------------ |:---------------------------------------------------------- |
+| [`abs(x)`](@ref)         | a positive value with the magnitude of `x`                 |
+| [`abs2(x)`](@ref)        | the squared magnitude of `x`                               |
+| [`sign(x)`](@ref)        | indicates the sign of `x`, returning -1, 0, or +1          |
+| [`signbit(x)`](@ref)     | indicates whether the sign bit is on (true) or off (false) |
+| [`copysign(x, y)`](@ref) | a value with the magnitude of `x` and the sign of `y`      |
+| [`flipsign(x, y)`](@ref) | a value with the magnitude of `x` and the sign of `x*y`    |
 
 ### Powers, logs and roots
 
@@ -555,12 +555,12 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 |:------------------------ |:-------------------------------------------------------------------------- |
 | [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
 | [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x,y)`](@ref)     | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
 | [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
 | [`expm1(x)`](@ref)       | accurate `exp(x)-1` for `x` near zero                                      |
-| [`ldexp(x,n)`](@ref)     | `x*2^n` computed efficiently for integer values of `n`                     |
+| [`ldexp(x, n)`](@ref)    | `x*2^n` computed efficiently for integer values of `n`                     |
 | [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b,x)`](@ref)       | base `b` logarithm of `x`                                                  |
+| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
 | [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
 | [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
 | [`log1p(x)`](@ref)       | accurate `log(1+x)` for `x` near zero                                      |

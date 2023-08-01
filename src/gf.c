@@ -1483,7 +1483,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
     assert(oldentry != closure->newentry && "entry already added");
     assert(oldentry->min_world <= closure->newentry->min_world && "old method cannot be newer than new method");
-    assert(oldentry->max_world == ~(size_t)0 && "method cannot be added at the same time as method deleted");
+    assert(oldentry->max_world != closure->newentry->min_world && "method cannot be added at the same time as method deleted");
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
     typemap_slurp_search(oldentry, &closure->match);
     jl_method_t *oldmethod = oldentry->func.method;
@@ -1568,8 +1568,8 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "  ** incremental compilation may be fatally broken for this module **\n\n");
+    if (jl_generating_output())
+        jl_error("Method overwriting is not permitted during Module precompile.");
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
@@ -1860,6 +1860,8 @@ static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_RO
 
 static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world)
 {
+    if (jl_options.incremental && jl_generating_output())
+        jl_error("Method deletion is not possible during Module precompile.");
     jl_method_t *method = methodentry->func.method;
     assert(!method->is_for_opaque_closure);
     method->deleted_world = methodentry->max_world = max_world;
@@ -1911,9 +1913,6 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
 
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "WARNING: method deletion during Module precompile may lead to undefined behavior"
-                             "\n  ** incremental compilation may be fatally broken for this module **\n\n");
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
@@ -2317,8 +2316,10 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world) {
-            if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
+            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+            if (invoke != NULL) {
                 return codeinst;
+            }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
@@ -2860,20 +2861,19 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
+STATIC_INLINE jl_value_t *invoke_codeinst(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    jl_value_t *res = invoke(F, args, nargs, codeinst);
+    return verify_type(res);
+}
+
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
     // manually inlined copy of jl_method_compiled
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
-    while (codeinst) {
-        if (codeinst->min_world <= world && world <= codeinst->max_world) {
-            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-            if (invoke != NULL) {
-                jl_value_t *res = invoke(F, args, nargs, codeinst);
-                return verify_type(res);
-            }
-        }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
-    }
+    jl_code_instance_t *codeinst = jl_method_compiled(mfunc, world);
+    if (codeinst)
+        return invoke_codeinst(F, args, nargs, codeinst);
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -2886,9 +2886,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-    jl_value_t *res = invoke(F, args, nargs, codeinst);
-    return verify_type(res);
+    return invoke_codeinst(F, args, nargs, codeinst);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
@@ -3426,7 +3424,9 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
             }
             if ((size_t)visited->items[idx] == 1) {
-                assert(cycle == depth);
+                // n.b. cycle might be < depth, if we had a cycle with a child
+                // idx, but since we are on the top of the stack, nobody
+                // observed that and so we are content to ignore this
                 size_t childidx = (size_t)arraylist_pop(stack);
                 assert(childidx == idx); (void)childidx;
                 assert(!subt || *found_minmax == 2);

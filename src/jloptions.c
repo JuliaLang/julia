@@ -102,7 +102,7 @@ static const char opts[]  =
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]     Set <dir> as the home project/environment\n"
+    " --project[={<dir>|@.}]     Set <dir> as the active project/environment\n"
     " -J, --sysimage <file>      Start up with the given system image file\n"
     " -H, --home <dir>           Set location of `julia` executable\n"
     " --startup-file={yes*|no}   Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH`\n"
@@ -110,7 +110,7 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no}\n"
+    " --compiled-modules={yes*|no|existing}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
@@ -131,8 +131,8 @@ static const char opts[]  =
     "                           interface if supported (Linux and Windows) or to the number of CPU\n"
     "                           threads if not supported (MacOS) or if process affinity is not\n"
     "                           configured, and sets M to 1.\n"
-    " --gcthreads=M[,N]         Use M threads for the mark phase of GC and N (0 or 1) threads for the concurrent sweeping phase of GC.\n"
-    "                           M is set to half of the number of compute threads and N is set to 0 if unspecified.\n"
+    " --gcthreads=N[,M]         Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.\n"
+    "                           N is set to half of the number of compute threads and M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -460,8 +460,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
+            else if (!strcmp(optarg,"existing"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
             break;
         case opt_pkgimages:
             pkgimage_explicit = 1;
@@ -838,7 +840,7 @@ restart_switch:
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
-                    jl_errorf("julia: --gcthreads=<n>,<m>; n must be 0 or 1");
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
             break;
