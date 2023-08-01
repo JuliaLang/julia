@@ -2502,7 +2502,7 @@ function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
     (A[1,1] == A[2,2]) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have equal diagonal values."))
     (A[1,2]*A[2,1] < 0) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have complex conjugate eigenvalues."))
     μ = sqrt(-4*A[1,2]*A[2,1])/2
-    r = cbrt(sqrt(A[1,1]^2 + μ^2))
+    r = cbrt(hypot(A[1,1], μ))
     θ = atan(μ, A[1,1])
     α = r*cos(θ/3)
     β′ = r*sin(θ/3)/µ

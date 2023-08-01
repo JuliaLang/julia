@@ -812,7 +812,7 @@ for func in (:log, :sqrt)
 end
 
 # Cube root of a real-valued symmetric matrix
-function cbrt(A::Symmetric{T}) where {T<:Real}
+function cbrt(A::HermOrSym{<:Real})
     F = eigen(A)
     A = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
     return A

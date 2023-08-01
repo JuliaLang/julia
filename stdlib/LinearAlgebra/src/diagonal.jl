@@ -714,7 +714,7 @@ for f in (:exp, :cis, :log, :sqrt,
 end
 
 # Cube root of a real-valued diagonal matrix
-cbrt(A::Diagonal{T}) where {T<:Real} = Diagonal(cbrt.(A.diag))
+cbrt(A::Diagonal{<:Real}) = Diagonal(cbrt.(A.diag))
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
