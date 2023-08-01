@@ -2550,12 +2550,12 @@ end
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
             k₁, k₂ = i+1+(sizes[i+1]==0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]==0)
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
-            S₁ = reshape(M_S₁, s₁, :)[:, 1:s₁]
-            S₂ = reshape(M_S₂, s₂, :)[:, 1:s₂]
-            L₀ = reshape(M_L₀, s₁*s₂, :)[:,1:s₁*s₂]
-            L₁ = reshape(M_L₁, s₁*s₂, :)[:,1:s₁*s₂]
-            Bᵢⱼ⁽⁰⁾ = reshape(M_Bᵢⱼ⁽⁰⁾, s₁, :)[:, 1:s₂]
-            Bᵢⱼ⁽¹⁾ = reshape(M_Bᵢⱼ⁽¹⁾, s₁, :)[:, 1:s₂]
+            S₁ = M_S₁[1:s₁, 1:s₁]
+            S₂ = M_S₂[1:s₂, 1:s₂]
+            L₀ = M_L₀[1:s₁*s₂,1:s₁*s₂]
+            L₁ = M_L₁[1:s₁*s₂,1:s₁*s₂]
+            Bᵢⱼ⁽⁰⁾ = M_Bᵢⱼ⁽⁰⁾[1:s₁, 1:s₂]
+            Bᵢⱼ⁽¹⁾ = M_Bᵢⱼ⁽¹⁾[1:s₁, 1:s₂]
             # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
             mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂])
             # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
