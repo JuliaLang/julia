@@ -235,7 +235,7 @@ function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vect
             ti = widenconst(ti)
         end
         if isa(ti, Union)
-            nti = unionlen(ti)
+            nti = nvariants(ti)
             if nti > max
                 max, nti = nti, max
             end

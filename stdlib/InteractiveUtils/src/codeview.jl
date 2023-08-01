@@ -45,7 +45,7 @@ end
 # True if one can be pretty certain that the compiler handles this union well,
 # i.e. must be small with concrete types.
 function is_expected_union(u::Union)
-    Base.unionlen(u) < 4 || return false
+    Base.nvariants(u) < 4 || return false
     for x in Base.uniontypes(u)
         if !Base.isdispatchelem(x) || x == Core.Box
             return false
