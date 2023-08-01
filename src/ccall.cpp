@@ -172,12 +172,6 @@ static Value *runtime_sym_lookup(
         }
         auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
                     { libname, nameval, libptrgv });
-        if (runtime_lib) {
-            lookup->addFnAttr(Attribute::get(lookup->getContext(), "julia.libname", f_lib));
-        } else {
-            lookup->addFnAttr(Attribute::get(lookup->getContext(), "julia.libidx", std::to_string((uintptr_t) f_lib)));
-        }
-        lookup->addFnAttr(Attribute::get(lookup->getContext(), "julia.fname", f_name));
         llvmf = lookup;
     }
     setName(emission_context, llvmf, f_name + StringRef(".found"));
@@ -728,22 +722,6 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
-        // else {
-        //     void *symaddr;
-
-        //     void* libsym = jl_get_library_(sym.f_lib, 0);
-        //     int symbol_found = jl_dlsym(libsym, sym.f_name, &symaddr, 0);
-        //     if (!libsym || !symbol_found) {
-        //         // Error mode, either the library or the symbol couldn't be find during compiletime.
-        //         // Fallback to a runtime symbol lookup.
-        //         res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
-        //         res = ctx.builder.CreatePtrToInt(res, lrt);
-        //     } else {
-        //         // since we aren't saving this code, there's no sense in
-        //         // putting anything complicated here: just JIT the address of the cglobal
-        //         res = ConstantInt::get(lrt, (uint64_t)symaddr);
-        //     }
-        // }
     }
 
     JL_GC_POP();
@@ -2115,22 +2093,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             else
                 llvmf = emit_plt(ctx, functype, attributes, cc, symarg.f_lib, symarg.f_name);
         }
-        // else {
-        //     void *symaddr;
-        //     void *libsym = jl_get_library_(symarg.f_lib, 0);
-        //     int symbol_found = jl_dlsym(libsym, symarg.f_name, &symaddr, 0);
-        //     if (!libsym || !symbol_found) {
-        //         ++DeferredCCallLookups;
-        //         // either the library or the symbol could not be found, place a runtime
-        //         // lookup here instead.
-        //         llvmf = runtime_sym_lookup(ctx, funcptype, symarg.f_lib, NULL, symarg.f_name, ctx.f);
-        //     } else {
-        //         ++LiteralCCalls;
-        //         // since we aren't saving this code, there's no sense in
-        //         // putting anything complicated here: just JIT the function address
-        //         llvmf = literal_static_pointer_val(symaddr, funcptype);
-        //     }
-        // }
     }
 
     OperandBundleDef OpBundle("jl_roots", gc_uses);

@@ -1407,7 +1407,7 @@ namespace {
         JITPointersT(orc::ExecutionSession &ES) JL_NOTSAFEPOINT : ES(ES) {}
 
         Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
-            TSM.withModuleDo([&](Module &M) {
+            TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
                 for (auto &GV : make_early_inc_range(M.globals())) {
                     if (auto *Shared = getSharedBytes(GV)) {
                         ++InternedGlobals;
@@ -1563,6 +1563,7 @@ namespace {
 
             for (auto &F : M) {
                 for (auto &BB : F) {
+                    SmallVector<Instruction *> to_delete;
                     for (auto &I : make_early_inc_range(BB)) {
                         auto CI = dyn_cast<CallInst>(&I);
                         if (!CI)
@@ -1570,14 +1571,21 @@ namespace {
                         auto Callee = CI->getCalledFunction();
                         if (!Callee || Callee->getName() != XSTR(jl_load_and_lookup))
                             continue;
-                        auto fname = CI->getFnAttr("julia.fname").getValueAsString().str();
+                        // Long-winded way of extracting fname without needing a second copy in an attribute
+                        auto fname = cast<ConstantDataArray>(cast<GlobalVariable>(CI->getArgOperand(1)->stripPointerCasts())->getInitializer())->getAsCString();
+                        auto libarg = CI->getArgOperand(0)->stripPointerCasts();
+                        // Should only use in store and phi node
+                        // Note that this uses the raw output of codegen,
+                        // which is why we can assume this
+                        assert(++++CI->use_begin() == CI->use_end());
                         void *addr;
-                        if (CI->hasFnAttr("julia.libname")) {
-                            auto libname = CI->getFnAttr("julia.libname").getValueAsString().str();
+                        if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
+                            auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
                             addr = lookup(libname.data(), fname.data());
                         } else {
-                            assert(CI->hasFnAttr("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
-                            auto libidx = (uintptr_t)std::stoull(CI->getFnAttr("julia.libidx").getValueAsString().str());
+                            assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
+                            libarg = cast<ConstantExpr>(libarg)->getOperand(0);
+                            auto libidx = cast<ConstantInt>(libarg)->getZExtValue();
                             addr = lookup(libidx, fname.data());
                         }
                         if (addr) {
@@ -1590,9 +1598,22 @@ namespace {
                                 }
                                 init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
                             }
-                            CI->replaceAllUsesWith(init);
-                            CI->eraseFromParent();
+                            // DCE and SimplifyCFG will kill the branching structure around
+                            // the call, so we don't need to worry about removing everything
+                            for (auto user : make_early_inc_range(CI->users())) {
+                                if (auto SI = dyn_cast<StoreInst>(user)) {
+                                    to_delete.push_back(SI);
+                                } else {
+                                    auto PHI = cast<PHINode>(user);
+                                    PHI->replaceAllUsesWith(init);
+                                    to_delete.push_back(PHI);
+                                }
+                            }
+                            to_delete.push_back(CI);
                         }
+                    }
+                    for (auto I : to_delete) {
+                        I->eraseFromParent();
                     }
                 }
             }
