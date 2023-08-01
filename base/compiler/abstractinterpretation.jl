@@ -2887,17 +2887,49 @@ function init_vartable!(vartable::VarTable, frame::InferenceState)
     return vartable
 end
 
+function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
+                           currstate::VarTable, @nospecialize(rt))
+    bestguess = frame.bestguess
+    nargs = narguments(frame, #=include_va=#false)
+    slottypes = frame.slottypes
+    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
+    # narrow representation of bestguess slightly to prepare for tmerge with rt
+    if rt isa InterConditional && bestguess isa Const
+        slot_id = rt.slot
+        old_id_type = slottypes[slot_id]
+        if bestguess.val === true && rt.elsetype !== Bottom
+            bestguess = InterConditional(slot_id, old_id_type, Bottom)
+        elseif bestguess.val === false && rt.thentype !== Bottom
+            bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    end
+    # copy limitations to return value
+    if !isempty(frame.pclimitations)
+        union!(frame.limitations, frame.pclimitations)
+        empty!(frame.pclimitations)
+    end
+    if !isempty(frame.limitations)
+        rt = LimitedAccuracy(rt, copy(frame.limitations))
+    end
+    𝕃ₚ = ipo_lattice(interp)
+    if !⊑(𝕃ₚ, rt, bestguess)
+        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
+        frame.bestguess = tmerge(𝕃ₚ, bestguess, rt) # new (wider) return type for frame
+        return true
+    else
+        return false
+    end
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    nargs = narguments(frame, #=include_va=#false)
-    slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
-    𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
+    𝕃ᵢ = typeinf_lattice(interp)
 
     currbb = frame.currbb
     if currbb != 1
@@ -2998,35 +3030,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         end
                     end
                 elseif isa(stmt, ReturnNode)
-                    bestguess = frame.bestguess
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
-                    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
-                    # narrow representation of bestguess slightly to prepare for tmerge with rt
-                    if rt isa InterConditional && bestguess isa Const
-                        let slot_id = rt.slot
-                            old_id_type = slottypes[slot_id]
-                            if bestguess.val === true && rt.elsetype !== Bottom
-                                bestguess = InterConditional(slot_id, old_id_type, Bottom)
-                            elseif bestguess.val === false && rt.thentype !== Bottom
-                                bestguess = InterConditional(slot_id, Bottom, old_id_type)
-                            end
-                        end
-                    end
-                    # copy limitations to return value
-                    if !isempty(frame.pclimitations)
-                        union!(frame.limitations, frame.pclimitations)
-                        empty!(frame.pclimitations)
-                    end
-                    if !isempty(frame.limitations)
-                        rt = LimitedAccuracy(rt, copy(frame.limitations))
-                    end
-                    if !⊑(𝕃ₚ, rt, bestguess)
-                        # new (wider) return type for frame
-                        bestguess = tmerge(𝕃ₚ, bestguess, rt)
-                        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
-                        frame.bestguess = bestguess
+                    if update_bestguess!(interp, frame, currstate, rt)
                         for (caller, caller_pc) in frame.cycle_backedges
-                            if !(caller.ssavaluetypes[caller_pc] === Any)
+                            if caller.ssavaluetypes[caller_pc] !== Any
                                 # no reason to revisit if that call-site doesn't affect the final result
                                 push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
                             end
