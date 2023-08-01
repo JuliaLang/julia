@@ -742,6 +742,10 @@ function readheader(s::AbstractSerializer)
     if version > ser_version
         error("""Cannot read stream serialized with a newer version of Julia.
                  Got data version $version > current version $ser_version""")
+    elseif version < ser_version
+        @warn("""Got data $version < current version $ser_version.
+                It is recommended that a common Julia version is used.
+                Unexpected behavior may result otherwise.""")
     end
     s.version = version
     return
