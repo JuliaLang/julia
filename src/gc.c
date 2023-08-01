@@ -1171,7 +1171,10 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
             dest->bigalloc += jl_atomic_load_relaxed(&ptls->gc_num.bigalloc);
             uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc);
             uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
+            dest->freed += jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
             jl_atomic_store_relaxed(&gc_heap_stats.heap_size, alloc_acc - free_acc + jl_atomic_load_relaxed(&gc_heap_stats.heap_size));
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
         }
     }
 }
