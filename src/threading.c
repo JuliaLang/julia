@@ -474,6 +474,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
         abort();
     }
     jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
+    ptls->system_id = 0;
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();
