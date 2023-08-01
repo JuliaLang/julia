@@ -55,7 +55,7 @@ void jl_mach_gc_end(void)
         int8_t gc_state = (int8_t)(item >> 8);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        thread_resume(pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls2->system_id)));
     }
     suspended_threads.len = 0;
 }
@@ -279,7 +279,7 @@ kern_return_t catch_mach_exception_raise(
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
+        if (pthread_mach_thread_np(jl_atomic_load_relaxed(&_ptls2->system_id)) == thread) {
             ptls2 = _ptls2;
             break;
         }
@@ -389,7 +389,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
     if (ct2 == NULL) // this thread is already dead
         return 0;
 
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls2->system_id));
 
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
@@ -417,7 +417,7 @@ static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t 
 static void jl_thread_resume(int tid, int sig)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls2->system_id));
     kern_return_t ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
@@ -427,7 +427,7 @@ static void jl_thread_resume(int tid, int sig)
 static void jl_try_deliver_sigint(void)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls2->system_id));
 
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
@@ -464,7 +464,7 @@ CFI_NORETURN
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls2->system_id));
 
     host_thread_state_t state;
     if (!jl_thread_suspend_and_get_state2(0, &state)) {

@@ -347,7 +347,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, (void*)ptls);
 #endif
-    ptls->system_id = (jl_thread_t)(uintptr_t)uv_thread_self();
+    jl_atomic_store_relaxed(&ptls->system_id, (jl_thread_t)(uintptr_t)uv_thread_self());
     ptls->rngseed = jl_rand();
     if (tid == 0)
         ptls->disable_gc = 1;
@@ -473,8 +473,9 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
         jl_safe_printf("fatal: thread exited from wrong Task.\n");
         abort();
     }
-    jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
-    ptls->system_id = 0;
+    // mark this thread as dead
+    jl_atomic_store_relaxed(&ptls->current_task, NULL);
+    jl_atomic_store_relaxed(&ptls->system_id, 0);
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();

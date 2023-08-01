@@ -259,7 +259,7 @@ typedef struct _jl_tls_states_t {
 #else
     void *signal_stack;
 #endif
-    jl_thread_t system_id;
+    _Atomic(jl_thread_t) system_id;
     arraylist_t finalizers;
     struct _jl_gc_pagemeta_t *page_metadata_allocd;
     struct _jl_gc_pagemeta_t *page_metadata_lazily_freed;

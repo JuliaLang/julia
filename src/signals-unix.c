@@ -404,7 +404,7 @@ static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t 
         return;
     }
     jl_atomic_store_release(&ptls2->signal_request, 1);
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_kill(jl_atomic_load_relaxed(&ptls2->system_id), SIGUSR2);
     // wait for thread to acknowledge
     int err = pthread_cond_timedwait(&signal_caught_cond, &in_signal_lock, &ts);
     if (err == ETIMEDOUT) {
@@ -455,7 +455,7 @@ static void jl_try_deliver_sigint(void)
     jl_wake_libuv();
     jl_atomic_store_release(&ptls2->signal_request, 2);
     // This also makes sure `sleep` is aborted.
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_kill(jl_atomic_load_relaxed(&ptls2->system_id), SIGUSR2);
 }
 
 // Write only by signal handling thread, read only by main thread
@@ -640,7 +640,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     }
 
 #ifdef HAVE_MACH
-    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
+    attach_exception_port(pthread_mach_thread_np(jl_atomic_load_relaxed(&ptls->system_id)), 0);
 #endif
 }
 
