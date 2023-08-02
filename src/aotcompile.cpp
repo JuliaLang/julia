@@ -720,13 +720,18 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             gvars[gvar.second] = i+1;
         }
     }
-    for (auto &GV : M.globals()) {
+    for (auto &GV : M.global_values()) {
         if (GV.isDeclaration()) {
             if (GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
             }
         } else {
+            if (auto F = dyn_cast<Function>(&GV)) {
+                // Ignore alwaysinline functions
+                if (F->hasFnAttribute(Attribute::AlwaysInline))
+                    continue;
+            }
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
@@ -806,8 +811,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        if (isa<Function>(G)) {
-            partitioner.make(&G, getFunctionWeight(cast<Function>(G)).weight);
+        if (auto F = dyn_cast<Function>(&G)) {
+            // alwaysinline functions cannot be partitioned,
+            // they must remain in every module in order to be inlined
+            if (F->hasFnAttribute(Attribute::AlwaysInline))
+                continue;
+            partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
             partitioner.make(&G, 1);
         }
@@ -1104,6 +1113,12 @@ static void materializePreserved(Module &M, Partition &partition) {
     for (auto &F : M.functions()) {
         if (!F.isDeclaration()) {
             if (!Preserve.contains(&F)) {
+                if (F.hasFnAttribute(Attribute::AlwaysInline)) {
+                    F.setLinkage(GlobalValue::InternalLinkage);
+                    F.setVisibility(GlobalValue::DefaultVisibility);
+                    F.setDSOLocal(true);
+                    continue;
+                }
                 F.deleteBody();
                 F.setLinkage(GlobalValue::ExternalLinkage);
                 F.setVisibility(GlobalValue::HiddenVisibility);
