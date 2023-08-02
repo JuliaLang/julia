@@ -1859,6 +1859,8 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     return issubset(kwnames, kws)
 end
 
+hasmethod_one_type(f::F, ::Type{T}) where {F<:Function,T} = hasmethod(f, Tuple{Type{T}})
+
 """
     fbody = bodyfunction(basemethod::Method)
 
