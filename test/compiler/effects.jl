@@ -1010,3 +1010,16 @@ end |> !Core.Compiler.is_nothrow
 @test Base.infer_effects() do
     getglobal(@__MODULE__, :my_defined_var, :foo, nothing)
 end |> !Core.Compiler.is_nothrow
+
+# irinterp should refine `:nothrow` information only if profitable
+Base.@assume_effects :nothrow function irinterp_nothrow_override(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test Base.infer_effects((Float64,)) do y
+    isinf(y) && return zero(y)
+    irinterp_nothrow_override(true, y)
+end |> Core.Compiler.is_nothrow
