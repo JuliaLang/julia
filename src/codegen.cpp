@@ -1775,7 +1775,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
-static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
+static unsigned julia_alignment(jl_value_t *jt);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -1813,7 +1813,7 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
-static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, const Twine &name, Module &M)
+static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, Align align, const Twine &name, Module &M)
 {
     GlobalVariable *&gv = emission_context.mergedConstants[val];
     auto get_gv = [&](const Twine &name) {
@@ -1825,6 +1825,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
                 val,
                 name);
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+        gv->setAlignment(align);
         return gv;
     };
     if (gv == nullptr) {
@@ -1945,7 +1946,8 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
+        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), Align(julia_alignment(typ)), "_j_const", *jl_Module);
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());
@@ -2319,7 +2321,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                 new_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), new_idx);
                 if (v.V && !v.ispointer()) {
                     // TODO: remove this branch once all consumers of v.TIndex understand how to handle a non-ispointer value
-                    return value_to_pointer(ctx, v.V, typ, new_tindex);
+                    return jl_cgval_t(value_to_pointer(ctx, v), typ, new_tindex);
                 }
             }
             else if (jl_subtype(v.typ, typ)) {
@@ -7672,7 +7674,7 @@ static jl_llvm_functions_t
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), NULL, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), nullptr, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
                 SI->insertAfter(ctx.topalloca);
@@ -7692,7 +7694,7 @@ static jl_llvm_functions_t
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
-                jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+                nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.topalloca);
             varinfo.boxroot = av;
