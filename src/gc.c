@@ -3725,7 +3725,6 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
             jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, sz-old);
 
         int64_t diff = sz - old;
         if (diff < 0) {
@@ -3883,7 +3882,6 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         }
     }
 
-    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, allocsz-oldsz);
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
