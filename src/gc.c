@@ -3353,7 +3353,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         thrashing = 1;
     else if (thrashing == 1 && thrash_counter <= 2)
         thrashing = 0; // maybe we should report this to the user or error out?
-        
+
     int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
         target_allocs = 2*sqrt((double)heap_size/min_interval);
@@ -3731,9 +3731,9 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         if (diff < 0) {
             uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
             if (free_acc + diff < 16*1024)
-                jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + sz);
+                jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + (-diff));
             else {
-                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + sz));
+                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
                 jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
             }
         }
@@ -3867,9 +3867,9 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     if (diff < 0) {
         uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
         if (free_acc + diff < 16*1024)
-            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + sz);
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + (-diff));
         else {
-            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + sz));
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
             jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
         }
     }
