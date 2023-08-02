@@ -698,7 +698,7 @@ static uint64_t old_alloc_diff = 0;
 static uint64_t old_freed_diff = 0;
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
-
+static int thrashing = 0;
 // global variables for GC stats
 
 // Resetting the object to a young object, this is used when marking the
@@ -3321,7 +3321,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.last_incremental_sweep = gc_end_time;
     }
 
-    int thrashing = thrash_counter > 4; // maybe we should report this to the user or error out?
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
     double min_interval = default_collect_interval;
@@ -3340,16 +3339,21 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         old_freed_diff = freed_diff;
         old_pause_time = pause;
         old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-        if (gc_time > alloc_time * 95)
+        if (gc_time > alloc_time * 95 && !(thrash_counter < 4))
             thrash_counter += 1;
-        else
-            thrash_counter = 0;
+        else if (thrash_counter > 0)
+            thrash_counter -= 1;
         if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
             double alloc_rate = alloc_mem/alloc_time;
             double gc_rate = gc_mem/gc_time;
             target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
         }
     }
+    if (thrashing == 0 && thrash_counter >= 3)
+        thrashing = 1;
+    else if (thrashing == 1 && thrash_counter <= 2)
+        thrashing = 0; // maybe we should report this to the user or error out?
+        
     int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
         target_allocs = 2*sqrt((double)heap_size/min_interval);
