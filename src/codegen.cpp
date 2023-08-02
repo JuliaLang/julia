@@ -8908,17 +8908,15 @@ jl_llvm_functions_t jl_emit_codeinst(
                         jl_gc_wb(codeinst, src);
                     }
                 }
-                else if (jl_is_method(def)) {// don't delete toplevel code
-                    if (// and there is something to delete (test this before calling jl_ir_inlining_cost)
-                        inferred != jl_nothing &&
-                        // don't delete inlineable code, unless it is constant
-                        (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr ||
-                         (jl_ir_inlining_cost(inferred) == UINT16_MAX)) &&
-                        // don't delete code when generating a precompile file
-                        !(params.imaging || jl_options.incremental)) {
-                        // if not inlineable, code won't be needed again
-                        jl_atomic_store_release(&codeinst->inferred, jl_nothing);
-                    }
+                // delete non-inlineable code, since it won't be needed again
+                // because we already emitted LLVM code from it and the native
+                // Julia-level optimization will never need to see it
+                else if (jl_is_method(def) && // don't delete toplevel code
+                         inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
+                         ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
+                          jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) && // unless it is constant
+                         !(params.imaging || jl_options.incremental)) { // don't delete code when generating a precompile file
+                    jl_atomic_store_release(&codeinst->inferred, jl_nothing);
                 }
             }
         }
