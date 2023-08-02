@@ -998,3 +998,15 @@ f50198() = (hf50198(Ref(:x)[]); nothing)
 f50311(x, s) = Symbol(s)
 g50311(x) = Val{f50311((1.0, x), "foo")}()
 @test fully_eliminated(g50311, Tuple{Float64})
+
+# getglobal effects
+const my_defined_var = 42
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end |> Core.Compiler.is_foldable_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo, nothing)
+end |> !Core.Compiler.is_nothrow
