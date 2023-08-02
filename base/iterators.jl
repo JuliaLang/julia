@@ -481,7 +481,7 @@ zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail..
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
 function reverse(z::Zip)
     if !first(_zip_lengths_finite_equal(z.is))
-        throw(ArgumentError("Zipped iterators of unknown, infinite, or unequal lengths must be collected before reversing"))
+        throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
     end
     Zip(Base.map(reverse, z.is))
 end
