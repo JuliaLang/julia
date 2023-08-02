@@ -584,12 +584,12 @@ precompile_test_harness(false) do dir
     fb_uuid = Base.module_build_id(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(DEPOT_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @eval using FooBar1
     @test !isfile(joinpath(cachedir2, "FooBar.ji"))
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
