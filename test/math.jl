@@ -1540,24 +1540,31 @@ end
     @test (@allocated f44336()) == 0
 end
 
-# test constant-foldability
-for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
-           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-           :exp, :exp2, :exp10, :expm1
-           )
+@testset "constant-foldability of core math functions" begin
+    for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
+            :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+            :exp, :exp2, :exp10, :expm1
+            )
+        for T in (Float16, Float32, Float64)
+            @testset let f = getfield(@__MODULE__, fn), T = T
+                @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
+            end
+        end
+    end
+end;
+@testset "removability of core math functions" begin
     for T in (Float16, Float32, Float64)
-        f = getfield(@__MODULE__, fn)
-        eff = Base.infer_effects(f, (T,))
-        @test Core.Compiler.is_foldable(eff)
+        @testset let T = T
+            for f in (exp, exp2, exp10)
+                @testset let f = f
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                end
+            end
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+        end
     end
-end
-for T in (Float16, Float32, Float64)
-    for f in (exp, exp2, exp10)
-        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
-    end
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
-end
+end;
 
 @testset "BigInt Rationals with special funcs" begin
     @test sinpi(big(1//1)) == big(0.0)
