@@ -2570,23 +2570,26 @@ end
     # Cube roots of 1x1 and 2x2 diagonal blocks
     i = 1
     sizes = ones(Int,n)
+    S = zeros(2,n)
     while i < n
         if !iszero(A[i+1,i])
             _cbrt_2x2!(A[i:i+1,i:i+1])
+            mul!(S[1:2,i:i+1], A[i:i+1,i:i+1], A[i:i+1,i:i+1])
             sizes[i] = 2
             sizes[i+1] = 0
             i += 2
         else
             A[i,i] = cbrt(A[i,i])
+            S[1,i] = A[i,i]*A[i,i]
             i += 1
         end
     end
-    if sizes[n] == 1 A[n,n] = cbrt(A[n,n]) end
-    Σ = cumsum(sizes)
+    if i == n
+        A[n,n] = cbrt(A[n,n])
+        S[1,n] = A[n,n]*A[n,n]
+    end
     # Algorithm 4.3 in Reference [1]
     Δ = I(4)
-    M_S₁ = zeros(T,2,2)
-    M_S₂ = zeros(T,2,2)
     M_L₀ = zeros(T,4,4)
     M_L₁ = zeros(T,4,4)
     M_Bᵢⱼ⁽⁰⁾ = zeros(T,2,2)
@@ -2594,10 +2597,8 @@ end
     for k = 1:n-1
         for i = 1:n-k
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
-            k₁, k₂ = i+1+(sizes[i+1]==0), i+Σ[i+k-1]-Σ[i+1]+sizes[i+1]+(sizes[i+1]==0)
+            k₁, k₂ = i+1+(sizes[i+1]==0), i+k-1+(sizes[i+k-1]==2)
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
-            S₁ = M_S₁[1:s₁, 1:s₁]
-            S₂ = M_S₂[1:s₂, 1:s₂]
             L₀ = M_L₀[1:s₁*s₂,1:s₁*s₂]
             L₁ = M_L₁[1:s₁*s₂,1:s₁*s₂]
             Bᵢⱼ⁽⁰⁾ = M_Bᵢⱼ⁽⁰⁾[1:s₁, 1:s₂]
@@ -2607,11 +2608,9 @@ end
             # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
             mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]')
             # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
-            mul!(S₁, A[i₁:i₂,i₁:i₂], A[i₁:i₂,i₁:i₂])
-            mul!(S₂, A[j₁:j₂,j₁:j₂], A[j₁:j₂,j₁:j₂])
-            kron!(L₀, Δ[1:s₂,1:s₂], S₁)
+            kron!(L₀, Δ[1:s₂,1:s₂], S[1:s₁,i₁:i₂])
             L₀ .+= kron!(L₁, A[j₁:j₂,j₁:j₂]', A[i₁:i₂,i₁:i₂])
-            L₀ .+= kron!(L₁, S₂', Δ[1:s₁,1:s₁])
+            L₀ .+= kron!(L₁, S[1:s₂,j₁:j₂]', Δ[1:s₁,1:s₁])
             mul!(A[i₁:i₂,j₁:j₂], A[i₁:i₂,i₁:i₂], Bᵢⱼ⁽⁰⁾, -1.0, 1.0)
             A[i₁:i₂,j₁:j₂] .-= Bᵢⱼ⁽¹⁾
             ldiv!(lu!(L₀), A[i₁:i₂,j₁:j₂][:])
