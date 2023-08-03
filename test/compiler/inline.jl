@@ -2065,3 +2065,20 @@ end
 # https://github.com/JuliaLang/julia/issues/50612
 f50612(x) = UInt32(x)
 @test all(!isinvoke(:UInt32),get_code(f50612,Tuple{Char}))
+
+# move inlineable constant values into statement position during `compact!`-ion
+# so that we don't inline DCE-eligibile calls
+Base.@assume_effects :nothrow function erase_before_inlining(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test fully_eliminated((Float64,); retval=5) do y
+    length(erase_before_inlining(true, y))
+end
+@test fully_eliminated((Float64,); retval=(5,5)) do y
+    z = erase_before_inlining(true, y)
+    return length(z), length(z)
+end
