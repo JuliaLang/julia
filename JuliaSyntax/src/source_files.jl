@@ -13,7 +13,7 @@ information for a byte offset can be looked up via the `source_line`,
 struct SourceFile
     # TODO: Rename SourceFile -> SourceText / SourceChunk / SourceIndex / SourceLineIndex ?
     # See https://github.com/JuliaLang/JuliaSyntax.jl/issues/190
-    code::SubString
+    code::SubString{String}
     # Offset of `code` within a larger chunk of source text
     byte_offset::Int
     filename::Union{Nothing,String}
