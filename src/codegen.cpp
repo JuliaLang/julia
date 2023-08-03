@@ -2368,6 +2368,8 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     if (!m->getModuleFlag("Debug Info Version"))
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
+    if (imaging_mode)
+        m->addModuleFlag(llvm::Module::Error, "julia.imaging_mode", 1);
     m->setDataLayout(DL);
     m->setTargetTriple(triple.str());
 
