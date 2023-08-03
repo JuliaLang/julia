@@ -15,6 +15,7 @@
 #include <string.h>
 #include <strings.h>
 #include <inttypes.h>
+#include <sys/types.h>
 #include "julia.h"
 #include "julia_threads.h"
 #include "julia_internal.h"
@@ -60,21 +61,20 @@ typedef struct {
 
 // This struct must be kept in sync with the Julia type of the same name in base/timing.jl
 typedef struct {
-    int64_t     allocd;
-    int64_t     deferred_alloc;
-    int64_t     freed;
+    uint64_t    allocd;
     uint64_t    malloc;
     uint64_t    realloc;
     uint64_t    poolalloc;
     uint64_t    bigalloc;
-    uint64_t    freecall;
-    uint64_t    total_time;
     uint64_t    total_allocd;
-    size_t      interval;
-    int         pause;
-    int         full_sweep;
+    uint64_t    freed;
+} jl_gc_alloc_stats_t;
+
+typedef struct {
+    uint64_t    total_time;
+    uint64_t    n_gcs;
+    uint64_t    n_full_gcs;
     uint64_t    max_pause;
-    uint64_t    max_memory;
     uint64_t    time_to_safepoint;
     uint64_t    max_time_to_safepoint;
     uint64_t    total_time_to_safepoint;
@@ -84,7 +84,8 @@ typedef struct {
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
     uint64_t    last_incremental_sweep;
-} jl_gc_num_t;
+} jl_gc_timing_stats_t;
+
 
 // Array chunks (work items representing suffixes of
 // large arrays of pointers left to be marked)
@@ -375,7 +376,8 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 }
 #endif
 
-extern jl_gc_num_t gc_num;
+extern jl_gc_alloc_stats_t gc_allocs;
+extern jl_gc_timing_stats_t gc_timings;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
@@ -501,7 +503,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int64_t live_bytes, int64_t estimate_freed,
                          int sweep_full);
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
-                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t freed, uint64_t live,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
                      uint64_t sweep);
 #else
@@ -530,7 +532,7 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
-                         interval, pause, ttsp, mark, sweep)
+                            pause, ttsp, mark, sweep)
 #endif
 
 #ifdef MEMFENCE

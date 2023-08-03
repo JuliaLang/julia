@@ -500,7 +500,7 @@ void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count, gc_num.pause);
+                   pool_count + other_count, pool_count, other_count, gc_timings.n_gcs);
 }
 
 void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
@@ -598,11 +598,11 @@ void jl_gc_debug_critical_error(void)
 void jl_gc_debug_print_status(void)
 {
     // May not be accurate but should be helpful enough
-    uint64_t pool_count = gc_num.poolalloc;
-    uint64_t big_count = gc_num.bigalloc;
+    uint64_t pool_count = gc_allocs.poolalloc;
+    uint64_t big_count = gc_allocs.bigalloc;
     jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
+                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %lu\n",
+                   pool_count + big_count, pool_count, big_count, gc_timings.n_gcs);
 }
 #endif
 
@@ -738,7 +738,7 @@ void gc_final_pause_end(int64_t t0, int64_t tend)
     uint64_t post_time = gc_postmark_end - gc_premark_end;
     uint64_t sweep_pause = tend - gc_premark_end;
     uint64_t pause = tend - t0;
-    total_freed_bytes += gc_num.freed;
+    total_freed_bytes += gc_allocs.freed;
     total_sweep_time += sweep_pause - post_time;
     total_fin_time += post_time;
     max_pause = max_pause < pause ? pause : max_pause;
@@ -789,18 +789,18 @@ void jl_print_gc_stats(JL_STREAM *s)
     double ptime = jl_hrtime() - process_t0;
     double exec_time = jl_ns2s(ptime);
     jl_safe_printf("exec time\t%.5f sec\n", exec_time);
-    if (gc_num.pause > 0) {
+    if (gc_timings.n_gcs > 0) {
         jl_safe_printf("gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
-                       jl_ns2s(gc_num.total_time),
-                       jl_ns2s(gc_num.total_time) / exec_time * 100,
-                       gc_num.pause, gc_num.full_sweep);
+                       jl_ns2s(gc_timings.total_time),
+                       jl_ns2s(gc_timings.total_time) / exec_time * 100,
+                       gc_timings.n_gcs, gc_timings.n_full_gcs);
         jl_safe_printf("gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
-                       jl_ns2ms(gc_num.total_time) / gc_num.pause,
+                       jl_ns2ms(gc_timings.total_time) / gc_timings.n_gcs,
                        jl_ns2ms(max_pause));
         jl_safe_printf("\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
-                       (int)(total_mark_time * 100 / gc_num.total_time),
-                       (int)(total_sweep_time * 100 / gc_num.total_time),
-                       (int)(total_fin_time * 100 / gc_num.total_time));
+                       (int)(total_mark_time * 100 / gc_timings.total_time),
+                       (int)(total_sweep_time * 100 / gc_timings.total_time),
+                       (int)(total_fin_time * 100 / gc_timings.total_time));
     }
     unsigned p2 = 0, p1 = 0, p0 = 0;
     gc_stats_pagetable(&p2, &p1, &p0);
@@ -809,7 +809,7 @@ void jl_print_gc_stats(JL_STREAM *s)
                    p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
                    p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
 #ifdef _OS_LINUX_
-    double gct = gc_num.total_time / 1e9;
+    double gct = gc_timings.total_time / 1e9;
     struct mallinfo mi = mallinfo();
     jl_safe_printf("malloc size\t%d MB\n", mi.uordblks / 1024 / 1024);
     jl_safe_printf("max page alloc\t%ld MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
@@ -943,20 +943,20 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int sweep_full)
 {
     uint64_t sweep_pause = gc_end_t - gc_premark_end;
-    int pct = actual_allocd ? (gc_num.freed * 100) / actual_allocd : -1;
+    int pct = actual_allocd ? (gc_allocs.freed * 100) / actual_allocd : -1;
     jl_safe_printf("GC sweep pause %.2f ms live %" PRId64 " kB "
                    "(freed %" PRId64 " kB EST %" PRId64 " kB "
                    "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
                    "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
                    jl_ns2ms(sweep_pause), live_bytes / 1024,
-                   gc_num.freed / 1024, estimate_freed / 1024,
-                   gc_num.freed - estimate_freed, pct, gc_num.allocd / 1024,
+                   gc_allocs.freed / 1024, estimate_freed / 1024,
+                   gc_allocs.freed - estimate_freed, pct, gc_allocs.allocd / 1024,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
-                   sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
+                   sweep_full ? "full" : "quick", -gc_allocs.allocd / 1024);
 }
 
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
-                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t freed, uint64_t live,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
                      uint64_t sweep)
 {
@@ -965,16 +965,14 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                        " live = %" PRIu64 "m new interval = %" PRIu64
                        "m time = %" PRIu64 "ms ttsp = %" PRIu64 "us mark time = %"
                        PRIu64 "ms sweep time = %" PRIu64 "ms \n",
-                       end, freed, live/1024/1024,
-                       interval/1024/1024, pause/1000000, ttsp,
+                       end, freed, live/1024/1024, pause/1000000, ttsp,
                        mark/1000000,sweep/1000000);
     else
         jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64
                        " live = %" PRIu64 "m new interval = %" PRIu64 "m pause time = %"
                        PRIu64 "ms ttsp = %" PRIu64 "us mark time = %" PRIu64
                        "ms sweep time = %" PRIu64 "ms \n",
-                       end, freed, live/1024/1024,
-                       interval/1024/1024, pause/1000000, ttsp,
+                       end, freed, live/1024/1024, pause/1000000, ttsp,
                        mark/1000000,sweep/1000000);
 }
 #endif

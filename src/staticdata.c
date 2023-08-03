@@ -3328,8 +3328,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     ios_close(&fptr_record);
     ios_close(&sysimg);
 
-    if (!s.incremental)
-        jl_gc_reset_alloc_count();
     arraylist_free(&deser_sym);
 
     // Prepare for later external linkage against the sysimg
