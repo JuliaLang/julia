@@ -1,6 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "dtypes.h"
+#include "julia.h"
+#include "julia_atomics.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #ifdef __GLIBC__
@@ -1791,6 +1794,51 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
     }
 }
 
+STATIC_INLINE jl_value_t *gc_prequeue_pop_(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
+    assert(mq->prequeue.enqueued > mq->prequeue.dequeued);
+    jl_value_t * v = mq->prequeue.prefetch_buffer[mq->prequeue.dequeued & PREFETCH_BUFFER_MASK];
+    mq->prequeue.dequeued += 1;
+    return v;
+}
+
+
+STATIC_INLINE void gc_prequeue_push(jl_gc_markqueue_t *mq, jl_value_t *v) JL_NOTSAFEPOINT{
+    assert(mq->prequeue.enqueued - mq->prequeue.dequeued < PREFETCH_BUFFER_SIZE);
+    mq->prequeue.prefetch_buffer[mq->prequeue.enqueued & PREFETCH_BUFFER_MASK] = v;
+    mq->prequeue.enqueued += 1;
+}
+
+STATIC_INLINE size_t gc_prequeue_size(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
+    return mq->prequeue.enqueued - mq->prequeue.dequeued;
+}
+
+STATIC_INLINE size_t gc_prequeue_free_space(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
+    if (__unlikely(mq->prequeue.disable_push == 1)) {
+        return 0;
+    }
+    return PREFETCH_BUFFER_SIZE - gc_prequeue_size(mq) - 1;
+}
+
+STATIC_INLINE jl_value_t *gc_prequeue_pop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
+    while (gc_prequeue_size(mq) > 0) {
+        jl_value_t *obj = gc_prequeue_pop_(mq);
+        if ((uintptr_t) obj & 0x1) { //Is a parent object
+            jl_value_t *parent = (jl_value_t *)((uintptr_t)obj & ~0x1);
+            uintptr_t nptr = (uintptr_t)gc_prequeue_pop_(mq);
+            gc_mark_push_remset(ptls, parent, nptr | mq->prequeue.push_remset);
+            mq->prequeue.push_remset = 0;
+        }
+        else { //Normal object
+            jl_taggedvalue_t *o = jl_astaggedvalue(obj);
+            if (!gc_old(o->header))
+                mq->prequeue.push_remset = 1;
+            if(gc_try_setmark_tag(o, GC_MARKED))
+                return obj;
+        }
+    }
+    return NULL;
+}
+
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
@@ -1805,6 +1853,21 @@ STATIC_INLINE jl_value_t *gc_ptr_queue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOIN
 {
     jl_value_t *v = NULL;
     ws_queue_pop(&mq->ptr_queue, &v, sizeof(jl_value_t*));
+    return v;
+}
+
+STATIC_INLINE jl_value_t *gc_value_pop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = NULL;
+    if (gc_prequeue_size(mq) > PREFETCH_BUFFER_MIN) {
+        v = gc_prequeue_pop(ptls, mq);
+        if (v != NULL)
+            return v;
+    }
+    v = gc_ptr_queue_pop(mq);
+    if (v != NULL)
+        return v;
+    v = gc_prequeue_pop(ptls, mq);
     return v;
 }
 
@@ -1885,28 +1948,31 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t **slot = NULL;
     jl_value_t *new_obj = NULL;
+    int push_into_queue = gc_prequeue_free_space(mq) > 33;
     for (; obj8_begin < obj8_end; obj8_begin++) {
         slot = &((jl_value_t**)obj8_parent)[*obj8_begin];
         new_obj = *slot;
         if (new_obj != NULL) {
             verify_parent2("object", obj8_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj8_parent, slot, (jl_datatype_t*)jl_typeof(obj8_parent)));
-            gc_assert_parent_validity((jl_value_t *)obj8_parent, new_obj);
-            if (obj8_begin + 1 != obj8_end) {
+            assert(((uintptr_t)new_obj & 0x1) == 0);
+            if (push_into_queue) {
+                __builtin_prefetch(jl_astaggedvalue(new_obj), 1, 3);
+                __builtin_prefetch(&((jl_value_t**)new_obj)[7], 1, 3);
+                gc_prequeue_push(mq, new_obj);
+            }
+            else
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-            }
-            else {
-                // Unroll marking of last item to avoid pushing
-                // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
-            }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj8_parent, slot);
         }
     }
-    gc_mark_push_remset(ptls, (jl_value_t *)obj8_parent, nptr);
-    return new_obj;
+    if (push_into_queue) {
+        gc_prequeue_push(mq, (jl_value_t *)((uintptr_t)obj8_parent | 1));
+        gc_prequeue_push(mq, (jl_value_t *)nptr);
+    }
+    else
+        gc_mark_push_remset(ptls, (jl_value_t *)obj8_parent, nptr);
+    return NULL;
 }
 
 // Mark object with 16bit field descriptors
@@ -2719,7 +2785,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 {
     while (1) {
-        void *new_obj = (void *)gc_ptr_queue_pop(&ptls->mark_queue);
+        void *new_obj = (void *)gc_value_pop(ptls, &ptls->mark_queue);
         // No more objects to mark
         if (__unlikely(new_obj == NULL)) {
             return;
@@ -2758,10 +2824,11 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     int master_tid = jl_atomic_load(&gc_master_tid);
     if (master_tid != -1)
         mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    mq->prequeue.disable_push=0;
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
-        new_obj = gc_ptr_queue_pop(mq);
+        new_obj = gc_value_pop(ptls,mq);
         if (new_obj != NULL) {
             goto mark;
         }
@@ -2830,6 +2897,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
                 goto mark;
         }
     }
+    mq->prequeue.disable_push=1;
 }
 
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
@@ -3580,7 +3648,11 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->bottom, 0);
     jl_atomic_store_relaxed(&q->array, wsa2);
     arraylist_new(&mq->reclaim_set, 32);
-
+    mq->prequeue.prefetch_buffer = (jl_value_t **)malloc_s(sizeof(jl_value_t *) * PREFETCH_BUFFER_SIZE);
+    mq->prequeue.push_remset = 0;
+    mq->prequeue.disable_push = 1;
+    mq->prequeue.enqueued = 0;
+    mq->prequeue.dequeued = 0;
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
