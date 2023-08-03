@@ -3036,6 +3036,7 @@ static void sweep_finalizer_list(arraylist_t *list)
 
 // collector entry point and control
 _Atomic(uint32_t) jl_gc_disable_counter = 1;
+static _Atomic(int) gc_should_gc_enabled = 0;
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
@@ -3045,6 +3046,10 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     if (on && !prev) {
         // disable -> enable
         jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+        if ((jl_atomic_load(&jl_gc_disable_counter) == 0) && jl_atomic_load_acquire(&gc_should_gc_enabled)) {
+            jl_atomic_store(&gc_heap_stats.heap_target, default_collect_interval);
+            jl_gc_collect(JL_GC_AUTO); // Run a GC if we should've but it was disabled
+        }
     }
     else if (prev && !on) {
         // enable -> disable
@@ -3417,7 +3422,9 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
-        // GC is disabled
+        // GC is disabled but we should run it when it's turned on again.
+        jl_atomic_store_release(&gc_should_gc_enabled, 1);
+        jl_atomic_store(&gc_heap_stats.heap_target, max_total_memory);
         return;
     }
     jl_gc_debug_print();

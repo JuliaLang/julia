@@ -601,7 +601,7 @@ void jl_gc_debug_print_status(void)
     uint64_t pool_count = gc_allocs.poolalloc;
     uint64_t big_count = gc_allocs.bigalloc;
     jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %lu\n",
+                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %" PRIu64 "\n",
                    pool_count + big_count, pool_count, big_count, gc_timings.n_gcs);
 }
 #endif
