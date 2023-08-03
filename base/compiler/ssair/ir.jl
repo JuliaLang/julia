@@ -1338,7 +1338,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 return result_idx
             end
         end
-        ssa_rename[idx] = SSAValue(result_idx)
+        typ = inst[:type]
+        if isa(typ, Const) && is_inlineable_constant(typ.val)
+            ssa_rename[idx] = quoted(typ.val)
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+        end
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, PiNode)
