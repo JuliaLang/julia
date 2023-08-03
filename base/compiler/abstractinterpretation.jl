@@ -1158,8 +1158,11 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                 # that are newly resovled by irinterp
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
-                new_effects = Effects(result.effects; nothrow)
-                return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
+                effects = result.effects
+                if !is_nothrow(effects)
+                    effects = Effects(effects; nothrow)
+                end
+                return ConstCallResults(rt, SemiConcreteResult(mi, ir, effects), effects, mi)
             end
         end
     end
