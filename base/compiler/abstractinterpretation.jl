@@ -28,7 +28,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, Effects(), NoCallInfo())
     end
 
-    (; valid_worlds, applicable, info) = matches
+    (; valid_worlds, applicable, info, nonoverlayed) = matches
     update_valid_age!(sv, valid_worlds)
     napplicable = length(applicable)
     rettype = Bottom
@@ -39,13 +39,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     const_results = Union{Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
-    all_effects = EFFECTS_TOTAL
-    if !matches.nonoverlayed
-        # currently we don't have a good way to execute the overlayed method definition,
-        # so we should give up concrete eval when any of the matched methods is overlayed
-        f = nothing
-        all_effects = Effects(all_effects; nonoverlayed=false)
-    end
+    all_effects = Effects(EFFECTS_TOTAL; nonoverlayed)
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
@@ -848,16 +842,17 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return :none
     end
-    if isoverlayed(method_table(interp)) && !is_nonoverlayed(effects)
-        # disable concrete-evaluation if this function call is tainted by some overlayed
-        # method since currently there is no direct way to execute overlayed methods
-        add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
-        return :none
-    end
-    if result.edge !== nothing && is_foldable(effects)
+    mi = result.edge
+    if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
-            return :concrete_eval
-        elseif !any_conditional(arginfo)
+            if is_nonoverlayed(mi.def::Method) && (!isoverlayed(method_table(interp)) || is_nonoverlayed(effects))
+                return :concrete_eval
+            end
+            # disable concrete-evaluation if this function call is tainted by some overlayed
+            # method since currently there is no easy way to execute overlayed methods
+            add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
+        end
+        if !any_conditional(arginfo)
             return :semi_concrete_eval
         end
     end
@@ -886,8 +881,8 @@ function collect_const_args(argtypes::Vector{Any}, start::Int)
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo,
-    sv::AbsIntState, invokecall::Union{InvokeCall,Nothing})
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
+    invokecall::Union{InvokeCall,Nothing}=nothing)
     args = collect_const_args(arginfo, #=start=#2)
     if invokecall !== nothing
         # this call should be `invoke`d, rewrite `args` back now
@@ -1923,7 +1918,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
     𝕃ₚ = ipo_lattice(interp)
-    f = overlayed ? nothing : singleton_type(ft′)
+    f = singleton_type(ft′)
     invokecall = InvokeCall(types, lookupsig)
     const_call_result = abstract_call_method_with_const_args(interp,
         result, f, arginfo, si, match, sv, invokecall)
@@ -1934,7 +1929,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-    effects = Effects(effects; nonoverlayed=!overlayed)
+    effects = Effects(effects; nonoverlayed = !overlayed)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
     return CallMeta(rt, effects, info)
@@ -2892,17 +2887,49 @@ function init_vartable!(vartable::VarTable, frame::InferenceState)
     return vartable
 end
 
+function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
+                           currstate::VarTable, @nospecialize(rt))
+    bestguess = frame.bestguess
+    nargs = narguments(frame, #=include_va=#false)
+    slottypes = frame.slottypes
+    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
+    # narrow representation of bestguess slightly to prepare for tmerge with rt
+    if rt isa InterConditional && bestguess isa Const
+        slot_id = rt.slot
+        old_id_type = slottypes[slot_id]
+        if bestguess.val === true && rt.elsetype !== Bottom
+            bestguess = InterConditional(slot_id, old_id_type, Bottom)
+        elseif bestguess.val === false && rt.thentype !== Bottom
+            bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    end
+    # copy limitations to return value
+    if !isempty(frame.pclimitations)
+        union!(frame.limitations, frame.pclimitations)
+        empty!(frame.pclimitations)
+    end
+    if !isempty(frame.limitations)
+        rt = LimitedAccuracy(rt, copy(frame.limitations))
+    end
+    𝕃ₚ = ipo_lattice(interp)
+    if !⊑(𝕃ₚ, rt, bestguess)
+        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
+        frame.bestguess = tmerge(𝕃ₚ, bestguess, rt) # new (wider) return type for frame
+        return true
+    else
+        return false
+    end
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    nargs = narguments(frame, #=include_va=#false)
-    slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
-    𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
+    𝕃ᵢ = typeinf_lattice(interp)
 
     currbb = frame.currbb
     if currbb != 1
@@ -3003,35 +3030,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         end
                     end
                 elseif isa(stmt, ReturnNode)
-                    bestguess = frame.bestguess
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
-                    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
-                    # narrow representation of bestguess slightly to prepare for tmerge with rt
-                    if rt isa InterConditional && bestguess isa Const
-                        let slot_id = rt.slot
-                            old_id_type = slottypes[slot_id]
-                            if bestguess.val === true && rt.elsetype !== Bottom
-                                bestguess = InterConditional(slot_id, old_id_type, Bottom)
-                            elseif bestguess.val === false && rt.thentype !== Bottom
-                                bestguess = InterConditional(slot_id, Bottom, old_id_type)
-                            end
-                        end
-                    end
-                    # copy limitations to return value
-                    if !isempty(frame.pclimitations)
-                        union!(frame.limitations, frame.pclimitations)
-                        empty!(frame.pclimitations)
-                    end
-                    if !isempty(frame.limitations)
-                        rt = LimitedAccuracy(rt, copy(frame.limitations))
-                    end
-                    if !⊑(𝕃ₚ, rt, bestguess)
-                        # new (wider) return type for frame
-                        bestguess = tmerge(𝕃ₚ, bestguess, rt)
-                        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
-                        frame.bestguess = bestguess
+                    if update_bestguess!(interp, frame, currstate, rt)
                         for (caller, caller_pc) in frame.cycle_backedges
-                            if !(caller.ssavaluetypes[caller_pc] === Any)
+                            if caller.ssavaluetypes[caller_pc] !== Any
                                 # no reason to revisit if that call-site doesn't affect the final result
                                 push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
                             end
