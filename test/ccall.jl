@@ -1064,6 +1064,9 @@ threadcall_test_func(x) =
 @test @threadcall((:threadcall_args, libccalltest), Cint, (Cint, Cint), 1, 2) == 3
 
 let n=3
+    if Int === Int32
+        n = 2 # use fewer threads on 32 bit
+    end
     tids = Culong[]
     @sync for i in 1:10^n
         @async push!(tids, @threadcall(:uv_thread_self, Culong, ()))
