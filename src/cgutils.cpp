@@ -125,7 +125,8 @@ static Value *stringConstPtr(
         ctxt.resize(28);
         ctxt[25] = ctxt[26] = ctxt[27] = '.';
     }
-    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
+    // Doesn't need to be aligned, we shouldn't operate on these like julia objects
+    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
     auto gep = irbuilder.CreateInBoundsGEP(gv->getValueType(),
@@ -918,7 +919,7 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
         if (val)
-            data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *jl_Module);
+            data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment(jl_typeof(x.constant))), "_j_const", *jl_Module);
         else
             data = literal_pointer_val(ctx, x.constant);
     }
@@ -1106,7 +1107,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                 if (justtag && jt->smalltag) {
                     ptr = ConstantInt::get(expr_type, jt->smalltag << 4);
                     if (ctx.emission_context.imaging)
-                        ptr = get_pointer_to_constant(ctx.emission_context, ptr, StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
+                        ptr = get_pointer_to_constant(ctx.emission_context, ptr, Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
                 }
                 else if (ctx.emission_context.imaging)
                     ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx, (jl_value_t*)jt), datatype_or_p->getType());

@@ -140,7 +140,8 @@ static const char opts[]  =
     // interactive options
     " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|auto*}    Enable or disable startup banner\n"
+    " --banner={yes|no|short|auto*}\n"
+    "                            Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
     " --history-file={yes*|no}   Load or save history\n\n"
 
@@ -444,8 +445,10 @@ restart_switch:
                 jl_options.banner = 0;
             else if (!strcmp(optarg, "auto"))
                 jl_options.banner = -1;
+            else if (!strcmp(optarg, "short"))
+                jl_options.banner = 2;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
             break;
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))

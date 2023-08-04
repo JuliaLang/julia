@@ -583,7 +583,6 @@
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
     YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
-    YY(LLVMExtraMPMAddFinalLowerGCPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \
     YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
     YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
@@ -595,6 +594,7 @@
     YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
     YY(LLVMExtraFPMAddLowerExcHandlersPass) \
     YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraFPMAddFinalLowerGCPass) \
     YY(LLVMExtraLPMAddJuliaLICMPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
