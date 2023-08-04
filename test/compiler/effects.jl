@@ -1025,8 +1025,8 @@ end
 end |> Core.Compiler.is_nothrow
 
 # Effects for :compilerbarrier
-f1(b) = Base.compilerbarrier(:type, b)
-f2(b) = Base.compilerbarrier(:conditional, b)
+f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
+f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
 
-@test !Core.Compiler.is_consistent(Base.infer_effects(f1, (Bool,)))
-@test Core.Compiler.is_consistent(Base.infer_effects(f2, (Bool,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
+@test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
