@@ -274,36 +274,12 @@ is set to either `"truecolor"` or `"24bit"`.
 
 As a fallback, first on unix systems the `colors` terminal capability is checked
 — should more than 256 colors be reported, this is taken to signify 24-bit
-support. Lastly, the color is attempted to be set to `#010203` and then the
-current color queried via the DCS (Device Control String) sequence `\$qm`. If
-the output contains `":1:2:3"` this is taken to signify 24-bit support.
-
-If the fallbacks are used, the `"COLORTERM"` entry in `ENV` is updated according
-to the result. This ensures that frequent calls will only potentially be slow
-the first time.
+support.
 """
 function ttyhastruecolor()
-    function test24bitcolor_dcs()
-        REPL.Terminals.raw!(REPL.TerminalMenus.terminal, true)
-        print(stdout, "\e[48;2;1;2;3m\eP\$qm\e\\\e[m")
-        flush(stdout)
-        # Some terminals are bad and haven't got DCS sequence support,
-        # if we don't see a response from stdin we need to abort.
-        output = @task readuntil(stdin, 'm')
-        schedule(output)
-        Timer(0.1) do _
-            istaskdone(output) || Base.throwto(output, InterruptException())
-        end
-        color::String = try
-            fetch(output)
-        catch _ "" end
-        REPL.Terminals.raw!(REPL.TerminalMenus.terminal, false)
-        occursin(":1:2:3", color)
-    end
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
         @static if Sys.isunix()
-            get(current_terminfo, :colors, 0) > 256 ||
-                isinteractive() && test24bitcolor_dcs()
+            get(current_terminfo, :colors, 0) > 256
         else
             false
         end
