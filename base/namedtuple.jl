@@ -269,6 +269,8 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
+
 @assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[an...]
