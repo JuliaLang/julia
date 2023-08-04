@@ -3292,7 +3292,7 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    This function is expected to be used _with `setting` known precisely at compile-time.
+    This function is expected to be used with `setting` known precisely at compile-time.
     If the `setting` is not known precisely at compile-time, the compiler will emit the
     strongest barrier(s). No compile-time warning is issued.
 
