@@ -2570,7 +2570,7 @@ end
     # Cube roots of 1x1 and 2x2 diagonal blocks
     i = 1
     sizes = ones(Int,n)
-    S = zeros(2,n)
+    S = zeros(T,2,n)
     while i < n
         if !iszero(A[i+1,i])
             _cbrt_2x2!(A[i:i+1,i:i+1])
