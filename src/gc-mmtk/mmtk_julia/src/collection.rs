@@ -1,5 +1,5 @@
-use crate::{spawn_collector_thread, UPCALLS};
 use crate::{JuliaVM, USER_TRIGGERED_GC};
+use crate::{SINGLETON, UPCALLS};
 use log::{info, trace};
 use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
@@ -9,9 +9,6 @@ use mmtk::MutatorContext;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
-
-const GC_THREAD_KIND_CONTROLLER: libc::c_int = 0;
-const GC_THREAD_KIND_WORKER: libc::c_int = 1;
 
 static GC_START: AtomicU64 = AtomicU64::new(0);
 
@@ -111,19 +108,19 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn spawn_gc_thread(tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
-        let (ctx_ptr, kind) = match ctx {
-            GCThreadContext::Controller(c) => (
-                Box::into_raw(c) as *mut libc::c_void,
-                GC_THREAD_KIND_CONTROLLER,
-            ),
-            GCThreadContext::Worker(w) => {
-                (Box::into_raw(w) as *mut libc::c_void, GC_THREAD_KIND_WORKER)
+        // Just drop the join handle. The thread will run until the process quits.
+        let _ = std::thread::spawn(move || {
+            use mmtk::util::opaque_pointer::*;
+            let worker_tls = VMWorkerThread(tls);
+            match ctx {
+                GCThreadContext::Controller(mut c) => {
+                    mmtk::memory_manager::start_control_collector(&SINGLETON, worker_tls, &mut c)
+                }
+                GCThreadContext::Worker(mut w) => {
+                    mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, &mut w)
+                }
             }
-        };
-
-        unsafe {
-            spawn_collector_thread(tls, ctx_ptr as usize as _, kind);
-        }
+        });
     }
 
     fn schedule_finalization(_tls: VMWorkerThread) {}

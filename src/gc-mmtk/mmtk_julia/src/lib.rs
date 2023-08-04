@@ -4,13 +4,11 @@ extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
 
-use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::util::ObjectReference;
 use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
-use mmtk::Mutator;
 use mmtk::MMTK;
 
 use std::collections::HashMap;
@@ -67,11 +65,8 @@ lazy_static! {
     };
 }
 
-#[link(kind = "static", name = "runtime_gc_c")]
-extern "C" {
-    pub static JULIA_HEADER_SIZE: usize;
-    pub static JULIA_BUFF_TAG: usize;
-}
+pub static mut JULIA_HEADER_SIZE: usize = 0;
+pub static mut JULIA_BUFF_TAG: usize = 0;
 
 #[no_mangle]
 pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
@@ -98,17 +93,6 @@ lazy_static! {
     // As we only do a shallow copy, we should not free the original boxed mutator, until the thread is getting destroyed.
     // Otherwise, we will have dangling pointers.
     pub static ref MUTATORS: RwLock<HashMap<Address, Address>> = RwLock::new(HashMap::new());
-}
-
-#[link(name = "runtime_gc_c")]
-#[allow(improper_ctypes)]
-extern "C" {
-    pub fn spawn_collector_thread(tls: VMThread, ctx: *mut GCWorker<JuliaVM>, kind: i32);
-    pub fn set_julia_obj_header_size_and_buffer_tag(size: usize, tag: usize);
-    pub fn reset_mutator_count();
-    pub fn get_next_julia_mutator() -> usize;
-    pub fn get_mutator_ref(mutator: *mut Mutator<JuliaVM>) -> ObjectReference;
-    pub fn get_mutator_from_ref(mutator: ObjectReference) -> *mut Mutator<JuliaVM>;
 }
 
 type ProcessEdgeFn = *const extern "C" fn(closure: Address, slot: Address);
