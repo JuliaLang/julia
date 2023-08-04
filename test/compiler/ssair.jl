@@ -5,7 +5,7 @@ using Core.IR
 const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -591,6 +591,16 @@ let ci = make_ci([
     ir = Core.Compiler.complete(compact)
 
     @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# compact constant PiNode
+let ci = make_ci(Any[
+        PiNode(0.0, Const(0.0))
+        ReturnNode(SSAValue(1))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir)
+    @test fully_eliminated(ir)
 end
 
 # insert_node! with new instruction with flag computed

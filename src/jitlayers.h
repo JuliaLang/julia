@@ -448,6 +448,8 @@ public:
         std::unique_ptr<WNMutex> mutex;
     };
 
+    struct DLSymOptimizer;
+
 private:
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
@@ -517,6 +519,9 @@ public:
     }
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
+
+    // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
+    void optimizeDLSyms(Module &M);
 private:
 
     const std::unique_ptr<TargetMachine> TM;
@@ -530,6 +535,8 @@ private:
     std::mutex RLST_mutex{};
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+
+    std::unique_ptr<DLSymOptimizer> DLSymOpt;
 
     //Compilation streams
     jl_locked_stream dump_emitted_mi_name_stream;
@@ -554,7 +561,6 @@ private:
     OptSelLayerT OptSelLayer;
     DepsVerifyLayerT DepsVerifyLayer;
     CompileLayerT ExternalCompileLayer;
-
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
@@ -569,6 +575,8 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     }
     return *_shared_module;
 }
+
+void optimizeDLSyms(Module &M);
 
 Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;
 Pass *createCombineMulAddPass() JL_NOTSAFEPOINT;
