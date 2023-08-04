@@ -3048,7 +3048,6 @@ JL_DLLEXPORT int jl_gc_enable(int on)
         jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
         if ((jl_atomic_load(&jl_gc_disable_counter) == 0) && jl_atomic_load_acquire(&gc_should_gc_enabled)) {
             jl_atomic_store(&gc_heap_stats.heap_target, default_collect_interval);
-            jl_gc_collect(JL_GC_AUTO); // Run a GC if we should've but it was disabled
         }
     }
     else if (prev && !on) {
