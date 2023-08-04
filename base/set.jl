@@ -428,7 +428,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
-`allunique` is much more efficient when the input is sorted
+`allunique` may use a specialized implementation when the input is sorted.
 
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
@@ -484,19 +484,10 @@ function allunique(A::StridedArray)
     elseif OrderStyle(eltype(A)) === Ordered()
         a1, rest1 = Iterators.peel(A)
         a2, rest = Iterators.peel(rest1)
-        if isless(a1, a2)
+        if !isequal(a1, a2)
+            compare = isless(a1, a2) ? isless : (a,b) -> isless(b,a)
             for a in rest
-                if isless(a2, a)
-                    a2 = a
-                elseif isequal(a2, a)
-                    return false
-                else
-                    return _hashed_allunique(A)
-                end
-            end
-        elseif isless(a2, a1)
-            for a in rest
-                if isless(a, a2)
+                if compare(a2, a)
                     a2 = a
                 elseif isequal(a2, a)
                     return false
