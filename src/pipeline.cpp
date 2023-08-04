@@ -25,6 +25,7 @@
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
@@ -372,6 +373,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
     if (options.dump_native) {
+        MPM.addPass(StripDeadPrototypesPass());
         JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
     }
     JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
