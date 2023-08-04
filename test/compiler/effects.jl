@@ -1023,3 +1023,10 @@ end
     isinf(y) && return zero(y)
     irinterp_nothrow_override(true, y)
 end |> Core.Compiler.is_nothrow
+
+# Effects for :compilerbarrier
+f1(b) = Base.compilerbarrier(:type, b)
+f2(b) = Base.compilerbarrier(:conditional, b)
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1, (Bool,)))
+@test Core.Compiler.is_consistent(Base.infer_effects(f2, (Bool,)))
