@@ -773,11 +773,13 @@ struct ConstCallResults
     const_result::ConstResult
     effects::Effects
     edge::MethodInstance
-    ConstCallResults(@nospecialize(rt),
-                     const_result::ConstResult,
-                     effects::Effects,
-                     edge::MethodInstance) =
-        new(rt, const_result, effects, edge)
+    function ConstCallResults(
+        @nospecialize(rt),
+        const_result::ConstResult,
+        effects::Effects,
+        edge::MethodInstance)
+        return new(rt, const_result, effects, edge)
+    end
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -791,24 +793,33 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
+    concrete_eval_result = nothing
     if eligibility === :concrete_eval
-        return concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
+        concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
+        # if we don't inline the result of this concrete evaluation,
+        # give const-prop' a chance to inline a better method body
+        if !may_optimize(interp) || (
+            may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
+            concrete_eval_result.rt === Bottom) # unless this call deterministically throws and thus is non-inlineable
+            return concrete_eval_result
+        end
+        # TODO allow semi-concrete interp for this call?
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
-    mi === nothing && return nothing
+    mi === nothing && return concrete_eval_result
     if is_constprop_recursed(result, mi, sv)
         add_remark!(interp, sv, "[constprop] Edge cycle encountered")
         return nothing
     end
     # try semi-concrete evaluation
     if eligibility === :semi_concrete_eval
-        res = semi_concrete_eval_call(interp, mi, result, arginfo, sv)
-        if res !== nothing
-            return res
+        irinterp_result = semi_concrete_eval_call(interp, mi, result, arginfo, sv)
+        if irinterp_result !== nothing
+            return irinterp_result
         end
     end
     # try constant prop'
-    return const_prop_call(interp, mi, result, arginfo, sv)
+    return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
 function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match::MethodMatch)
@@ -900,7 +911,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConcreteResult(edge, result.effects), result.effects, edge)
+        return ConstCallResults(Bottom, ConcreteResult(edge, result.effects), result.effects, edge)
     end
     return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
 end
@@ -1170,7 +1181,8 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
 end
 
 function const_prop_call(interp::AbstractInterpreter,
-    mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
+    mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
+    concrete_eval_result::Union{Nothing,ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
@@ -1193,6 +1205,11 @@ function const_prop_call(interp::AbstractInterpreter,
             return nothing
         end
         @assert inf_result.result !== nothing
+        if concrete_eval_result !== nothing
+            # override return type and effects with concrete evaluation result if available
+            inf_result.result = concrete_eval_result.rt
+            inf_result.ipo_effects = concrete_eval_result.effects
+        end
     else
         # found the cache for this constant prop'
         if inf_result.result === nothing

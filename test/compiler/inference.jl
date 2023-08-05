@@ -5030,3 +5030,16 @@ h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2,
 let x = Issue50544((1, Issue50544((2.0, 'x'))))
     @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
 end
+
+# override const-prop' return type with the concrete-eval result
+# if concrete-eval returns non-inlineable constant
+Base.@assume_effects :foldable function continue_const_prop(i, j)
+    chars = map(Char, i:j)
+    String(chars)
+end
+@test Base.return_types() do
+    Val(length(continue_const_prop(1, 5)))
+end |> only === Val{5}
+@test fully_eliminated() do
+    length(continue_const_prop(1, 5))
+end
