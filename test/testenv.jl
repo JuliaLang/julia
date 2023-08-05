@@ -37,6 +37,13 @@ if !@isdefined(testenv_defined)
 
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
+<<<<<<< HEAD
+=======
+        if X isa Integer
+            heap_size=round(Int,(Sys.free_memory()/(1024^2)/(X+1)))
+            push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
+        end
+>>>>>>> ab94fadc9f (Add fallback if we have make a weird GC decision. (#50682))
         addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
     end
 

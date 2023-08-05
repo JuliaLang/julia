@@ -1461,6 +1461,12 @@ endef
 # Overridable in Make.user
 WINE ?= wine
 
+ifeq ($(BINARY),32)
+HEAPLIM := --heap-size-hint=1000M
+else
+HEAPLIM :=
+endif
+
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
