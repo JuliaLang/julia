@@ -914,11 +914,11 @@ Computes the real-valued cube root of a real-valued matrix `A`. If `T = cbrt(A)`
 we have `T*T*T ≈ A`, see example given below.
 
 If `A` is symmetric, i.e., of type `HermOrSym{<:Real}`, then ([`eigen`](@ref)) is used to
-find the cube root. Otherwise, a specialized version of the p-th root algorithm, given in
-[^S03], is utilized, which exploits the real-valued Schur decomposition ([`schur`](@ref))
+find the cube root. Otherwise, a specialized version of the p-th root algorithm [^S03] is
+utilized, which exploits the real-valued Schur decomposition ([`schur`](@ref))
 to compute the cube root.
 
-[^S03]
+[^S03]:
 
     Matthew I. Smith, "A Schur Algorithm for Computing Matrix pth Roots",
     SIAM Journal on Matrix Analysis and Applications, vol. 24, 2003, pp. 971–989.

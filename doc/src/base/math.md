@@ -158,7 +158,7 @@ Base.signbit
 Base.flipsign
 Base.sqrt(::Number)
 Base.isqrt
-Base.Math.cbrt
+Base.Math.cbrt(::AbstractFloat)
 Base.real
 Base.imag
 Base.reim
