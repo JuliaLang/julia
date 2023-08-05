@@ -571,8 +571,8 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
 """
-function reinterpret(Out::Type, x::In) where {In}
-    if isprimitivetype(Out) && isprimitivetype(In)
+function reinterpret(::Type{Out}, x) where {Out}
+    if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end
     # only available when Base is fully loaded.
