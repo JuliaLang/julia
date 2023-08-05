@@ -461,10 +461,16 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 G.setVisibility(GlobalValue::HiddenVisibility);
                 G.setDSOLocal(true);
                 makeSafeName(G);
-                if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
-                    // Add unwind exception personalities to functions to handle async exceptions
-                    if (Function *F = dyn_cast<Function>(&G))
+                if (Function *F = dyn_cast<Function>(&G)) {
+                    if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+                        // Add unwind exception personalities to functions to handle async exceptions
                         F->setPersonalityFn(juliapersonality_func);
+                    }
+                    // Alwaysinline functions must be inlined, so they should be marked internal
+                    if (F->hasFnAttribute(Attribute::AlwaysInline)) {
+                        F->setLinkage(GlobalValue::InternalLinkage);
+                        F->setVisibility(GlobalValue::DefaultVisibility);
+                    }
                 }
             }
         }
@@ -730,18 +736,12 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                 dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
             }
         } else {
-            if (auto F = dyn_cast<Function>(&GV)) {
-                // Ignore alwaysinline functions
-                if (F->hasFnAttribute(Attribute::AlwaysInline))
-                    continue;
-            }
+            // Local global values are not partitioned
+            if (GV.hasLocalLinkage())
+                continue;
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
-            }
-            if (!GV.hasExternalLinkage()) {
-                bad = true;
-                dbgs() << "Global " << GV << " has non-external linkage " << GV.getLinkage() << " but is in partition " << GVNames[GV.getName()] << "\n";
             }
         }
     }
@@ -814,11 +814,9 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
+        if (G.hasLocalLinkage())
+            continue;
         if (auto F = dyn_cast<Function>(&G)) {
-            // alwaysinline functions cannot be partitioned,
-            // they must remain in every module in order to be inlined
-            if (F->hasFnAttribute(Attribute::AlwaysInline))
-                continue;
             partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
             partitioner.make(&G, 1);
@@ -932,7 +930,6 @@ struct ShardTimers {
     ImageTimer deserialize;
     ImageTimer materialize;
     ImageTimer construct;
-    ImageTimer deletion;
     // impl timers
     ImageTimer unopt;
     ImageTimer optimize;
@@ -946,13 +943,12 @@ struct ShardTimers {
     void print(raw_ostream &out, bool clear=false) {
         StringRef sep = "===-------------------------------------------------------------------------===";
         out << formatv("{0}\n{1}\n{0}\n", sep, fmt_align(name + " : " + desc, AlignStyle::Center, sep.size()));
-        auto total = deserialize.elapsed + materialize.elapsed + construct.elapsed + deletion.elapsed +
+        auto total = deserialize.elapsed + materialize.elapsed + construct.elapsed +
             unopt.elapsed + optimize.elapsed + opt.elapsed + obj.elapsed + asm_.elapsed;
         out << "Time (s)  Name  Description\n";
         deserialize.print(out, clear);
         materialize.print(out, clear);
         construct.print(out, clear);
-        deletion.print(out, clear);
         unopt.print(out, clear);
         optimize.print(out, clear);
         opt.print(out, clear);
@@ -1108,39 +1104,38 @@ static auto serializeModule(const Module &M) {
 // consistent.
 static void materializePreserved(Module &M, Partition &partition) {
     DenseSet<GlobalValue *> Preserve;
-    for (auto &GV : M.global_values()) {
-        if (!GV.isDeclaration()) {
-            if (partition.globals.count(GV.getName())) {
-                Preserve.insert(&GV);
-            }
-        }
+    for (auto &Name : partition.globals) {
+        auto *GV = M.getNamedValue(Name.first());
+        assert(GV && !GV->isDeclaration() && !GV->hasLocalLinkage());
+        Preserve.insert(GV);
     }
+
     for (auto &F : M.functions()) {
-        if (!F.isDeclaration()) {
-            if (!Preserve.contains(&F)) {
-                if (F.hasFnAttribute(Attribute::AlwaysInline)) {
-                    F.setLinkage(GlobalValue::InternalLinkage);
-                    F.setVisibility(GlobalValue::DefaultVisibility);
-                    F.setDSOLocal(true);
-                    continue;
-                }
-                F.deleteBody();
-                F.setLinkage(GlobalValue::ExternalLinkage);
-                F.setVisibility(GlobalValue::HiddenVisibility);
-                F.setDSOLocal(true);
-            }
-        }
+        if (F.isDeclaration())
+            continue;
+        if (Preserve.contains(&F))
+            continue;
+        if (F.hasLocalLinkage())
+            continue;
+        F.deleteBody();
+        F.setLinkage(GlobalValue::ExternalLinkage);
+        F.setVisibility(GlobalValue::HiddenVisibility);
+        F.setDSOLocal(true);
     }
+
     for (auto &GV : M.globals()) {
-        if (!GV.isDeclaration()) {
-            if (!Preserve.contains(&GV)) {
-                GV.setInitializer(nullptr);
-                GV.setLinkage(GlobalValue::ExternalLinkage);
-                GV.setVisibility(GlobalValue::HiddenVisibility);
-                GV.setDSOLocal(true);
-            }
-        }
+        if (GV.isDeclaration())
+            continue;
+        if (Preserve.contains(&GV))
+            continue;
+        if (GV.hasLocalLinkage())
+            continue;
+        GV.setInitializer(nullptr);
+        GV.setLinkage(GlobalValue::ExternalLinkage);
+        GV.setVisibility(GlobalValue::HiddenVisibility);
+        GV.setDSOLocal(true);
     }
+
     // Global aliases are a pain to deal with. It is illegal to have an alias to a declaration,
     // so we need to replace them with either a function or a global variable declaration. However,
     // we can't just delete the alias, because that would break the users of the alias. Therefore,
@@ -1149,25 +1144,27 @@ static void materializePreserved(Module &M, Partition &partition) {
     // to deleting the old alias.
     SmallVector<std::pair<GlobalAlias *, GlobalValue *>> DeletedAliases;
     for (auto &GA : M.aliases()) {
-        if (!GA.isDeclaration()) {
-            if (!Preserve.contains(&GA)) {
-                if (GA.getValueType()->isFunctionTy()) {
-                    auto F = Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M);
-                    // This is an extremely sad hack to make sure the global alias never points to an extern function
-                    auto BB = BasicBlock::Create(M.getContext(), "", F);
-                    new UnreachableInst(M.getContext(), BB);
-                    GA.setAliasee(F);
-
-                    DeletedAliases.push_back({ &GA, F });
-                }
-                else {
-                    auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
-                    DeletedAliases.push_back({ &GA, GV });
-                }
-            }
+        assert(!GA.isDeclaration() && "Global aliases can't be declarations!"); // because LLVM says so
+        if (Preserve.contains(&GA))
+            continue;
+        if (GA.hasLocalLinkage())
+            continue;
+        if (GA.getValueType()->isFunctionTy()) {
+            auto F = Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M);
+            // This is an extremely sad hack to make sure the global alias never points to an extern function
+            auto BB = BasicBlock::Create(M.getContext(), "", F);
+            new UnreachableInst(M.getContext(), BB);
+            GA.setAliasee(F);
+            DeletedAliases.push_back({ &GA, F });
+        }
+        else {
+            auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
+            DeletedAliases.push_back({ &GA, GV });
         }
     }
+
     cantFail(M.materializeAll());
+
     for (auto &Deleted : DeletedAliases) {
         Deleted.second->takeName(Deleted.first);
         Deleted.first->replaceAllUsesWith(Deleted.second);
@@ -1236,20 +1233,6 @@ static void construct_vars(Module &M, Partition &partition) {
     gidxs_var->setDSOLocal(true);
 }
 
-// Materialization will leave many unused declarations, which multiversioning would otherwise clone.
-// This function removes them to avoid unnecessary cloning of declarations.
-// The GlobalDCEPass is much better at this, but we only care about removing unused
-// declarations, not actually about seeing if code is dead (codegen knows it is live, by construction).
-static void dropUnusedGlobals(Module &M) {
-    std::vector<GlobalValue *> unused;
-    for (auto &G : M.global_values()) {
-        if (G.isDeclaration() && G.use_empty())
-            unused.push_back(&G);
-    }
-    for (auto &G : unused)
-        G->eraseFromParent();
-}
-
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
 template<typename ModuleReleasedFunc>
@@ -1268,7 +1251,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         timers[i].deserialize.init("deserialize_" + idx, "Deserialize module");
         timers[i].materialize.init("materialize_" + idx, "Materialize declarations");
         timers[i].construct.init("construct_" + idx, "Construct partitioned definitions");
-        timers[i].deletion.init("deletion_" + idx, "Delete dead declarations");
         timers[i].unopt.init("unopt_" + idx, "Emit unoptimized bitcode");
         timers[i].optimize.init("optimize_" + idx, "Optimize shard");
         timers[i].opt.init("opt_" + idx, "Emit optimized bitcode");
@@ -1361,10 +1343,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 for (DICompileUnit *CU : M->debug_compile_units())
                     CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
-
-                timers[i].deletion.startTimer();
-                dropUnusedGlobals(*M);
-                timers[i].deletion.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
             });
@@ -1875,8 +1853,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    if (dump_native)
+    if (dump_native) {
+        PM->add(createStripDeadPrototypesPass());
         PM->add(createMultiVersioningPass(external_use));
+    }
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
@@ -2158,6 +2138,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
                     global.second->setVisibility(GlobalValue::DefaultVisibility);
                 }
+            }
+            if (!jl_options.image_codegen) {
+                optimizeDLSyms(*m.getModuleUnlocked());
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {

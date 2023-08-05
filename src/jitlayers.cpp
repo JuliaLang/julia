@@ -226,14 +226,17 @@ static jl_callptr_t _jl_compile_codeinst(
             jl_compile_workqueue(params, *temp_module, CompilationPolicy::Default);
         }
 
-        if (params._shared_module)
+        if (params._shared_module) {
+            jl_ExecutionEngine->optimizeDLSyms(*params._shared_module);
             jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
+        }
 
         // In imaging mode, we can't inline global variable initializers in order to preserve
         // the fiction that we don't know what loads from the global will return. Thus, we
         // need to emit a separate module for the globals before any functions are compiled,
         // to ensure that the globals are defined when they are compiled.
         if (params.imaging) {
+            // Won't contain any PLT/dlsym calls, so no need to optimize those
             jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging, params.DL, params.TargetTriple, params.global_targets));
         } else {
             StringMap<void*> NewGlobals;
@@ -262,6 +265,7 @@ static jl_callptr_t _jl_compile_codeinst(
             orc::ThreadSafeModule &TSM = std::get<0>(def.second);
             //The underlying context object is still locked because params is not destroyed yet
             auto M = TSM.getModuleUnlocked();
+            jl_ExecutionEngine->optimizeDLSyms(*M);
             for (auto &F : M->global_objects()) {
                 if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
                     NewExports[F.getName()] = &TSM;
@@ -398,11 +402,17 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (success && p == NULL) {
             jl_jit_globals(params.global_targets);
             assert(params.workqueue.empty());
-            if (params._shared_module)
+            if (params._shared_module) {
+                jl_ExecutionEngine->optimizeDLSyms(*params._shared_module);
                 jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
+            }
         }
-        if (success && llvmmod == NULL)
+        if (success && llvmmod == NULL) {
+            into->withModuleDo([&](Module &M) {
+                jl_ExecutionEngine->optimizeDLSyms(M);
+            });
             jl_ExecutionEngine->addModule(std::move(*into));
+        }
     }
     JL_UNLOCK(&jl_codegen_lock);
     if (timed) {
@@ -1404,10 +1414,10 @@ namespace {
 
     struct JITPointersT {
 
-        JITPointersT(orc::ExecutionSession &ES) : ES(ES) {}
+        JITPointersT(orc::ExecutionSession &ES) JL_NOTSAFEPOINT : ES(ES) {}
 
-        Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
-            TSM.withModuleDo([&](Module &M) {
+        Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
+            TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
                 for (auto &GV : make_early_inc_range(M.globals())) {
                     if (auto *Shared = getSharedBytes(GV)) {
                         ++InternedGlobals;
@@ -1427,7 +1437,7 @@ namespace {
         // making a copy per object file of output.
         // we memoize them using the ExecutionSession's string pool;
         // this makes it unsafe to call clearDeadEntries() on the pool.
-        Constant *getSharedBytes(GlobalVariable &GV) {
+        Constant *getSharedBytes(GlobalVariable &GV) JL_NOTSAFEPOINT {
             // We could probably technically get away with
             // interning even external linkage globals,
             // as long as they have global unnamedaddr,
@@ -1460,6 +1470,176 @@ namespace {
     };
 }
 
+
+struct JuliaOJIT::DLSymOptimizer {
+    DLSymOptimizer(bool named) JL_NOTSAFEPOINT {
+        this->named = named;
+#define INIT_RUNTIME_LIBRARY(libname, handle) \
+        do { \
+            auto libidx = (uintptr_t) libname; \
+            if (libidx >= runtime_symbols.size()) { \
+                runtime_symbols.resize(libidx + 1); \
+            } \
+            runtime_symbols[libidx].first = handle; \
+        } while (0)
+
+        INIT_RUNTIME_LIBRARY(NULL, jl_RTLD_DEFAULT_handle);
+        INIT_RUNTIME_LIBRARY(JL_EXE_LIBNAME, jl_exe_handle);
+        INIT_RUNTIME_LIBRARY(JL_LIBJULIA_INTERNAL_DL_LIBNAME, jl_libjulia_internal_handle);
+        INIT_RUNTIME_LIBRARY(JL_LIBJULIA_DL_LIBNAME, jl_libjulia_handle);
+
+#undef INIT_RUNTIME_LIBRARY
+    }
+
+    void *lookup_symbol(void *libhandle, const char *fname) {
+        void *addr;
+        jl_dlsym(libhandle, fname, &addr, 0);
+        return addr;
+    }
+
+    void *lookup(const char *libname, const char *fname) {
+        StringRef lib(libname);
+        StringRef f(fname);
+        std::lock_guard<std::mutex> lock(symbols_mutex);
+        auto uit = user_symbols.find(lib);
+        if (uit == user_symbols.end()) {
+            void *handle = jl_get_library_(libname, 0);
+            if (!handle)
+                return nullptr;
+            uit = user_symbols.insert(std::make_pair(lib, std::make_pair(handle, StringMap<void*>()))).first;
+        }
+        auto &symmap = uit->second.second;
+        auto it = symmap.find(f);
+        if (it != symmap.end()) {
+            return it->second;
+        }
+        void *handle = lookup_symbol(uit->second.first, fname);
+        symmap[f] = handle;
+        return handle;
+    }
+
+    void *lookup(uintptr_t libidx, const char *fname) {
+        std::lock_guard<std::mutex> lock(symbols_mutex);
+        runtime_symbols.resize(std::max(runtime_symbols.size(), libidx + 1));
+        auto it = runtime_symbols[libidx].second.find(fname);
+        if (it != runtime_symbols[libidx].second.end()) {
+            return it->second;
+        }
+        auto handle = lookup_symbol(runtime_symbols[libidx].first, fname);
+        runtime_symbols[libidx].second[fname] = handle;
+        return handle;
+    }
+
+    void operator()(Module &M) {
+        for (auto &GV : M.globals()) {
+            auto Name = GV.getName();
+            if (Name.startswith("jlplt") && Name.endswith("got")) {
+                auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
+                void *addr;
+                if (GV.hasAttribute("julia.libname")) {
+                    auto libname = GV.getAttribute("julia.libname").getValueAsString().str();
+                    addr = lookup(libname.data(), fname.data());
+                } else {
+                    assert(GV.hasAttribute("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
+                    auto libidx = (uintptr_t)std::stoull(GV.getAttribute("julia.libidx").getValueAsString().str());
+                    addr = lookup(libidx, fname.data());
+                }
+                if (addr) {
+                    Function *Thunk = nullptr;
+                    if (!GV.isDeclaration()) {
+                        Thunk = cast<Function>(GV.getInitializer()->stripPointerCasts());
+                        assert(++Thunk->uses().begin() == Thunk->uses().end() && "Thunk should only have one use in PLT initializer!");
+                        assert(Thunk->hasLocalLinkage() && "Thunk should not have non-local linkage!");
+                    } else {
+                        GV.setLinkage(GlobalValue::PrivateLinkage);
+                    }
+                    auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), GV.getValueType());
+                    if (named) {
+                        auto T = GV.getValueType();
+                        assert(T->isPointerTy());
+                        if (!T->isOpaquePointerTy()) {
+                            T = T->getNonOpaquePointerElementType();
+                        }
+                        init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
+                    }
+                    GV.setInitializer(init);
+                    GV.setConstant(true);
+                    GV.setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+                    if (Thunk) {
+                        Thunk->eraseFromParent();
+                    }
+                }
+            }
+        }
+
+        for (auto &F : M) {
+            for (auto &BB : F) {
+                SmallVector<Instruction *> to_delete;
+                for (auto &I : make_early_inc_range(BB)) {
+                    auto CI = dyn_cast<CallInst>(&I);
+                    if (!CI)
+                        continue;
+                    auto Callee = CI->getCalledFunction();
+                    if (!Callee || Callee->getName() != XSTR(jl_load_and_lookup))
+                        continue;
+                    // Long-winded way of extracting fname without needing a second copy in an attribute
+                    auto fname = cast<ConstantDataArray>(cast<GlobalVariable>(CI->getArgOperand(1)->stripPointerCasts())->getInitializer())->getAsCString();
+                    auto libarg = CI->getArgOperand(0)->stripPointerCasts();
+                    // Should only use in store and phi node
+                    // Note that this uses the raw output of codegen,
+                    // which is why we can assume this
+                    assert(++++CI->use_begin() == CI->use_end());
+                    void *addr;
+                    if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
+                        auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
+                        addr = lookup(libname.data(), fname.data());
+                    } else {
+                        assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
+                        libarg = cast<ConstantExpr>(libarg)->getOperand(0);
+                        auto libidx = cast<ConstantInt>(libarg)->getZExtValue();
+                        addr = lookup(libidx, fname.data());
+                    }
+                    if (addr) {
+                        auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), CI->getType());
+                        if (named) {
+                            auto T = CI->getType();
+                            assert(T->isPointerTy());
+                            if (!T->isOpaquePointerTy()) {
+                                T = T->getNonOpaquePointerElementType();
+                            }
+                            init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
+                        }
+                        // DCE and SimplifyCFG will kill the branching structure around
+                        // the call, so we don't need to worry about removing everything
+                        for (auto user : make_early_inc_range(CI->users())) {
+                            if (auto SI = dyn_cast<StoreInst>(user)) {
+                                to_delete.push_back(SI);
+                            } else {
+                                auto PHI = cast<PHINode>(user);
+                                PHI->replaceAllUsesWith(init);
+                                to_delete.push_back(PHI);
+                            }
+                        }
+                        to_delete.push_back(CI);
+                    }
+                }
+                for (auto I : to_delete) {
+                    I->eraseFromParent();
+                }
+            }
+        }
+    }
+
+    std::mutex symbols_mutex;
+    StringMap<std::pair<void *, StringMap<void *>>> user_symbols;
+    SmallVector<std::pair<void *, StringMap<void *>>> runtime_symbols;
+    bool named;
+};
+
+void optimizeDLSyms(Module &M) {
+    JuliaOJIT::DLSymOptimizer(true)(M);
+}
+
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
@@ -1478,6 +1658,7 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ExternalJD(ES.createBareJITDylib("JuliaExternal")),
+    DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
         return orc::ThreadSafeContext(std::move(ctx));
@@ -1845,6 +2026,10 @@ void JuliaOJIT::printTimers()
     }
 #endif
     reportAndResetTimings();
+}
+
+void JuliaOJIT::optimizeDLSyms(Module &M) {
+    (*DLSymOpt)(M);
 }
 
 JuliaOJIT *jl_ExecutionEngine;
