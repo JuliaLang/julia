@@ -2667,6 +2667,10 @@ function handle_global_assignment!(interp::AbstractInterpreter, frame::Inference
     effect_free = ALWAYS_FALSE
     nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
     inaccessiblememonly = ALWAYS_FALSE
+    if !nothrow
+        sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
+    end
+    sub_curr_ssaflag!(frame, IR_FLAG_EFFECT_FREE)
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; effect_free, nothrow, inaccessiblememonly))
     return nothing
 end

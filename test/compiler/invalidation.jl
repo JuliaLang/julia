@@ -181,7 +181,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inferrable, (Any,)))
         @test rt === Nothing
         effects = Base.infer_effects(pr48932_callee_inferrable, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test_broken Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:

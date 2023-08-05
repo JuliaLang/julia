@@ -331,8 +331,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 return (false, false, false)
             end
             return (false, true, true)
-        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
+        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds
             return (true, true, true)
+        elseif head === :boundscheck
+            return (false, true, true)
         else
             # e.g. :loopinfo
             return (false, false, false)
@@ -453,9 +455,172 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     return nothing
 end
 
+function visit_bb_phis!(callback, ir::IRCode, bb::Int)
+    stmts = ir.cfg.blocks[bb].stmts
+    for idx in stmts
+        stmt = ir[SSAValue(idx)][:inst]
+        if !isa(stmt, PhiNode)
+            if !is_valid_phiblock_stmt(stmt)
+                return
+            end
+        else
+            callback(idx, stmt)
+        end
+    end
+end
+
+function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
+    inconsistent = BitSet()
+    inconsistent_bbs = BitSet()
+    tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+
+    all_effect_free = true # TODO refine using EscapeAnalysis
+    all_nothrow = true
+    all_retpaths_consistent = true
+    had_trycatch = false
+
+    scanner = BBScanner(ir)
+
+    cfg = nothing
+    domtree = nothing
+    function get_augmented_domtree()
+        if cfg !== nothing
+            return (cfg, domtree)
+        end
+        cfg = copy(ir.cfg)
+        # Add a virtual basic block to represent the exit
+        push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
+
+        for bb = 1:(length(cfg.blocks)-1)
+            terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:inst]
+            if isa(terminator, ReturnNode) && isdefined(terminator, :val)
+                cfg_insert_edge!(cfg, bb, length(cfg.blocks))
+            end
+        end
+
+        domtree = construct_domtree(cfg.blocks)
+        return (cfg, domtree)
+    end
+
+
+    function scan_non_dataflow_flags!(flag)
+        all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
+        all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
+    end
+
+    function scan_inconsistency!(flag, idx, @nospecialize(stmt))
+        stmt_inconsistent = (flag & IR_FLAG_CONSISTENT) == 0
+        for ur in userefs(stmt)
+            val = ur[]
+            if isa(val, SSAValue)
+                stmt_inconsistent |= val.id in inconsistent
+                count!(tpdum, val)
+            elseif isexpr(val, :boundscheck)
+                stmt_inconsistent = true
+            end
+        end
+        stmt_inconsistent && push!(inconsistent, idx)
+        return stmt_inconsistent
+    end
+
+    function scan_stmt!(inst, idx, lstmt, bb)
+        stmt = inst[:inst]
+        flag = inst[:flag]
+
+        if isexpr(stmt, :enter)
+            # try/catch not yet modeled
+            had_trycatch = true
+            return true
+        end
+
+        scan_non_dataflow_flags!(flag)
+        stmt_inconsistent = scan_inconsistency!(flag, idx, stmt)
+
+        if idx == lstmt
+            if isa(stmt, ReturnNode) && isdefined(stmt, :val) && stmt_inconsistent
+                all_retpaths_consistent = false
+            elseif isa(stmt, GotoIfNot) && stmt_inconsistent
+                # Conditional Branch with inconsistent condition.
+                sa, sb = ir.cfg.blocks[bb].succs
+                (cfg, domtree) = get_augmented_domtree()
+                for succ in iterated_dominance_frontier(cfg, BlockLiveness((sa, sb), nothing), domtree)
+                    if succ == length(cfg.blocks)
+                        # Phi node in the virtual exit -> We have a conditional
+                        # return. TODO: Check if all the retvals are egal.
+                        all_retpaths_consistent = false
+                    else
+                        visit_bb_phis!(ir, succ) do phiidx::Int, phi::PhiNode
+                            push!(inconsistent, phiidx)
+                        end
+                    end
+                end
+            end
+        end
+
+        return all_retpaths_consistent
+    end
+    if !scan!(scan_stmt!, scanner, true)
+        if !all_retpaths_consistent
+            # No longer any dataflow concerns, just scan the flags
+            scan!(scanner, false) do inst, idx, lstmt, bb
+                flag = inst[:flag]
+                scan_non_dataflow_flags!(flag)
+            end
+        else
+            scan!(scan_stmt!, scanner, true)
+            complete!(tpdum); push!(scanner.bb_ip, 1)
+            populate_def_use_map!(tpdum, scanner)
+            for def in inconsistent
+                for use in tpdum[def]
+                    if !(use in inconsistent)
+                        push!(inconsistent, use)
+                        append!(stmt_ip, tpdum[use])
+                    end
+                end
+            end
+
+            stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
+            while !isempty(stmt_ip)
+                idx = popfirst!(stmt_ip)
+                inst = ir[SSAValue(idx)]
+                stmt = inst[:inst]
+                if isa(stmt, ReturnNode)
+                    all_retpaths_consistent = false
+                else isa(stmt, GotoIfNot)
+                    bb = block_for_inst(ir, idx)
+                    sa, sb = ir.cfg.blocks[bb].succs
+                    for succ in iterated_dominance_frontier(ir.cfg, BlockLiveness((sa, sb), nothing), get!(lazydomtree))
+                        visit_bb_phis!(ir, succ) do (phiidx, phi)
+                            push!(inconsistent, phiidx)
+                            push!(stmt_ip, phiidx)
+                        end
+                    end
+                end
+                all_retpaths_consistent || break
+                append!(inconsistent, tpdum[idx])
+                append!(stmt_ip, tpdum[idx])
+            end
+        end
+    end
+
+    had_trycatch && return
+    effects = result.ipo_effects
+    if all_effect_free
+        effects = Effects(effects; effect_free = true)
+    end
+    if all_nothrow
+        effects = Effects(effects; nothrow = true)
+    end
+    if all_retpaths_consistent
+        effects = Effects(effects; consistent = ALWAYS_TRUE)
+    end
+    result.ipo_effects = effects
+end
+
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
+    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt, caller)
+    ipo_dataflow_analysis!(interp, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -500,7 +665,7 @@ matchpass(optimize_until::Int, stage, _) = optimize_until == stage
 matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
-function run_passes(
+function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
     caller::InferenceResult,
@@ -517,7 +682,7 @@ function run_passes(
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "compact 3" ir = compact!(ir)
+    @pass "compact 3" ir = compact!(ir, true)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end

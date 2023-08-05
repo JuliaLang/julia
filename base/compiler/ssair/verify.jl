@@ -292,7 +292,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             continue
         end
 
-        if is_phinode_block && isa(stmt, Union{Expr, UpsilonNode, PhiCNode, SSAValue})
+        if is_phinode_block && !is_valid_phiblock_stmt(stmt)
             if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
                 # Go back and check that all non-PhiNodes are valid value-position
                 for validate_idx in firstidx:(lastphi-1)

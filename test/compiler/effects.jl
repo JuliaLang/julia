@@ -890,7 +890,8 @@ end |> Core.Compiler.is_foldable_nothrow
     return 1
 end |> Core.Compiler.is_foldable_nothrow
 
-@test Base.infer_effects(Tuple{Int64}) do i
+# TODO: Needs noub split
+@test_broken Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_noub
 
@@ -1028,3 +1029,26 @@ f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+
+# Optimizer-refined effects
+function f1_optrefine(b)
+    if Base.inferencebarrier(b)
+        error()
+    end
+    return b
+end
+@test Core.Compiler.is_consistent(Base.infer_effects(f1_optrefine, (Bool,)))
+
+function f2_optrefine()
+    if Ref(false)[]
+        error()
+    end
+    return true
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
+
+function f3_optrefine(x)
+    @fastmath sqrt(x)
+    return x
+end
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))

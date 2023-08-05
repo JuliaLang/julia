@@ -919,7 +919,7 @@ function typeinf_ircode(
     end
     (; result) = frame
     opt = OptimizationState(frame, interp)
-    ir = run_passes(opt.src, opt, result, optimize_until)
+    ir = run_passes_ipo_safe(opt.src, opt, result, optimize_until)
     rt = widenconst(ignorelimited(result.result))
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
     return ir, rt

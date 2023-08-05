@@ -144,14 +144,30 @@ function compute_basic_blocks(stmts::Vector{Any})
 end
 
 # this function assumes insert position exists
+function is_valid_phiblock_stmt(@nospecialize(stmt))
+    isa(stmt, PhiNode) && return true
+    isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
+    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    return true
+end
+
 function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
-    for idx in cfg.blocks[block].stmts
+    stmts = cfg.blocks[block].stmts
+    lastnonphiidx = first(stmts)
+    for idx in stmts
         stmt = code[idx]
         if !isa(stmt, PhiNode)
-            return idx
+            if !is_valid_phiblock_stmt(stmt)
+                return lastnonphiidx
+            end
+        else
+            lastnonphiidx = idx + 1
         end
     end
-    error("any insert position isn't found")
+    if lastnonphiidx > last(stmts)
+        error("any insert position isn't found")
+    end
+    return lastnonphiidx
 end
 
 # SSA values that need renaming
@@ -1390,7 +1406,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         if cfg_transforms_enabled
             # Rename phi node edges
             let bb_rename_pred=bb_rename_pred
-                map!(i::Int32->bb_rename_pred[i], stmt.edges, stmt.edges)
+                map!(i::Int32->i == 0 ? 0 : bb_rename_pred[i], stmt.edges, stmt.edges)
             end
 
             # Remove edges and values associated with dead blocks. Entries in

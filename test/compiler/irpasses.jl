@@ -688,7 +688,7 @@ let nt = (a=1, b=2)
 end
 
 # Expr(:new) annotated as PartialStruct
-struct FooPartial
+struct FooPartialNew
     x
     y
     global f_partial

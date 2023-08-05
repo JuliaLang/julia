@@ -216,9 +216,9 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
     return Const(x)
 end
 
-struct BlockLiveness
-    def_bbs::Vector{Int}
-    live_in_bbs::Vector{Int}
+struct BlockLiveness{D, L <: Union{Vector{Int}, Nothing}}
+    def_bbs::D
+    live_in_bbs::L
 end
 
 """
@@ -281,7 +281,8 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
         push!(worklist, node)
         while !isempty(worklist)
             active = pop!(worklist)
-            for succ in cfg.blocks[active].succs
+            succs = cfg.blocks[active].succs
+            for succ in succs
                 # Check whether the current root (`node`) dominates succ.
                 # We are guaranteed that `node` dominates `active`, since
                 # we've arrived at `active` by following dominator tree edges.
@@ -296,7 +297,7 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
                 # unless liveness said otherwise.
                 succ in processed && continue
                 push!(processed, succ)
-                if !(succ in liveness.live_in_bbs)
+                if liveness.live_in_bbs !== nothing && !(succ in liveness.live_in_bbs)
                     continue
                 end
                 push!(phiblocks, succ)

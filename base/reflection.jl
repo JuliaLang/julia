@@ -1648,9 +1648,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     for match in matches.matches
         match = match::Core.MethodMatch
         frame = Core.Compiler.typeinf_frame(interp,
-            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            match.method, match.spec_types, match.sparams, #=run_optimizer=#true)
         frame === nothing && return Core.Compiler.Effects()
-        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+        effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
     return effects
 end
