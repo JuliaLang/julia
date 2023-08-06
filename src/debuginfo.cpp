@@ -372,9 +372,18 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 codeinst_in_flight.erase(codeinst_it);
             }
         }
+        jl_method_instance_t *mi = NULL;
+        if (codeinst) {
+            mi = codeinst->def;
+            // Non-opaque-closure MethodInstances are considered globally rooted
+            // through their methods, but for OC, we need to create a global root
+            // here.
+            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+        }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-            if (codeinst)
-                linfomap[Addr] = std::make_pair(Size, codeinst->def);
+            if (mi)
+                linfomap[Addr] = std::make_pair(Size, mi);
             if (first) {
                 objectmap[SectionLoadAddr] = {&Object,
                     (size_t)SectionSize,
@@ -390,7 +399,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress) JL_NOTSAFEPOINT
+                            std::function<void *(void *)> lookupWriteAddress)
 {
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
 }
@@ -503,7 +512,7 @@ static int lookup_pointer(
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
-                    frame->linfo = NULL; // TODO: if (new_frames[n_frames - 1].linfo) frame->linfo = lookup(func_name in linfo)?
+                    frame->linfo = NULL; // Looked up on Julia side
                 }
             }
         }
@@ -687,7 +696,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPO
             std::move(error_splitobj.get()),
             std::move(SplitFile.get()));
 }
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
     jl_method_instance_t **linfos, size_t n)
 {
@@ -1217,7 +1226,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1607,7 +1616,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 #endif
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread

@@ -1652,6 +1652,21 @@ fake_repl() do stdin_write, stdout_read, repl
     @test !contains(s, "ERROR")
     @test contains(s, "Test Passed")
 
+    # Test for https://github.com/JuliaLang/julia/issues/49319
+    s = sendrepl2("# comment", "In [16]")
+    @test !contains(s, "ERROR")
+
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+fake_repl() do stdin_write, stdout_read, repl
+    backend = REPL.REPLBackend()
+    repltask = @async REPL.run_repl(repl; backend)
+    write(stdin_write,
+          "a = UInt8(81):UInt8(160); b = view(a, 1:64); c = reshape(b, (8, 8)); d = reinterpret(reshape, Float64, c); sqrteach(a) = [sqrt(x) for x in a]; sqrteach(d)\n\"ZZZZZ\"\n")
+    txt = readuntil(stdout_read, "ZZZZZ")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end

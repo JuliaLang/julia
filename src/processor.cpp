@@ -629,6 +629,7 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 template<typename F>
 static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
@@ -810,6 +811,8 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
     }
+
+    res.small_typeof = pointers->small_typeof;
 
     return res;
 }

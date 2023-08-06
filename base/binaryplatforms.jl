@@ -186,7 +186,7 @@ end
 function Base.show(io::IO, p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
-    other_tags = sort(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
     if !isempty(other_tags)
         str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
     end
@@ -835,7 +835,7 @@ Inspects the current Julia process to determine the libgfortran version this Jul
 linked against (if any).
 """
 function detect_libgfortran_version()
-    libgfortran_paths = filter(x -> occursin("libgfortran", x), Libdl.dllist())
+    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
     if isempty(libgfortran_paths)
         # One day, I hope to not be linking against libgfortran in base Julia
         return nothing
@@ -865,7 +865,7 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # This can happen if we were built by clang, so we don't link against
         # libstdc++ at all.
@@ -897,7 +897,7 @@ between Julia and LLVM; they must match.
 """
 function detect_cxxstring_abi()
     # First, if we're not linked against libstdc++, then early-exit because this doesn't matter.
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # We were probably built by `clang`; we don't link against `libstdc++`` at all.
         return nothing
@@ -1016,19 +1016,19 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Throw an error if `a` and `b` have both set non-default comparison strategies for `k`
         # and they're not the same strategy.
-        if a_comp != compare_default && b_comp != compare_default && a_comp != b_comp
+        if a_comp !== compare_default && b_comp !== compare_default && a_comp !== b_comp
             throw(ArgumentError("Cannot compare Platform objects with two different non-default comparison strategies for the same key \"$(k)\""))
         end
 
         # Select the custom comparator, if we have one.
         comparator = a_comp
-        if b_comp != compare_default
+        if b_comp !== compare_default
             comparator = b_comp
         end
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
+        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
             return false
         end
     end
@@ -1080,7 +1080,7 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     # We prefer these better matches, and secondarily reverse-sort by triplet so
     # as to generally choose the latest release (e.g. a `libgfortran5` tarball
     # over a `libgfortran3` tarball).
-    ps = sort(ps, lt = (a, b) -> begin
+    sort!(ps, lt = (a, b) -> begin
         loss_a = match_loss(a, platform)
         loss_b = match_loss(b, platform)
         if loss_a != loss_b
@@ -1089,7 +1089,8 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
         return triplet(a) > triplet(b)
     end)
 
-    return download_info[first(ps)]
+    # @invokelatest here to not get invalidated by new defs of `==(::Function, ::Function)`
+    return @invokelatest getindex(download_info, first(ps))
 end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)

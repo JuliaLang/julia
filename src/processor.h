@@ -88,6 +88,7 @@ typedef struct {
     const int32_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
+    void **small_typeof;
 } jl_image_t;
 
 // The header for each image
@@ -194,8 +195,10 @@ typedef struct {
     const jl_image_header_t *header;
     // The shard table, contains per-shard data
     const jl_image_shard_t *shards; // points to header->nshards length array
-    // The TLS data
+    // The TLS data pointer
     const jl_image_ptls_t *ptls;
+    // A copy of small_typeof[]
+    void **small_typeof;
 
     //  serialized target data
     //  This contains the number of targets
@@ -218,6 +221,8 @@ jl_image_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
+// Return the features of the host CPU as a julia string.
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);

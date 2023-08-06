@@ -139,12 +139,12 @@ valid_tparam(@nospecialize(x)) = valid_typeof_tparam(typeof(x))
 
 function compatible_vatuple(a::DataType, b::DataType)
     vaa = a.parameters[end]
-    vab = a.parameters[end]
+    vab = b.parameters[end]
     if !(isvarargtype(vaa) && isvarargtype(vab))
         return isvarargtype(vaa) == isvarargtype(vab)
     end
-    (isdefined(vaa, :N) == isdefined(vab, :N)) || return false
-    !isdefined(vaa, :N) && return true
+    isdefined(vaa, :N) || return !isdefined(vab, :N)
+    isdefined(vab, :N) || return false
     return vaa.N === vab.N
 end
 
@@ -163,8 +163,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
-            if a.name === ub.name === Tuple.name &&
-                    length(a.parameters) == length(ub.parameters)
+            if a.name === ub.name === Tuple.name && length(a.parameters) == length(ub.parameters)
                 if 1 < unionsplitcost(JLTypeLattice(), a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
@@ -213,11 +212,11 @@ end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
-function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
+function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, unwraptv(unwrapva(x)))
+        t = tmerge(𝕃, t, unwraptv(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end
@@ -316,24 +315,6 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
         ua = ua.body
     end
     return depth
-end
-
-# convert a Union of Tuple types to a Tuple of Unions
-function unswitchtupleunion(u::Union)
-    ts = uniontypes(u)
-    n = -1
-    for t in ts
-        if t isa DataType && t.name === Tuple.name && length(t.parameters) != 0 && !isvarargtype(t.parameters[end])
-            if n == -1
-                n = length(t.parameters)
-            elseif n != length(t.parameters)
-                return u
-            end
-        else
-            return u
-        end
-    end
-    Tuple{Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]...}
 end
 
 function unwraptv_ub(@nospecialize t)

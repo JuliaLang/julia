@@ -646,7 +646,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
-    jl_timing_block_t *blk = jl_timing_block_exit_task(ct, ptls);
+    jl_timing_block_t *blk = jl_timing_block_task_exit(ct, ptls);
     ctx_switch(ct);
 
 #ifdef MIGRATE_TASKS
@@ -666,7 +666,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 != ct->ptls &&
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
-    jl_timing_block_enter_task(ct, ptls, blk); (void)blk;
+    jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -705,18 +705,17 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack()                                                    \
         jl_timing_block_t *cur_block = ptls->timing_stack;                     \
         while (cur_block && eh->timing_stack != cur_block) {                   \
-            cur_block = jl_pop_timing_block(cur_block);                        \
+            cur_block = jl_timing_block_pop(cur_block);                        \
         }                                                                      \
         assert(cur_block == eh->timing_stack);
 #else
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body()                                                  \
+#define throw_internal_body(altstack)                                          \
     assert(!jl_get_safe_restore());                                            \
     jl_ptls_t ptls = ct->ptls;                                                 \
     ptls->io_wait = 0;                                                         \
-    JL_GC_PUSH1(&exception);                                                   \
     jl_gc_unsafe_enter(ptls);                                                  \
     if (exception) {                                                           \
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
@@ -729,6 +728,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     assert(ct->excstack && ct->excstack->top);                                 \
     jl_handler_t *eh = ct->eh;                                                 \
     if (eh != NULL) {                                                          \
+        if (altstack) ptls->sig_exception = NULL;                              \
         pop_timings_stack()                                                    \
         asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
         jl_longjmp(eh->eh_ctx, 1);                                             \
@@ -741,23 +741,21 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
 CFI_NORETURN
-    throw_internal_body()
+    JL_GC_PUSH1(&exception);
+    throw_internal_body(0);
     jl_unreachable();
 }
 
-#ifdef _COMPILER_ASAN_ENABLED_
 /* On the signal stack, we don't want to create any asan frames, but we do on the
    normal, stack, so we split this function in two, depending on which context
-   we're calling it in */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
+   we're calling it in. This also lets us avoid making a GC frame on the altstack,
+   which might end up getting corrupted if we recur here through another signal. */
+JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
 {
 CFI_NORETURN
-    throw_internal_body()
+    throw_internal_body(1);
     jl_unreachable();
 }
-#else
-#define throw_internal_altstack throw_internal
-#endif
 
 // record backtrace and raise an error
 JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
@@ -799,7 +797,7 @@ CFI_NORETURN
     }
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *e = ptls->sig_exception;
-    ptls->sig_exception = NULL;
+    JL_GC_PROMISE_ROOTED(e);
     throw_internal_altstack(ct, e);
 }
 
@@ -1039,6 +1037,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(t, jl_task_tag, 0);
     JL_PROBE_RT_NEW_TASK(ct, t);
     t->copy_stack = 0;
     if (ssize == 0) {
@@ -1068,30 +1067,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-#ifdef USE_TRACY
-    jl_value_t *start_type = jl_typeof(t->start);
-    const char *start_name = "";
-    if (jl_is_datatype(start_type))
-        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
-
-    static uint16_t task_id = 1;
-
-    // XXX: Tracy uses this as a handle internally and requires that this
-    // string live forever, so this allocation is intentionally leaked.
-    char *fiber_name;
-    if (start_name[0] == '#') {
-        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
-        size_t fiber_name_len = strlen(jl_symbol_name(mi->def.method->file)) + 22; // 22 characters in "Task 65535 (:0000000)\0"
-        fiber_name = (char *)malloc(fiber_name_len);
-        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d)", task_id++, jl_symbol_name(mi->def.method->file), mi->def.method->line);
-    } else {
-        size_t fiber_name_len = strlen(start_name) + 16; // 16 characters in "Task 65535 (\"\")\0"
-        fiber_name = (char *)malloc(fiber_name_len);
-        snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")", task_id++, start_name);
-    }
-
-    t->name = fiber_name;
-#endif
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
@@ -1109,6 +1084,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    jl_timing_task_init(t);
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -1245,7 +1221,7 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
-    jl_timing_block_enter_task(ct, ptls, NULL);
+    jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
@@ -1659,6 +1635,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (jl_nothing == NULL) // make a placeholder
         jl_nothing = jl_gc_permobj(0, jl_nothing_type);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;
     size_t ssize = (char*)stack_hi - (char*)stack_lo;
@@ -1716,7 +1693,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ctx.asan_fake_stack = NULL;
 #endif
 
-    jl_timing_block_enter_task(ct, ptls, NULL);
+    jl_timing_block_task_enter(ct, ptls, NULL);
 
 #ifdef COPY_STACKS
     // initialize the base_ctx from which all future copy_stacks will be copies

@@ -84,7 +84,7 @@ end
 const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
-    (x isa Type || x isa Symbol) && return 0
+    (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
@@ -106,6 +106,10 @@ end
 function is_inlineable_constant(@nospecialize(x))
     return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
+
+is_nospecialized(method::Method) = method.nospecialize ≠ 0
+
+is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospecialized(method)
 
 ###########################
 # MethodInstance/CodeInfo #
@@ -137,7 +141,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
-        elseif isa(src, Array{UInt8,1})
+        elseif isa(src, String)
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -154,8 +158,16 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
     isa(atype, DataType) || return nothing
     mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return nothing
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
-        mt, atype, sparams, method)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
+        mt, atype, sparams, method, #=int return_if_compileable=#1)
+end
+
+function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
+    isa(atype, DataType) || return method.sig
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt === nothing && return method.sig
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
+        mt, atype, sparams, method, #=int return_if_compileable=#0)
 end
 
 isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
@@ -199,9 +211,12 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
+@inline function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
+    end
+    if is_nospecializeinfer(method)
+        atype = get_nospecializeinfer_sig(method, atype, sparams)
     end
     if preexisting
         # check cached specializations
@@ -312,7 +327,7 @@ end
 # types #
 #########
 
-function singleton_type(@nospecialize(ft))
+@nospecializeinfer function singleton_type(@nospecialize(ft))
     ft = widenslotwrapper(ft)
     if isa(ft, Const)
         return ft.val
@@ -324,7 +339,7 @@ function singleton_type(@nospecialize(ft))
     return nothing
 end
 
-function maybe_singleton_const(@nospecialize(t))
+@nospecializeinfer function maybe_singleton_const(@nospecialize(t))
     if isa(t, DataType)
         if issingletontype(t)
             return Const(t.instance)

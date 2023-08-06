@@ -42,6 +42,9 @@ All features supported by LLVM are supported and a feature can be disabled with 
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
 
+!!! note
+    It is good practice to specify either `clone_all` or `base(<n>)` for every target apart from the first one. This makes it explicit which targets have all functions cloned, and which targets are based on other targets. If this is not done, the default behavior is to not clone every function, and to use the first target's function definition as the fallback when not cloning a function.
+
 1. `clone_all`
 
     By default, only functions that are the most likely to benefit from

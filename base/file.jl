@@ -645,7 +645,7 @@ The `cleanup` option controls whether the process attempts to delete the
 returned path automatically when the process exits. Note that the `tempname`
 function does not create any file or directory at the returned location, so
 there is nothing to cleanup unless you create a file or directory there. If
-you do and `clean` is `true` it will be deleted upon process termination.
+you do and `cleanup` is `true` it will be deleted upon process termination.
 
 !!! compat "Julia 1.4"
     The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4

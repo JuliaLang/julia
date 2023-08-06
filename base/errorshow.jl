@@ -35,6 +35,13 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+function showerror(io::IO, ex::Meta.ParseError)
+    if isnothing(ex.detail)
+        print(io, "ParseError(", repr(ex.msg), ")")
+    else
+        showerror(io, ex.detail)
+    end
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -181,6 +188,7 @@ function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b:
     if a.name === b.name
         Base.show_type_name(io, a.name)
         n = length(a.parameters)
+        n > 0 || return
         print(io, '{')
         for i = 1:n
             if i > length(b.parameters)
@@ -242,7 +250,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int])
+        ex = MethodError(f, ex.args[3:end::Int], ex.world)
     end
     name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -489,7 +497,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)::Bool
+                        if k == 1 && Base.isvarargtype(sigtype)
+                            # There wasn't actually a mismatch - the method match failed for
+                            # some other reason, e.g. world age. Just print the sigstr.
+                            print(iob, sigstr...)
+                        elseif get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -780,12 +792,12 @@ function show_backtrace(io::IO, t::Vector)
     if length(filtered) > BIG_STACKTRACE_SIZE
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
+    else
+        try invokelatest(update_stackframes_callback[], filtered) catch end
+        # process_backtrace returns a Vector{Tuple{Frame, Int}}
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
-
-    try invokelatest(update_stackframes_callback[], filtered) catch end
-    # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
-    return
+    nothing
 end
 
 

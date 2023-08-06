@@ -633,7 +633,7 @@ end
 @test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
-@test_repr "let @m(x), y=z; end"
+test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
@@ -789,6 +789,14 @@ let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
     @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+end
+
+function f49475(a=12.0; b) end
+let ms = methods(f49475)
+    @test length(ms) == 2
+    repr1 = sprint(show, "text/plain", ms[1])
+    repr2 = sprint(show, "text/plain", ms[2])
+    @test occursin("f49475(; ...)", repr1) || occursin("f49475(; ...)", repr2)
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -1001,6 +1009,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Printing of :(function (x...) end)
+@test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
@@ -1358,6 +1369,8 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 
+# Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -2616,4 +2629,9 @@ end
 
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
+end
+
+let buf = IOBuffer()
+    Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
+    @test String(take!(buf)) == "(::Function)(::Any)"
 end

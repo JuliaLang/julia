@@ -875,7 +875,9 @@ julia> sqrt(A)
 sqrt(::AbstractMatrix)
 
 function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
-    if ishermitian(A)
+    if checksquare(A) == 0
+        return copy(A)
+    elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     elseif istriu(A)
@@ -907,14 +909,12 @@ sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
-    AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
-        Ai = triu!(parent(inv(UpperTriangular(AA))))
-    elseif istril(AA)
-        Ai = tril!(parent(inv(LowerTriangular(AA))))
+    if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
     else
-        Ai = inv!(lu(AA))
+        Ai = inv!(lu(A))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai

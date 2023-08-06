@@ -9,10 +9,10 @@ include("newinterp.jl")
 # OverlayMethodTable
 # ==================
 
-import Base.Experimental: @MethodTable, @overlay
+using Base.Experimental: @MethodTable, @overlay
 
 @newinterp MTOverlayInterp
-@MethodTable(OverlayedMT)
+@MethodTable OverlayedMT
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
@@ -43,8 +43,8 @@ end |> !Core.Compiler.is_nonoverlayed
 end |> !Core.Compiler.is_nonoverlayed
 
 # account for overlay possibility in unanalyzed matching method
-callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange(::Float64) = strangesin(x)
+callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
     matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
@@ -112,10 +112,49 @@ end |> only === Nothing
 @newinterp Issue48097Interp
 @MethodTable Issue48097MT
 CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
+function CC.concrete_eval_eligible(interp::Issue48097Interp,
+    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
+        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    if ret === :semi_concrete_eval
+        # disable semi-concrete interpretation
+        return :none
+    end
+    return ret
+end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
 @test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
+end
+
+# Should not concrete-eval overlayed methods in semi-concrete interpretation
+@newinterp OverlaySinInterp
+@MethodTable OverlaySinMT
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlaySinMT)
+overlay_sin1(x) = error("Not supposed to be called.")
+@overlay OverlaySinMT overlay_sin1(x) = cos(x)
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
+end
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
+end
+_overlay_sin2(x) = error("Not supposed to be called.")
+@overlay OverlaySinMT _overlay_sin2(x) = cos(x)
+overlay_sin2(x) = _overlay_sin2(x)
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
 end
 
 # AbstractLattice
@@ -124,7 +163,7 @@ end
 using Core: SlotNumber, Argument
 using Core.Compiler: slot_id, tmerge_fast_path
 import .CC:
-    AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice, OptimizerLattice,
+    AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice,
     widenlattice, is_valid_lattice_norec, typeinf_lattice, ipo_lattice, optimizer_lattice,
     widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn
 
@@ -145,7 +184,7 @@ const AnyTaintLattice{L} = Union{TaintLattice{L},InterTaintLattice{L}}
 
 CC.typeinf_lattice(::TaintInterpreter) = InferenceLattice(TaintLattice(BaseInferenceLattice.instance))
 CC.ipo_lattice(::TaintInterpreter) = InferenceLattice(InterTaintLattice(IPOResultLattice.instance))
-CC.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(OptimizerLattice())
+CC.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(SimpleInferenceLattice.instance)
 
 struct Taint
     typ
@@ -245,13 +284,13 @@ end
 # External lattice without `Conditional`
 
 import .CC:
-    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice,
     typeinf_lattice, ipo_lattice, optimizer_lattice
 
 @newinterp NonconditionalInterpreter
 CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
 CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
-CC.optimizer_lattice(::NonconditionalInterpreter) = OptimizerLattice(PartialsLattice(ConstsLattice()))
+CC.optimizer_lattice(::NonconditionalInterpreter) = PartialsLattice(ConstsLattice())
 
 @test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
     c = isa(x, Int) || isa(x, Float64)
@@ -278,9 +317,9 @@ CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
-    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
-        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
         return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
     end
@@ -347,3 +386,8 @@ let NoinlineModule = Module()
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 end
+
+# Make sure that Core.Compiler has enough NamedTuple infrastructure
+# to properly give error messages for basic kwargs...
+Core.eval(Core.Compiler, quote f(;a=1) = a end)
+@test_throws MethodError Core.Compiler.f(;b=2)

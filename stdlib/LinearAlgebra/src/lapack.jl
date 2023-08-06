@@ -554,9 +554,9 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function getrf!(A::AbstractMatrix{$elty})
+        function getrf!(A::AbstractMatrix{$elty}; check = true)
             require_one_based_indexing(A)
-            chkfinite(A)
+            check && chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
@@ -1009,6 +1009,9 @@ for (gels, gesv, getrs, getri, elty) in
             n = checksquare(A)
             if n != size(B, 1)
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
+            end
+            if n != length(ipiv)
+                throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs to be $n"))
             end
             nrhs = size(B, 2)
             info = Ref{BlasInt}()

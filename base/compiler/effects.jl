@@ -54,6 +54,37 @@ analyzed method (see the implementation of `merge_effects!`). Each effect proper
 initialized with `ALWAYS_TRUE`/`true` and then transitioned towards `ALWAYS_FALSE`/`false`.
 Note that within the current flow-insensitive analysis design, effects detected by local
 analysis on each statement usually taint the global conclusion conservatively.
+
+## Key for `show` output of Effects:
+
+The output represents the state of different effect properties in the following order:
+
+1. `consistent` (`c`):
+    - `+c` (green): `ALWAYS_TRUE`
+    - `-c` (red): `ALWAYS_FALSE`
+    - `?c` (yellow): `CONSISTENT_IF_NOTRETURNED` and/or `CONSISTENT_IF_INACCESSIBLEMEMONLY`
+2. `effect_free` (`e`):
+    - `+e` (green): `ALWAYS_TRUE`
+    - `-e` (red): `ALWAYS_FALSE`
+    - `?e` (yellow): `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`
+3. `nothrow` (`n`):
+    - `+n` (green): `true`
+    - `-n` (red): `false`
+4. `terminates` (`t`):
+    - `+t` (green): `true`
+    - `-t` (red): `false`
+5. `notaskstate` (`s`):
+    - `+s` (green): `true`
+    - `-s` (red): `false`
+6. `inaccessiblememonly` (`m`):
+    - `+m` (green): `ALWAYS_TRUE`
+    - `-m` (red): `ALWAYS_FALSE`
+    - `?m` (yellow): `INACCESSIBLEMEM_OR_ARGMEMONLY`
+7. `noinbounds` (`i`):
+    - `+i` (green): `true`
+    - `-i` (red): `false`
+
+Additionally, if the `nonoverlayed` property is false, a red prime symbol (′) is displayed after the tuple.
 """
 struct Effects
     consistent::UInt8
@@ -100,7 +131,7 @@ const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
 const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true,  true)
 const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true,  false)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true,  true)  # unknown mostly, but it's not overlayed and noinbounds at least (e.g. it's not a call)
 const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, false) # unknown really
 
 function Effects(e::Effects = _EFFECTS_UNKNOWN;

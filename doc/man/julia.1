@@ -67,7 +67,7 @@ Print uncommon options not shown by `-h`
 
 .TP
 --project[=<dir>/@.]
-Set <dir> as the home project/environment. The default @. option will search
+Set <dir> as the active project/environment. The default @. option will search
 through parent directories until a Project.toml or JuliaProject.toml file is
 found.
 
@@ -117,6 +117,11 @@ process based on the OS-specific affinity assignment interface, if
 supported (Linux and Windows). If this is not supported (macOS) or
 process affinity is not configured, it uses the number of CPU
 threads.
+
+.TP
+--gcthreads <n>
+Enable n GC threads; If unspecified is set to half of the
+compute worker threads.
 
 .TP
 -p, --procs {N|auto}

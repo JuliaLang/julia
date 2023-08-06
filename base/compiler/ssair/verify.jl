@@ -20,6 +20,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
+is_value_pos_expr_head(head::Symbol) = head === :boundscheck
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
@@ -60,7 +61,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             # Allow a tuple in symbol position for foreigncall - this isn't actually
             # a real call - it's interpreted in global scope by codegen. However,
             # we do need to keep this a real use, because it could also be a pointer.
-        elseif op.head !== :boundscheck
+        elseif !is_value_pos_expr_head(op.head)
             if !allow_frontend_forms || op.head !== :opaque_closure_method
                 @verify_error "Expr not allowed in value position"
                 error("")
@@ -87,7 +88,7 @@ end
 
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
-                   𝕃ₒ::AbstractLattice = OptimizerLattice())
+                   𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -174,25 +175,47 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     isa(stmt, PhiNode) || break
                 end
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error("")
+                termidx = last(block.stmts)
+                stmttyp = ir.stmts[termidx][:type]
+                if isempty(block.succs) && stmttyp == Union{}
+                    # Allow fallthrough terminators that are known to error to
+                    # be removed from the CFG. Ideally we'd add an unreachable
+                    # here, but that isn't always possible.
+                else
+                    @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
+                    error("")
+                end
             end
         end
     end
+    lastbb = 0
+    is_phinode_block = false
+    firstidx = 1
+    lastphi = 1
     for (bb, idx) in bbidxiter(ir)
+        if bb != lastbb
+            is_phinode_block = true
+            lastphi = firstidx = idx
+            lastbb = bb
+        end
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
         bb_unreachable(domtree, bb) && continue
         stmt = ir.stmts[idx][:inst]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
+            if !is_phinode_block
+                @verify_error "φ node $idx is not at the beginning of the basic block $bb"
+                error("")
+            end
+            lastphi = idx
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
                 for j = (i+1):length(stmt.edges)
                     edge′ = stmt.edges[j]
                     if edge == edge′
-                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is
+                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is always unique.
                         @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
                         error("")
                     end
@@ -225,7 +248,21 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 end
                 check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i, allow_frontend_forms)
             end
-        elseif isa(stmt, PhiCNode)
+            continue
+        end
+
+        if is_phinode_block && isa(stmt, Union{Expr, UpsilonNode, PhiCNode, SSAValue})
+            if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
+                # Go back and check that all non-PhiNodes are valid value-position
+                for validate_idx in firstidx:(lastphi-1)
+                    validate_stmt = ir.stmts[validate_idx][:inst]
+                    isa(validate_stmt, PhiNode) && continue
+                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0, allow_frontend_forms)
+                end
+                is_phinode_block = false
+            end
+        end
+        if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
                 val = stmt.values[i]
                 if !isa(val, SSAValue)
