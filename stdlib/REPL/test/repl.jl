@@ -1602,7 +1602,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
 
-# Non standard output_prefix, tested via `ipython_mode!`
+# Non standard output_prefix, tested via `numbered_prompt!`
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
 
@@ -1611,7 +1611,7 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl; backend)
     end
 
-    REPL.ipython_mode!(repl, backend)
+    REPL.numbered_prompt!(repl, backend)
 
     global c = Base.Event(true)
     function sendrepl2(cmd, txt)
@@ -1647,6 +1647,26 @@ fake_repl() do stdin_write, stdout_read, repl
     s = sendrepl2("x_47878 = range(-1; stop = 1)\n", "-1:1")
     @test contains(s, "Out[11]: -1:1")
 
+    # Test for https://github.com/JuliaLang/julia/issues/49041
+    s = sendrepl2("using Test; @test true", "In [14]")
+    @test !contains(s, "ERROR")
+    @test contains(s, "Test Passed")
+
+    # Test for https://github.com/JuliaLang/julia/issues/49319
+    s = sendrepl2("# comment", "In [16]")
+    @test !contains(s, "ERROR")
+
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+fake_repl() do stdin_write, stdout_read, repl
+    backend = REPL.REPLBackend()
+    repltask = @async REPL.run_repl(repl; backend)
+    write(stdin_write,
+          "a = UInt8(81):UInt8(160); b = view(a, 1:64); c = reshape(b, (8, 8)); d = reinterpret(reshape, Float64, c); sqrteach(a) = [sqrt(x) for x in a]; sqrteach(d)\n\"ZZZZZ\"\n")
+    txt = readuntil(stdout_read, "ZZZZZ")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end

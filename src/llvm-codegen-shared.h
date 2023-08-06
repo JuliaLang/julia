@@ -22,17 +22,6 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
-// Do not use (only for migration purposes)
-// Prefer DataLayout::getIntPtrType with addrspace argument to support cross-compilation
-static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
-    //return M.getDataLayout().getIntPtrType(M.getContext());
-    if (sizeof(size_t) > sizeof(uint32_t)) {
-        return llvm::Type::getInt64Ty(ctxt);
-    } else {
-        return llvm::Type::getInt32Ty(ctxt);
-    }
-}
-
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
         return llvm::StructType::get(C);
@@ -181,7 +170,7 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
+static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *pgcstack)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
@@ -189,17 +178,16 @@ static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &bui
     const int pgcstack_offset = offsetof(jl_task_t, gcstack);
     return builder.CreateInBoundsGEP(
             T_pjlvalue, emit_bitcast_with_builder(builder, pgcstack, T_ppjlvalue),
-            ConstantInt::get(getSizeTy(builder.getContext()), -(pgcstack_offset / sizeof(void *))),
+            ConstantInt::get(T_size, -(pgcstack_offset / sizeof(void *))),
             "current_task");
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
-    auto T_size = getSizeTy(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
             T_pjlvalue, current_task,
@@ -213,11 +201,10 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
 }
 
 // Get signal page through current task.
-static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     // return builder.CreateCall(prepare_call(reuse_signal_page_func));
-    auto T_size = getSizeTy(builder.getContext());
     auto T_psize = T_size->getPointerTo();
     auto T_ppsize = T_psize->getPointerTo();
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
@@ -236,22 +223,20 @@ static inline void emit_signal_fence(llvm::IRBuilder<> &builder)
     builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 }
 
-static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa, bool final = false)
+static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa, bool final = false)
 {
     using namespace llvm;
-    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, ptls, tbaa);
+    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, T_size, ptls, tbaa);
     emit_signal_fence(builder);
     Module *M = builder.GetInsertBlock()->getModule();
     LLVMContext &C = builder.getContext();
     // inline jlsafepoint_func->realize(M)
     if (final) {
-        auto T_size = getSizeTy(builder.getContext());
         builder.CreateLoad(T_size, signal_page, true);
     }
     else {
         Function *F = M->getFunction("julia.safepoint");
         if (!F) {
-            auto T_size = getSizeTy(builder.getContext());
             auto T_psize = T_size->getPointerTo();
             FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_psize}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
@@ -262,7 +247,7 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Value *pt
     emit_signal_fence(builder);
 }
 
-static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state, bool final)
+static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state, bool final)
 {
     using namespace llvm;
     Type *T_int8 = state->getType();
@@ -288,38 +273,38 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::V
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
-    emit_gc_safepoint(builder, ptls, tbaa, final);
+    emit_gc_safepoint(builder, T_size, ptls, tbaa, final);
     builder.CreateBr(exitBB);
     builder.SetInsertPoint(exitBB);
     return old_state;
 }
 
-static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(0);
-    return emit_gc_state_set(builder, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(0);
-    return emit_gc_state_set(builder, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
-static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
@@ -331,125 +316,73 @@ using namespace llvm;
 
 inline void addFnAttr(CallInst *Target, Attribute::AttrKind Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     Target->addFnAttr(Attr);
-#else
-    Target->addAttribute(AttributeList::FunctionIndex, Attr);
-#endif
 }
 
 template<class T, class A>
 inline void addRetAttr(T *Target, A Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     Target->addRetAttr(Attr);
-#else
-    Target->addAttribute(AttributeList::ReturnIndex, Attr);
-#endif
 }
 
 inline void addAttributeAtIndex(Function *F, unsigned Index, Attribute Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     F->addAttributeAtIndex(Index, Attr);
-#else
-    F->addAttribute(Index, Attr);
-#endif
 }
 
 inline AttributeSet getFnAttrs(const AttributeList &Attrs)
 {
-#if JL_LLVM_VERSION >= 140000
     return Attrs.getFnAttrs();
-#else
-    return Attrs.getFnAttributes();
-#endif
 }
 
 inline AttributeSet getRetAttrs(const AttributeList &Attrs)
 {
-#if JL_LLVM_VERSION >= 140000
     return Attrs.getRetAttrs();
-#else
-    return Attrs.getRetAttributes();
-#endif
 }
 
 inline bool hasFnAttr(const AttributeList &L, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.hasFnAttr(Kind);
-#else
-    return L.hasAttribute(AttributeList::FunctionIndex, Kind);
-#endif
 }
 
 inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
                                          unsigned Index, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributeAtIndex(C, Index, Kind);
-#else
-    return L.addAttribute(C, Index, Kind);
-#endif
 }
 
 inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
                                          unsigned Index, Attribute Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributeAtIndex(C, Index, Attr);
-#else
-    return L.addAttribute(C, Index, Attr);
-#endif
 }
 
 inline AttributeList addAttributesAtIndex(const AttributeList &L, LLVMContext &C,
                                           unsigned Index, const AttrBuilder &Builder)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributesAtIndex(C, Index, Builder);
-#else
-    return L.addAttributes(C, Index, Builder);
-#endif
 }
 
 inline AttributeList addFnAttribute(const AttributeList &L, LLVMContext &C,
                                     Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addFnAttribute(C, Kind);
-#else
-    return L.addAttribute(C, AttributeList::FunctionIndex, Kind);
-#endif
 }
 
 inline AttributeList addRetAttribute(const AttributeList &L, LLVMContext &C,
                                      Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addRetAttribute(C, Kind);
-#else
-    return L.addAttribute(C, AttributeList::ReturnIndex, Kind);
-#endif
 }
 
 inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.hasAttributesAtIndex(Index);
-#else
-    return L.hasAttributes(Index);
-#endif
 }
 
 inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.getAttributeAtIndex(Index, Kind);
-#else
-    return L.getAttribute(Index, Kind);
-#endif
 }
 
 // Iterate through uses of a particular type.

@@ -78,6 +78,9 @@ Random.seed!(1)
         @test !istril(D, -1)
         @test istril(D, 1)
         @test istril(Diagonal(zero(diag(D))), -1)
+        @test Base.isstored(D,1,1)
+        @test !Base.isstored(D,1,2)
+        @test_throws BoundsError Base.isstored(D, n + 1, 1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -381,9 +384,17 @@ Random.seed!(1)
 
     @testset "conj and transpose" begin
         @test transpose(D) == D
-        if elty <: BlasComplex
+        if elty <: Real
+            @test transpose(D) === D
+            @test adjoint(D) === D
+        elseif elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
             @test adjoint(D) == conj(D)
+            local D2 = copy(D)
+            local D2adj = adjoint(D2)
+            D2adj[1,1] = rand(eltype(D2adj))
+            @test D2[1,1] == adjoint(D2adj[1,1])
+            @test D2adj' === D2
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
@@ -747,6 +758,12 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    M = [1 2; 3 4]
+    for n in 0:1
+        D = Diagonal(fill(M, n))
+        @test D == Matrix{eltype(D)}(D)
+    end
 end
 
 @testset "linear solve for block diagonal matrices" begin

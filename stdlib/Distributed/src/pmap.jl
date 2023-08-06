@@ -6,7 +6,7 @@ struct BatchProcessingError <: Exception
 end
 
 """
-    pgenerate([::WorkerPool], f, c...) -> iterator
+    pgenerate([::AbstractWorkerPool], f, c...) -> iterator
 
 Apply `f` to each element of `c` in parallel using available workers and tasks.
 
@@ -18,14 +18,14 @@ Note that `f` must be made available to all worker processes; see
 [Code Availability and Loading Packages](@ref code-availability)
 for details.
 """
-function pgenerate(p::WorkerPool, f, c)
+function pgenerate(p::AbstractWorkerPool, f, c)
     if length(p) == 0
         return AsyncGenerator(f, c; ntasks=()->nworkers(p))
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
     return Iterators.flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
-pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
+pgenerate(p::AbstractWorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
 pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
 pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 
@@ -40,8 +40,8 @@ For multiple collection arguments, apply `f` elementwise.
 Note that `f` must be made available to all worker processes; see
 [Code Availability and Loading Packages](@ref code-availability) for details.
 
-If a worker pool is not specified, all available workers, i.e., the default worker pool
-is used.
+If a worker pool is not specified all available workers will be used via a [`CachingPool`](@ref).
+
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
 local process and distribute over tasks, specify `distributed=false`.
@@ -153,7 +153,7 @@ function pmap(f, p::AbstractWorkerPool, c; distributed=true, batch_size=1, on_er
 end
 
 pmap(f, p::AbstractWorkerPool, c1, c...; kwargs...) = pmap(a->f(a...), p, zip(c1, c...); kwargs...)
-pmap(f, c; kwargs...) = pmap(f, default_worker_pool(), c; kwargs...)
+pmap(f, c; kwargs...) = pmap(f, CachingPool(workers()), c; kwargs...)
 pmap(f, c1, c...; kwargs...) = pmap(a->f(a...), zip(c1, c...); kwargs...)
 
 function wrap_on_error(f, on_error; capture_data=false)

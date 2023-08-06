@@ -26,7 +26,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     global reinterpret
 
-    """
+    @doc """
         reinterpret(T::DataType, A::AbstractArray)
 
     Construct a view of the array with the same binary data as the given
@@ -38,13 +38,13 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     ```jldoctest
     julia> reinterpret(Float32, UInt32[1 2 3 4 5])
     1×5 reinterpret(Float32, ::Matrix{UInt32}):
-    1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
+     1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 
     julia> reinterpret(Complex{Int}, 1:6)
     3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
-    1 + 2im
-    3 + 4im
-    5 + 6im
+     1 + 2im
+     3 + 4im
+     5 + 6im
     ```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
@@ -387,8 +387,6 @@ end
     end
 end
 
-@inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
-
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -434,7 +432,7 @@ end
                 while nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                    memcpy(tptr + nbytes_copied, sptr + sidx, nb)
                     nbytes_copied += nb
                     sidx = 0
                     i += 1
@@ -574,7 +572,7 @@ end
                 if sidx != 0
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
-                    _memcpy!(sptr + sidx, tptr, nb)
+                    memcpy(sptr + sidx, tptr, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -583,7 +581,7 @@ end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -592,7 +590,7 @@ end
                 if nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
             end
@@ -653,8 +651,8 @@ end
 
 # Padding
 struct Padding
-    offset::Int
-    size::Int
+    offset::Int # 0-indexed offset of the next valid byte; sizeof(T) indicates trailing padding
+    size::Int   # bytes of padding before a valid byte
 end
 function intersect(p1::Padding, p2::Padding)
     start = max(p1.offset, p2.offset)
@@ -698,27 +696,33 @@ function iterate(cp::CyclePadding, state::Tuple)
 end
 
 """
-    Compute the location of padding in a type.
+    Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
 """
-function padding(T)
-    padding = Padding[]
-    last_end::Int = 0
+@assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
+    pads = Padding[]
+    last_end::Int = baseoffset
     for i = 1:fieldcount(T)
-        offset = fieldoffset(T, i)
+        offset = baseoffset + Int(fieldoffset(T, i))
         fT = fieldtype(T, i)
+        append!(pads, padding(fT, offset))
         if offset != last_end
-            push!(padding, Padding(offset, offset-last_end))
+            push!(pads, Padding(offset, offset-last_end))
         end
         last_end = offset + sizeof(fT)
     end
-    padding
+    if 0 < last_end - baseoffset < sizeof(T)
+        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
+    end
+    return Core.svec(pads...)
 end
 
 function CyclePadding(T::DataType)
     a, s = datatype_alignment(T), sizeof(T)
     as = s + (a - (s % a)) % a
     pad = padding(T)
-    s != as && push!(pad, Padding(s, as - s))
+    if s != as
+        pad = Core.svec(pad..., Padding(s, as - s))
+    end
     CyclePadding(pad, as)
 end
 
@@ -749,6 +753,92 @@ end
     end
     return true
 end
+
+@assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
+    padding(Out) == padding(In)
+end
+
+@assume_effects :foldable function packedsize(::Type{T}) where T
+    pads = padding(T)
+    return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
+end
+
+@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+
+function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    writeoffset = 0
+    for i ∈ 1:fieldcount(In)
+        readoffset = fieldoffset(In, i)
+        fT = fieldtype(In, i)
+        if ispacked(fT)
+            readsize = sizeof(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+            writeoffset += readsize
+        else # nested padded type
+            _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
+            writeoffset += packedsize(fT)
+        end
+    end
+end
+
+function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    readoffset = 0
+    for i ∈ 1:fieldcount(Out)
+        writeoffset = fieldoffset(Out, i)
+        fT = fieldtype(Out, i)
+        if ispacked(fT)
+            writesize = sizeof(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+            readoffset += writesize
+        else # nested padded type
+            _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
+            readoffset += packedsize(fT)
+        end
+    end
+end
+
+@inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
+    # handle non-primitive types
+    isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
+    isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    inpackedsize = packedsize(In)
+    outpackedsize = packedsize(Out)
+    inpackedsize == outpackedsize ||
+        throw(ArgumentError("Packed sizes of types $Out and $In do not match; got $outpackedsize \
+            and $inpackedsize, respectively."))
+    in = Ref{In}(x)
+    out = Ref{Out}()
+    if struct_subpadding(Out, In)
+        # if packed the same, just copy
+        GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
+            memcpy(ptr_out, ptr_in, sizeof(Out))
+        end
+        return out[]
+    else
+        # mismatched padding
+        GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
+
+            if fieldcount(In) > 0 && ispacked(Out)
+                _copytopacked!(ptr_out, ptr_in)
+            elseif fieldcount(Out) > 0 && ispacked(In)
+                _copyfrompacked!(ptr_out, ptr_in)
+            else
+                packed = Ref{NTuple{inpackedsize, UInt8}}()
+                GC.@preserve packed begin
+                    ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                    _copytopacked!(ptr_packed, ptr_in)
+                    _copyfrompacked!(ptr_out, ptr_packed)
+                end
+            end
+        end
+        return out[]
+    end
+end
+
 
 # Reductions with IndexSCartesian2
 

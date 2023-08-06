@@ -120,7 +120,7 @@ static void _compile_all_union(jl_value_t *sig)
                 jl_svecset(p, i, ty);
             }
         }
-        methsig = (jl_value_t*)jl_apply_tuple_type(p);
+        methsig = jl_apply_tuple_type(p);
         methsig = jl_rewrap_unionall(methsig, sig);
         _compile_all_tvar_union(methsig);
     }
@@ -186,8 +186,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
                 inferred != jl_nothing &&
-                jl_ir_flag_inferred((jl_array_t*)inferred) &&
-                (jl_ir_inlining_cost((jl_array_t*)inferred) == UINT16_MAX)) {
+                jl_ir_flag_inferred(inferred) &&
+                (jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
                 do_compile = 1;
             }
             else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {

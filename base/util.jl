@@ -135,8 +135,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
-!!! compat "Julia 1.9"
-    Support for italic output was added in Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for italic output was added in Julia 1.10.
 """
 @constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
@@ -153,6 +153,8 @@ Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-nat
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
 
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
@@ -203,6 +205,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
@@ -266,7 +269,7 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
-    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
+    memset(p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
@@ -602,7 +605,7 @@ macro kwdef(expr)
         kwdefs = nothing
     end
     return quote
-        Base.@__doc__ $(esc(expr))
+        $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
     end
 end

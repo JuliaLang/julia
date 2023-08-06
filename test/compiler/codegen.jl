@@ -17,14 +17,19 @@ end
 
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
-    params = Base.CodegenParams(safepoint_on_entry=false)
-    d = InteractiveUtils._dump_function(f, t, false, false, !raw, dump_module, :att, optimize, :none, false, params)
+    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false)
+    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end
 
+# Some tests assume calls should be stripped out,
+# so strip out the calls to debug intrinsics that
+# are not actually materialized as call instructions.
+strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
-    @test !occursin(" call ", get_llvm(identity, Tuple{String}))
+    @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
 end
 
 jl_string_ptr(s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
@@ -114,22 +119,22 @@ end
 
 if !is_debug_build && opt_level > 0
     # Make sure `jl_string_ptr` is inlined
-    @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
+    @test !occursin(" call ", strip_debug_calls(get_llvm(jl_string_ptr, Tuple{String})))
     # Make sure `Core.sizeof` call is inlined
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{String}), [Iptr])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{String})), [Iptr])
     # String
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{Core.SimpleVector}), [Iptr])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Core.SimpleVector})), [Iptr])
     # Array
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector{Int}}), [Iptr])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Array{Any}})), [Iptr])
     # Check that we load the elsize
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Vector})), [Iptr, "i16"])
     # Primitive Type size should be folded to a constant
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{Ptr}), String[])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
@@ -253,7 +258,7 @@ if opt_level > 0
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
     @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
-    @test occursin("ret $Iptr %0", load_dummy_ref_ir)
+    @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
 
 # Issue 22770
@@ -649,7 +654,7 @@ end
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]
-@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+@test_throws BoundsError f41157(Tuple{Int}[], (NTuple{N,Union{}} where N)[])
 
 # issue #41096
 struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
@@ -786,17 +791,12 @@ f_isa_type(@nospecialize(x)) = isa(x, Type)
 f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
 
-@testset "regression in generic_bitcast: should support Union{} values" begin
-    f(x) = Core.bitcast(UInt64, x)
-    @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
-end
-
 f48085(@nospecialize x...) = length(x)
 @test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
 @test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
 
 # Make sure that the bounds check is elided in tuple iteration
-@test !occursin("call void @", get_llvm(iterate, Tuple{NTuple{4, Float64}, Int}))
+@test !occursin("call void @", strip_debug_calls(get_llvm(iterate, Tuple{NTuple{4, Float64}, Int})))
 
 # issue #34459
 function f34459(args...)
@@ -825,3 +825,31 @@ end
 # issue 48917, hoisting load to above the parent
 f48917(x, w) = (y = (a=1, b=x); z = (; a=(a=(1, w), b=(3, y))))
 @test f48917(1,2) == (a = (a = (1, 2), b = (3, (a = 1, b = 1))),)
+
+# https://github.com/JuliaLang/julia/issues/50317 getproperty allocation on struct with 1 field
+struct Wrapper50317
+    lock::ReentrantLock
+end
+const MONITOR50317 = Wrapper50317(ReentrantLock())
+issue50317() = @noinline MONITOR50317.lock
+issue50317()
+let res = @timed issue50317()
+    @test res.bytes == 0
+    return res # must return otherwise the compiler may eliminate the result entirely
+end
+struct Wrapper50317_2
+    lock::ReentrantLock
+    fun::Vector{Int}
+end
+const MONITOR50317_2 = Wrapper50317_2(ReentrantLock(),[1])
+issue50317_2() = @noinline MONITOR50317.lock
+issue50317_2()
+let res = @timed issue50317_2()
+    @test res.bytes == 0
+    return res
+end
+const a50317 = (b=3,)
+let res = @timed a50317[:b]
+    @test res.bytes == 0
+    return res
+end

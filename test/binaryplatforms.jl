@@ -315,8 +315,9 @@ end
         P("x86_64", "linux"; libgfortran_version=v"5") => "linux8",
 
         # Ambiguity test
-        P("aarch64", "linux"; libgfortran_version=v"3") => "linux4",
+        P("aarch64", "linux"; libgfortran_version=v"3") => "linux3",
         P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18") => "linux5",
+        P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18", foo="bar") => "linux9",
 
         # OS test
         P("x86_64", "macos"; libgfortran_version=v"3") => "mac4",
@@ -327,8 +328,9 @@ end
     @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"4")) == "linux7"
 
     # Ambiguity test
-    @test select_platform(platforms, P("aarch64", "linux")) == "linux5"
-    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux5"
+    @test select_platform(platforms, P("aarch64", "linux")) == "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18")) === "linux5"
     @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"4")) === nothing
 
     @test select_platform(platforms, P("x86_64", "macos")) == "mac4"
@@ -339,6 +341,22 @@ end
 
     # Sorry, Alex. ;)
     @test select_platform(platforms, P("x86_64", "freebsd")) === nothing
+
+    # The new "most complete match" algorithm deals with ambiguities as follows:
+    platforms = Dict(
+        P("x86_64", "linux") => "normal",
+        P("x86_64", "linux"; sanitize="memory") => "sanitized",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "normal"
+    @test select_platform(platforms, P("x86_64", "linux"; sanitize="memory")) == "sanitized"
+
+    # Ties are broken by reverse-sorting by triplet:
+    platforms = Dict(
+        P("x86_64", "linux"; libgfortran_version=v"3") => "libgfortran3",
+        P("x86_64", "linux"; libgfortran_version=v"4") => "libgfortran4",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "libgfortran4"
+    @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"3")) == "libgfortran3"
 end
 
 @testset "Custom comparators" begin

@@ -14,9 +14,9 @@ export libgit2
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgit2_handle = C_NULL
-libgit2_path = ""
+artifact_dir::String = ""
+libgit2_handle::Ptr{Cvoid} = C_NULL
+libgit2_path::String = ""
 
 if Sys.iswindows()
     const libgit2 = "libgit2.dll"

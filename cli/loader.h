@@ -53,19 +53,17 @@
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
-# ifdef LIBRARY_EXPORTS
+# ifdef JL_LIBRARY_EXPORTS
 #  define JL_DLLEXPORT __declspec(dllexport)
-# else
-#  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+#  define JL_DLLIMPORT __declspec(dllimport)
 #define JL_HIDDEN
 #else
-# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX_)
-#  define JL_DLLEXPORT __attribute__ ((visibility("protected")))
-# else
-#  define JL_DLLEXPORT __attribute__ ((visibility("default")))
-# endif
+# define JL_DLLIMPORT __attribute__ ((visibility("default")))
 #define JL_HIDDEN    __attribute__ ((visibility("hidden")))
+#endif
+#ifndef JL_DLLEXPORT
+#  define JL_DLLEXPORT JL_DLLIMPORT
 #endif
 /*
  * DEP_LIBS is our list of dependent libraries that must be loaded before `libjulia`.

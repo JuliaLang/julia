@@ -216,7 +216,7 @@ a [`mutable struct`](@ref).
 
 When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
 the argument values to new variable names corresponding to the function arguments, as discussed
-in [Argument-Passing Behavior](@ref man-functions).  (By [convention](@ref man-punctuation),
+in [Argument-Passing Behavior](@ref man-argument-passing).  (By [convention](@ref man-punctuation),
 functions that mutate one or more of their arguments have names ending with `!`.)
 
 

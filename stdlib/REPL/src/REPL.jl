@@ -248,11 +248,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -261,7 +259,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
-            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            if mode isa LineEdit.Prompt
+                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
@@ -283,6 +283,19 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     end
     return nothing
 end
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limitflag[]
+        print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    return nothing
+end
+
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -292,7 +305,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             if iserr
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -315,7 +328,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
                     setglobal!(Base.MainInclude, :err, excs)
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    repl_display_error(errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -1396,7 +1409,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1407,12 +1420,25 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return quote
+    return Expr(:toplevel, get_usings!([], x)..., quote
         let __temp_val_a72df459 = $x
             $capture_result($n, __temp_val_a72df459)
             __temp_val_a72df459
         end
+    end)
+end
+
+function get_usings!(usings, ex)
+    ex isa Expr || return usings
+    # get all `using` and `import` statements which are at the top level
+    for (i, arg) in enumerate(ex.args)
+        if Base.isexpr(arg, :toplevel)
+            get_usings!(usings, arg)
+        elseif Base.isexpr(arg, [:using, :import])
+            push!(usings, popat!(ex.args, i))
+        end
     end
+    return usings
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
@@ -1456,7 +1482,7 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
@@ -1468,7 +1494,7 @@ end
     Out[n]
 
 A variable referring to all previously computed values, automatically imported to the interactive prompt.
-Only defined and exists while using [IPython mode](@ref IPython-mode).
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
 
 See also [`ans`](@ref).
 """
@@ -1476,6 +1502,6 @@ Base.MainInclude.Out
 
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
 
 end # module
