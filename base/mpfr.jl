@@ -358,12 +358,8 @@ round(::Type{<:Integer}, x::BigFloat, r::RoundingMode) = throw(MethodError(round
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_trunc(T, _unchecked_cast(T, x, RoundToZero))
 unsafe_trunc(::Type{BigInt}, x::BigFloat) = _unchecked_cast(BigInt, x, RoundToZero)
 
-# TODO: Ideally the base fallbacks for these would already exist
-for (f, rnd) in zip((:trunc, :floor, :ceil, :round),
-                 (RoundToZero, RoundDown, RoundUp, :(ROUNDING_MODE[])))
-    @eval $f(::Type{T}, x::BigFloat) where T<:Union{Unsigned, Signed, BigInt} = round(T, x, $rnd)
-    @eval $f(::Type{Integer}, x::BigFloat) = $f(BigInt, x)
-end
+round(::Type{T}, x::BigFloat) where T<:Integer = round(T, x, ROUNDING_MODE[])
+round(::Type{Integer}, x::BigFloat, r::RoundingMode) = round(BigInt, x, r)
 
 function Bool(x::BigFloat)
     iszero(x) && return false

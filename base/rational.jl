@@ -484,13 +484,13 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
+round(x::Rational, r::RoundingMode=RoundNearest) = div(numerator(x), denominator(x), r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
-    convert(T, div(numerator(x), denominator(x), r))
+    convert(T, round(x, r))
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T

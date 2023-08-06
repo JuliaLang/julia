@@ -688,10 +688,7 @@ Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
 
-round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
- ceil(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
+round(x::Integer, r::RoundingMode) = x
 
 ## integer construction ##
 

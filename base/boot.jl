@@ -328,9 +328,8 @@ TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
     TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
-    T  # Type
-    val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
+    args
+    InexactError(f::Symbol, @nospecialize(args...)) = (@noinline; new(f, args))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -629,8 +628,6 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
-
 function is_top_bit_set(x)
     @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
@@ -643,7 +640,7 @@ end
 
 function check_top_bit(::Type{To}, x) where {To}
     @inline
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
+    is_top_bit_set(x) && throw(InexactError(:check_top_bit, To, x))
     x
 end
 
@@ -651,7 +648,7 @@ function checked_trunc_sint(::Type{To}, x::From) where {To,From}
     @inline
     y = trunc_int(To, x)
     back = sext_int(From, y)
-    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
+    eq_int(x, back) || throw(InexactError(:trunc, To, x))
     y
 end
 
@@ -659,7 +656,7 @@ function checked_trunc_uint(::Type{To}, x::From) where {To,From}
     @inline
     y = trunc_int(To, x)
     back = zext_int(From, y)
-    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
+    eq_int(x, back) || throw(InexactError(:trunc, To, x))
     y
 end
 

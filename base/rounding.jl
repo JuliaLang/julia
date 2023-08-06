@@ -224,6 +224,8 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
     end
 end
 
+# Default definitions
+
 """
     set_zero_subnormals(yes::Bool) -> Bool
 
@@ -255,7 +257,6 @@ get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 end #module
 
-# Docstring listed here so it appears above the complex docstring.
 """
     round([T,] x, [r::RoundingMode])
     round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
@@ -329,4 +330,16 @@ julia> round(357.913; sigdigits=4, base=2)
 
 To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
 """
-round(T::Type, x)
+function round end
+
+trunc(x; kwargs...) = round(x, RoundToZero; kwargs...)
+floor(x; kwargs...) = round(x, RoundDown; kwargs...)
+ ceil(x; kwargs...) = round(x, RoundUp; kwargs...)
+round(x; kwargs...) = round(x, RoundNearest; kwargs...)
+
+trunc(::Type{T}, x; kwargs...) where {T} = round(T, x, RoundToZero; kwargs...)
+floor(::Type{T}, x; kwargs...) where {T} = round(T, x, RoundDown; kwargs...)
+ ceil(::Type{T}, x; kwargs...) where {T} = round(T, x, RoundUp; kwargs...)
+round(::Type{T}, x; kwargs...) where {T} = round(T, x, RoundNearest; kwargs...)
+
+round(::Type{T}, x, r::RoundingMode) where {T} = convert(T, round(x, r))
