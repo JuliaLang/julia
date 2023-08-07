@@ -1130,7 +1130,7 @@ function f44200()
     x44200
 end
 let src = code_typed1(f44200)
-    @test_broken count(x -> isa(x, Core.PiNode), src.code) == 0
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
 
 # Test that peeling off one case from (::Any) doesn't introduce
@@ -2065,3 +2065,34 @@ end
 # https://github.com/JuliaLang/julia/issues/50612
 f50612(x) = UInt32(x)
 @test all(!isinvoke(:UInt32),get_code(f50612,Tuple{Char}))
+
+# move inlineable constant values into statement position during `compact!`-ion
+# so that we don't inline DCE-eligibile calls
+Base.@assume_effects :nothrow function erase_before_inlining(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test fully_eliminated((Float64,); retval=5) do y
+    length(erase_before_inlining(true, y))
+end
+@test fully_eliminated((Float64,); retval=(5,5)) do y
+    z = erase_before_inlining(true, y)
+    return length(z), length(z)
+end
+
+# continue const-prop' when concrete-eval result is too big
+const THE_BIG_TUPLE_2 = ntuple(identity, 1024)
+return_the_big_tuple2(a) = (a, THE_BIG_TUPLE_2)
+let src = code_typed1() do
+        return return_the_big_tuple2(42)[2]
+    end
+    @test count(isinvoke(:return_the_big_tuple2), src.code) == 0
+end
+let src = code_typed1() do
+        return iterate(("1", '2'), 1)
+    end
+    @test count(isinvoke(:iterate), src.code) == 0
+end

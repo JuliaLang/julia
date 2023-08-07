@@ -98,10 +98,8 @@ identity_if_string(x::SafeRef) = nothing
 let result = code_escapes((SafeRef{String},); optimize=false) do x
         identity_if_string(x)
     end
-    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
-    @test !has_thrown_escape(result.state[Argument(2)], i)
-    @test !has_return_escape(result.state[Argument(2)], r)
+    @test !has_thrown_escape(result.state[Argument(2)])
+    @test !has_return_escape(result.state[Argument(2)])
 end
 let result = code_escapes((Union{SafeRef{String},Vector{String}},); optimize=false) do x
         identity_if_string(x)

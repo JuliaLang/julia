@@ -637,8 +637,8 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to the absolute value of `x`.
 
-`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the truncated
+value is not representable a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 
@@ -666,8 +666,8 @@ function trunc end
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
 
-`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the floored
+value is not representable a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
@@ -681,8 +681,8 @@ function floor end
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
 
-`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
-representable.
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the ceiled
+value is not representable as a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """

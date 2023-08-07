@@ -2370,8 +2370,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
                         Type *T_int64 = Type::getInt64Ty(LI->getContext());
                         auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
-                        LI->setMetadata(LLVMContext::MD_align,
-                                        MDNode::get(LI->getContext(), { op }));
+                        LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
                     }
                 }
                 // As a last resort, if we didn't manage to strip down the tag
@@ -2480,7 +2479,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    (allocaAddressSpace ? Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)) : Frame));
+                    Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now

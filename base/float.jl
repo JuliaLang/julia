@@ -379,11 +379,6 @@ trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
 trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
 trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
 
-# fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
-
 # Bool
 trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
 floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
