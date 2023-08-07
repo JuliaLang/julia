@@ -387,12 +387,18 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
+
+# For a collection of iterators `is`, returns a tuple (b, n), where
+# `b` is true when every component of `is` has a statically-known finite
+# length and all such lengths are equal. Otherwise, `b` is false.
+# `n` is an implementation detail, and will be the `length` of the first
+# iterator if it is statically-known and finite. Otherwise, `n` is `nothing`.
 function _zip_lengths_finite_equal(is)
     i = is[1]
-    b, n = _zip_lengths_finite_equal(tail(is))
     if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
         return (false, nothing)
     else
+        b, n = _zip_lengths_finite_equal(tail(is))
         return (b && (n === nothing || n == length(i)), length(i))
     end
 end
