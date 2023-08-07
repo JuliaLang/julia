@@ -1419,6 +1419,7 @@ function isprecompiled(pkg::PkgId;
         end
         try
             # update timestamp of precompilation file so that it is the first to be tried by code loading
+            # TODO Still relevant?
             touch(path_to_try)
         catch ex
             # file might be read-only and then we fail to update timestamp, which is fine
@@ -2606,7 +2607,8 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    totbytes = read(f, Int64) # total bytes for file dependencies + preferences
+    # write_dependency_list writes UInt64 here
+    totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
     includes = CacheHeaderIncludes[]
@@ -2670,6 +2672,7 @@ function parse_cache_header(f::IO)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        # why not build_id = UInt128(read(f, UInt64), read(f, UInt64))
         build_id = UInt128(read(f, UInt64)) << 64
         build_id |= read(f, UInt64)
         push!(required_modules, PkgId(uuid, sym) => build_id)
@@ -3153,7 +3156,7 @@ end
         if build_id != UInt128(0)
             id_build = (UInt128(checksum) << 64) | id.second
             if id_build != build_id
-                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it is does not provide desired build_id ($((UUID(build_id))))"
+                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it does not provide desired build_id ($((UUID(build_id))))"
                 return true
             end
         end
@@ -3213,8 +3216,9 @@ end
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
-                if identify_package(modkey, req_modkey.name) != req_modkey
-                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed"
+                pkg = identify_package(modkey, req_modkey.name)
+                if pkg != req_modkey
+                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $pkg"
                     return true
                 end
             end

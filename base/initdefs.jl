@@ -116,9 +116,7 @@ function init_depot_path()
 end
 
 # replace leading dirname with `@depot, @stdlib` if `path` is located within any of DEPOT_PATH or Sys.STDLIB
-# return normalized path otherwise
-function replace_depot_path(_path::AbstractString)
-    path = normpath(_path)
+function replace_depot_path(path::AbstractString)
     if startswith(path, Sys.STDLIB)
         subpath = path[nextind(path,length(Sys.STDLIB)):end]
         if isabspath(subpath)
@@ -138,22 +136,20 @@ function replace_depot_path(_path::AbstractString)
     return path
 end
 
-# resolve leading `@depot, @stdlib` alias from `_path` to point to a valid path in any
+# resolve leading `@depot, @stdlib` alias from `path` to point to a valid path in any
 # of DEPOT_PATH/compiled or Sys.STDLIb
-# if `_path` has no leading alias, we return a normalized path
-function resolve_depot_path(_path::AbstractString)
-    path = normpath(_path)
+function resolve_depot_path(path::AbstractString)
     if startswith(path, "@stdlib")
         fullpath = joinpath(Sys.STDLIB, path[nextind(path,length("@stdlib")+1):end])
         ispath(fullpath) && return fullpath
-        throw(ErrorException("Failed to resolve `$path` ($fullpath) to a stdlib path in `$(Sys.STDLIB)`."))
+        error("Failed to resolve `$path` ($fullpath) to a stdlib path in `$(Sys.STDLIB)`")
     elseif startswith(path, joinpath("@depot"))
         dir = path[nextind(path,length("@depot")+1):end]
         for depot in DEPOT_PATH
             fullpath = joinpath(depot, dir)
             ispath(fullpath) && return fullpath
         end
-        throw(ErrorException("Failed to resolve `$path` to a valid path for any depot in `DEPOT_PATH`"))
+        error("Failed to resolve `$path` to a valid path for any depot in `DEPOT_PATH`")
     end
     return path
 end
