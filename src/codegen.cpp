@@ -8125,6 +8125,7 @@ static jl_llvm_functions_t
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
     int cursor = 0;
+    int current_label = 0;
     auto find_next_stmt = [&] (int seq_next) {
         // new style ir is always in dominance order, but frontend IR might not be
         // `seq_next` is the next statement we want to emit
@@ -8141,6 +8142,7 @@ static jl_llvm_functions_t
             workstack.pop_back();
             auto nextbb = BB.find(item + 1);
             if (nextbb == BB.end()) {
+                // Not a BB
                 cursor = item;
                 return;
             }
@@ -8151,8 +8153,10 @@ static jl_llvm_functions_t
             seq_next = -1;
             // if this BB is non-empty, we've visited it before so skip it
             if (!nextbb->second->getTerminator()) {
+                // New BB
                 ctx.builder.SetInsertPoint(nextbb->second);
                 cursor = item;
+                current_label = item;
                 return;
             }
         }
@@ -8400,7 +8404,8 @@ static jl_llvm_functions_t
             int lname = jl_gotonode_label(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             auto br = ctx.builder.CreateBr(BB[lname]);
-            if (ctx.LoopID) {
+            // Check if backwards branch
+            if (ctx.LoopID && lname <= current_label) {
                 br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
                 ctx.LoopID = NULL;
             }
@@ -8427,7 +8432,8 @@ static jl_llvm_functions_t
             else
                 br = ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
 
-            if (ctx.LoopID) {
+            // Check if backwards branch
+            if (ctx.LoopID && lname <= current_label) {
                 br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
                 ctx.LoopID = NULL;
             }
