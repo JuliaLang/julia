@@ -107,13 +107,13 @@ static inline bool test_nbit(const T1 &bits, T2 _bitidx)
 }
 
 template<typename T>
-static inline void unset_bits(T &bits)
+static inline void unset_bits(T &bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }
 
 template<typename T, typename T1, typename... Rest>
-static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest)
+static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest) JL_NOTSAFEPOINT
 {
     auto bitidx = static_cast<uint32_t>(_bitidx);
     auto u32idx = bitidx / 32;
@@ -142,7 +142,7 @@ static inline void set_bit(T &bits, T1 _bitidx, bool val)
 template<size_t n>
 struct FeatureList {
     uint32_t eles[n];
-    uint32_t &operator[](size_t pos)
+    uint32_t &operator[](size_t pos) JL_NOTSAFEPOINT
     {
         return eles[pos];
     }
@@ -296,12 +296,6 @@ static inline void append_ext_features(std::vector<std::string> &features,
 /**
  * Target specific type/constant definitions, always enable.
  */
-
-struct FeatureName {
-    const char *name;
-    uint32_t bit; // bit index into a `uint32_t` array;
-    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
-};
 
 template<typename CPU, size_t n>
 struct CPUSpec {
@@ -636,7 +630,13 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
     const void *ids = pointers->target_data;
-    uint32_t target_idx = callback(ids);
+    jl_value_t* rejection_reason = nullptr;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t target_idx = callback(ids, &rejection_reason);
+    if (target_idx == (uint32_t)-1) {
+        jl_throw(jl_new_struct(jl_errorexception_type, rejection_reason));
+    }
+    JL_GC_POP();
 
     if (pointers->header->version != 1) {
         jl_error("Image file is not compatible with this version of Julia");
@@ -855,17 +855,20 @@ struct SysimgMatch {
 // Find the best match in the sysimg.
 // Select the best one based on the largest vector register and largest compatible feature set.
 template<typename S, typename T, typename F>
-static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size)
+static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size, jl_value_t **rejection_reason)
 {
     SysimgMatch match;
     bool match_name = false;
     int feature_size = 0;
+    std::vector<const char *> rejection_reasons;
+    rejection_reasons.reserve(sysimg.size());
     for (uint32_t i = 0; i < sysimg.size(); i++) {
         auto &imgt = sysimg[i];
         if (!(imgt.en.features & target.dis.features).empty()) {
             // Check sysimg enabled features against runtime disabled features
             // This is valid (and all what we can do)
             // even if one or both of the targets are unknown.
+            rejection_reasons.push_back("Rejecting this target due to use of runtime-disabled features\n");
             continue;
         }
         if (imgt.name == target.name) {
@@ -876,25 +879,44 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
             }
         }
         else if (match_name) {
+            rejection_reasons.push_back("Rejecting this target since another target has a cpu name match\n");
             continue;
         }
         int new_vsz = max_vector_size(imgt.en.features);
-        if (match.vreg_size > new_vsz)
+        if (match.vreg_size > new_vsz) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger vector register size\n");
             continue;
+        }
         int new_feature_size = imgt.en.features.nbits();
         if (match.vreg_size < new_vsz) {
             match.best_idx = i;
             match.vreg_size = new_vsz;
             feature_size = new_feature_size;
+            rejection_reasons.push_back("Updating best match to this target due to larger vector register size\n");
             continue;
         }
-        if (new_feature_size < feature_size)
+        if (new_feature_size < feature_size) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger feature set\n");
             continue;
+        }
         match.best_idx = i;
         feature_size = new_feature_size;
+        rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1)
-        jl_error("Unable to find compatible target in system image.");
+    if (match.best_idx == (uint32_t)-1) {
+        // Construct a nice error message for debugging purposes
+        std::string error_msg = "Unable to find compatible target in cached code image.\n";
+        for (size_t i = 0; i < rejection_reasons.size(); i++) {
+            error_msg += "Target ";
+            error_msg += std::to_string(i);
+            error_msg += " (";
+            error_msg += sysimg[i].name;
+            error_msg += "): ";
+            error_msg += rejection_reasons[i];
+        }
+        if (rejection_reason)
+            *rejection_reason = jl_pchar_to_string(error_msg.data(), error_msg.size());
+    }
     return match;
 }
 
@@ -946,3 +968,30 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
+    auto specs = jl_get_llvm_clone_targets();
+    const uint32_t base_flags = 0;
+    std::vector<uint8_t> data;
+    auto push_i32 = [&] (uint32_t v) {
+        uint8_t buff[4];
+        memcpy(buff, &v, 4);
+        data.insert(data.end(), buff, buff + 4);
+    };
+    push_i32(specs.size());
+    for (uint32_t i = 0; i < specs.size(); i++) {
+        push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+        auto &specdata = specs[i].data;
+        data.insert(data.end(), specdata.begin(), specdata.end());
+    }
+
+    jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
+    uint8_t *out = (uint8_t*)jl_array_data(arr);
+    memcpy(out, data.data(), data.size());
+    return arr;
+}
+
+extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
+    *fnames = feature_names;
+    *nf = nfeature_names;
+}
