@@ -359,7 +359,8 @@ end
     @test round(Float32, x) == x
 end
 
-@testset "rounding complex numbers (#42060)" begin
+@testset "rounding complex numbers (#42060, #47128)" begin
+    # 42060
     @test ceil(Complex(4.6, 2.2)) === Complex(5.0, 3.0)
     @test floor(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
     @test trunc(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
@@ -368,4 +369,8 @@ end
     @test floor(Complex(-4.6, -2.2)) === Complex(-5.0, -3.0)
     @test trunc(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
     @test round(Complex(-4.6, -2.2)) === Complex(-5.0, -2.0)
+
+    # 47128
+    @test round(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 2)
+    @test ceil(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 3)
 end
