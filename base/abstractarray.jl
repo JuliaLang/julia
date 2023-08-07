@@ -1524,10 +1524,9 @@ _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 Return a tuple of `UInt`s that represent the mutable data segments of an array.
 
-Custom arrays that would like to opt-in to aliasing detection of their component
-parts can specialize this method to return the concatenation of the `dataids` of
-their component parts.  A typical definition for an array that wraps a parent is
-`Base.dataids(C::CustomArray) = dataids(C.parent)`.
+The default implementation recursively combines the `dataids` of all fields of the struct.
+Custom arrays only need to implement a custom `dataids` method if they depend upon non-array
+fields to define their contents and are immutable.
 """
 function dataids(A::AbstractArray)
     @inline
