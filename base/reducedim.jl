@@ -448,7 +448,7 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
 
-Note that since the `count!` function is intended to operate without making any allocations, the target `r` must not alias with the source `A`.
+Note that since the `count!` function is intended to operate without making any allocations, the target `r` must not share memory with the source `A`.
 
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
@@ -528,7 +528,7 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that since the `sum!` function is intended to operate without making any allocations, the target `r` must not alias with the source `A`.
+Note that since the `sum!` function is intended to operate without making any allocations, the target `r` must not share memory with the source `A`.
 
 # Examples
 ```jldoctest
@@ -603,7 +603,7 @@ prod(f, A::AbstractArray; dims)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that since the `prod!` function is intended to operate without making any allocations, the target `r` must not alias with the source `A`.
+Note that since the `prod!` function is intended to operate without making any allocations, the target `r` must not share memory with the source `A`.
 
 # Examples
 ```jldoctest
@@ -899,7 +899,7 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
-Note that since the `all!` function is intended to operate without making any allocations, the target `r` must not alias with the source `A`.
+Note that since the `all!` function is intended to operate without making any allocations, the target `r` must not share memory with the source `A`.
 
 # Examples
 ```jldoctest
@@ -974,7 +974,7 @@ any(::Function, ::AbstractArray; dims)
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
 
-Note that since the `any!` function is intended to operate without making any allocations, the target `r` must not alias with the source `A`.
+Note that since the `any!` function is intended to operate without making any allocations, the target `r` must not share memory with the source `A`.
 
 # Examples
 ```jldoctest
