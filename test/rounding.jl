@@ -353,8 +353,19 @@ end
 end
 
 @testset "rounding floats with specified return type #50778" begin
-    @test round(Float64, 1.2) == 1
-    @test round(Float32, 1e60) == Inf32
+    @test round(Float64, 1.2) === 1.0
+    @test round(Float32, 1e60) === Inf32
     x = floatmax(Float32)-1.0
     @test round(Float32, x) == x
+end
+
+@testset "rounding complex numbers (#42060)" begin
+    @test ceil(Complex(4.6, 2.2)) === Complex(5.0, 3.0)
+    @test floor(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test trunc(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test round(Complex(4.6, 2.2)) === Complex(5.0, 2.0)
+    @test ceil(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test floor(Complex(-4.6, -2.2)) === Complex(-5.0, -3.0)
+    @test trunc(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test round(Complex(-4.6, -2.2)) === Complex(-5.0, -2.0)
 end
