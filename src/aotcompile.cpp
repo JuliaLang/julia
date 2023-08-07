@@ -910,6 +910,32 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
+    size_t externalized = partitioner.nodes.size();
+    for (size_t i = 0; i < partitioner.nodes.size(); i++) {
+        auto &node = partitioner.nodes[i];
+        bool externalize = false;
+        for (ConstantUses<Instruction> uses(node.GV, M); !uses.done(); uses.next()) {
+            auto val = uses.get_info().val->getFunction();
+            auto idx = partitioner.node_map.find(val);
+            if (idx == partitioner.node_map.end()) {
+                externalize = true;
+                break;
+            }
+            auto &use = partitioner.nodes[idx->second];
+            // used in a different partition
+            if (use.size != node.size) {
+                externalize = true;
+                break;
+            }
+        }
+        if (!externalize) {
+            partitions[node.size].globals[node.GV->getName()] = false;
+            node.GV->setVisibility(GlobalValue::DefaultVisibility);
+            externalized--;
+        }
+    }
+    dbgs() << "Externalized " << externalized << " / " << partitioner.nodes.size() << "(" << externalized * (1.0 / partitioner.nodes.size()) << ") globals\n";
+
     bool verified = verify_partitioning(partitions, M, fvars.size(), gvars.size());
     assert(verified && "Partitioning failed to partition globals correctly");
     (void) verified;
