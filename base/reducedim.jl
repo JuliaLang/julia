@@ -1032,7 +1032,7 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         @inline function $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true)
-            if size(r) == size(A) 
+            if size(r) == size(A) && init
                 copyto!(r, A)
                 return r
             end
