@@ -1546,6 +1546,11 @@ dataids(A::Array) = (UInt(pointer(A)),)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 
+# While dictionaries aren't typically involved in aliasing detection, some arrays
+# (like DefaultArray) do use dictionaries as a backing element for their data.
+# Defining this ensures those fields are appropriately involved in aliasing decisions.
+dataids(dict::AbstractDict) = (UInt(pointer_from_objref(dict)),)
+
 ## get (getindex with a default value) ##
 
 RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange, AbstractVector{Int}}}},
