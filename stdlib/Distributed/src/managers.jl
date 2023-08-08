@@ -111,7 +111,7 @@ addprocs([
   version is used on all remote machines because serialization and code distribution might
   fail otherwise.
 
-* `exeflags`: additional flags passed to the worker processes.
+* `exeflags`: additional [command-line switches](@ref command-line-interface) passed to the worker processes.
 
 * `topology`: Specifies how the workers connect to each other. Sending a message between
   unconnected workers results in an error.
@@ -451,7 +451,9 @@ Local workers inherit the current package environment (i.e., active project,
 [`LOAD_PATH`](@ref), and [`DEPOT_PATH`](@ref)) from the main process.
 
 !!! warning
-    Local workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize their global state.
+    Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+    their global state (such as command-line switches, global variables, new method definitions, and loaded modules) with any
+    of the other running processes.
 
 **Keyword arguments**:
  - `restrict::Bool`: if `true` (default) binding is restricted to `127.0.0.1`.
