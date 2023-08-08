@@ -445,8 +445,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
         G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalValue::ExternalLinkage);
-        G->setVisibility(GlobalValue::HiddenVisibility);
+        G->setLinkage(GlobalValue::InternalLinkage);
         G->setDSOLocal(true);
         data->jl_sysimg_gvars.push_back(G);
     }
@@ -470,19 +469,13 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         for (GlobalObject &G : clone.getModuleUnlocked()->global_objects()) {
             if (!G.isDeclaration()) {
-                G.setLinkage(GlobalValue::ExternalLinkage);
-                G.setVisibility(GlobalValue::HiddenVisibility);
+                G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
                 if (Function *F = dyn_cast<Function>(&G)) {
                     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
                         // Add unwind exception personalities to functions to handle async exceptions
                         F->setPersonalityFn(juliapersonality_func);
-                    }
-                    // Alwaysinline functions must be inlined, so they should be marked internal
-                    if (F->hasFnAttribute(Attribute::AlwaysInline)) {
-                        F->setLinkage(GlobalValue::InternalLinkage);
-                        F->setVisibility(GlobalValue::DefaultVisibility);
                     }
                 }
             }
@@ -707,11 +700,19 @@ ModuleInfo compute_module_info(Module &M) {
 }
 
 struct Partition {
-    StringSet<> globals;
+    StringMap<bool> globals;
     StringMap<unsigned> fvars;
     StringMap<unsigned> gvars;
     size_t weight;
 };
+
+static bool canPartition(const GlobalValue &G) {
+    if (auto F = dyn_cast<Function>(&G)) {
+        if (F->hasFnAttribute(Attribute::AlwaysInline))
+            return false;
+    }
+    return true;
+}
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
@@ -750,11 +751,28 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
         } else {
             // Local global values are not partitioned
-            if (GV.hasLocalLinkage())
+            if (!canPartition(GV)) {
+                if (GVNames.count(GV.getName())) {
+                    bad = true;
+                    dbgs() << "Shouldn't have partitioned " << GV.getName() << ", but is in partition " << GVNames[GV.getName()] << "\n";
+                }
                 continue;
+            }
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
+            }
+            for (ConstantUses<GlobalValue> uses(const_cast<GlobalValue*>(&GV), const_cast<Module&>(M)); !uses.done(); uses.next()) {
+                auto val = uses.get_info().val;
+                if (!GVNames.count(val->getName())) {
+                    bad = true;
+                    dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is not in any partition\n";
+                    continue;
+                }
+                if (GVNames[val->getName()] != GVNames[GV.getName()]) {
+                    bad = true;
+                    dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is in partition " << GVNames[GV.getName()] << " but " << val->getName() << " is in partition " << GVNames[val->getName()] << "\n";
+                }
             }
         }
     }
@@ -827,8 +845,10 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        if (G.hasLocalLinkage())
+        if (!canPartition(G))
             continue;
+        G.setLinkage(GlobalValue::ExternalLinkage);
+        G.setVisibility(GlobalValue::HiddenVisibility);
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
@@ -841,6 +861,8 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
+            // This can fail if we can't partition a global, but it uses something we can partition
+            // This should be fixed by altering canPartition to not permit partitioning this global
             assert(idx != partitioner.node_map.end());
             partitioner.merge(i, idx->second);
         }
@@ -868,35 +890,35 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (unsigned idx = 0; idx < idxs.size(); ++idx) {
         auto i = idxs[idx];
         auto root = partitioner.find(i);
-        assert(root == i || partitioner.nodes[root].GV == nullptr);
-        if (partitioner.nodes[root].GV) {
+        assert(root == i || partitioner.nodes[root].weight == 0);
+        if (partitioner.nodes[root].weight) {
             auto &node = partitioner.nodes[root];
             auto &P = *pq.top();
             pq.pop();
             auto name = node.GV->getName();
-            P.globals.insert(name);
+            P.globals.insert({name, true});
             if (fvars.count(node.GV))
                 P.fvars[name] = fvars[node.GV];
             if (gvars.count(node.GV))
                 P.gvars[name] = gvars[node.GV];
             P.weight += node.weight;
-            node.GV = nullptr;
+            node.weight = 0;
             node.size = &P - partitions.data();
             pq.push(&P);
         }
         if (root != i) {
             auto &node = partitioner.nodes[i];
-            assert(node.GV != nullptr);
+            assert(node.weight != 0);
             // we assigned its root already, so just add it to the root's partition
             // don't touch the priority queue, since we're not changing the weight
             auto &P = partitions[partitioner.nodes[root].size];
             auto name = node.GV->getName();
-            P.globals.insert(name);
+            P.globals.insert({name, true});
             if (fvars.count(node.GV))
                 P.fvars[name] = fvars[node.GV];
             if (gvars.count(node.GV))
                 P.gvars[name] = gvars[node.GV];
-            node.GV = nullptr;
+            node.weight = 0;
             node.size = partitioner.nodes[root].size;
         }
     }
@@ -1118,15 +1140,23 @@ static void materializePreserved(Module &M, Partition &partition) {
     for (auto &Name : partition.globals) {
         auto *GV = M.getNamedValue(Name.first());
         assert(GV && !GV->isDeclaration() && !GV->hasLocalLinkage());
-        Preserve.insert(GV);
+        if (!Name.second) {
+            // We skip partitioning for internal variables, so this has
+            // the same effect as putting it in preserve.
+            // This just avoids a hashtable lookup.
+            GV->setLinkage(GlobalValue::InternalLinkage);
+            assert(GV->hasDefaultVisibility());
+        } else {
+            Preserve.insert(GV);
+        }
     }
 
     for (auto &F : M.functions()) {
         if (F.isDeclaration())
             continue;
-        if (Preserve.contains(&F))
-            continue;
         if (F.hasLocalLinkage())
+            continue;
+        if (Preserve.contains(&F))
             continue;
         F.deleteBody();
         F.setLinkage(GlobalValue::ExternalLinkage);
@@ -1211,7 +1241,7 @@ static void construct_vars(Module &M, Partition &partition) {
     std::vector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
     gvar_pairs.reserve(partition.gvars.size());
     for (auto &gvar : partition.gvars) {
-        auto GV = M.getGlobalVariable(gvar.first());
+        auto GV = M.getNamedGlobal(gvar.first());
         assert(GV);
         assert(!GV->isDeclaration());
         gvar_pairs.push_back({ gvar.second, GV });
@@ -1594,16 +1624,6 @@ void jl_dump_native_impl(void *native_code,
             fidxs_var->setDSOLocal(true);
             dataM.addModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(Context, "_0"));
 
-            // reflect the address of the jl_RTLD_DEFAULT_handle variable
-            // back to the caller, so that we can check for consistency issues
-            GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&dataM);
-            addComdat(new GlobalVariable(dataM,
-                                        jlRTLD_DEFAULT_var->getType(),
-                                        true,
-                                        GlobalVariable::ExternalLinkage,
-                                        jlRTLD_DEFAULT_var,
-                                        "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
-
             // let the compiler know we are going to internalize a copy of this,
             // if it has a current usage with ExternalLinkage
             auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
@@ -1634,6 +1654,16 @@ void jl_dump_native_impl(void *native_code,
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);
+
+        // reflect the address of the jl_RTLD_DEFAULT_handle variable
+        // back to the caller, so that we can check for consistency issues
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
+        addComdat(new GlobalVariable(metadataM,
+                                    jlRTLD_DEFAULT_var->getType(),
+                                    true,
+                                    GlobalVariable::ExternalLinkage,
+                                    jlRTLD_DEFAULT_var,
+                                    "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
 
         Type *T_size = DL.getIntPtrType(Context);
         Type *T_psize = T_size->getPointerTo();
