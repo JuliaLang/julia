@@ -61,6 +61,9 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
+#ifdef MADV_NOHUGEPAGE
+    madvise(stk, bufsz, MADV_NOHUGEPAGE);
+#endif
 #endif
     jl_atomic_fetch_add(&num_stack_mappings, 1);
     return stk;
