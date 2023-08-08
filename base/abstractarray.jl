@@ -3340,7 +3340,7 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
 
-Note that since the `map!` function is intended to operate without making any allocations, the target `destination` must not share memory with any of the sources in `collection...`.
+Note that the order in which the `collection`s are iterated is undefined. This means you should be careful whenever the target `destination` shares memory with any of the `collection`s, because you may get an incorrect result.
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 

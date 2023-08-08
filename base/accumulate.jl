@@ -43,7 +43,7 @@ end
 
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
 
-Note that since the `cumsum!` function is intended to operate without making any allocations, the target `B` must not share memory with the source `A`.
+Note that the target `B` must not share memory with the source `A`, otherwise the behavior is undefined.
 """
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
@@ -153,7 +153,7 @@ cumsum(itr) = accumulate(add_sum, itr)
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
 
-Note that since the `cumprod!` function is intended to operate without making any allocations, the target `B` must not share memory with the source `A`.
+Note that the target `B` must not share memory with the source `A`, otherwise the behavior is undefined.
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
@@ -164,7 +164,7 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 
-Note that since the `cumprod!` function is intended to operate without making any allocations, the target `y` must not share memory with the source `x`.
+Note that the target `y` must not share memory with the source `x`, otherwise the behavior is undefined.
 """
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
 
@@ -307,7 +307,7 @@ Cumulative operation `op` on `A` along the dimension `dims`, storing the result 
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
 value is used to instantiate the accumulation.
 
-Note that since the `accumulate!` function is intended to operate without making any allocations, the target `B` must not share memory with the source `A`.
+Note that the target `B` must not share memory with the source `A`, otherwise the behavior is undefined.
 
 See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 
