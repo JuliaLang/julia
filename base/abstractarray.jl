@@ -1548,7 +1548,6 @@ dataids(x) = ()
 # While dictionaries aren't typically involved in aliasing detection, some arrays
 # (like DefaultArray) do use dictionaries as a backing element for their data.
 # Defining this ensures those fields are involved in aliasing decisions.
-dataids(dict::Dict) = (UInt(pointer_from_objref(dict)),)
 dataids(dict::AbstractDict) = (UInt(objectid(dict)),)
 
 ## get (getindex with a default value) ##
