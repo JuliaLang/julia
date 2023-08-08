@@ -81,14 +81,6 @@ trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
 floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
 ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
 
-# fallbacks
-trunc(::Type{T}, x::Real; kwargs...) where {T} = round(T, x, RoundToZero; kwargs...)
-floor(::Type{T}, x::Real; kwargs...) where {T} = round(T, x, RoundDown; kwargs...)
-ceil(::Type{T}, x::Real; kwargs...) where {T} = round(T, x, RoundUp; kwargs...)
-round(::Type{T}, x::Real; kwargs...) where {T} = round(T, x, RoundNearest; kwargs...)
-
-round(::Type{T}, x::Real, r::RoundingMode) where {T} = convert(T, round(x, r))
-
 round(x::Integer, r::RoundingMode) = x
 
 # round x to multiples of 1/invstep
