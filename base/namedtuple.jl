@@ -196,6 +196,14 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:
     return NT1(T1(nt))::NT1::NT
 end
 
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # _tuple_error(NT, nt)
+    T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+    NT1 = NamedTuple{names, T1}
+    return NT1(T1(nt))::NT1::NT
+end
+
 if nameof(@__MODULE__) === :Base
     Tuple(nt::NamedTuple) = (nt...,)
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
