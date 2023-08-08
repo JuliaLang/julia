@@ -2252,6 +2252,10 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+        if haskey(ENV, "JULIA_PKG_UNOPT_BITCODE_DIR")
+            output_unopt_bc = `$(ENV["JULIA_PKG_UNOPT_BITCODE_DIR"])/$(pkg.name).a`
+            opts = `$(opts) --output-unopt-bc $(output_unopt_bc)`
+        end
     else
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
