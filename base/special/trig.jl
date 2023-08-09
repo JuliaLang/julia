@@ -932,10 +932,10 @@ cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 tanpi(x::Integer) = x >= 0 ? (isodd(x) ? -zero(float(x)) : zero(float(x))) :
                              (isodd(x) ? zero(float(x)) : -zero(float(x)))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
-sinpi(x::Real) = sin(pi*x)
-cospi(x::Real) = cos(pi*x)
-sincospi(x::Real) = sincos(pi*x)
-tanpi(x::Real) = tan(pi*x)
+sinpi(x::AbstractFloat) = sin(pi*x)
+cospi(x::AbstractFloat) = cos(pi*x)
+sincospi(x::AbstractFloat) = sincos(pi*x)
+tanpi(x::AbstractFloat) = tan(pi*x)
 tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
 
 function sinpi(z::Complex{T}) where T
