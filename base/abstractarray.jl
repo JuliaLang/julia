@@ -1522,11 +1522,19 @@ _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 """
     Base.dataids(A::AbstractArray)
 
-Return a tuple of `UInt`s that represent the mutable data segments of an array.
+Return a tuple of `UInt`s that identify the mutable data segments of an array.
 
+These values are used to determine if two arrays might share memory with [`Base.mightalias`](@ref).
 The default implementation recursively combines the `dataids` of all fields of the struct.
-Custom arrays only need to implement a custom `dataids` method if they depend upon non-array
-fields to define their contents and are immutable.
+
+Custom arrays only need to implement a custom `dataids` method if:
+
+* they wish to ignore some fields (with non-empty `dataids`) in aliasing considerations;
+    for example this can be the case if an array is used to store intentionally-shared
+    metadata or other data that is not mutated by `setindex!`
+
+* or they depend upon non-array fields (with empty `dataids`) to define their indexable
+    contents that they wish to include in aliasing considerations.
 """
 function dataids(A::AbstractArray)
     @inline
