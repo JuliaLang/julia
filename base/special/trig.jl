@@ -789,7 +789,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sinpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
@@ -820,7 +820,7 @@ end
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:Union{IEEEFloat, Rational}
+function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
@@ -856,7 +856,7 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
@@ -895,7 +895,7 @@ Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large
 
 See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function tanpi(_x::T) where T<:IEEEFloat
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
     x = abs(_x)
