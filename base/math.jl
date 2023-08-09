@@ -408,6 +408,8 @@ const libm = Base.libm_name
     sinh(x)
 
 Compute hyperbolic sine of `x`.
+
+See also [`sin`](@ref).
 """
 sinh(x::Number)
 
@@ -415,6 +417,8 @@ sinh(x::Number)
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
+
+See also [`cos`](@ref).
 """
 cosh(x::Number)
 
@@ -493,9 +497,11 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x)
+    sin(x::T) where T <: Number -> float(T)
 
 Compute sine of `x`, where `x` is in radians.
+
+Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
 
@@ -524,25 +530,33 @@ julia> round(exp(im*pi/6), digits=3)
 sin(x::Number)
 
 """
-    cos(x)
+    cos(x::T) where T <: Number -> float(T)
 
 Compute cosine of `x`, where `x` is in radians.
+
+Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
 
 See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
 """
-    tan(x)
+    tan(x::T) where T <: Number -> float(T)
 
 Compute tangent of `x`, where `x` is in radians.
+
+Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+
+See also [`tanh`](@ref).
 """
 tan(x::Number)
 
 """
-    asin(x)
+    asin(x::T) where T <: Number -> float(T)
 
 Compute the inverse sine of `x`, where the output is in radians.
+
+Returns a `T(NaN)` if `isnan(x)`.
 
 See also [`asind`](@ref) for output in degrees.
 
@@ -558,7 +572,9 @@ julia> asind.((0, 1/2, 1))
 asin(x::Number)
 
 """
-    acos(x)
+    acos(x::T) where T <: Number -> float(T)
+
+Returns a `T(NaN)` if `isnan(x)`.
 
 Compute the inverse cosine of `x`, where the output is in radians
 """
