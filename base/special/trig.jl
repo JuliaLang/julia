@@ -796,9 +796,7 @@ function sinpi(_x::T) where T<:IEEEFloat
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -827,9 +825,7 @@ function cospi(x::T) where T<:IEEEFloat
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return one(T)
-    end
+    x >= maxintfloat(T) && return one(T)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -863,9 +859,7 @@ function sincospi(_x::T) where T<:IEEEFloat
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
-    end
+    x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -905,9 +899,7 @@ function tanpi(_x::T) where T<:IEEEFloat
     end
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
