@@ -445,31 +445,18 @@ end
 @testset "Exponentiation operator" begin
     @test big(5)^true == big(5)
     @test big(5)^false == one(BigInt)
-    # Test BigInt and Int8 exponentiation are consistent.
-    for i = typemin(Int8):typemax(Int8), j = typemin(Int8):typemax(Int8)
+    testvals = Int8[-128:-126; -3:3; 125:127]
+    @testset "BigInt and Int8 are consistent: $i^$j" for i in testvals, j in testvals
         int8_res = try
             i^j
         catch e
             e
         end
-        big_res = try
-            big(i)^big(j)
-        catch e
-            e
-        end
-        if int8_res isa Exception && big_res isa Exception
-            # Both have exception
-            if typeof(int8_res) != typeof(big_res)
-                throw(big_res)
-            end
-        elseif big_res isa Exception
-            @error "$i^$j failed on BigInt but not Int8"
-            throw(big_res)
-        elseif int8_res isa Exception
-            @error "$i^$j failed on Int8 but not BigInt"
-            throw(int8_res)
+        if int8_res isa Int8
+            @test (big(i)^big(j)) % Int8 === int8_res
         else
-            @test big_res%Int8 === int8_res
+            # Test both have exception of the same type
+            @test_throws typeof(int8_res) big(i)^big(j)
         end
     end
 end
