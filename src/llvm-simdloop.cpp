@@ -190,10 +190,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 
     // TODO: Can we drop `julia.simdloop` and `julia.ivdep`?
 
-    // REMARK([=]() {
-    //     return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getLoopLatch()->getTerminator()->getDebugLoc(), L)
-    //         << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
-    // });
+    REMARK([&]() {
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getStartLoc(), L.getHeader())
+            << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
+    });
 
     // If ivdep is true we assume that there is no memory dependency between loop iterations
     // This is a fairly strong assumption and does often not hold true for generic code.
