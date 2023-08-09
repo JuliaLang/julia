@@ -351,7 +351,8 @@ hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}
 hasfastin(x) = hasfastin(typeof(x))
 
 ⊇(a, b) = b ⊆ a
-
+issubset(a) = Fix2(issubset, a)
+⊇(a) = Fix1(issubset, a)
 ## strict subset comparison
 
 function ⊊ end
@@ -380,6 +381,8 @@ false
 ⊊(a, b::AbstractSet) = Set(a) ⊊ b
 ⊊(a, b) = Set(a) ⊊ Set(b)
 ⊋(a, b) = b ⊊ a
+⊋(a) = Fix2(⊋, a)
+⊊(a) = Fix2(⊊, a)
 
 function ⊈ end
 function ⊉ end
@@ -404,6 +407,8 @@ false
 
 ⊈(a, b) = !⊆(a, b)
 ⊉(a, b) = b ⊈ a
+⊉(a) = Fix2(⊉, a)
+⊈(a) = Fix2(⊈, a)
 
 ## set equality comparison
 
@@ -440,6 +445,8 @@ function issetequal(a, b)
     haslength(b) && return issetequal(b, Set(a))
     return issetequal(Set(a), Set(b))
 end
+
+issetequal(a) = Fix2(issetequal, a)
 
 ## set disjoint comparison
 """
@@ -486,6 +493,8 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
         return _overlapping_range_isdisjoint(a, b)
     end
 end
+
+isdisjoint(a) = Fix2(isdisjoint, a)
 
 _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
 
