@@ -216,7 +216,7 @@ end
 
 Calculates the matrix-matrix or matrix-vector product `AB` and stores the result in `Y`, overwriting the existing value of `Y`.
 
-Note that the target `Y` must not share memory with either `A` or `B`, otherwise the behavior is undefined.
+Note that the target `Y` must not share memory with either `A` or `B`, otherwise the result is undefined.
 
 # Examples
 ```jldoctest
