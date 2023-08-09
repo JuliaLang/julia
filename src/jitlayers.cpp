@@ -213,18 +213,15 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.cache = true;
     params.world = world;
-    params.imaging = imaging_default();
+    params.imaging_mode = imaging_default();
     params.debug_level = jl_options.debug_level;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging, params.DL, params.TargetTriple);
+            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging_mode, params.DL, params.TargetTriple);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
-        {
-            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.getContext(), params.imaging);
-            jl_compile_workqueue(params, *temp_module, CompilationPolicy::Default);
-        }
+        jl_compile_workqueue(params, CompilationPolicy::Default);
 
         if (params._shared_module) {
             jl_ExecutionEngine->optimizeDLSyms(*params._shared_module);
@@ -235,9 +232,9 @@ static jl_callptr_t _jl_compile_codeinst(
         // the fiction that we don't know what loads from the global will return. Thus, we
         // need to emit a separate module for the globals before any functions are compiled,
         // to ensure that the globals are defined when they are compiled.
-        if (params.imaging) {
+        if (params.imaging_mode) {
             // Won't contain any PLT/dlsym calls, so no need to optimize those
-            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging, params.DL, params.TargetTriple, params.global_targets));
+            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging_mode, params.DL, params.TargetTriple, params.global_targets));
         } else {
             StringMap<void*> NewGlobals;
             for (auto &global : params.global_targets) {
@@ -380,7 +377,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (!pparams) {
             ctx = jl_ExecutionEngine->acquireContext();
         }
-        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
+        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging_mode : imaging_default(), pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
@@ -388,7 +385,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
     jl_codegen_params_t params(into->getContext(), std::move(target_info.first), std::move(target_info.second));
-    params.imaging = imaging_default();
+    params.imaging_mode = imaging_default();
     params.debug_level = jl_options.debug_level;
     if (pparams == NULL)
         pparams = &params;
