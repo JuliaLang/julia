@@ -224,7 +224,7 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
     }
 
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(M));
+    assert(!verifyLLVMIR(*L));
 #endif
     return true;
 }
