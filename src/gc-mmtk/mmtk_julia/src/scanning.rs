@@ -20,19 +20,11 @@ use std::sync::MutexGuard;
 pub struct VMScanning {}
 
 impl Scanning<JuliaVM> for VMScanning {
-    fn scan_roots_in_all_mutator_threads(
-        _tls: VMWorkerThread,
-        _factory: impl RootsWorkFactory<JuliaVMEdge>,
-    ) {
-        // Thread roots are collected by Julia before stopping the world
-    }
-
     fn scan_roots_in_mutator_thread(
         _tls: VMWorkerThread,
         _mutator: &'static mut Mutator<JuliaVM>,
         _factory: impl RootsWorkFactory<JuliaVMEdge>,
     ) {
-        unimplemented!()
     }
     fn scan_vm_specific_roots(
         _tls: VMWorkerThread,

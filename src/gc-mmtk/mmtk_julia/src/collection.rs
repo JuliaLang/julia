@@ -15,7 +15,7 @@ static GC_START: AtomicU64 = AtomicU64::new(0);
 pub struct VMCollection {}
 
 impl Collection<JuliaVM> for VMCollection {
-    fn stop_all_mutators<F>(_tls: VMWorkerThread, _mutator_visitor: F)
+    fn stop_all_mutators<F>(_tls: VMWorkerThread, mut mutator_visitor: F)
     where
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
@@ -26,6 +26,15 @@ impl Collection<JuliaVM> for VMCollection {
         }
 
         trace!("Stopped the world!");
+
+        // Tell MMTk the stacks are ready.
+        {
+            use mmtk::vm::ActivePlan;
+            for mutator in crate::active_plan::VMActivePlan::mutators() {
+                info!("stop_all_mutators: visiting {:?}", mutator.mutator_tls);
+                mutator_visitor(mutator);
+            }
+        }
 
         // Record the start time of the GC
         let now = unsafe { ((*UPCALLS).jl_hrtime)() };
@@ -128,13 +137,6 @@ impl Collection<JuliaVM> for VMCollection {
     fn out_of_memory(_tls: VMThread, _err_kind: AllocationError) {
         println!("Out of Memory!");
         unsafe { ((*UPCALLS).jl_throw_out_of_memory_error)() };
-    }
-
-    fn prepare_mutator<T: MutatorContext<JuliaVM>>(
-        _tls_w: VMWorkerThread,
-        _tls_m: VMMutatorThread,
-        _mutator: &T,
-    ) {
     }
 
     fn vm_live_bytes() -> usize {
