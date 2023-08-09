@@ -682,6 +682,8 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -759,6 +761,8 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -823,6 +827,8 @@ extrema(f, A::AbstractArray; dims)
     extrema!(r, A)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+Note that the target `dest` must not share memory with the source `src`, otherwise the result is undefined.
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -1093,6 +1099,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
+
+Note that the targets `rval` and `rind` must not share memory with the source `A`, otherwise the result is undefined.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1164,6 +1172,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
+
+Note that the targets `rval` and `rind` must not share memory with the source `A`, otherwise the result is undefined.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)

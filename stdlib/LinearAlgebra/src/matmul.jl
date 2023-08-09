@@ -214,9 +214,9 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product `AB` and stores the result in `Y`, overwriting the existing value of `Y`.
-
-Note that the target `Y` must not share memory with either `A` or `B`, otherwise the result is undefined.
+Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`, overwriting the existing value of `Y`,
+overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
+`B`.
 
 # Examples
 ```jldoctest
@@ -578,7 +578,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     end
 
     if C === A || B === C
-        throw(ArgumentError("output matrix must not share memory with input matrix"))
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
     if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
@@ -618,7 +618,7 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
     end
 
     if C === A || B === C
-        throw(ArgumentError("output matrix must not share memory with input matrix"))
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
     if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)

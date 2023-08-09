@@ -1781,6 +1781,8 @@ place of the removed items; in this case, `indices` must be a `AbstractUnitRange
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+Note that the target `a` must not share memory with the sources `indices` or `replacement`, otherwise the result is undefined.
+
 !!! compat "Julia 1.5"
     Prior to Julia 1.5, `indices` must always be a `UnitRange`.
 
@@ -2781,6 +2783,8 @@ end
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
 Items which are kept are shifted to fill the resulting gaps.
+
+Note that the target `a` must not share memory with the indices `inds`, otherwise the result is undefined.
 
 `inds` must be an iterator of sorted and unique integer indices.
 See also [`deleteat!`](@ref).

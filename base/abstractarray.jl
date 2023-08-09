@@ -1369,6 +1369,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
+Note that the target `A` must not share memory with the source `X` or the indices `inds`, otherwise the result is undefined.
+
 # Examples
 ```jldoctest
 julia> A = zeros(2,2);
