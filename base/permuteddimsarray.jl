@@ -252,6 +252,10 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     return P
 end
 
+function Base.unaliascopy(P::PermutedDimsArray)::typeof(P)
+    return (typeof(P))(Base.unaliascopy(P.parent))
+end
+
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianIndices{0}, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)

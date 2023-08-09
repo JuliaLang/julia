@@ -1158,6 +1158,7 @@ end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
 Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+Base.unaliascopy(S::Strider)::typeof(S) = (typeof(S))(Base.unaliascopy(S.data), S.offset, S.strides, S.size)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1285,6 +1286,18 @@ end
             @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
         end
     end
+end
+
+@testset "PermutedDimsArray unaliasing" begin
+    A = [1 2; 3 4]
+    P = permutedims(A, (2,1))
+    A .= PermutedDimsArray(A, (2,1))
+    @test A == P
+
+    A = [1 2; 3 4]
+    S = Strider(vec(A), strides(A), size(A))
+    A .= PermutedDimsArray(S, (2, 1))
+    @test A == P
 end
 
 @testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
