@@ -726,7 +726,7 @@ static void init_global_mutexes(void) {
     JL_SPIN_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
     JL_SPIN_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_SPIN_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
-    JL_SPIN_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
+    JL_SLEEP_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
     JL_SPIN_MUTEX_INIT(&typecache_lock, "typecache_lock");
 }
 

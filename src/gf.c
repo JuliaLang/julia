@@ -3966,12 +3966,12 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start)
 
 JL_DLLEXPORT void jl_typeinf_lock_begin(void)
 {
-    JL_SPIN_LOCK(&jl_codegen_lock);
+    JL_SLEEP_LOCK(&jl_codegen_lock);
 }
 
 JL_DLLEXPORT void jl_typeinf_lock_end(void)
 {
-    JL_SPIN_UNLOCK(&jl_codegen_lock);
+    JL_SLEEP_UNLOCK(&jl_codegen_lock);
 }
 
 #ifdef __cplusplus

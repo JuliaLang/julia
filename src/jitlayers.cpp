@@ -380,7 +380,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging_mode : imaging_default(), pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
         into = &backing;
     }
-    JL_SPIN_LOCK(&jl_codegen_lock);
+    JL_SLEEP_LOCK(&jl_codegen_lock);
     auto target_info = into->withModuleDo([&](Module &M) {
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
@@ -411,7 +411,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_ExecutionEngine->addModule(std::move(*into));
         }
     }
-    JL_SPIN_UNLOCK(&jl_codegen_lock);
+    JL_SLEEP_UNLOCK(&jl_codegen_lock);
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -485,7 +485,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     jl_code_info_t *src = NULL;
     jl_code_instance_t *codeinst = NULL;
     JL_GC_PUSH2(&src, &codeinst);
-    JL_SPIN_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    JL_SLEEP_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
     if (ci != jl_nothing)
         codeinst = (jl_code_instance_t*)ci;
@@ -529,7 +529,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else {
         codeinst = NULL;
     }
-    JL_SPIN_UNLOCK(&jl_codegen_lock);
+    JL_SLEEP_UNLOCK(&jl_codegen_lock);
     if (timed) {
         if (measure_compile_time_enabled) {
             uint64_t t_comp = jl_hrtime() - compiler_start_time;
@@ -550,11 +550,11 @@ void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
     if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
         return;
     }
-    JL_SPIN_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    JL_SLEEP_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     if (jl_atomic_load_relaxed(&oc_wrap->invoke) == NULL) {
         _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0);
     }
-    JL_SPIN_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_SLEEP_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -571,7 +571,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
-    JL_SPIN_LOCK(&jl_codegen_lock);
+    JL_SLEEP_LOCK(&jl_codegen_lock);
     if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
@@ -595,7 +595,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);
         JL_GC_POP();
     }
-    JL_SPIN_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_SLEEP_UNLOCK(&jl_codegen_lock); // Might GC
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -630,7 +630,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
-            JL_SPIN_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            JL_SLEEP_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
@@ -654,7 +654,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
-            JL_SPIN_UNLOCK(&jl_codegen_lock);
+            JL_SLEEP_UNLOCK(&jl_codegen_lock);
             if (timed) {
                 if (measure_compile_time_enabled) {
                     auto end = jl_hrtime();

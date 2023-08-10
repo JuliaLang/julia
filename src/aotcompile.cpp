@@ -297,7 +297,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     // compile all methods for the current world and type-inference world
 
-    JL_SPIN_LOCK(&jl_codegen_lock);
+    JL_SLEEP_LOCK(&jl_codegen_lock);
     auto target_info = clone.withModuleDo([&](Module &M) {
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
@@ -351,7 +351,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         // finally, make sure all referenced methods also get compiled or fixed up
         jl_compile_workqueue(params, policy);
     }
-    JL_SPIN_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_SLEEP_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
@@ -2130,7 +2130,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
-        JL_SPIN_LOCK(&jl_codegen_lock);
+        JL_SLEEP_LOCK(&jl_codegen_lock);
         auto target_info = m.withModuleDo([&](Module &M) {
             return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
         });
@@ -2148,7 +2148,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
         output.debug_level = std::max(2, static_cast<int>(jl_options.debug_level));
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
-        JL_SPIN_UNLOCK(&jl_codegen_lock); // Might GC
+        JL_SLEEP_UNLOCK(&jl_codegen_lock); // Might GC
 
         Function *F = NULL;
         if (m) {

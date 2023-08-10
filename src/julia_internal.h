@@ -1378,7 +1378,7 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 // -- synchronization utilities -- //
 
 extern jl_spin_mutex_t typecache_lock;
-extern JL_DLLEXPORT jl_spin_mutex_t jl_codegen_lock;
+extern JL_DLLEXPORT jl_sleep_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
 void jl_mach_gc_end(void);
