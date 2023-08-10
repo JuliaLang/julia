@@ -166,14 +166,13 @@ Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs
 function Channel(func::Function; ctype=nothing, csize=nothing, taskref=nothing, spawn=nothing, threadpool=nothing)
     # The spawn= keyword argument was added in Julia v1.3, and cannot be used with the
     # deprecated keyword arguments `ctype=` or `csize=`.
-    if (ctype !== nothing || csize !== nothing) && spawn !== nothing
-        throw(ArgumentError("Cannot set `spawn=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false)` instead!"))
+    if (ctype !== nothing || csize !== nothing) && (spawn !== nothing || threadpool !== nothing)
+        throw(ArgumentError("Cannot set `spawn=` or `threadpool=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false, threadpool=nothing)` instead!"))
     end
     # Set the actual default values for the arguments.
     ctype === nothing && (ctype = Any)
     csize === nothing && (csize = 0)
     spawn === nothing && (spawn = false)
-    threadpool !== nothing && (spawn = true)
     return Channel{ctype}(func, csize; taskref=taskref, spawn=spawn, threadpool=threadpool)
 end
 
