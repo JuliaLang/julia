@@ -171,7 +171,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
     BasicBlock *Lh = L.getHeader();
     LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
 
-    for (unsigned i = 0, ie = LoopID->getNumOperands(); i < ie; ++i) {
+    SmallVector<Metadata*, 4> MDs(1);
+    // First Operand is self-reference
+    // Drop `julia.` prefixes
+    for (unsigned i = 1, ie = LoopID->getNumOperands(); i < ie; ++i) {
         Metadata *Op = LoopID->getOperand(i);
         const MDString *S = dyn_cast<MDString>(Op);
         if (S) {
@@ -184,13 +187,18 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
                 continue;
             }
         }
+        MDs.push_back(Op);
     }
 
     LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
     if (!simd && !ivdep)
         return false;
 
-    // TODO: Can we drop `julia.simdloop` and `julia.ivdep`?
+    LLVMContext &Context = L.getHeader()->getContext();
+    MDNode *NewLoopID = MDNode::get(Context, MDs);
+    // Set operand 0 to refer to the loop id itself
+    NewLoopID->replaceOperandWith(0, NewLoopID);
+    L.setLoopID(NewLoopID);
 
     REMARK([&]() {
         return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getStartLoc(), L.getHeader())

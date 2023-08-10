@@ -121,8 +121,8 @@ end
 # CHECK: [[LOOPUNROLL]] = !{!"llvm.loop.unroll.count", i64 3}
 # CHECK: [[LOOPID4]] = distinct !{[[LOOPID4]], [[LOOPUNROLL2:![0-9]+]]}
 # CHECK: [[LOOPUNROLL2]] = !{!"llvm.loop.unroll.full"}
-# LOWER: [[LOOPID]] = distinct !{[[LOOPID]], !"julia.simdloop"}
-# LOWER: [[LOOPID2]] = distinct !{[[LOOPID2]], !"julia.simdloop", !"julia.ivdep"}
+# LOWER: [[LOOPID]] = distinct !{[[LOOPID]]}
+# LOWER: [[LOOPID2]] = distinct !{[[LOOPID2]]}
 # LOWER: [[LOOPID3]] = distinct !{[[LOOPID3]], [[LOOPUNROLL:![0-9]+]]}
 # LOWER: [[LOOPUNROLL]] = !{!"llvm.loop.unroll.count", i64 3}
 # LOWER: [[LOOPID4]] = distinct !{[[LOOPID4]], [[LOOPUNROLL2:![0-9]+]]}
