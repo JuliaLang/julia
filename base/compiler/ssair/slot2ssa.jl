@@ -400,7 +400,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         push!(result_order, node)
         bb_rename[node] = length(result_order)
         cs = domtree.nodes[node].children
-        terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
+        terminator = ir[SSAValue(last(ir.cfg.blocks[node].stmts))][:stmt]
         next_node = node + 1
         node = -1
         # Adding the nodes in reverse sorted order attempts to retain
@@ -448,10 +448,10 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
             nidx = bb_start_off + 1
-            inst = result[nidx][:inst]
-            @assert isa(inst, GotoNode)
+            stmt = result[nidx][:stmt]
+            @assert isa(stmt, GotoNode)
             # N.B.: The .label has already been renamed when it was created.
-            new_bbs[new_bb] = BasicBlock(nidx:nidx, [new_bb - 1], [inst.label])
+            new_bbs[new_bb] = BasicBlock(nidx:nidx, [new_bb - 1], [stmt.label])
             bb_start_off += 1
             continue
         end
@@ -459,22 +459,22 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         inst_range = (bb_start_off+1):(bb_start_off+length(old_inst_range))
         for (nidx, idx) in zip(inst_range, old_inst_range)
             inst_rename[idx] = SSAValue(nidx)
-            @assert !isassigned(result.inst, nidx)
+            @assert !isassigned(result.stmt, nidx)
             node = result[nidx]
             node[] = ir.stmts[idx]
-            inst = node[:inst]
-            if isa(inst, PhiNode)
-                node[:inst] = rename_phinode_edges(inst, bb, result_order, bb_rename)
+            stmt = node[:stmt]
+            if isa(stmt, PhiNode)
+                node[:stmt] = rename_phinode_edges(stmt, bb, result_order, bb_rename)
             end
         end
         # Now fix up the terminator
-        terminator = result[inst_range[end]][:inst]
+        terminator = result[inst_range[end]][:stmt]
         if isa(terminator, GotoNode)
             # Convert to implicit fall through
             if bb_rename[terminator.label] == new_bb + 1
-                result[inst_range[end]][:inst] = nothing
+                result[inst_range[end]][:stmt] = nothing
             else
-                result[inst_range[end]][:inst] = GotoNode(bb_rename[terminator.label])
+                result[inst_range[end]][:stmt] = GotoNode(bb_rename[terminator.label])
             end
         elseif isa(terminator, GotoIfNot)
             # Check if we need to break the critical edge
@@ -483,9 +483,9 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
             end
-            result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+            result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
                 if terminator.head === :enter
@@ -496,7 +496,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -509,7 +509,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
     for i in 1:length(result)
-        result[i][:inst] = renumber_ssa!(result[i][:inst], inst_rename, true)
+        result[i][:stmt] = renumber_ssa!(result[i][:stmt], inst_rename, true)
     end
     cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
     new_new_nodes = NewNodeStream(length(ir.new_nodes))
@@ -519,11 +519,11 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         new_new_nodes.info[i] = new_new_info
         new_node = new_new_nodes.stmts[i]
         new_node[] = ir.new_nodes.stmts[i]
-        new_node_inst = new_node[:inst]
+        new_node_inst = new_node[:stmt]
         if isa(new_node_inst, PhiNode)
             new_node_inst = rename_phinode_edges(new_node_inst, block_for_inst(ir.cfg, new_info.pos), result_order, bb_rename)
         end
-        new_node[:inst] = renumber_ssa!(new_node_inst, inst_rename, true)
+        new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
     return new_ir
@@ -606,7 +606,7 @@ end
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                         defuses::Vector{SlotInfo}, slottypes::Vector{Any},
                         𝕃ₒ::AbstractLattice)
-    code = ir.stmts.inst
+    code = ir.stmts.stmt
     cfg = ir.cfg
     catch_entry_blocks = TryCatchRegion[]
     for idx in 1:length(code)
@@ -766,7 +766,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             end
             new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(𝕃ₒ, old_entry[:type], typ)
             old_entry[:type] = new_typ
-            old_entry[:inst] = node
+            old_entry[:stmt] = node
             incoming_vals[slot] = Pair{Any, Any}(ssaval, outgoing_def)
         end
         (item in visited) && continue
@@ -911,7 +911,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             push!(type_refine_phi, ssaval.id)
             new_idx = ssaval.id
             node = new_nodes.stmts[new_idx]
-            phic_values = (node[:inst]::PhiCNode).values
+            phic_values = (node[:stmt]::PhiCNode).values
             for i = 1:length(phic_values)
                 orig_typ = typ = typ_for_val(phic_values[i], ci, ir.sptypes, -1, slottypes)
                 while isa(typ, DelayedTyp)
@@ -930,7 +930,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts, 𝕃ₒ)
+            new_typ = recompute_type(node[:stmt]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts, 𝕃ₒ)
             if !⊑(𝕃ₒ, node[:type], new_typ) || !⊑(𝕃ₒ, new_typ, node[:type])
                 node[:type] = new_typ
                 changed = true
@@ -955,12 +955,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     resize!(ir.stmts.type, nstmts)
     for i in 1:nstmts
         local node = ir.stmts[i]
-        node[:inst] = new_to_regular(renumber_ssa!(new_code[i], ssavalmap), nstmts)
+        node[:stmt] = new_to_regular(renumber_ssa!(new_code[i], ssavalmap), nstmts)
         node[:type] = result_types[i]
     end
     for i = 1:length(new_nodes)
         local node = new_nodes.stmts[i]
-        node[:inst] = new_to_regular(renumber_ssa!(node[:inst], ssavalmap), nstmts)
+        node[:stmt] = new_to_regular(renumber_ssa!(node[:stmt], ssavalmap), nstmts)
     end
     @timeit "domsort" ir = domsort_ssa!(ir, domtree)
     return ir

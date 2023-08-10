@@ -135,7 +135,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     last_block_idx = last(state.cfg.blocks[block].stmts)
     if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
         need_split = false
-        post_bb_id = -ir[SSAValue(last_block_idx)][:inst].label
+        post_bb_id = -ir[SSAValue(last_block_idx)][:stmt].label
     else
         post_bb_id = length(state.new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
         need_split = true #!(idx == last_block_idx)
@@ -196,7 +196,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     for (old_block, new_block) in enumerate(bb_rename_range)
         if (length(state.new_cfg_blocks[new_block].succs) == 0)
             terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
-            terminator = todo.ir[SSAValue(terminator_idx)][:inst]
+            terminator = todo.ir[SSAValue(terminator_idx)][:stmt]
             if isa(terminator, ReturnNode) && isdefined(terminator, :val)
                 any_edges = true
                 push!(state.new_cfg_blocks[new_block].succs, post_bb_id)
@@ -556,7 +556,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                                union_split::UnionSplit, boundscheck::Symbol,
                                todo_bbs::Vector{Tuple{Int,Int}}, params::OptimizationParams)
     (; fully_covered, atype, cases, bbs) = union_split
-    stmt, typ, line = compact.result[idx][:inst], compact.result[idx][:type], compact.result[idx][:line]
+    stmt, typ, line = compact.result[idx][:stmt], compact.result[idx][:type], compact.result[idx][:line]
     join_bb = bbs[end]
     pn = PhiNode()
     local bb = compact.active_result_bb
@@ -605,9 +605,9 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         if isa(case, InliningTodo)
             val = ir_inline_item!(compact, idx, argexprs′, case, boundscheck, todo_bbs)
         elseif isa(case, InvokeCase)
-            inst = Expr(:invoke, case.invoke, argexprs′...)
+            invoke_stmt = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
-            val = insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
+            val = insert_node_here!(compact, NewInstruction(invoke_stmt, typ, case.info, line, flag))
         else
             case = case::ConstantCase
             val = case.val
@@ -993,7 +993,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
     isinvoke::Bool = false)
     if isa(case, ConstantCase)
-        ir[SSAValue(idx)][:inst] = case.val
+        ir[SSAValue(idx)][:stmt] = case.val
     elseif isa(case, InvokeCase)
         is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
@@ -1120,7 +1120,7 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
                 break
             end
             if nonempty_idx != 0
-                ir.stmts[idx][:inst] = stmt.args[nonempty_idx]
+                ir[SSAValue(idx)][:stmt] = stmt.args[nonempty_idx]
                 return nothing
             end
         end
@@ -1236,8 +1236,9 @@ end
 # this method does not access the method table or otherwise process generic
 # functions.
 function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, state::InliningState)
-    stmt = ir.stmts[idx][:inst]
-    rt = ir.stmts[idx][:type]
+    inst = ir[SSAValue(idx)]
+    stmt = inst[:stmt]
+    rt = inst[:type]
     if !(stmt isa Expr)
         check_effect_free!(ir, idx, stmt, rt, state)
         return nothing
@@ -1247,7 +1248,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         if head === :splatnew
             inline_splatnew!(ir, idx, stmt, rt, state)
         elseif head === :new_opaque_closure
-            narrow_opaque_closure!(ir, stmt, ir.stmts[idx][:info], state)
+            narrow_opaque_closure!(ir, stmt, inst[:info], state)
         elseif head === :invoke
             sig = call_sig(ir, stmt)
             sig === nothing && return nothing
@@ -1267,14 +1268,14 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     # Check if we match any of the early inliners
     earlyres = early_inline_special_case(ir, stmt, rt, sig, state)
     if isa(earlyres, SomeCase)
-        ir.stmts[idx][:inst] = earlyres.val
+        inst[:stmt] = earlyres.val
         return nothing
     end
 
     if check_effect_free!(ir, idx, stmt, rt, state)
         if sig.f === typeassert || ⊑(optimizer_lattice(state.interp), sig.ft, typeof(typeassert))
             # typeassert is a no-op if effect free
-            ir.stmts[idx][:inst] = stmt.args[2]
+            inst[:stmt] = stmt.args[2]
             return nothing
         end
     end
@@ -1288,7 +1289,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     # Special case inliners for regular functions
     lateres = late_inline_special_case!(ir, idx, stmt, rt, sig, state)
     if isa(lateres, SomeCase)
-        ir[SSAValue(idx)][:inst] = lateres.val
+        inst[:stmt] = lateres.val
         check_effect_free!(ir, idx, lateres.val, rt, state)
         return nothing
     end
@@ -1576,7 +1577,7 @@ function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Modif
     case === nothing && return nothing
     stmt.head = :invoke_modify
     pushfirst!(stmt.args, case.invoke)
-    ir.stmts[idx][:inst] = stmt
+    ir[SSAValue(idx)][:stmt] = stmt
     return nothing
 end
 
@@ -1636,7 +1637,7 @@ end
 function inline_const_if_inlineable!(inst::Instruction)
     rt = inst[:type]
     if rt isa Const && is_inlineable_constant(rt.val)
-        inst[:inst] = quoted(rt.val)
+        inst[:stmt] = quoted(rt.val)
         return true
     end
     inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
@@ -1691,7 +1692,7 @@ end
 
 function linear_inline_eligible(ir::IRCode)
     length(ir.cfg.blocks) == 1 || return false
-    terminator = ir[SSAValue(last(ir.cfg.blocks[1].stmts))][:inst]
+    terminator = ir[SSAValue(last(ir.cfg.blocks[1].stmts))][:stmt]
     isa(terminator, ReturnNode) || return false
     isdefined(terminator, :val) || return false
     return true

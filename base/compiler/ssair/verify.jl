@@ -46,7 +46,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
 
         use_inst = ir[op]
-        if isa(use_inst[:inst], Union{GotoIfNot, GotoNode, ReturnNode})
+        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode})
             @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
             error("")
         end
@@ -135,7 +135,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             error("")
         end
         last_end = last(block.stmts)
-        terminator = ir.stmts[last_end][:inst]
+        terminator = ir[SSAValue(last_end)][:stmt]
 
         bb_unreachable(domtree, idx) && continue
         if isa(terminator, ReturnNode)
@@ -168,7 +168,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 # As a special case, we allow extra statements in the BB of an :enter
                 # statement, until we can do proper CFG manipulations during compaction.
                 for idx in first(block.stmts):last(block.stmts)
-                    stmt = ir.stmts[idx][:inst]
+                    stmt = ir[SSAValue(idx)][:stmt]
                     if isexpr(stmt, :enter)
                         terminator = stmt
                         @goto enter_check
@@ -201,7 +201,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
         bb_unreachable(domtree, bb) && continue
-        stmt = ir.stmts[idx][:inst]
+        stmt = ir[SSAValue(idx)][:stmt]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
             if !is_phinode_block
@@ -255,7 +255,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
                 # Go back and check that all non-PhiNodes are valid value-position
                 for validate_idx in firstidx:(lastphi-1)
-                    validate_stmt = ir.stmts[validate_idx][:inst]
+                    validate_stmt = ir[SSAValue(validate_idx)][:stmt]
                     isa(validate_stmt, PhiNode) && continue
                     check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0, allow_frontend_forms)
                 end
@@ -269,7 +269,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
                     error("")
                 end
-                if !isa(ir[val][:inst], UpsilonNode)
+                if !isa(ir[val][:stmt], UpsilonNode)
                     @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
                     error("")
                 end

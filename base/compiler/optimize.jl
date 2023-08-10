@@ -618,7 +618,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     svdef = sv.linfo.def
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
+    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
@@ -646,7 +646,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         if ftyp === IntrinsicFunction && farg isa SSAValue
             # if this comes from code that was already inlined into another function,
             # Consts have been widened. try to recover in simple cases.
-            farg = isa(src, CodeInfo) ? src.code[farg.id] : src.stmts[farg.id][:inst]
+            farg = isa(src, CodeInfo) ? src.code[farg.id] : src[farg][:stmt]
             if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
                 ftyp = argextype(farg, src, sptypes)
             end
@@ -741,7 +741,7 @@ function inline_cost(ir::IRCode, params::OptimizationParams,
                        cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
-        stmt = ir.stmts[line][:inst]
+        stmt = ir[SSAValue(line)][:stmt]
         thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return MAX_INLINE_COST
