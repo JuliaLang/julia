@@ -1155,6 +1155,9 @@ function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
+# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
+# /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -1591,7 +1594,11 @@ end
     ξ1/ν
 end
 
-# apply reflector from left
+"""
+    reflectorApply!(x, τ, A)
+
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+"""
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)

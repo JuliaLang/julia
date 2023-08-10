@@ -137,6 +137,12 @@ function Base.show(io::IO, ::MIME"text/plain", x::TransposeFactorization)
     show(io, MIME"text/plain"(), parent(x))
 end
 
+function (\)(F::Factorization, B::AbstractVecOrMat)
+    require_one_based_indexing(B)
+    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
+    ldiv!(F, copy_similar(B, TFB))
+end
+(\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns or rows
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal}
@@ -150,32 +156,6 @@ end
     conj!(adjoint(parent(F)) \ conj.(B))
 (\)(F::AdjointFactorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
     @invoke \(F::typeof(F), B::VecOrMat)
-
-function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where {T<:BlasReal}
-    require_one_based_indexing(B)
-    x = rdiv!(copy(reinterpret(T, B)), F)
-    return copy(reinterpret(Complex{T}, x))
-end
-# don't do the reinterpretation for [Adjoint/Transpose]Factorization
-(/)(B::VecOrMat{Complex{T}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
-    conj!(adjoint(parent(F)) \ conj.(B))
-(/)(B::VecOrMat{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
-    @invoke /(B::VecOrMat{Complex{T}}, F::Factorization{T})
-
-function (\)(F::Factorization, B::AbstractVecOrMat)
-    require_one_based_indexing(B)
-    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
-    ldiv!(F, copy_similar(B, TFB))
-end
-(\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
-
-function (/)(B::AbstractMatrix, F::Factorization)
-    require_one_based_indexing(B)
-    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    rdiv!(copy_similar(B, TFB), F)
-end
-(/)(A::AbstractMatrix, F::AdjointFactorization) = adjoint(adjoint(F) \ adjoint(A))
-(/)(A::AbstractMatrix, F::TransposeFactorization) = transpose(transpose(F) \ transpose(A))
 
 function ldiv!(Y::AbstractVector, A::Factorization, B::AbstractVector)
     require_one_based_indexing(Y, B)
@@ -200,3 +180,27 @@ function ldiv!(Y::AbstractMatrix, A::Factorization, B::AbstractMatrix)
         return ldiv!(A, Y)
     end
 end
+
+function (/)(B::AbstractMatrix, F::Factorization)
+    require_one_based_indexing(B)
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    rdiv!(copy_similar(B, TFB), F)
+end
+# reinterpretation trick for complex lhs and real factorization
+function (/)(B::Union{Matrix{Complex{T}},AdjOrTrans{Complex{T},Vector{Complex{T}}}}, F::Factorization{T}) where {T<:BlasReal}
+    require_one_based_indexing(B)
+    x = rdiv!(copy(reinterpret(T, B)), F)
+    return copy(reinterpret(Complex{T}, x))
+end
+# don't do the reinterpretation for [Adjoint/Transpose]Factorization
+(/)(B::Union{Matrix{Complex{T}},AdjOrTrans{Complex{T},Vector{Complex{T}}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
+    @invoke /(B::AbstractMatrix, F::Factorization)
+(/)(B::Matrix{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
+    @invoke /(B::AbstractMatrix, F::Factorization)
+(/)(B::Adjoint{Complex{T},Vector{Complex{T}}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
+    (F' \ B')'
+(/)(B::Transpose{Complex{T},Vector{Complex{T}}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
+    transpose(transpose(F) \ transpose(B))
+
+rdiv!(B::AbstractMatrix, A::TransposeFactorization) = transpose(ldiv!(A.parent, transpose(B)))
+rdiv!(B::AbstractMatrix, A::AdjointFactorization) = adjoint(ldiv!(A.parent, adjoint(B)))

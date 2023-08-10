@@ -885,7 +885,10 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
-signbit(x::BigFloat) = ccall((:mpfr_signbit, libmpfr), Int32, (Ref{BigFloat},), x) != 0
+# Note: this inlines the implementation of `mpfr_signbit` to avoid a
+# `ccall`.
+signbit(x::BigFloat) = signbit(x.sign)
+
 function sign(x::BigFloat)
     c = cmp(x, 0)
     (c == 0 || isnan(x)) && return x

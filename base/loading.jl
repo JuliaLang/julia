@@ -491,12 +491,12 @@ end
 """
     pkgdir(m::Module[, paths::String...])
 
-Return the root directory of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package. Optionally further
+Return the root directory of the package that declared module `m`,
+or `nothing` if `m` was not declared in a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
-To get the root directory of the package that imported the current module
+To get the root directory of the package that implements the current module
 the form `pkgdir(@__MODULE__)` can be used.
 
 ```julia-repl
@@ -1027,8 +1027,8 @@ function find_all_in_cache_path(pkg::PkgId)
     end
 end
 
-ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
-cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Base.Libc.dlext)"), ".ji")
+ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
+cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Libdl.dlext)"), ".ji")
 
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -1364,6 +1364,65 @@ end
 
 # End extensions
 
+# should sync with the types of arguments of `stale_cachefile`
+const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
+
+"""
+    Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+
+Returns whether a given PkgId within the active project is precompiled.
+
+By default this check observes the same approach that code loading takes
+with respect to when different versions of dependencies are currently loaded
+to that which is expected. To ignore loaded modules and answer as if in a
+fresh julia session specify `ignore_loaded=true`.
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+"""
+function isprecompiled(pkg::PkgId;
+        ignore_loaded::Bool=false,
+        stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
+        cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
+        sourcepath::Union{String,Nothing}=Base.locate_package(pkg)
+    )
+    isnothing(sourcepath) && error("Cannot locate source for $(repr(pkg))")
+    for path_to_try in cachepaths
+        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true)
+        if staledeps === true
+            continue
+        end
+        staledeps, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}}
+        # finish checking staledeps module graph
+        for i in 1:length(staledeps)
+            dep = staledeps[i]
+            dep isa Module && continue
+            modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+            modpaths = find_all_in_cache_path(modkey)
+            for modpath_to_try in modpaths::Vector{String}
+                stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
+                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded) === true,
+                        stale_cache, stale_cache_key)
+                    continue
+                end
+                @goto check_next_dep
+            end
+            @goto check_next_path
+            @label check_next_dep
+        end
+        try
+            # update timestamp of precompilation file so that it is the first to be tried by code loading
+            touch(path_to_try)
+        catch ex
+            # file might be read-only and then we fail to update timestamp, which is fine
+            ex isa IOError || rethrow()
+        end
+        return true
+        @label check_next_path
+    end
+    return false
+end
+
 # loads a precompile cache file, after checking stale_cachefile tests
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
@@ -1653,6 +1712,8 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+const _require_world_age = Ref{UInt}(typemax(UInt))
+
 """
     require(into::Module, module::Symbol)
 
@@ -1675,6 +1736,14 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    if _require_world_age[] != typemax(UInt)
+        Base.invoke_in_world(_require_world_age[], __require, into, mod)
+    else
+        @invokelatest __require(into, mod)
+    end
+end
+
+function __require(into::Module, mod::Symbol)
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
@@ -1724,6 +1793,14 @@ require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
 
 function _require_prelocked(uuidkey::PkgId, env=nothing)
+    if _require_world_age[] != typemax(UInt)
+        Base.invoke_in_world(_require_world_age[], __require_prelocked, uuidkey, env)
+    else
+        @invokelatest __require_prelocked(uuidkey, env)
+    end
+end
+
+function __require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
         newm = _require(uuidkey, env)
@@ -1871,7 +1948,7 @@ function _require(pkg::PkgId, env=nothing)
             end
         end
 
-        if JLOptions().use_compiled_modules != 0
+        if JLOptions().use_compiled_modules == 1
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
                 if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
@@ -1884,15 +1961,24 @@ function _require(pkg::PkgId, env=nothing)
                     @goto load_from_cache
                 end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
-                cachefile = compilecache(pkg, path)
-                if isa(cachefile, Exception)
+                cachefile_or_module = maybe_cachefile_lock(pkg, path) do
+                    # double-check now that we have lock
+                    m = _require_search_from_serialized(pkg, path, UInt128(0))
+                    m isa Module && return m
+                    compilecache(pkg, path)
+                end
+                cachefile_or_module isa Module && return cachefile_or_module::Module
+                cachefile = cachefile_or_module
+                if isnothing(cachefile) # maybe_cachefile_lock returns nothing if it had to wait for another process
+                    @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
+                elseif isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                         @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
                     else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
-                    # fall-through to loading the file locally
+                    # fall-through to loading the file locally if not incremental
                 else
                     cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
                     m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
@@ -1901,6 +1987,10 @@ function _require(pkg::PkgId, env=nothing)
                     else
                         return m
                     end
+                end
+                if JLOptions().incremental != 0
+                    # during incremental precompilation, this should be fail-fast
+                    throw(PrecompilableError())
                 end
             end
         end
@@ -2195,14 +2285,14 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
+function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=something(Base.active_project(), ""))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
@@ -2751,11 +2841,9 @@ get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uu
 get_compiletime_preferences(::Nothing) = String[]
 
 function check_clone_targets(clone_targets)
-    try
-        ccall(:jl_check_pkgimage_clones, Cvoid, (Ptr{Cchar},), clone_targets)
-        return true
-    catch
-        return false
+    rejection_reason = ccall(:jl_check_pkgimage_clones, Any, (Ptr{Cchar},), clone_targets)
+    if rejection_reason !== nothing
+        return rejection_reason
     end
 end
 
@@ -2787,6 +2875,125 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
+struct ImageTarget
+    name::String
+    flags::Int32
+    ext_features::String
+    features_en::Vector{UInt8}
+    features_dis::Vector{UInt8}
+end
+
+function parse_image_target(io::IO)
+    flags = read(io, Int32)
+    nfeature = read(io, Int32)
+    feature_en = read(io, 4*nfeature)
+    feature_dis = read(io, 4*nfeature)
+    name_len = read(io, Int32)
+    name = String(read(io, name_len))
+    ext_features_len = read(io, Int32)
+    ext_features = String(read(io, ext_features_len))
+    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+end
+
+function parse_image_targets(targets::Vector{UInt8})
+    io = IOBuffer(targets)
+    ntargets = read(io, Int32)
+    targets = Vector{ImageTarget}(undef, ntargets)
+    for i in 1:ntargets
+        targets[i] = parse_image_target(io)
+    end
+    return targets
+end
+
+function current_image_targets()
+    targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
+    return parse_image_targets(targets)
+end
+
+struct FeatureName
+    name::Cstring
+    bit::UInt32 # bit index into a `uint32_t` array;
+    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
+end
+
+function feature_names()
+    fnames = Ref{Ptr{FeatureName}}()
+    nf = Ref{Csize_t}()
+    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
+    if fnames[] == C_NULL
+        @assert nf[] == 0
+        return Vector{FeatureName}(undef, 0)
+    end
+    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
+end
+
+function test_feature(features::Vector{UInt8}, feat::FeatureName)
+    bitidx = feat.bit
+    u8idx = div(bitidx, 8) + 1
+    bit = bitidx % 8
+    return (features[u8idx] & (1 << bit)) != 0
+end
+
+function show(io::IO, it::ImageTarget)
+    print(io, it.name)
+    if !isempty(it.ext_features)
+        print(io, ",", it.ext_features)
+    end
+    print(io, "; flags=", it.flags)
+    print(io, "; features_en=(")
+    first = true
+    for feat in feature_names()
+        if test_feature(it.features_en, feat)
+            name = Base.unsafe_string(feat.name)
+            if first
+                first = false
+                print(io, name)
+            else
+                print(io, ", ", name)
+            end
+        end
+    end
+    print(io, ")")
+    # Is feature_dis useful?
+end
+
+# Set by FileWatching.__init__()
+global mkpidlock_hook
+global trymkpidlock_hook
+global parse_pidfile_hook
+
+# The preferences hash is only known after precompilation so just assume no preferences.
+# Also ignore the active project, which means that if all other conditions are equal,
+# the same package cannot be precompiled from different projects and/or different preferences at the same time.
+compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
+
+# Allows processes to wait if another process is precompiling a given source already.
+# The lock file is deleted and precompilation will proceed after `stale_age` seconds if
+#  - the locking process no longer exists
+#  - the lock is held by another host, since processes cannot be checked remotely
+# or after `stale_age * 25` seconds if the process does still exist.
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
+    if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
+        pidfile = compilecache_pidfile_path(pkg)
+        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
+        if cachefile === false
+            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
+            verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+            if isempty(hostname) || hostname == gethostname()
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+            else
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
+            end
+            # wait until the lock is available, but don't actually acquire it
+            # returning nothing indicates a process waited for another
+            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
+        end
+        return cachefile
+    else
+        # for packages loaded before FileWatching.__init__()
+        f()
+    end
+end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2820,8 +3027,12 @@ end
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true
             end
-            if !check_clone_targets(clone_targets)
-                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
+            rejection_reasons = check_clone_targets(clone_targets)
+            if !isnothing(rejection_reasons)
+                @debug("Rejecting cache file $cachefile for $modkey:",
+                    Reasons=rejection_reasons,
+                    var"Image Targets"=parse_image_targets(clone_targets),
+                    var"Current Targets"=current_image_targets())
                 return true
             end
             if !isfile(ocachefile)

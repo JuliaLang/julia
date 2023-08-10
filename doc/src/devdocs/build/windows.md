@@ -47,15 +47,18 @@ MinGW-w64 compilers available through Cygwin's package manager.
     either 32 or 64 bit Julia from either 32 or 64 bit Cygwin. 64 bit Cygwin
     has a slightly smaller but often more up-to-date selection of packages.
 
-    Advanced: you may skip steps 2-4 by running:
+    *Advanced*: you may skip steps 2-4 by running:
 
-        setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
-        :: replace <url> with a site from https://cygwin.com/mirrors.html
-        :: or run setup manually first and select a mirror
+    ```sh
+    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+    ```
 
- 2. Select installation location and download mirror.
+    replacing `<url>` with a site from [https://cygwin.com/mirrors.html](https://cygwin.com/mirrors.html)
+    or run setup manually first and select a mirror.
 
- 3. At the '*Select Packages'* step, select the following:
+ 2. Select installation location and a mirror to download from.
+
+ 3. At the *Select Packages* step, select the following:
 
     1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
     2.  From the *Net* category: `curl`
@@ -67,7 +70,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
         `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
-    a *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
+    *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
 
  5. Build Julia and its dependencies from source:
 
@@ -93,64 +96,67 @@ MinGW-w64 compilers available through Cygwin's package manager.
        make -j 4       # Adjust the number of threads (4) to match your build environment.
        make -j 4 debug # This builds julia-debug.exe
        ```
-
-
-    > Protip: build both!
-    > ```sh
-    > make O=julia-win32 configure
-    > make O=julia-win64 configure
-    > echo 'XC_HOST = i686-w64-mingw32' > julia-win32/Make.user
-    > echo 'XC_HOST = x86_64-w64-mingw32' > julia-win64/Make.user
-    > echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
-    >         $(error "in-tree build disabled")
-    >       endif' >> Make.user
-    > make -C julia-win32  # build for Windows x86 in julia-win32 folder
-    > make -C julia-win64  # build for Windows x86-64 in julia-win64 folder
-    > ```
-
  6. Run Julia using the Julia executables directly
     ```sh
     usr/bin/julia.exe
     usr/bin/julia-debug.exe
     ```
 
+!!! note "Pro tip: build both!"
+    ```sh
+    make O=julia-win32 configure
+    make O=julia-win64 configure
+    echo 'XC_HOST = i686-w64-mingw32' > julia-win32/Make.user
+    echo 'XC_HOST = x86_64-w64-mingw32' > julia-win64/Make.user
+    echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
+            $(error "in-tree build disabled")
+          endif' >> Make.user
+    make -C julia-win32  # build for Windows x86 in julia-win32 folder
+    make -C julia-win64  # build for Windows x86-64 in julia-win64 folder
+    ```
+
 ### Compiling with MinGW/MSYS2
 
-> MSYS2 provides a robust MSYS experience.
+[MSYS2](https://www.msys2.org/) is a software distribution and build environment for Windows.
 
 Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
- 1. Install and configure [MSYS2](https://www.msys2.org/), Software Distribution
-    and Building Platform for Windows.
+ 1. Install and configure MSYS2.
 
     1. Download and run the latest installer for the
         [64-bit](https://github.com/msys2/msys2-installer/releases/latest) distribution.
         The installer will have a name like `msys2-x86_64-yyyymmdd.exe`.
 
-    2. Open MSYS2. Update package database and base packages:
-        ```sh
+    2. Open the MSYS2 shell. Update the package database and base packages:
+
+        ```
+        pacman -Syu
+        ```
+    3. Exit and restart MSYS2. Update the rest of the base packages:
+
+        ```
         pacman -Syu
         ```
 
-    3. Exit and restart MSYS2, Update the rest of the base packages:
-        ```sh
-        pacman -Syu
-        ```
+    4. Then install tools required to build julia:
 
-    3. Then install tools required to build julia:
-        ```sh
-        # tools
+        ```
         pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+        ```
 
-        # For 64 bit Julia, install x86_64
+        For 64 bit Julia, install the x86_64 version:
+
+        ```
         pacman -S mingw-w64-x86_64-gcc
-        # For 32 bit Julia, install i686
+        ```
+
+        For 32 bit Julia, install the i686 version:
+
+        ```
         pacman -S mingw-w64-i686-gcc
         ```
 
-    4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
-
-
+    5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
  2. Build Julia and its dependencies with pre-build dependencies.
 
     1. Open a new [**MINGW64/MINGW32 shell**](https://www.msys2.org/docs/environments/#overview).
@@ -158,25 +164,27 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
         so if you want to build the x86_64 and i686 versions,
         you'll need to build them in each environment separately.
 
-    2. and clone the Julia sources
-        ```sh
+    2. Clone the Julia sources:
+
+        ```
         git clone https://github.com/JuliaLang/julia.git
         cd julia
         ```
 
     3. Start the build
-        ```sh
+
+        ```
         make -j$(nproc)
         ```
 
-    > Protip: build in dir
-    > ```sh
-    > make O=julia-mingw-w64 configure
-    > echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
-    >         $(error "in-tree build disabled")
-    >       endif' >> Make.user
-    > make -C julia-mingw-w64
-    > ```
+!!! note "Pro tip: build in dir"
+    ```sh
+    make O=julia-mingw-w64 configure
+    echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
+            $(error "in-tree build disabled")
+          endif' >> Make.user
+    make -C julia-mingw-w64
+    ```
 
 
 ### Cross-compiling from Unix (Linux/Mac/WSL)
@@ -185,7 +193,7 @@ You can also use MinGW-w64 cross compilers to build a Windows version of Julia f
 Linux, Mac, or the Windows Subsystem for Linux (WSL).
 
 First, you will need to ensure your system has the required dependencies. We
-need wine (>=1.7.5), a system compiler, and some downloaders. Note: a cygwin install might
+need wine (>=1.7.5), a system compiler, and some downloaders. Note: a Cygwin install might
 interfere with this method if using WSL.
 
 **On Ubuntu** (on other Linux systems the dependency names are likely to be similar):
@@ -193,7 +201,9 @@ interfere with this method if using WSL.
 apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
 dpkg --add-architecture i386 && apt-get update && apt-get install wine32 # add sudo to each if needed
 # switch all of the following to their "-posix" variants (interactively):
-for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
+for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do
+    sudo update-alternatives --config $pkg
+done
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now
@@ -211,19 +221,19 @@ install wine wget mingw-w64`, as appropriate.
  6. `make binary-dist` then `make exe` to create the Windows installer.
  7. move the `julia-*.exe` installer to the target machine
 
-If you are building for 64-bit windows, the steps are essentially the same.
-Just replace `i686` in `XC_HOST` with `x86_64`. (note: on Mac, wine only runs
+If you are building for 64-bit Windows, the steps are essentially the same.
+Just replace `i686` in `XC_HOST` with `x86_64`. (Note: on Mac, wine only runs
 in 32-bit mode).
 
 
 ## Debugging a cross-compiled build under wine
 
 The most effective way to debug a cross-compiled version of Julia on the cross-compilation
-host is to install a windows version of gdb and run it under wine as usual. The pre-built
+host is to install a Windows version of GDB and run it under wine as usual. The pre-built
 packages available [as part of the MSYS2
-project](https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work. Apart
+project](https://packages.msys2.org/) are known to work. Apart
 from the GDB package you may also need the python and termcap packages. Finally, GDB's
-prompt may not work when launch from the command line. This can be worked around by
+prompt may not work when launched from the command line. This can be worked around by
 prepending `wineconsole` to the regular GDB invocation.
 
 
@@ -232,24 +242,25 @@ prepending `wineconsole` to the regular GDB invocation.
 Compiling using one of the options above creates a basic Julia build, but not some
 extra components that are included if you run the full Julia binary installer.
 If you need these components, the easiest way to get them is to build the installer
-yourself using ```make win-extras``` followed by ```make binary-dist``` and ```make exe```. Then running the resulting installer.
+yourself using ```make win-extras``` followed by ```make binary-dist``` and ```make exe```.
+Then run the resulting installer.
 
 
 ## Windows Build Debugging
 
 
-### GDB hangs with cygwin mintty
+### GDB hangs with Cygwin mintty
 
-- Run gdb under the windows console (cmd) instead. gdb [may not function
+- Run GDB under the Windows console (cmd) instead. GDB [may not function
   properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-
-  cygwin applications. You can use `cmd /c start` to start the windows console from mintty
+  Cygwin applications. You can use `cmd /c start` to start the Windows console from mintty
   if necessary.
 
 ### GDB not attaching to the right process
 
- - Use the PID from the windows task manager or `WINPID` from the `ps` command
-   instead of the PID from unix style command line tools (e.g. `pgrep`).  You
-   may need to add the PID column if it is not shown by default in the windows
+ - Use the PID from the Windows task manager or `WINPID` from the `ps` command
+   instead of the PID from unix-style command line tools (e.g. `pgrep`).  You
+   may need to add the PID column if it is not shown by default in the Windows
    task manager.
 
 ### GDB not showing the right backtrace

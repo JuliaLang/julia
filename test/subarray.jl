@@ -275,9 +275,6 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9], reshape(2:11, 2, 5))
 
-_ndims(::AbstractArray{T,N}) where {T,N} = N
-_ndims(x) = 1
-
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         @testset "full tests: ($o1,$o2,$o3)" for o3 in oindex, o2 in oindex, o1 in oindex

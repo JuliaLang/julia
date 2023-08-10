@@ -5,7 +5,7 @@ using Core.IR
 const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -564,6 +564,43 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
     call2 = ir.stmts[3][:inst]
     @test iscall((ir,println), call2)
     @test call2.args[2] === SSAValue(2)
+end
+
+# Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
+let ci = make_ci([
+        # block 1
+        #= %1: =# Core.Compiler.GotoIfNot(Expr(:boundscheck), 3),
+        # block 2
+        #= %2: =# Expr(:call, println, Argument(1)),
+        # block 3
+        #= %3: =# Core.PhiNode(),
+        #= %4: =# Core.Compiler.ReturnNode(),
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+
+    # Insert another call at end of "block 2"
+    compact = Core.Compiler.IncrementalCompact(ir)
+    new_inst = NewInstruction(Expr(:call, println, Argument(1)), Nothing)
+    insert_node!(compact, SSAValue(2), new_inst, #= attach_after =# true)
+
+    # Complete iteration
+    x = Core.Compiler.iterate(compact)
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+    ir = Core.Compiler.complete(compact)
+
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# compact constant PiNode
+let ci = make_ci(Any[
+        PiNode(0.0, Const(0.0))
+        ReturnNode(SSAValue(1))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir)
+    @test fully_eliminated(ir)
 end
 
 # insert_node! with new instruction with flag computed

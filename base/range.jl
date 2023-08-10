@@ -404,7 +404,11 @@ struct UnitRange{T<:Real} <: AbstractUnitRange{T}
 end
 UnitRange{T}(start, stop) where {T<:Real} = UnitRange{T}(convert(T, start), convert(T, stop))
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
-UnitRange(start, stop) = UnitRange(promote(start, stop)...)
+function UnitRange(start, stop)
+    startstop_promoted = promote(start, stop)
+    not_sametype((start, stop), startstop_promoted)
+    UnitRange(startstop_promoted...)
+end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
@@ -443,7 +447,7 @@ distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
-    stop::T
+    stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
@@ -459,6 +463,8 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
+
+    global unchecked_oneto(stop::Integer) = new{typeof(stop)}(stop)
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
@@ -699,8 +705,6 @@ step(r::LinRange) = (last(r)-first(r))/r.lendiv
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
 
-axes(r::AbstractRange) = (oneto(length(r)),)
-
 # Needed to ensure `has_offset_axes` can constant-fold.
 has_offset_axes(::StepRange) = false
 
@@ -901,7 +905,10 @@ end
 
 ## indexing
 
-isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+function isassigned(r::AbstractRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    firstindex(r) <= i <= lastindex(r)
+end
 
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 
@@ -934,12 +941,16 @@ end
 function getindex(v::AbstractRange{T}, i::Integer) where T
     @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    ret = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
-    ok = ifelse(step(v) > zero(step(v)),
-                (ret <= last(v)) & (ret >= first(v)),
-                (ret <= first(v)) & (ret >= last(v)))
-    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
-    ret
+    @boundscheck checkbounds(v, i)
+    convert(T, first(v) + (i - oneunit(i))*step_hp(v))
+end
+
+let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
+    function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+        @inline
+        res = widemul(step(v), i-oneunit(i)) + first(v)
+        (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
+    end
 end
 
 function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
@@ -1369,8 +1380,21 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
-collect(r::AbstractRange) = vcat(r)
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
+function Array{T,1}(r::AbstractRange{T}) where {T}
+    a = Vector{T}(undef, length(r))
+    i = 1
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    return a
+end
+collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)

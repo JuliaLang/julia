@@ -46,7 +46,7 @@ may trip up Julia users accustomed to MATLAB:
   * A Julia script may contain any number of functions, and all definitions will be externally visible
     when the file is loaded. Function definitions can be loaded from files outside the current working
     directory.
-  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`max`](@ref) are performed
+  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`maximum`](@ref) are performed
     over every element of an array when called with a single argument, as in `sum(A)`, even if `A`
     has more than one dimension.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).

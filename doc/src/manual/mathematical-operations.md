@@ -534,7 +534,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`mod1(x, y)`](@ref)       | `mod` with offset 1; returns `r∈(0, y]` for `y>0` or `r∈[y, 0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)        | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
 | [`divrem(x, y)`](@ref)     | returns `(div(x, y),rem(x, y))`                                                                           |
-| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y),mod(x, y))`                                                                           |
+| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y), mod(x, y))`                                                                          |
 | [`gcd(x, y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
 | [`lcm(x, y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
@@ -555,12 +555,12 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 |:------------------------ |:-------------------------------------------------------------------------- |
 | [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
 | [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x,y)`](@ref)     | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
 | [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
-| [`ldexp(x, n)`](@ref)     | `x * 2^n` computed efficiently for integer values of `n`                  |
+| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                 λ   |
+| [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
 | [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b, x)`](@ref)       | base `b` logarithm of `x`                                                 |
+| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
 | [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
 | [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
 | [`log1p(x)`](@ref)       | accurate `log(1 + x)` for `x` near zero                                    |

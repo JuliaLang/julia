@@ -8,7 +8,8 @@ types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64},
+    BigFloat, BigInt, Rational{BigInt}
 ]
 vals = vcat(
     typemin(Int64),
@@ -51,8 +52,7 @@ let collides = 0
             collides += eq
         end
     end
-    # each pair of types has one collision for these values
-    @test collides <= (length(types) - 1)^2
+    @test collides <= 516
 end
 @test hash(0.0) != hash(-0.0)
 
@@ -310,3 +310,18 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
 @test Type{AUnionParam.body}.hash == 0
 @test Type{Base.Broadcast.Broadcasted}.hash != 0
+
+
+@testset "issue 50628" begin
+    # test hashing of rationals that equal floats are equal to the float hash
+    @test hash(5//2) == hash(big(5)//2) == hash(2.5)
+    # test hashing of rational that are integers hash to the integer
+    @test hash(Int64(5)^25) == hash(big(5)^25) == hash(Int64(5)^25//1) == hash(big(5)^25//1)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash(Int64(5)^25) != hash(5.0^25)
+    @test hash((Int64(5)//2)^25) == hash(big(5//2)^25)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash((Int64(5)//2)^25) != hash(2.5^25)
+    # test hashing of rational with odd denominator
+    @test hash(5//3) == hash(big(5)//3)
+end

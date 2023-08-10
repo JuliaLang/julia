@@ -379,11 +379,6 @@ trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
 trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
 trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
 
-# fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
-
 # Bool
 trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
 floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
@@ -635,31 +630,40 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
 const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
-let Tf = Float64, Tu = UInt64, Ti = Int64
-    @eval function hash(x::$Tf, h::UInt)
-        # see comments on trunc and hash(Real, UInt)
-        if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
-            xi = fptosi($Ti, x)
-            if isequal(xi, x)
-                return hash(xi, h)
-            end
-        elseif $(Tf(typemin(Tu))) <= x < $(Tf(typemax(Tu)))
-            xu = fptoui($Tu, x)
-            if isequal(xu, x)
-                return hash(xu, h)
-            end
-        elseif isnan(x)
-            return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+function hash(x::Float64, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if typemin(Int64) <= x < typemax(Int64)
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
         end
-        return hash_uint64(bitcast(UInt64, x)) - 3h
+    elseif typemin(UInt64) <= x < typemax(UInt64)
+        xu = fptoui(UInt64, x)
+        if isequal(xu, x)
+            return hash(xu, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
+    return hash_uint64(bitcast(UInt64, x)) - 3h
 end
 
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
-hash(x::Float16, h::UInt) = hash(Float64(x), h)
+
+function hash(x::Float16, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if isfinite(x) # all finite Float16 fit in Int64
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+    end
+    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+end
 
 ## generic hashing for rational values ##
-
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
@@ -675,27 +679,31 @@ function hash(x::Real, h::UInt)
         den = -den
     end
     num_z = trailing_zeros(num)
+    num >>= num_z
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
-
-    # handle values representable as Int64, UInt64, Float64
+    # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
+    # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1
-        left = top_set_bit(abs(num)) - den_z
-        right = pow
-        if -1074 <= right
-            if 0 <= right
-                left <= 63 && return hash(Int64(num) << Int(pow-num_z), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow-num_z), h)
+        # left = ceil(log2(num*2^pow))
+        left = top_set_bit(abs(num)) + pow
+        # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
+        if -1074 <= pow
+            if 0 <= pow # if pow is non-negative, it is an integer
+                left <= 63 && return hash(Int64(num) << Int(pow), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow-num_z), h)
+            # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
+            # Float64s only have 53 mantisa bits (including implicit bit)
+            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
+    else
+        h = hash_integer(den, h)
     end
-
     # handle generic rational values
-    h = hash_integer(den, h)
     h = hash_integer(pow, h)
-    h = hash_integer(num >> num_z, h)
+    h = hash_integer(num, h)
     return h
 end
 

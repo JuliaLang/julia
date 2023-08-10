@@ -23,8 +23,10 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
-function _isself(@nospecialize(ft))
-    name = ft.name.mt.name
+function _isself(ft::DataType)
+    ftname = ft.name
+    isdefined(ftname, :mt) || return false
+    name = ftname.mt.name
     mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
     return isdefined(mod, name) && ft == typeof(getfield(mod, name))
 end
@@ -2128,7 +2130,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)
-        comp_prec = minimum(operator_precedence, args[2:2:end])
+        comp_prec = minimum(operator_precedence, args[2:2:end]; init=typemax(Int))
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec, quote_level)
         else
@@ -2557,14 +2559,12 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     str = String(take!(unwrapcontext(io)[1]))
-    if get(out, :limit, false)::Bool
+    typelimitflag = get(out, :stacktrace_types_limited, nothing)
+    if typelimitflag isa RefValue{Bool}
         sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
-            typelimitflag = get(out, :stacktrace_types_limited, nothing)
-            if typelimitflag !== nothing
-                typelimitflag[] = true
-            end
+            typelimitflag[] = true
         end
         str = str_lim
     end
