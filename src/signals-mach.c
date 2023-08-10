@@ -279,7 +279,7 @@ kern_return_t catch_mach_exception_raise(
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        if (_ptls2->current_task == NULL) {
+        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL) {
             // this thread is dead
             continue;
         }
