@@ -195,10 +195,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         return false;
 
     LLVMContext &Context = L.getHeader()->getContext();
-    MDNode *NewLoopID = MDNode::get(Context, MDs);
+    LoopID = MDNode::get(Context, MDs);
     // Set operand 0 to refer to the loop id itself
-    NewLoopID->replaceOperandWith(0, NewLoopID);
-    L.setLoopID(NewLoopID);
+    LoopID->replaceOperandWith(0, LoopID);
+    L.setLoopID(LoopID);
 
     REMARK([&]() {
         return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getStartLoc(), L.getHeader())
