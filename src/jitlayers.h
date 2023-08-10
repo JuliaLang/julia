@@ -246,11 +246,11 @@ struct jl_codegen_params_t {
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
-    bool imaging;
+    bool imaging_mode;
     int debug_level;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
         : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
-            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
+            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging_mode(imaging_default()) {}
 };
 
 jl_llvm_functions_t jl_emit_code(
@@ -273,7 +273,6 @@ enum CompilationPolicy {
 
 void jl_compile_workqueue(
     jl_codegen_params_t &params,
-    Module &original,
     CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
@@ -571,7 +570,7 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, DL, TargetTriple);
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging_mode, DL, TargetTriple);
     }
     return *_shared_module;
 }

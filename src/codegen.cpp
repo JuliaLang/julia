@@ -2519,7 +2519,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    if (ctx.emission_context.imaging)
+    if (ctx.emission_context.imaging_mode)
         return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
@@ -2530,7 +2530,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    if (ctx.emission_context.imaging)
+    if (ctx.emission_context.imaging_mode)
         return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
@@ -5407,7 +5407,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         // TODO: Emit this inline and outline it late using LLVM's coroutine support.
         orc::ThreadSafeModule closure_m = jl_create_ts_module(
                 name_from_method_instance(mi), ctx.emission_context.tsctx,
-                ctx.emission_context.imaging,
+                ctx.emission_context.imaging_mode,
                 jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
         jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
         JL_GC_POP();
@@ -8917,7 +8917,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                          inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
                          ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
                           jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) && // unless it is constant
-                         !(params.imaging || jl_options.incremental)) { // don't delete code when generating a precompile file
+                         !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file
                     jl_atomic_store_release(&codeinst->inferred, jl_nothing);
                 }
             }
@@ -8930,7 +8930,6 @@ jl_llvm_functions_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     jl_codegen_params_t &params,
-    Module &original,
     CompilationPolicy policy)
 {
     JL_TIMING(CODEGEN, CODEGEN_Workqueue);
@@ -8978,8 +8977,8 @@ void jl_compile_workqueue(
                     if (src) {
                         orc::ThreadSafeModule result_m =
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging,
-                            original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging_mode,
+                            params.DL, params.TargetTriple);
                         auto decls = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
                         if (result_m)
                             it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
@@ -8988,8 +8987,8 @@ void jl_compile_workqueue(
                 else {
                     orc::ThreadSafeModule result_m =
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging,
-                            original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging_mode,
+                            params.DL, params.TargetTriple);
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     if (result_m)
                         it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;

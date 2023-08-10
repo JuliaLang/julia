@@ -33,8 +33,8 @@ The macro has special parsing so that the documented object may occur on the nex
 By default, documentation is written as Markdown, but any object can be used as
 the first argument.
 
-## Documenting objects after they are defined
-You can document an object after its definition by
+## Documenting objects separately from their definitions
+You can document an object before or after its definition with
 
     @doc "foo" function_to_doc
     @doc "bar" TypeToDoc
