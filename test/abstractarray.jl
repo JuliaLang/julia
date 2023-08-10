@@ -1854,3 +1854,9 @@ end
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
+
+@testset "isassigned with a Bool index" begin
+    A = zeros(2,2)
+    @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
+    @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
