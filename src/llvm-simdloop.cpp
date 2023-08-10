@@ -74,7 +74,7 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFE
 /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
 /// mark the ops as permitting reassociation/commuting.
 /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution *SE) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -152,13 +152,15 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRe
         });
         (*K)->setHasAllowReassoc(true);
         (*K)->setHasAllowContract(true);
+        if (SE)
+            SE->forgetValue(*K);
         ++length;
     }
     ReductionChainLength += length;
     MaxChainLength.updateMax(length);
 }
 
-static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
+static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution *SE) JL_NOTSAFEPOINT
 {
     MDNode *LoopID = L.getLoopID();
     if (!LoopID)
@@ -217,14 +219,17 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
         // Mark floating-point reductions as okay to reassociate/commute.
         for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
             if (PHINode *Phi = dyn_cast<PHINode>(I))
-                enableUnsafeAlgebraIfReduction(Phi, L, ORE);
+                enableUnsafeAlgebraIfReduction(Phi, L, ORE, SE);
             else
                 break;
         }
+
+        if (SE)
+            SE->forgetLoopDispositions(&L);
     }
 
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(*L));
+    assert(!verifyLLVMIR(L));
 #endif
     return true;
 }
@@ -242,7 +247,7 @@ PreservedAnalyses LowerSIMDLoopPass::run(Loop &L, LoopAnalysisManager &AM,
 
 {
     OptimizationRemarkEmitter ORE(L.getHeader()->getParent());
-    if (processLoop(L, ORE)) {
+    if (processLoop(L, ORE, &AR.SE)) {
 #ifdef JL_DEBUG_BUILD
         if (AR.MSSA)
             AR.MSSA->verifyMemorySSA();
@@ -268,7 +273,7 @@ public:
     bool runOnLoop(Loop *L, LPPassManager &LPM) override
     {
         OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
-        return processLoop(*L, ORE);
+        return processLoop(*L, ORE, nullptr);
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
