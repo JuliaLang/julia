@@ -542,11 +542,11 @@ end
 
 function _stmt(code::IRCode, idx::Int)
     stmts = code.stmts
-    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+    return isassigned(stmts.stmt, idx) ? stmts[idx][:stmt] : UNDEF
 end
 function _stmt(compact::IncrementalCompact, idx::Int)
     stmts = compact.result
-    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+    return isassigned(stmts.stmt, idx) ? stmts[idx][:stmt] : UNDEF
 end
 function _stmt(code::CodeInfo, idx::Int)
     code = code.code
@@ -717,7 +717,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 end
 
 function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
-    new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
+    new_nodes_perm = filter(i -> isassigned(new_nodes.stmt, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
 
     # separate iterators for the nodes that are inserted before resp. after each statement
@@ -745,7 +745,7 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
 
         iter[] += 1
         new_node = new_nodes[node_idx]
-        new_node_inst = isassigned(new_nodes.inst, node_idx) ? new_node[:inst] : UNDEF
+        new_node_inst = isassigned(new_nodes.stmt, node_idx) ? new_node[:stmt] : UNDEF
         new_node_type = isassigned(new_nodes.type, node_idx) ? new_node[:type] : UNDEF
         node_idx += length(stmts)
         return node_idx, new_node_inst, new_node_type
@@ -820,15 +820,15 @@ end
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
 function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
-    stmts = code.stmts
+    insts = code.stmts
     used = BitSet()
-    for stmt in stmts
-        scan_ssa_use!(push!, used, stmt[:inst])
+    for inst in insts
+        scan_ssa_use!(push!, used, inst[:stmt])
     end
     new_nodes = code.new_nodes.stmts
     for nn in 1:length(new_nodes)
-        if isassigned(new_nodes.inst, nn)
-            scan_ssa_use!(push!, used, new_nodes[nn][:inst])
+        if isassigned(new_nodes.stmt, nn)
+            scan_ssa_use!(push!, used, new_nodes[nn][:stmt])
         elseif warn_unset_entry
             printstyled(io, "ERROR: New node array has unset entry\n", color=:red)
             warn_unset_entry = false
