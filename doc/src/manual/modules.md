@@ -213,7 +213,7 @@ a variable owned by the current module, or else raises an error.
 
 ### Renaming with `as`
 
-An identifier brought into scope by `import` or `using` can be renamed with the keyword `as`.
+An identifier brought into scope by `import` can be renamed with the keyword `as`.
 This is useful for working around name conflicts as well as for shortening names.
 For example, `Base` exports the function name `read`, but the CSV.jl package also provides `CSV.read`.
 If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
