@@ -204,18 +204,19 @@ void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<Strin
             if (idx < jl_nfields(names)) {
                 auto name = jl_fieldref(names, idx);
                 assert(jl_is_symbol(name));
-                field = jl_symbol_name((jl_sym_t*)name);
+                V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
+                return;
             }
         } else {
             auto flds = jl_field_names(jt);
             if (idx < jl_svec_len(flds)) {
                 auto name = jl_svec_ref(flds, idx);
                 assert(jl_is_symbol(name));
-                field = jl_symbol_name((jl_sym_t*)name);
+                V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
+                return;
             }
         }
-        field = "<unknown field>";
-        V->setName(Twine(GetObjName()) + "." + Twine(field) + suffix);
+        V->setName(Twine(GetObjName()) + "." + Twine("unknown field") + suffix);
     }
 }
 
