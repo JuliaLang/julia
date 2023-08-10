@@ -217,7 +217,7 @@ struct jl_codegen_params_t {
     // outputs
     jl_workqueue_t workqueue;
     jl_compiled_functions_t compiled_functions;
-    std::map<void*, GlobalVariable*> global_targets;
+    std::map<void*, GlobalVariable*> globals;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;

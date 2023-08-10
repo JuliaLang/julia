@@ -418,25 +418,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
             data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
         }
-        else if (func == "jl_fptr_sparam") {
-            func_id = -2;
+        if (params._shared_module) {
+            bool error = L.linkInModule(std::move(params._shared_module));
+            assert(!error && "Error linking in shared module");
+            (void)error;
         }
-        else {
-            //Safe b/c context is locked by params
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(func)));
-            func_id = data->jl_sysimg_fvars.size();
-        }
-        if (!cfunc.empty()) {
-            //Safe b/c context is locked by params
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(cfunc)));
-            cfunc_id = data->jl_sysimg_fvars.size();
-        }
-        data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
-    }
-    if (params._shared_module) {
-        bool error = L.linkInModule(std::move(params._shared_module));
-        assert(!error && "Error linking in shared module");
-        (void)error;
     }
 
     // now get references to the globals in the merged module

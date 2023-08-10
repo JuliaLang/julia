@@ -234,7 +234,7 @@ static jl_callptr_t _jl_compile_codeinst(
         // need to emit a separate module for the globals before any functions are compiled,
         // to ensure that the globals are defined when they are compiled.
         if (params.imaging) {
-            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging, params.DL, params.TargetTriple, params.global_targets));
+            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging, params.DL, params.TargetTriple, params.globals));
         } else {
             StringMap<void*> NewGlobals;
             for (auto &global : params.globals) {
