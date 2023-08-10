@@ -363,6 +363,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     size_t idx = 0;
     for (auto &global : params.global_targets) {
         gvars[idx] = global.second->getName().str();
+        global.second->setInitializer(literal_static_pointer_val(global.first, global.second->getValueType()));
         assert(gvars_set.insert(global.second).second && "Duplicate gvar in params!");
         assert(gvars_names.insert(gvars[idx]).second && "Duplicate gvar name in params!");
         data->jl_value_to_llvm[idx] = global.first;
@@ -431,7 +432,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     for (auto &global : gvars) {
         //Safe b/c context is locked by params
         GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
-        G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
+        assert(G->hasInitializer());
         G->setLinkage(GlobalValue::InternalLinkage);
         G->setDSOLocal(true);
         data->jl_sysimg_gvars.push_back(G);
@@ -1567,6 +1568,11 @@ void jl_dump_native_impl(void *native_code,
         auto &Context = dataM.getContext();
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
+
+        // Wipe the global initializers, we'll reset them at load time
+        for (auto gv : data->jl_sysimg_gvars) {
+            cast<GlobalVariable>(gv)->setInitializer(Constant::getNullValue(gv->getValueType()));
+        }
 
         // add metadata information
         if (imaging_mode) {
