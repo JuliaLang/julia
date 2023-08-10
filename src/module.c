@@ -190,14 +190,14 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     return b;
 }
 
-extern jl_mutex_t jl_modules_mutex;
+extern jl_spin_mutex_t jl_modules_mutex;
 
 static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new globals cannot be created in a generated function");
     if (jl_options.incremental && jl_generating_output()) {
-        JL_LOCK(&jl_modules_mutex);
+        JL_SPIN_LOCK(&jl_modules_mutex);
         int open = ptrhash_has(&jl_current_modules, (void*)m);
         if (!open && jl_module_init_order != NULL) {
             size_t i, l = jl_array_len(jl_module_init_order);
@@ -208,7 +208,7 @@ static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
                 }
             }
         }
-        JL_UNLOCK(&jl_modules_mutex);
+        JL_SPIN_UNLOCK(&jl_modules_mutex);
         if (!open) {
             jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
                       "because the side effects will not be permanent.",
