@@ -35,11 +35,8 @@ Exported symbols are automatically considered public
 In other words:
 
 - Documented behavior of public symbols is part of the public API.
-
 - Undocumented behavior of public symbols is not part of the public API.
-
 - Documented behavior of private symbols is not part of the public API.
-
 - Undocumented behavior of private symbols is not part of the public API.
 
 You can get a complete list of the public symbols from a module with `names(MyModule)`.
