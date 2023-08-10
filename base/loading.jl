@@ -1660,7 +1660,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, path, fsize, hash, depot_alias) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, depot_alias, fsize, hash) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
@@ -1676,7 +1676,7 @@ function _include_dependency(mod::Module, _path::AbstractString)
             else
                 UInt64(0), UInt32(0)
             end
-            push!(_require_dependencies, (mod, path, fsize, hash, replace_depot_path(path)))
+            push!(_require_dependencies, (mod, replace_depot_path(path), fsize, hash))
         end
     end
     return path, prev
@@ -1793,7 +1793,7 @@ function __require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), replace_depot_path(path)))
+            push!(_require_dependencies, (into, replace_depot_path(path), UInt64(0), UInt32(0)))
         end
         return _require_prelocked(uuidkey, env)
     finally

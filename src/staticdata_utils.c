@@ -708,7 +708,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_len(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *depalias = jl_fieldref(deptuple, 4);        // file @depot alias
+        jl_value_t *depalias = jl_fieldref(deptuple, 1);               // file @depot alias
         size_t slen = jl_string_len(depalias);
         write_int32(s, slen);
         ios_write(s, jl_string_data(depalias), slen);

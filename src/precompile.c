@@ -36,15 +36,32 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
         size_t len = jl_array_len(udeps);
+        static jl_value_t *resolve_depot_func = NULL;
+        if (!resolve_depot_func)
+            resolve_depot_func = jl_get_global(jl_base_module, jl_symbol("resolve_depot_path"));
         ios_t srctext;
+        jl_value_t *deptuple = NULL;
+        JL_GC_PUSH2(&deptuple, &udeps);
         for (size_t i = 0; i < len; i++) {
-            jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
+            deptuple = jl_array_ptr_ref(udeps, i);
             jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
             // Dependencies declared with `include_dependency` are excluded
             // because these may not be Julia code (and could be huge)
             if (depmod != (jl_value_t*)jl_main_module) {
-                jl_value_t *dep = jl_fieldref(deptuple, 1);  // file abspath
-                const char *depstr = jl_string_data(dep);
+                jl_value_t *depalias = jl_fieldref(deptuple, 1);  // file @depot alias
+
+                jl_value_t **resolve_depot_args;
+                JL_GC_PUSHARGS(resolve_depot_args, 2);
+                resolve_depot_args[0] = resolve_depot_func;
+                resolve_depot_args[1] = depalias;
+                jl_task_t *ct = jl_current_task;
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *abspath = (jl_value_t*)jl_apply(resolve_depot_args, 2);
+                ct->world_age = last_age;
+                JL_GC_POP();
+
+                const char *depstr = jl_string_data(abspath);
                 if (!depstr[0])
                     continue;
                 ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
@@ -53,7 +70,6 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                               depstr);
                     continue;
                 }
-                jl_value_t *depalias = jl_fieldref(deptuple, 4);  // file @depot alias
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
                 ios_write(f, jl_string_data(depalias), slen);
@@ -66,6 +82,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 ios_seek_end(f);
             }
         }
+        JL_GC_POP();
     }
     write_int32(f, 0); // mark the end of the source text
 }
