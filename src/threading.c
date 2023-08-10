@@ -493,7 +493,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 //// the other threads time to fail and emit their failure message
 //__attribute__((destructor)) static void _waitthreaddeath(void) { sleep(1); }
 
-JL_DLLEXPORT jl_spin_mutex_t jl_codegen_lock;
+JL_DLLEXPORT jl_sleep_mutex_t jl_codegen_lock;
 jl_spin_mutex_t typecache_lock;
 
 JL_DLLEXPORT ssize_t jl_tls_offset = -1;
