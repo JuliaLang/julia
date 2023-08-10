@@ -280,8 +280,8 @@ typedef struct _jl_tls_states_t {
     small_arraylist_t locks;
 
     JULIA_DEBUG_SLEEPWAKE(
-        uint64_t uv_run_enter;
-        uint64_t uv_run_leave;
+        // uint64_t uv_run_enter;
+        // uint64_t uv_run_leave;
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )

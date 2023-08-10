@@ -130,6 +130,11 @@ void JL_UV_LOCK(void)
     }
 }
 
+int JL_UV_TRYLOCK(void)
+{
+    return jl_mutex_trylock(&jl_uv_mutex);
+}
+
 JL_DLLEXPORT void jl_iolock_begin(void)
 {
     JL_UV_LOCK();
@@ -267,24 +272,22 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
 extern _Atomic(unsigned) _threadedregion;
 
+int jl_process_events_locked(void) {
+    uv_loop_t *loop = jl_io_loop;
+    loop->stop_flag = 0;
+    uv_ref((uv_handle_t*)&signal_async); // force the loop alive
+    int r = uv_run(loop, UV_RUN_NOWAIT);
+    uv_unref((uv_handle_t*)&signal_async);
+    return r;
+}
+
 JL_DLLEXPORT int jl_process_events(void)
 {
-    jl_task_t *ct = jl_current_task;
-    uv_loop_t *loop = jl_io_loop;
-    jl_gc_safepoint_(ct->ptls);
-    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
-        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
-            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
-            loop->stop_flag = 0;
-            uv_ref((uv_handle_t*)&signal_async); // force the loop alive
-            int r = uv_run(loop, UV_RUN_NOWAIT);
-            uv_unref((uv_handle_t*)&signal_async);
-            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
-            JL_UV_UNLOCK();
-            return r;
-        }
-        jl_gc_safepoint_(ct->ptls);
+    if (jl_atomic_load_relaxed(&jl_n_threads) == 1)
+    {
+        jl_process_events_locked();
     }
+    // otherwise we will have a utility thread.
     return 0;
 }
 
