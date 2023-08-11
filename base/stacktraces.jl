@@ -308,7 +308,10 @@ is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing
 
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
-    if linfo === nothing
+    internalflag = get(io, :stacktrace_internal_removed, nothing)
+    skip_internal = ((internalflag === nothing ? false : internalflag[]) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) &&
+        parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+    if linfo === nothing || skip_internal
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym

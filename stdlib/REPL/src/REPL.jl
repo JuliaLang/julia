@@ -291,7 +291,8 @@ end
 function repl_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
     limitflag = Ref(false)
-    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    internalflag = Ref(isinteractive() ? true : false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag, :stacktrace_internal_removed => internalflag)
     Base.invokelatest(Base.display_error, errio, errval)
     if limitflag[]
         print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")

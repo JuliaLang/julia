@@ -61,7 +61,7 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(io, re.captured)
+    showerror(io, re.captured) # Does :stacktrace_internal_removed need to be set to false for the IO here anymore?
 end
 
 function run_work_thunk(thunk::Function, print_error::Bool)
