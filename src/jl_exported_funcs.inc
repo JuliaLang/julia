@@ -247,6 +247,7 @@
     XX(jl_get_UNAME) \
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
+    XX(jl_get_num_stack_mappings) \
     XX(jl_gf_invoke_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_git_branch) \
