@@ -226,7 +226,7 @@ end
 
 string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
 
-function _string(a::Union{Char, String, SubString{String}, Symbol}...)
+function _string(a...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually
