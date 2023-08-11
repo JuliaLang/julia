@@ -824,7 +824,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     # select frames from user-controlled code
     is = find_visible_frames(trace)
-    
+
     num_vis_frames = length(is)
 
     if num_vis_frames > 0
@@ -850,7 +850,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         end
 
         # print if frames other than top-level were omitted
-        if num_frames - 1 > num_vis_frames 
+        if num_frames - 1 > num_vis_frames
             if lasti < num_frames - 1
                 println(io)
                 print_omitted_modules(lasti + 1, num_frames - 1)
