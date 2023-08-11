@@ -107,6 +107,11 @@ end
     @test taskref[].sticky == false
     @test collect(c) == [0]
 end
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no channel_threadpool.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
     function testcpt(sz)
