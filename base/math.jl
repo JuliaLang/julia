@@ -497,7 +497,7 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x::T) where T <: Number -> float(T)
+    sin(x::T) where {T <: Number} -> float(T)
 
 Compute sine of `x`, where `x` is in radians.
 
@@ -530,7 +530,7 @@ julia> round(exp(im*pi/6), digits=3)
 sin(x::Number)
 
 """
-    cos(x::T) where T <: Number -> float(T)
+    cos(x::T) where {T <: Number} -> float(T)
 
 Compute cosine of `x`, where `x` is in radians.
 
@@ -541,7 +541,7 @@ See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 cos(x::Number)
 
 """
-    tan(x::T) where T <: Number -> float(T)
+    tan(x::T) where {T <: Number} -> float(T)
 
 Compute tangent of `x`, where `x` is in radians.
 
@@ -552,7 +552,7 @@ See also [`tanh`](@ref).
 tan(x::Number)
 
 """
-    asin(x::T) where T <: Number -> float(T)
+    asin(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse sine of `x`, where the output is in radians.
 
@@ -572,7 +572,7 @@ julia> asind.((0, 1/2, 1))
 asin(x::Number)
 
 """
-    acos(x::T) where T <: Number -> float(T)
+    acos(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse cosine of `x`, where the output is in radians
 

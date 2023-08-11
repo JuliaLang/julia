@@ -1075,7 +1075,7 @@ isinf_real(x::Complex) = isinf(real(x)) && isfinite(imag(x))
 isinf_real(x::Number) = false
 
 """
-    sinc(x::T) where T <: Number -> float(T)
+    sinc(x::T) where {T <: Number} -> float(T)
 
 Compute normalized sinc function ``\\operatorname{sinc}(x) = \\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 
@@ -1094,7 +1094,7 @@ _sinc(x::Float16) = Float16(_sinc(Float32(x)))
 _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
 """
-    cosc(x::T) where T <: Number -> float(T)
+    cosc(x::T) where {T <: Number} -> float(T)
 
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
@@ -1145,21 +1145,21 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
     dname = string(finvd)
     @eval begin
         @doc """
-            $($name)(x::T) where T <: Number -> float(T)
+            $($name)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in radians.
 
         Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
         """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
-            $($hname)(x::T) where T <: Number -> float(T)
+            $($hname)(x::T) where {T <: Number} -> float(T)
 
         Compute the hyperbolic $($fn) of `x`.
 
         Return a `T(NaN)` if `isnan(x)`.
         """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
-            $($dname)(x::T) where T <: Number -> float(T)
+            $($dname)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
 
@@ -1175,12 +1175,12 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     hname = string(hfa)
     @eval begin
         @doc """
-            $($tname)(x::T) where T <: Number -> float(T)
+            $($tname)(x::T) where {T <: Number} -> float(T)
 
         Compute the inverse $($fn) of `x`, where the output is in radians.
         """ ($tfa)(y::Number) = ($tfainv)(inv(y))
         @doc """
-            $($hname)(x::T) where T <: Number -> float(T)
+            $($hname)(x::T) where {T <: Number} -> float(T)
 
         Compute the inverse hyperbolic $($fn) of `x`.
         """ ($hfa)(y::Number) = ($hfainv)(inv(y))
