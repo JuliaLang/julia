@@ -650,6 +650,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
+    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -660,6 +661,7 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
+    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1406,6 +1408,13 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
+    // for any of our other symbols that we insert during compilation.
+    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
+        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
+        return 1;
+    }
+
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
