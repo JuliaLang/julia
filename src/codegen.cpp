@@ -197,7 +197,6 @@ void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<Strin
             return;
         }
 
-        const char *field;
         if (jl_is_namedtuple_type(jt)) {
             auto names = jl_tparam0(jt);
             assert(jl_is_tuple(names));
