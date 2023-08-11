@@ -2349,27 +2349,17 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context, const DataLayout &DL, const Triple &triple)
 {
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
-    // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
-    // imaging mode. The structure of v4 is slightly nicer for debugging JIT
-    // code.
+    // According to clang darwin above 10.10 supports dwarfv4
     if (!m->getModuleFlag("Dwarf Version")) {
-        int dwarf_version = 4;
-    if (triple.isOSDarwin()) {
-        if (imaging_mode) {
-            dwarf_version = 2;
-        }
-    }
-    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
     }
     if (!m->getModuleFlag("Debug Info Version"))
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
-    if (imaging_mode)
-        m->addModuleFlag(llvm::Module::Error, "julia.imaging_mode", 1);
     m->setDataLayout(DL);
     m->setTargetTriple(triple.str());
 
@@ -5407,7 +5397,6 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         // TODO: Emit this inline and outline it late using LLVM's coroutine support.
         orc::ThreadSafeModule closure_m = jl_create_ts_module(
                 name_from_method_instance(mi), ctx.emission_context.tsctx,
-                ctx.emission_context.imaging_mode,
                 jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
         jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
         JL_GC_POP();
@@ -8977,8 +8966,7 @@ void jl_compile_workqueue(
                     if (src) {
                         orc::ThreadSafeModule result_m =
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging_mode,
-                            params.DL, params.TargetTriple);
+                            params.tsctx, params.DL, params.TargetTriple);
                         auto decls = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
                         if (result_m)
                             it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
@@ -8987,8 +8975,7 @@ void jl_compile_workqueue(
                 else {
                     orc::ThreadSafeModule result_m =
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging_mode,
-                            params.DL, params.TargetTriple);
+                            params.tsctx, params.DL, params.TargetTriple);
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     if (result_m)
                         it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
@@ -9107,7 +9094,7 @@ void emitFloat16Wrappers(Module &M, bool external)
 static void init_f16_funcs(void)
 {
     auto ctx = jl_ExecutionEngine->acquireContext();
-    auto TSM =  jl_create_ts_module("F16Wrappers", ctx, imaging_default());
+    auto TSM =  jl_create_ts_module("F16Wrappers", ctx);
     auto aliasM = TSM.getModuleUnlocked();
     emitFloat16Wrappers(*aliasM, true);
     jl_ExecutionEngine->addModule(std::move(TSM));
