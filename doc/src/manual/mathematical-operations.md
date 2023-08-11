@@ -557,7 +557,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
 | [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
 | [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                 λ   |
+| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
 | [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
 | [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
 | [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
