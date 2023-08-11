@@ -359,7 +359,7 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+Compute the base `b` logarithm of `x`. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 # Examples
@@ -501,7 +501,7 @@ asinh(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
 
@@ -534,7 +534,7 @@ sin(x::Number)
 
 Compute cosine of `x`, where `x` is in radians.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
@@ -545,7 +545,7 @@ cos(x::Number)
 
 Compute tangent of `x`, where `x` is in radians.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`tanh`](@ref).
 """
@@ -556,7 +556,7 @@ tan(x::Number)
 
 Compute the inverse sine of `x`, where the output is in radians.
 
-Returns a `T(NaN)` if `isnan(x)`.
+Return a `T(NaN)` if `isnan(x)`.
 
 See also [`asind`](@ref) for output in degrees.
 
@@ -574,9 +574,9 @@ asin(x::Number)
 """
     acos(x::T) where T <: Number -> float(T)
 
-Returns a `T(NaN)` if `isnan(x)`.
-
 Compute the inverse cosine of `x`, where the output is in radians
+
+Return a `T(NaN)` if `isnan(x)`.
 """
 acos(x::Number)
 
@@ -599,9 +599,12 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex arguments to obtain complex results.
-Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
+
+!!! note "Branch cut"
+    `log` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis. 
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -635,7 +638,7 @@ log(x::Number)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+Compute the logarithm of `x` to base 2. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
@@ -668,7 +671,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -691,7 +694,7 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+Accurate natural logarithm of `1+x`. Throw a [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
 # Examples
@@ -722,11 +725,14 @@ end
 
 Return ``\\sqrt{x}``.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. Note that `sqrt` has a branch cut
-along the negative real axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) negative arguments instead to obtain a [`Complex`](@ref) result.
 
 The prefix operator `√` is equivalent to `sqrt`.
+
+!!! note "Branch cut"
+    `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis. 
 
 See also: [`hypot`](@ref).
 
@@ -1021,7 +1027,8 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 """
     exponent(x::Real) -> Int
 
-Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+Return the largest integer `y` such that `2^y ≤ abs(x)`.
+For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
@@ -1346,8 +1353,8 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and returns the high double. References:
-    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # double-double numbers and return the high double. References:
+    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)

@@ -170,7 +170,7 @@ end
 Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
 a tuple `(sine, cosine)`.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `(T(NaN), T(NaN))` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` if `isnan(x)`.
 
 See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 """
@@ -789,7 +789,7 @@ end
 
 Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
@@ -822,7 +822,7 @@ end
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`cospi`](@ref).
 """
@@ -855,7 +855,7 @@ end
 Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
 where `x` is in radians), returning a tuple `(sine, cosine)`.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
@@ -894,7 +894,7 @@ end
 
 Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large `x`.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
@@ -1149,21 +1149,21 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
 
         Compute the $($fn) of `x`, where `x` is in radians.
 
-        Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+        Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
         """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
             $($hname)(x::T) where T <: Number -> float(T)
 
         Compute the hyperbolic $($fn) of `x`.
 
-        Returns a `T(NaN)` if `isnan(x)`.
+        Return a `T(NaN)` if `isnan(x)`.
         """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
             $($dname)(x::T) where T <: Number -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
 
-        Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+        Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
         """ ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
@@ -1270,7 +1270,7 @@ tand(x::Real) = sind(x) / cosd(x)
 
 Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 
-Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
 Propagates `Missing`.
 
 !!! compat "Julia 1.3"
@@ -1292,7 +1292,7 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
             Compute $($fn) of `x`, where `x` is in $($un).
             If `x` is a matrix, `x` needs to be a square matrix.
 
-            Throws a [`DomainError`](@ref) if `isinf(x)`, returns a `T(NaN)` if `isnan(x)`.
+            Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
             !!! compat "Julia 1.7"
                 Matrix arguments require Julia 1.7 or later.
@@ -1327,7 +1327,7 @@ end
 
 Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
 
-Returns a `NaN` if `isnan(y)` or `isnan(x)`. The returned `NaN` is either a `T` in the single
+Return a `NaN` if `isnan(y)` or `isnan(x)`. The returned `NaN` is either a `T` in the single
 argument version, or a `promote_type(T,S)` in the two argument version.
 
 !!! compat "Julia 1.7"
