@@ -517,6 +517,8 @@ active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
 
+setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
+
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
 """
