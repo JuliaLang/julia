@@ -3164,3 +3164,9 @@ end
         end
     end
 end
+
+@testset "irrational special values" begin
+    for v ∈ (π, ℯ, γ, catalan, φ)
+        @test v === typemin(v) === typemax(v)
+    end
+end
