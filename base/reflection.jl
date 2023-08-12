@@ -955,11 +955,12 @@ function to_tuple_type(@nospecialize(t))
     t
 end
 
-function signature_type(@nospecialize(f), @nospecialize(argtypes))
+function signature_type(@nospecialize(f), @nospecialize(argtypes), check::Symbol=:type)
     argtypes = to_tuple_type(argtypes)
-    ft = Core.Typeof(f)
+    t = Core.Typeof(f)
+    ft = ifelse(check === :callable && t <: Type, f, t)
     u = unwrap_unionall(argtypes)::DataType
-    return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
+    return rewrap_unionall(Tuple{ft,u.parameters...}, argtypes)
 end
 
 """
@@ -1016,8 +1017,8 @@ _uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
 _uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
 uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
-function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
-    tt = signature_type(f, t)
+function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt, check::Symbol=:type)
+    tt = signature_type(f, t, check)
     return _methods_by_ftype(tt, lim, world)
 end
 
@@ -1065,17 +1066,18 @@ A list of modules can also be specified as an array.
 See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+    mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing, check::Symbol=:type)
     world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
+    for m in _methods(f, t, -1, world, check)::Vector
         m = m::Core.MethodMatch
         (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
 end
-methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
+methods(@nospecialize(f), @nospecialize(t), mod::Module, check::Symbol=:type) = methods(f, t, (mod,), check)
+methods(@nospecialize(f), @nospecialize(t), check::Symbol) = methods(f, t, nothing, check)
 
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -1089,9 +1091,16 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
 end
 
 function methods(@nospecialize(f),
-                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+    mod::Union{Module,AbstractArray{Module},Nothing}=nothing,
+    check::Symbol=:type)
     # return all matches
-    return methods(f, Tuple{Vararg{Any}}, mod)
+    return methods(f, Tuple{Vararg{Any}}, mod, check)
+end
+
+function methods(@nospecialize(f),
+    check::Symbol)
+    # return all matches
+    return methods(f, Tuple{Vararg{Any}}, nothing, check)
 end
 
 function visit(f, mt::Core.MethodTable)
