@@ -1051,14 +1051,44 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+# we are not actually returning the method table, but an array of methods
+# besides adding the documentation related to `:callable` I'm also rewording
+# Return the method table for `f`. ----> Return an array of methods for `f`.
 """
-    methods(f, [types], [module])
+    methods(f, [types], [module], [:callable])
 
-Return the method table for `f`.
+Return an array of methods for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array.
+
+If `:callable` key is used, return the array of methods defined for the callable object of type `f`.
+
+# Example
+
+The usage of `:callable` key enables the return of methods defined for a callable
+object of a given type, eliminating the need to instantiate the object first.
+
+```julia
+julia> struct A{T}
+    x::T
+end
+
+# making the object callable
+julia> (a::A{Float64})(x::Float64) = a.x + x
+julia> (a::A{String})(x::String) = a.x * x
+
+julia> a = A(1.0)
+A{Float64}(1.0)
+
+julia> methods(a) == methods(A{Float64}, :callable)
+true
+
+julia> length(methods(A{<:Any}, :callable)) == 2
+true
+
+```
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1074,7 +1104,14 @@ function methods(@nospecialize(f), @nospecialize(t),
         m = m::Core.MethodMatch
         (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
     end
-    MethodList(ms, typeof(f).name.mt)
+
+    if (check === :callable)
+        # needed to ensure proper printing
+        # e.g, methods for type constructor ----> methods for callable object
+        (isconcretetype(f) || isabstracttype(f)) && return MethodList(ms, f.name.mt)
+        f isa UnionAll && return MethodList(ms, unwrap_unionall(f).name.mt)
+    end
+    return MethodList(ms, typeof(f).name.mt)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module, check::Symbol=:type) = methods(f, t, (mod,), check)
 methods(@nospecialize(f), @nospecialize(t), check::Symbol) = methods(f, t, nothing, check)

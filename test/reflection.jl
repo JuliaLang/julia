@@ -953,7 +953,7 @@ struct A{T}
     x::T
 end
 (a::A)(y) = a.x + y
-(a::A)(x::String) = string(a.x) * x
+(a::A)(x::String) = "$x: $a.x"
 (a::A{Float64})(x::Float64) = a.x + x
 
 struct B
