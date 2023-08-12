@@ -731,12 +731,12 @@ This is for use in special circumstances where the parser needs to resolve
 lexing ambiguities. There's no special whitespace handling — bump any
 whitespace if necessary with bump_trivia.
 """
-function bump_glue(stream::ParseStream, kind, flags, num_tokens)
+function bump_glue(stream::ParseStream, kind, flags)
     i = stream.lookahead_index
     h = SyntaxHead(kind, flags)
     push!(stream.tokens, SyntaxToken(h, kind, false,
                                      stream.lookahead[i+1].next_byte))
-    stream.lookahead_index += num_tokens
+    stream.lookahead_index += 2
     stream.peek_count = 0
     return position(stream)
 end

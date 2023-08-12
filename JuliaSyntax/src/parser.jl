@@ -1204,7 +1204,7 @@ function parse_unary(ps::ParseState)
                 # -1.0f0  ==>  -1.0f0
                 # -2*x    ==>  (call-i -2 * x)
                 # +0xff   ==>  0xff
-                bump_glue(ps, kind(t2), EMPTY_FLAGS, 2)
+                bump_glue(ps, kind(t2), EMPTY_FLAGS)
             end
             return
         end
