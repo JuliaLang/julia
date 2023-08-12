@@ -38,6 +38,7 @@ log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] 
 enum-map = ">=2.1"
 atomic = "0.4.6"
 chrono = "*"
+thread-id = "*"
 
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 

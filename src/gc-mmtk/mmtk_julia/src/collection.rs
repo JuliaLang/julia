@@ -5,7 +5,6 @@ use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-use mmtk::MutatorContext;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
@@ -60,6 +59,7 @@ impl Collection<JuliaVM> for VMCollection {
             crate::api::mmtk_used_bytes(),
             crate::api::mmtk_total_bytes()
         );
+
         trace!("Resuming mutators.");
     }
 
@@ -116,11 +116,14 @@ impl Collection<JuliaVM> for VMCollection {
         info!("Finished blocking mutator for GC!");
     }
 
-    fn spawn_gc_thread(tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
+    fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
         // Just drop the join handle. The thread will run until the process quits.
         let _ = std::thread::spawn(move || {
             use mmtk::util::opaque_pointer::*;
-            let worker_tls = VMWorkerThread(tls);
+            use mmtk::util::Address;
+            let worker_tls = VMWorkerThread(VMThread(OpaquePointer::from_address(unsafe {
+                Address::from_usize(thread_id::get())
+            })));
             match ctx {
                 GCThreadContext::Controller(mut c) => {
                     mmtk::memory_manager::start_control_collector(&SINGLETON, worker_tls, &mut c)
