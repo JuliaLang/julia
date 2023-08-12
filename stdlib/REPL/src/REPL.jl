@@ -248,11 +248,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -285,6 +283,19 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     end
     return nothing
 end
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limitflag[]
+        print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    return nothing
+end
+
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -294,7 +305,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             if iserr
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -317,7 +328,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
                     setglobal!(Base.MainInclude, :err, excs)
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    repl_display_error(errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -505,6 +516,8 @@ end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
+
+setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
@@ -1418,6 +1431,7 @@ function out_transform(@nospecialize(x), n::Ref{Int})
 end
 
 function get_usings!(usings, ex)
+    ex isa Expr || return usings
     # get all `using` and `import` statements which are at the top level
     for (i, arg) in enumerate(ex.args)
         if Base.isexpr(arg, :toplevel)

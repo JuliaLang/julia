@@ -23,8 +23,10 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
-function _isself(@nospecialize(ft))
-    name = ft.name.mt.name
+function _isself(ft::DataType)
+    ftname = ft.name
+    isdefined(ftname, :mt) || return false
+    name = ftname.mt.name
     mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
     return isdefined(mod, name) && ft == typeof(getfield(mod, name))
 end
@@ -1057,10 +1059,27 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
+function maybe_kws_nt(x::DataType)
+    x.name === typename(Pairs) || return nothing
+    length(x.parameters) == 4 || return nothing
+    x.parameters[1] === Symbol || return nothing
+    p4 = x.parameters[4]
+    if (isa(p4, DataType) && p4.name === typename(NamedTuple) && length(p4.parameters) == 2)
+        syms, types = p4.parameters
+        types isa DataType || return nothing
+        x.parameters[2] === eltype(p4) || return nothing
+        isa(syms, Tuple) || return nothing
+        x.parameters[3] === typeof(syms) || return nothing
+        return p4
+    end
+    return nothing
+end
+
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     isnamedtuple = x.name === typename(NamedTuple)
+    kwsnt = maybe_kws_nt(x)
     n = length(parameters)
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
@@ -1094,28 +1113,39 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        first = true
         if syms isa Tuple && types isa DataType
             print(io, "@NamedTuple{")
-            for i in 1:length(syms)
-                if !first
-                    print(io, ", ")
-                end
-                print(io, syms[i])
-                typ = types.parameters[i]
-                if typ !== Any
-                    print(io, "::")
-                    show(io, typ)
-                end
-                first = false
-            end
+            show_at_namedtuple(io, syms, types)
             print(io, "}")
             return
         end
+    elseif get(io, :backtrace, false)::Bool && kwsnt !== nothing
+        # simplify the type representation of keyword arguments
+        # when printing signature of keyword method in the stack trace
+        print(io, "@Kwargs{")
+        show_at_namedtuple(io, kwsnt.parameters[1]::Tuple, kwsnt.parameters[2]::DataType)
+        print(io, "}")
+        return
     end
 
     show_type_name(io, x.name)
     show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+end
+
+function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
+    first = true
+    for i in 1:length(syms)
+        if !first
+            print(io, ", ")
+        end
+        print(io, syms[i])
+        typ = types.parameters[i]
+        if typ !== Any
+            print(io, "::")
+            show(io, typ)
+        end
+        first = false
+    end
 end
 
 function show_supertypes(io::IO, typ::DataType)
@@ -2100,7 +2130,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)
-        comp_prec = minimum(operator_precedence, args[2:2:end])
+        comp_prec = minimum(operator_precedence, args[2:2:end]; init=typemax(Int))
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec, quote_level)
         else
@@ -2508,7 +2538,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false))
+        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false)::Bool)
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2517,21 +2547,24 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             first || print(io, ", ")
             first = false
             print_within_stacktrace(io, k; color=:light_black)
-            print(io, "::")
-            print_type_bicolor(io, t; use_color = get(io, :backtrace, false))
+            if t == pairs(NamedTuple)
+                # omit type annotation for splat keyword argument
+                print(io, "...")
+            else
+                print(io, "::")
+                print_type_bicolor(io, t; use_color = get(io, :backtrace, false)::Bool)
+            end
         end
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     str = String(take!(unwrapcontext(io)[1]))
-    if get(out, :limit, false)::Bool
+    typelimitflag = get(out, :stacktrace_types_limited, nothing)
+    if typelimitflag isa RefValue{Bool}
         sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
-            typelimitflag = get(out, :stacktrace_types_limited, nothing)
-            if typelimitflag !== nothing
-                typelimitflag[] = true
-            end
+            typelimitflag[] = true
         end
         str = str_lim
     end
@@ -2742,6 +2775,7 @@ module IRShow
     Base.iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
     Base.getindex(is::Compiler.InstructionStream, idx::Int) = Compiler.getindex(is, idx)
     Base.getindex(node::Compiler.Instruction, fld::Symbol) = Compiler.getindex(node, fld)
+    Base.getindex(ir::IRCode, ssa::SSAValue) = Compiler.getindex(ir, ssa)
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(

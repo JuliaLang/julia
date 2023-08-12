@@ -42,7 +42,7 @@ let m = Meta.@lower 1 + 1
     domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    phi = ir.stmts.inst[3]
+    phi = ir.stmts.stmt[3]
     @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
@@ -742,6 +742,57 @@ let m = Meta.@lower 1 + 1
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+# A lifted Core.ifelse with an eliminated branch (#50276)
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        #=  %1: =# Core.Argument(2),
+        # block 2
+        #=  %2: =# Expr(:call, Core.ifelse, SSAValue(1), true, missing),
+        #=  %3: =# GotoIfNot(SSAValue(2), 11),
+        # block 3
+        #=  %4: =# PiNode(SSAValue(2), Bool), # <-- This PiNode is the trigger of the bug, since it
+                                              #     means that only one branch of the Core.ifelse
+                                              #     is lifted.
+        #=  %5: =# GotoIfNot(false, 8),
+        # block 2
+        #=  %6: =# nothing,
+        #=  %7: =# GotoNode(8),
+        # block 4
+        #=  %8: =# PhiNode(Int32[5, 7], Any[SSAValue(4), SSAValue(6)]),
+        #               ^-- N.B. This PhiNode also needs to have a Union{ ... } type in order
+        #                   for lifting to be performed (it is skipped for e.g. `Bool`)
+        #
+        #=  %9: =# Expr(:call, isa, SSAValue(8), Missing),
+        #= %10: =# ReturnNode(SSAValue(9)),
+        # block 5
+        #= %11: =# ReturnNode(false),
+    ]
+    src.ssavaluetypes = Any[
+        Any,
+        Union{Missing, Bool},
+        Any,
+        Bool,
+        Any,
+        Missing,
+        Any,
+        Union{Nothing, Bool},
+        Bool,
+        Any,
+        Any
+    ]
+    nstmts = length(src.code)
+    src.codelocs = fill(one(Int32), nstmts)
+    src.ssaflags = fill(one(Int32), nstmts)
+    src.slotflags = fill(zero(UInt8), 3)
+    ir = Core.Compiler.inflate_ir(src)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #31546 - missing widenconst in SROA
 function f_31546(x)
     (a, b) = x == "r"  ? (false, false) :
@@ -787,12 +838,12 @@ end
 
 # Test cfg_simplify in complicated sequences of dropped and merged bbs
 using Core.Compiler: Argument, IRCode, GotoNode, GotoIfNot, ReturnNode, NoCallInfo, BasicBlock, StmtRange, SSAValue
-bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:inst]
+bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:stmt]
 
 function each_stmt_a_bb(stmts, preds, succs)
     ir = IRCode()
-    empty!(ir.stmts.inst)
-    append!(ir.stmts.inst, stmts)
+    empty!(ir.stmts.stmt)
+    append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
     empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
@@ -898,7 +949,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.stmt[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
@@ -1144,9 +1195,9 @@ let ci = code_typed1(optimize=false) do
         end
     end
     ir = Core.Compiler.inflate_ir(ci)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt) == 1
     ir = Core.Compiler.compact!(ir, true)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt) == 0
 end
 
 # Test that adce_pass! can drop phi node uses that can be concluded unused
@@ -1182,7 +1233,7 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) <= 2
-    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
+    @test isa(ir.stmts[length(ir.stmts)][:stmt], ReturnNode)
 end
 
 @test Core.Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
@@ -1270,3 +1321,120 @@ end
     return strct.b
 end
 @test fully_eliminated(one_const_field_partial; retval=5)
+
+# Test that SROA updates the type of intermediate phi nodes (#50285)
+struct Immut50285
+    x::Any
+end
+
+function immut50285(b, x, y)
+    if b
+       z = Immut50285(x)
+    else
+       z = Immut50285(y)
+    end
+    z.x::Union{Float64, Int}
+end
+
+let src = code_typed1(immut50285, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, typeassert)), src.code) == 0
+end
+
+function mut50285(b, x, y)
+    z = Ref{Any}()
+    if b
+       z[] = x
+    else
+       z[] = y
+    end
+    z[]::Union{Float64, Int}
+end
+
+let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, typeassert)), src.code) == 0
+end
+
+# Test that we can eliminate new{typeof(x)}(x)
+struct TParamTypeofTest1{T}
+    x::T
+    @eval TParamTypeofTest1(x) = $(Expr(:new, :(TParamTypeofTest1{typeof(x)}), :x))
+end
+tparam_typeof_test_elim1(x) = TParamTypeofTest1(x).x
+@test fully_eliminated(tparam_typeof_test_elim1, Tuple{Any})
+
+struct TParamTypeofTest2{S,T}
+    x::S
+    y::T
+    @eval TParamTypeofTest2(x, y) = $(Expr(:new, :(TParamTypeofTest2{typeof(x),typeof(y)}), :x, :y))
+end
+tparam_typeof_test_elim2(x, y) = TParamTypeofTest2(x, y).x
+@test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any})
+
+# Test that sroa doesn't get confused by free type parameters in struct types
+struct Wrap1{T}
+    x::T
+    @eval @inline (T::Type{Wrap1{X}} where X)(x) = $(Expr(:new, :T, :x))
+end
+Wrap1(x) = Wrap1{typeof(x)}(x)
+
+function wrap1_wrap1_ifelse(b, x, w1)
+    w2 = Wrap1(Wrap1(x))
+    w3 = Wrap1(typeof(w1)(w1.x))
+    Core.ifelse(b, w3, w2).x.x
+end
+function wrap1_wrap1_wrapper(b, x, y)
+    w1 = Base.inferencebarrier(Wrap1(y))::Wrap1{<:Union{Int, Float64}}
+    wrap1_wrap1_ifelse(b, x, w1)
+end
+@test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
+@test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
+
+# Test unswitching-union optimization within SRO Apass
+function sroaunswitchuniontuple(c, x1, x2)
+    t = c ? (x1,) : (x2,)
+    return getfield(t, 1)
+end
+struct SROAUnswitchUnion1{T}
+    x::T
+end
+struct SROAUnswitchUnion2{S,T}
+    x::T
+    @inline SROAUnswitchUnion2{S}(x::T) where {S,T} = new{S,T}(x)
+end
+function sroaunswitchunionstruct1(c, x1, x2)
+    x = c ? SROAUnswitchUnion1(x1) : SROAUnswitchUnion1(x2)
+    return getfield(x, :x)
+end
+function sroaunswitchunionstruct2(c, x1, x2)
+    x = c ? SROAUnswitchUnion2{:a}(x1) : SROAUnswitchUnion2{:a}(x2)
+    return getfield(x, :x)
+end
+let src = code_typed1(sroaunswitchuniontuple, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+let src = code_typed1(sroaunswitchunionstruct1, Tuple{Bool, Int, Float64})
+    @test count(isnew, src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+@test sroaunswitchunionstruct2(true, 1, 1.0) === 1
+@test sroaunswitchunionstruct2(false, 1, 1.0) === 1.0
+
+# Test SROA of union into getfield
+struct SingleFieldStruct1
+    x::Int
+end
+struct SingleFieldStruct2
+    x::Int
+end
+function foo(b, x)
+    if b
+        f = SingleFieldStruct1(x)
+    else
+        f = SingleFieldStruct2(x)
+    end
+    getfield(f, :x) + 1
+end
+@test foo(true, 1) == 2

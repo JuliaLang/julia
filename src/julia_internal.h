@@ -13,6 +13,7 @@
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
+#include <stdint.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Orc.h>
@@ -342,7 +343,6 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void *jl_gc_perm_alloc(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
-void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
 void gc_sweep_sysimg(void);
 
 
@@ -1217,15 +1217,18 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 //--------------------------------------------------
 // congruential random number generator
 // for a small amount of thread-local randomness
-STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias) JL_NOTSAFEPOINT
+
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
 {
-    *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
-}
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed) JL_NOTSAFEPOINT
-{
-    while ((*seed = 69069 * (*seed) + 362437) > unbias)
-        ;
-    return *seed % max;
+    uint64_t mask = ~(uint64_t)0;
+    --max;
+    mask >>= __builtin_clzll(max|1);
+    uint64_t x;
+    do {
+        *seed = 69069 * (*seed) + 362437;
+        x = *seed & mask;
+    } while (x > max);
+    return x;
 }
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
@@ -1668,7 +1671,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_m
 JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache, size_t world);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len, ios_t *s);
+        ios_t *z, ios_t *s);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,

@@ -156,14 +156,6 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
-# Wraps a type and represents that the value may also be undef at this point.
-# (only used in optimize, not abstractinterpret)
-# N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
-struct MaybeUndef
-    typ
-    MaybeUndef(@nospecialize(typ)) = new(typ)
-end
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -232,7 +224,7 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, MustAlias, NotFound, PartialStruct}
+const CompilerTypes = Union{Const, Conditional, MustAlias, NotFound, PartialStruct}
 ==(x::CompilerTypes, y::CompilerTypes) = x === y
 ==(x::Type, y::CompilerTypes) = false
 ==(x::CompilerTypes, y::Type) = false
@@ -420,16 +412,6 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
     return b.causes ⊆ a.causes
 end
 
-@nospecializeinfer function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef)
-        isa(b, MaybeUndef) || return false
-        a, b = a.typ, b.typ
-    elseif isa(b, MaybeUndef)
-        b = b.typ
-    end
-    return ⊑(widenlattice(lattice), a, b)
-end
-
 @nospecializeinfer function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
     # Fast paths for common cases
     b === Any && return true
@@ -556,14 +538,6 @@ end
         b = b.typ
     elseif isa(b, LimitedAccuracy)
         return false
-    end
-    return is_lattice_equal(widenlattice(lattice), a, b)
-end
-
-@nospecializeinfer function is_lattice_equal(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) || isa(b, MaybeUndef)
-        # TODO: Unwrap these and recurse to is_lattice_equal
-        return ⊑(lattice, a, b) && ⊑(lattice, b, a)
     end
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
@@ -709,12 +683,6 @@ end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::OptimizerLattice, @nospecialize(v), @nospecialize(t::Type))
-    # TODO: This can probably happen and should be handled
-    @assert !isa(v, MaybeUndef)
-    tmeet(widenlattice(lattice), v, t)
-end
-
 """
     widenconst(x) -> t::Type
 
@@ -723,7 +691,6 @@ Widens extended lattice element `x` to native `Type` representation.
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ

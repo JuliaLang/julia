@@ -9,7 +9,7 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::String
+    msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
 
@@ -252,9 +252,14 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-# Deprecate this, as it seems to have no documented meaning and is unused here,
-# but is frequently accessed in packages
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+function elsize(::Type{Ptr{T}}) where T
+    # this only must return something valid for values which satisfy is_valid_intrinsic_elptr(T),
+    # which includes Any and most concrete datatypes
+    T === Any && return sizeof(Ptr{Any})
+    T isa DataType || sizeof(Any) # throws
+    return LLT_ALIGN(Core.sizeof(T), datatype_alignment(T))
+end
 elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
@@ -723,7 +728,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
 [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
@@ -1752,7 +1757,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     if m == 0
         _deleteat!(a, i, 1)
     elseif m == 1
-        a[i] = ins[1]
+        a[i] = only(ins)
     else
         _growat!(a, i, m-1)
         k = 1
@@ -2035,18 +2040,6 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
-
-# disambiguation with LinAlg/special.jl
-# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
-# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
-hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
-hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
-vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
-vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
-    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
-    typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2440,9 +2433,8 @@ julia> findall(x -> x >= 0, d)
 ```
 """
 function findall(testf::Function, A)
-    T = eltype(keys(A))
     gen = (first(p) for p in pairs(A) if testf(last(p)))
-    isconcretetype(T) ? collect(T, gen) : collect(gen)
+    @default_eltype(gen) === Union{} ? collect(@default_eltype(keys(A)), gen) : collect(gen)
 end
 
 # Broadcasting is much faster for small testf, and computing

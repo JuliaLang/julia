@@ -3228,6 +3228,15 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
+Unsafe pointer operations are compatible with loading and storing pointers declared with
+`_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
+there is not support for atomically loading the Julia type `T`.
+
+See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+"""
+kw"atomic"
+
+"""
     Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
@@ -3268,11 +3277,9 @@ Base.donotdelete
 """
     Base.compilerbarrier(setting::Symbol, val)
 
-This function puts a barrier at a specified compilation phase.
-It is supposed to only influence the compilation behavior according to `setting`,
-and its runtime semantics is just to return the second argument `val` (except that
-this function will perform additional checks on `setting` in a case when `setting`
-isn't known precisely at compile-time.)
+This function acts a compiler barrier at a specified compilation phase.
+The dynamic semantics of this intrinsic are to return the `val` argument, unmodified.
+However, depending on the `setting`, the compiler is prevented from assuming this behavior.
 
 Currently either of the following `setting`s is allowed:
 - Barriers on abstract interpretation:
@@ -3285,9 +3292,9 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    This function is supposed to be used _with `setting` known precisely at compile-time_.
-    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
-    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+    This function is expected to be used with `setting` known precisely at compile-time.
+    If the `setting` is not known precisely at compile-time, the compiler will emit the
+    strongest barrier(s). No compile-time warning is issued.
 
 # Examples
 

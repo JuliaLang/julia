@@ -501,15 +501,40 @@ precompile_test_harness(false) do dir
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          true && __precompile__(false)
+          haskey(Base.loaded_modules, Base.PkgId("UseBaz")) || __precompile__(false)
           module Baz
           baz() = 1
           end
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    UseBaz_file = joinpath(dir, "UseBaz.jl")
+    write(UseBaz_file,
+          """
+          module UseBaz
+          biz() = 1
+          @assert haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+          @assert !haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          using Baz
+          @assert haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          buz() = 2
+          const generating = ccall(:jl_generating_output, Cint, ())
+          const incremental = Base.JLOptions().incremental
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("UseBaz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using UseBaz
+    @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+    @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
+    @test Base.invokelatest(UseBaz.biz) === 1
+    @test Base.invokelatest(UseBaz.buz) === 2
+    @test UseBaz.generating == 0
+    @test UseBaz.incremental == 0
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) == 1
+    @test Base.invokelatest(Baz.baz) === 1
+    @test Baz === UseBaz.Baz
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
@@ -655,7 +680,10 @@ precompile_test_harness("code caching") do dir
               precompile(getelsize, (Vector{Int32},))
           end
           """)
-    Base.compilecache(Base.PkgId(string(Cache_module)))
+    pkgid = Base.PkgId(string(Cache_module))
+    @test !Base.isprecompiled(pkgid)
+    Base.compilecache(pkgid)
+    @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
     M = getfield(@__MODULE__, Cache_module)
     # Test that this cache file "owns" all the roots
@@ -1766,6 +1794,50 @@ precompile_test_harness("Issue #48391") do load_path
     x = Base.invokelatest(I48391.SurrealFinite)
     @test Base.invokelatest(isless, x, x) === "good"
     @test_throws ErrorException isless(x, x)
+end
+
+precompile_test_harness("Generator nospecialize") do load_path
+    write(joinpath(load_path, "GenNoSpec.jl"),
+        """
+        module GenNoSpec
+        @generated function f(x...)
+            :((\$(Base.Meta.quot(x)),))
+        end
+        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))
+    @eval using GenNoSpec
+end
+
+precompile_test_harness("Issue #50538") do load_path
+    write(joinpath(load_path, "I50538.jl"),
+        """
+        module I50538
+        const newglobal = try
+            Base.newglobal = false
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        const newtype = try
+            Core.set_binding_type!(Base, :newglobal)
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        global undefglobal
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("I50538"))
+    @eval using I50538
+    @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test I50538.newtype.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
+                 Core.set_binding_type!(I50538, :undefglobal, Int))
+    Core.set_binding_type!(I50538, :undefglobal, Any)
+    @test Core.get_binding_type(I50538, :undefglobal) === Any
+    @test !isdefined(I50538, :undefglobal)
 end
 
 empty!(Base.DEPOT_PATH)

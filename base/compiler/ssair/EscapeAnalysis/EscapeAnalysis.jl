@@ -27,7 +27,7 @@ import ._TOP_MOD:     # Base definitions
     pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
     ismutabletype
 import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, OptimizerLattice, InferenceResult, IRCode, IR_FLAG_NOTHROW,
+    Bottom, InferenceResult, IRCode, IR_FLAG_NOTHROW, SimpleInferenceLattice,
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
@@ -42,7 +42,7 @@ end
 
 const AInfo = IdSet{Any}
 const LivenessSet = BitSet
-const 𝕃ₒ = OptimizerLattice()
+const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
@@ -671,7 +671,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
         local anyupdate = false
 
         for pc in nstmts:-1:1
-            stmt = getinst(ir, pc)[:inst]
+            stmt = getinst(ir, pc)[:stmt]
 
             # collect escape information
             if isa(stmt, Expr)
@@ -707,7 +707,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
                     continue
                 elseif head === :static_parameter ||  # this exists statically, not interested in its escape
                        head === :copyast ||           # XXX can this account for some escapes?
-                       head === :undefcheck ||        # XXX can this account for some escapes?
                        head === :isdefined ||         # just returns `Bool`, nothing accounts for any escapes
                        head === :gc_preserve_begin || # `GC.@preserve` expressions themselves won't be used anywhere
                        head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
@@ -785,7 +784,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     end
     for idx in 1:nstmts+nnewnodes
         inst = getinst(ir, idx)
-        stmt = inst[:inst]
+        stmt = inst[:stmt]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
             check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)

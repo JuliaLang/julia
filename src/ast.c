@@ -1348,8 +1348,8 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_ulong(lineno);
-    args[4] = jl_box_ulong(offset);
+    args[3] = jl_box_long(lineno);
+    args[4] = jl_box_long(offset);
     args[5] = options;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
