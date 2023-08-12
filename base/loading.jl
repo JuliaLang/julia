@@ -1503,7 +1503,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     try
         iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
-        _, _, depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io)
+        _, _, depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
@@ -1660,7 +1660,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, depot_alias, fsize, hash) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
@@ -1676,7 +1676,7 @@ function _include_dependency(mod::Module, _path::AbstractString)
             else
                 UInt64(0), UInt32(0)
             end
-            push!(_require_dependencies, (mod, replace_depot_path(path), fsize, hash))
+            push!(_require_dependencies, (mod, path, fsize, hash))
         end
     end
     return path, prev
@@ -1688,6 +1688,7 @@ end
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
 to be recompiled if the modification time of `path` changes.
+TODO: Update docs because we now use file size and content hash
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
@@ -1793,7 +1794,7 @@ function __require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, replace_depot_path(path), UInt64(0), UInt32(0)))
+            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0)))
         end
         return _require_prelocked(uuidkey, env)
     finally
@@ -2594,7 +2595,7 @@ struct CacheHeaderIncludes
     modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-function parse_cache_header(f::IO)
+function parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
@@ -2643,7 +2644,8 @@ function parse_cache_header(f::IO)
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
         else
-            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), fsize, hash, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname, cachefile),
+                                                fsize, hash, modpath))
         end
     end
     prefs = String[]
@@ -2683,10 +2685,10 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        ret = parse_cache_header(io)
+        ret = parse_cache_header(io, cachefile)
         srcfiles_only || return ret
         _, (includes, _), _, srctextpos, _... = ret
-        srcfiles = srctext_files(io, srctextpos)
+        srcfiles = srctext_files(io, cachefile, srctextpos)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
             chi.filename ∈ srcfiles || push!(delidx, i)
@@ -2698,21 +2700,21 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     end
 end
 
-preferences_hash(f::IO) = parse_cache_header(f)[6]
+preferences_hash(io::IO, cachefile) = parse_cache_header(io, cachefile)[6]
 function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
     try
         if iszero(isvalid_cache_header(io))
             throw(ArgumentError("Invalid header in cache file $cachefile."))
         end
-        return preferences_hash(io)
+        return preferences_hash(io, cachefile)
     finally
         close(io)
     end
 end
 
-function cache_dependencies(f::IO)
-    _, (includes, _), modules, _... = parse_cache_header(f)
+function cache_dependencies(io::IO, cachefile)
+    _, (includes, _), modules, _... = parse_cache_header(io, cachefile)
     return modules, map(chi -> chi.filename, includes)  # return just filename
 end
 
@@ -2720,24 +2722,26 @@ function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        return cache_dependencies(io)
+        return cache_dependencies(io, cachefile)
     finally
         close(io)
     end
 end
 
-function read_dependency_src(io::IO, filename::AbstractString)
-    srctextpos = parse_cache_header(io)[4]
+function read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
+    srctextpos = parse_cache_header(io, cachefile)[4]
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
-    return _read_dependency_src(io, filename)
+    return _read_dependency_src(io, cachefile, filename)
 end
 
-function _read_dependency_src(io::IO, filename::AbstractString)
+function _read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
+    msg = ""
     while !eof(io)
         filenamelen = read(io, Int32)
         filenamelen == 0 && break
-        fn = String(read(io, filenamelen))
+        depotfn = String(read(io, filenamelen))
+        fn = resolve_depot_path(depotfn, cachefile)
         len = read(io, UInt64)
         if fn == filename
             return String(read(io, len))
@@ -2751,20 +2755,21 @@ function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        return read_dependency_src(io, filename)
+        return read_dependency_src(io, cachefile, filename)
     finally
         close(io)
     end
 end
 
-function srctext_files(f::IO, srctextpos::Int64)
+function srctext_files(f::IO, cachefile::AbstractString, srctextpos::Int64)
     files = Set{String}()
     srctextpos == 0 && return files
     seek(f, srctextpos)
     while !eof(f)
         filenamelen = read(f, Int32)
         filenamelen == 0 && break
-        fn = String(read(f, filenamelen))
+        depotfn = String(read(f, filenamelen))
+        fn = resolve_depot_path(depotfn, cachefile)
         len = read(f, UInt64)
         push!(files, fn)
         seek(f, position(f) + len)
@@ -3109,7 +3114,7 @@ end
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end

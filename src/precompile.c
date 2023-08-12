@@ -30,15 +30,15 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         write_uint64(f, posfile);
         ios_seek_end(f);
         // Each source-text file is written as
-        //   int32: length of depot alias
-        //   char*: depot alias
+        //   int32: length of abspath
+        //   char*: abspath
         //   uint64: length of src text
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
         size_t len = jl_array_len(udeps);
-        static jl_value_t *resolve_depot_func = NULL;
-        if (!resolve_depot_func)
-            resolve_depot_func = jl_get_global(jl_base_module, jl_symbol("resolve_depot_path"));
+        static jl_value_t *replace_depot_func = NULL;
+        if (!replace_depot_func)
+            replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
         ios_t srctext;
         jl_value_t *deptuple = NULL;
         JL_GC_PUSH2(&deptuple, &udeps);
@@ -48,28 +48,29 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
             // Dependencies declared with `include_dependency` are excluded
             // because these may not be Julia code (and could be huge)
             if (depmod != (jl_value_t*)jl_main_module) {
-                jl_value_t *depalias = jl_fieldref(deptuple, 1);  // file @depot alias
+                jl_value_t *abspath = jl_fieldref(deptuple, 1);  // file abspath
+                const char *abspathstr = jl_string_data(abspath);
+                if (!abspathstr[0])
+                    continue;
+                ios_t *srctp = ios_file(&srctext, abspathstr, 1, 0, 0, 0);
+                if (!srctp) {
+                    jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
+                              abspathstr);
+                    continue;
+                }
 
-                jl_value_t **resolve_depot_args;
-                JL_GC_PUSHARGS(resolve_depot_args, 2);
-                resolve_depot_args[0] = resolve_depot_func;
-                resolve_depot_args[1] = depalias;
+                jl_value_t **replace_depot_args;
+                JL_GC_PUSHARGS(replace_depot_args, 3);
+                replace_depot_args[0] = replace_depot_func;
+                replace_depot_args[1] = abspath;
+                replace_depot_args[2] = jl_cstr_to_string(jl_options.outputji);
                 jl_task_t *ct = jl_current_task;
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                jl_value_t *abspath = (jl_value_t*)jl_apply(resolve_depot_args, 2);
+                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
                 ct->world_age = last_age;
                 JL_GC_POP();
 
-                const char *depstr = jl_string_data(abspath);
-                if (!depstr[0])
-                    continue;
-                ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
-                if (!srctp) {
-                    jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
-                              depstr);
-                    continue;
-                }
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
                 ios_write(f, jl_string_data(depalias), slen);

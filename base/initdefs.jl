@@ -115,44 +115,40 @@ function init_depot_path()
     nothing
 end
 
-# replace leading dirname with `@depot, @stdlib` if `path` is located within any of DEPOT_PATH or Sys.STDLIB
-function replace_depot_path(path::AbstractString)
-    if startswith(path, Sys.STDLIB)
-        subpath = path[nextind(path,length(Sys.STDLIB)):end]
-        if isabspath(subpath)
-            subpath = subpath[nextind(subpath,1):end]
-        end
-        return joinpath("@stdlib", subpath)
-    end
+# replace leading dirname of `path` with `@depot` if `path` and `cachefile` are located
+# on the same depot path; otherwise just return `path`
+function replace_depot_path(path::AbstractString, cachefile::AbstractString)
     for depot in DEPOT_PATH
-        if startswith(path, joinpath(depot, "compiled")) || startswith(path, joinpath(depot, "packages"))
-            subpath = path[nextind(path,length(depot)):end]
-            if isabspath(subpath)
-                subpath = subpath[nextind(subpath,1):end]
-            end
-            return joinpath("@depot", subpath)
+        if startswith(path, depot) && startswith(cachefile, depot)
+            depot_w_sep = joinpath(depot, "") # append the path separator
+            alias = joinpath("@depot", path[1+length(depot_w_sep):end])
+            return alias
         end
     end
+    # TODO Emit debug message when cachefile is not in a depot; can this even happen?
+    # TODO Emit debug message when path is not in the same depot as cachefile the cache file.
     return path
 end
 
-# resolve leading `@depot, @stdlib` alias from `path` to point to a valid path in any
-# of DEPOT_PATH/compiled or Sys.STDLIb
-function resolve_depot_path(path::AbstractString)
-    if startswith(path, "@stdlib")
-        fullpath = joinpath(Sys.STDLIB, path[nextind(path,length("@stdlib")+1):end])
-        ispath(fullpath) && return fullpath
-        error("Failed to resolve `$path` ($fullpath) to a stdlib path in `$(Sys.STDLIB)`")
-    elseif startswith(path, joinpath("@depot"))
-        dir = path[nextind(path,length("@depot")+1):end]
-        for depot in DEPOT_PATH
-            fullpath = joinpath(depot, dir)
-            ispath(fullpath) && return fullpath
+# resolve a leading `@depot` tag from `depotalias` to point to a valid path located
+# in the same depot as the `cachefile` it was loaded from
+# TODO IDK if returning an unresolved @depot on failure is ok? atm it is need to not break precompile tests
+function resolve_depot_path(depotalias::AbstractString, cachefile::AbstractString)
+    !startswith(depotalias, "@depot") && return depotalias
+    for depot in DEPOT_PATH
+        if startswith(cachefile, depot)
+            tag = joinpath("@depot", "") # append the path separator
+            path = joinpath(depot, depotalias[1+length(tag):end])
+            # if !ispath(path)
+            #     error("Failed to resolve `$depotalias` to a valid path located in the same depot (`$depot`) as the cachefile `$cachefile`")
+            # end
+            return path
         end
-        error("Failed to resolve `$path` to a valid path for any depot in `DEPOT_PATH`")
     end
-    return path
+    return depotalias
+    # error("Failed to resolve `$depotalias` to a valid path, because the cachefile `$cachefile` is not on located on any `DEPOT_PATH`")
 end
+
 
 ## LOAD_PATH & ACTIVE_PROJECT ##
 

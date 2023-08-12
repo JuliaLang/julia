@@ -59,9 +59,8 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            mod, depotpath, fsize = dep[1], dep[2], dep[3]
+            mod, path, fsize = dep[1], dep[2], dep[3]
             fsize == 0 && continue
-            path = Base.resolve_depot_path(depotpath)
             push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
