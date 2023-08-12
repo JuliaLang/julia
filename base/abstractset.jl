@@ -351,7 +351,31 @@ hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}
 hasfastin(x) = hasfastin(typeof(x))
 
 ⊇(a, b) = b ⊆ a
+
+"""
+    issubset(x)
+
+Create a function that compares its argument to `x` using [`issubset`](@ref), i.e.
+a function equivalent to `y -> issubset(y, x)`.
+The returned function is of type `Base.Fix2{typeof(issubset)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 issubset(a) = Fix2(issubset, a)
+
+"""
+    ⊇(x)
+
+Create a function that compares its argument to `x` using [`issubset`](@ref), i.e.
+a function equivalent to `y -> issubset(x, y)`.
+The returned function is of type `Base.Fix1{typeof(issubset)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 ⊇(a) = Fix1(issubset, a)
 ## strict subset comparison
 
@@ -381,7 +405,30 @@ false
 ⊊(a, b::AbstractSet) = Set(a) ⊊ b
 ⊊(a, b) = Set(a) ⊊ Set(b)
 ⊋(a, b) = b ⊊ a
+
+"""
+    ⊋(x)
+
+Create a function that compares its argument to `x` using [`⊋`](@ref), i.e.
+a function equivalent to `y -> y ⊋ x`.
+The returned function is of type `Base.Fix2{typeof(⊋)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 ⊋(a) = Fix2(⊋, a)
+"""
+    ⊊(x)
+
+Create a function that compares its argument to `x` using [`⊊`](@ref), i.e.
+a function equivalent to `y -> y ⊊ x`.
+The returned function is of type `Base.Fix2{typeof(⊊)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 ⊊(a) = Fix2(⊊, a)
 
 function ⊈ end
@@ -407,7 +454,31 @@ false
 
 ⊈(a, b) = !⊆(a, b)
 ⊉(a, b) = b ⊈ a
+
+"""
+    ⊉(x)
+
+Create a function that compares its argument to `x` using [`⊉`](@ref), i.e.
+a function equivalent to `y -> y ⊉ x`.
+The returned function is of type `Base.Fix2{typeof(⊉)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 ⊉(a) = Fix2(⊉, a)
+
+"""
+    ⊈(x)
+
+Create a function that compares its argument to `x` using [`⊈`](@ref), i.e.
+a function equivalent to `y -> y ⊈ x`.
+The returned function is of type `Base.Fix2{typeof(⊈)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 ⊈(a) = Fix2(⊈, a)
 
 ## set equality comparison
@@ -446,6 +517,17 @@ function issetequal(a, b)
     return issetequal(Set(a), Set(b))
 end
 
+"""
+    issetequal(x)
+
+Create a function that compares its argument to `x` using [`issetequal`](@ref), i.e.
+a function equivalent to `y -> issetequal(y, x)`.
+The returned function is of type `Base.Fix2{typeof(issetequal)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 issetequal(a) = Fix2(issetequal, a)
 
 ## set disjoint comparison
@@ -494,6 +576,17 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
     end
 end
 
+"""
+    isdisjoint(x)
+
+Create a function that compares its argument to `x` using [`isdisjoint`](@ref), i.e.
+a function equivalent to `y -> isdisjoint(y, x)`.
+The returned function is of type `Base.Fix2{typeof(isdisjoint)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
 isdisjoint(a) = Fix2(isdisjoint, a)
 
 _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
