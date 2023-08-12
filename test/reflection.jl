@@ -948,6 +948,41 @@ end
     @test length(methods(g, ())) == 1
 end
 
+module TestCallableObj
+struct A{T}
+    x::T
+end
+(a::A)(y) = a.x + y
+(a::A)(x::String) = string(a.x) * x
+(a::A{Float64})(x::Float64) = a.x + x
+
+struct B
+    x::Int
+end
+
+(b::B)(y) = b.x + y
+(b::B)(x::String) = string(b.x) * x
+(b::B)(y::Float64) = b.x + y
+end
+
+@testset "methods type-level/callable" begin
+    using .TestCallableObj: A, B
+
+    @test methods(A(1)) == methods(A{Int}, :callable)
+    @test methods(B(1)) == methods(B, :callable)
+
+    @test length(methods(A{<:Any})) == 1
+    @test length(methods(A{<:Any}, :callable)) == 3
+
+    @test methods(A("s")) == methods(A{String}, :callable)
+
+    @test length(methods(A{String})) == 1
+    @test length(methods(A{String}, :callable)) == 2
+
+    @test length(methods(B)) == 2
+    @test length(methods(B, :callable)) == 3
+end
+
 module BodyFunctionLookup
 f1(x, y; a=1) = error("oops")
 f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)
