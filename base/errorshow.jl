@@ -284,10 +284,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(iob, ")")
         str = String(take!(unwrapcontext(iob)[1]))
-        ioc = IOContext(io)
-        if !haskey(ioc, :displaysize)
-            ioc = IOContext(ioc, :displaysize => displaysize(io))
-        end
+        ioc = !haskey(ioc, :displaysize) ? IOContext(io, :displaysize => displaysize(io)) : io
         str = type_limited_string_from_context(ioc, str)
         print(io, str)
     end
