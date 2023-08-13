@@ -1030,7 +1030,6 @@ function rmprocs(pids...; waitfor=typemax(Int))
 
     pids = vcat(pids...)
     if waitfor == 0
-        println("hello")
         t = @async _rmprocs(pids, typemax(Int))
         yield()
         return t
