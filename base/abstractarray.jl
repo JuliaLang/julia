@@ -2878,11 +2878,6 @@ _ensure_array(x) = 1:0  # passed to similar, makes stack's output an Array
 _empty_stack(_...) = throw(ArgumentError("`stack` on an empty collection is not allowed"))
 
 
-cat_ndims(a) = 0
-cat_ndims(a::AbstractArray) = ndims(a)
-cat_length(::Any) = 1
-cat_length(a::AbstractArray) = length(a)
-
 ## Reductions and accumulates ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
