@@ -285,7 +285,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
         ctx = jl_ExecutionEngine->acquireContext();
-        backing = jl_create_ts_module("text", ctx, imaging);
+        backing = jl_create_ts_module("text", ctx);
     }
     orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
@@ -338,8 +338,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging_mode,
-                            clone.getModuleUnlocked()->getDataLayout(),
+                            params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
                     jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
                     if (result_m)
@@ -652,6 +651,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
+    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -662,6 +662,7 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
+    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1413,6 +1414,13 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
+    // for any of our other symbols that we insert during compilation.
+    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
+        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
+        return 1;
+    }
+
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
@@ -2125,7 +2133,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->getContext();
-        orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx, imaging_default());
+        orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
