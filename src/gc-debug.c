@@ -1224,18 +1224,18 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
     if (!gc_logging_enabled) {
         return;
     }
-    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
+    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
         pause/1e6, freed/(double)(1<<20),
         full ? "full" : "incr",
         recollect ? "recollect" : ""
     );
 
-    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB, heap_size %.2f MB, heap_target %.2f MB, live_bytes %.2f MB\n, Fragmentation %.3f",
+    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
+        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
-        live_bytes/(double)(1<<20),
         (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
     );
     // Should fragmentation use bytes_resident instead of heap_size?

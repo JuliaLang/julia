@@ -693,7 +693,7 @@ end
 
 ## scheduler and work queue
 
-struct IntrusiveLinkedListSynchronized{T}
+mutable struct IntrusiveLinkedListSynchronized{T}
     queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())

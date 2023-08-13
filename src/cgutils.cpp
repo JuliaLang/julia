@@ -125,7 +125,8 @@ static Value *stringConstPtr(
         ctxt.resize(28);
         ctxt[25] = ctxt[26] = ctxt[27] = '.';
     }
-    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
+    // Doesn't need to be aligned, we shouldn't operate on these like julia objects
+    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
     auto gep = irbuilder.CreateInBoundsGEP(gv->getValueType(),
@@ -344,7 +345,7 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        uint64_t id = ctx.emission_context.imaging ? jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1) : ctx.emission_context.global_targets.size();
+        uint64_t id = jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1); // TODO: use ctx.emission_context.global_targets.size()
         raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
@@ -918,7 +919,7 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
         if (val)
-            data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *jl_Module);
+            data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment(jl_typeof(x.constant))), "_j_const", *jl_Module);
         else
             data = literal_pointer_val(ctx, x.constant);
     }
@@ -1096,37 +1097,29 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
-        Type *expr_type = justtag ? ctx.types().T_size : ctx.emission_context.imaging ? ctx.types().T_pjlvalue : ctx.types().T_prjlvalue;
-        Value *datatype_or_p = Constant::getNullValue(ctx.emission_context.imaging ? expr_type->getPointerTo() : expr_type);
+        Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
+        Value *datatype_or_p = Constant::getNullValue(expr_type->getPointerTo());
         unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
                 Constant *ptr;
                 if (justtag && jt->smalltag) {
-                    ptr = ConstantInt::get(expr_type, jt->smalltag << 4);
-                    if (ctx.emission_context.imaging)
-                        ptr = get_pointer_to_constant(ctx.emission_context, ptr, StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
+                    ptr = get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
                 }
-                else if (ctx.emission_context.imaging)
+                else {
                     ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx, (jl_value_t*)jt), datatype_or_p->getType());
-                else if (justtag)
-                    ptr = ConstantInt::get(expr_type, (uintptr_t)jt);
-                else
-                    ptr = ConstantExpr::getAddrSpaceCast(literal_static_pointer_val((jl_value_t*)jt, ctx.types().T_pjlvalue), expr_type);
+                }
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");
             },
             p.typ,
             counter);
         auto emit_unboxty = [&] () -> Value* {
-            if (ctx.emission_context.imaging) {
-                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-                Value *datatype = ai.decorateInst(ctx.builder.CreateAlignedLoad(expr_type, datatype_or_p, Align(sizeof(void*))));
-                setName(ctx.emission_context, datatype, "typetag");
-                return justtag ? datatype : track_pjlvalue(ctx, datatype);
-            }
-            return datatype_or_p;
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            Value *datatype = ai.decorateInst(ctx.builder.CreateAlignedLoad(expr_type, datatype_or_p, Align(sizeof(void*))));
+            setName(ctx.emission_context, datatype, "typetag");
+            return justtag ? datatype : track_pjlvalue(ctx, datatype);
         };
         Value *res;
         if (!allunboxed) {

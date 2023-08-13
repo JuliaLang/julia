@@ -1436,6 +1436,9 @@ struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
 
+# issue #50716
+@test !<:(Ref{Vector{Tuple{K}} where K}, Ref{<:Vector{K}} where K)
+
 # issue #26131
 @test !(Vector{Vector{Number}} <: Vector{Union{Vector{Number}, Vector{S}}} where S<:Integer)
 

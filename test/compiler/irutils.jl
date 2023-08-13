@@ -37,8 +37,11 @@ isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
 isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
 isinvoke(pred::Function, @nospecialize(x)) = isexpr(x, :invoke) && pred(x.args[1]::MethodInstance)
 
-function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
-    code = code_typed1(args...; kwargs...).code
+fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...) =
+    fully_eliminated(code_typed1(args...; kwargs...); retval)
+fully_eliminated(src::CodeInfo; retval=(@__FILE__)) = fully_eliminated(src.code; retval)
+fully_eliminated(ir::IRCode; retval=(@__FILE__)) = fully_eliminated(ir.stmts.stmt; retval)
+function fully_eliminated(code::Vector{Any}; retval=(@__FILE__), kwargs...)
     if retval !== (@__FILE__)
         length(code) == 1 || return false
         code1 = code[1]

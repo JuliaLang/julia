@@ -1168,6 +1168,17 @@ Base.@irrational i46051 4863.185427757 1548big(pi)
     # issue #46051
     @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
+
+@testset "Irrational round, float, ceil" begin
+    using .MathConstants
+    @test round(π) === 3.0
+    @test round(Int, ℯ) === 3
+    @test floor(ℯ) === 2.0
+    @test floor(Int, φ) === 1
+    @test ceil(γ) === 1.0
+    @test ceil(Int, catalan) === 1
+end
+
 @testset "issue #6365" begin
     for T in (Float32, Float64)
         for i = 9007199254740992:9007199254740996
