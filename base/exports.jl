@@ -1066,61 +1066,79 @@ export
 
 # TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
 eval(Expr(:public,
-    Symbol("@assume_effects"),
-    Symbol("@constprop"),
-    Symbol("@locals"),
-    Symbol("@propagate_inbounds"),
+# Modules
+    :Checked,
+    :Filesystem,
+    :Order,
+    :Sort,
+
+# Types
     :AbstractLock,
     :AsyncCondition,
-    :Checked,
     :CodeUnits,
-    :DL_LOAD_PATH,
     :Event,
-    :Filesystem,
     :Fix1,
     :Fix2,
     :Generator,
     :ImmutableDict,
+    :OneTo,
+    :UUID,
+
+# Semaphores
+    :Semaphore,
+    :acquire,
+    :release,
+
+# collections
     :IteratorEltype,
     :IteratorSize,
-    :OneTo,
-    :Order,
-    :Pairs,
-    :Semaphore,
-    :Sort,
-    :UUID,
-    :acquire,
-    :active_project,
-    :cconvert,
-    :checked_length,
-    :exit_on_sigint,
-    :front,
-    :identify_package,
-    :isambiguous,
-    :isbinaryoperator,
+    :to_index,
+    :vect,
     :isdone,
+    :front,
+    :rest,
+    :split_rest,
+    :tail,
+    :checked_length,
+
+# Loading
+    :DL_LOAD_PATH,
+    :load_path,
+    :active_project,
+
+# Reflection and introspection
+    :isambiguous,
     :isexpr,
     :isidentifier,
-    :isoperator,
     :issingletontype,
-    :isunaryoperator,
-    :jit_total_bytes,
-    :load_path,
+    :identify_package,
     :locate_package,
     :moduleroot,
-    :notnothing,
+    :jit_total_bytes,
+    :summarysize,
+
+# Opperators
     :operator_associativity,
     :operator_precedence,
-    :promote_typejoin,
-    :release,
-    :require,
-    :rest,
+    :isbinaryoperator,
+    :isoperator,
+    :isunaryoperator,
+
+# C interface
+    :cconvert,
+    :unsafe_convert
+
+# Error handling
+    :exit_on_sigint,
+    :windowserror,
+
+# Macros
+    Symbol("@assume_effects"),
+    Symbol("@constprop"),
+    Symbol("@locals"),
+    Symbol("@propagate_inbounds"),
+
+# misc
+    :notnothing,
     :runtests,
-    :split_rest,
-    :summarysize,
-    :tail,
-    :text_colors,
-    :to_index,
-    :unsafe_convert,
-    :vect,
-    :windowserror))
+    :text_colors))
