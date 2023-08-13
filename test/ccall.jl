@@ -1923,5 +1923,9 @@ function somefunction_not_found()
 end
 
 @testset "library not found" begin
-    @test_throws "could not load library \"\"" somefunction_not_found()
+    if Sys.islinux()
+        @test_throws "could not load symbol \"somefunction\"" somefunction_not_found()
+    else
+        @test_throws "could not load library \"\"" somefunction_not_found()
+    end
 end
