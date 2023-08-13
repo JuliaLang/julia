@@ -671,11 +671,11 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 }
 
-JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exp)
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
     b->publicp = 1;
-    b->exportp = exp;
+    b->exportp = exported;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -953,7 +953,8 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int qualified, int all,
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
-        if (((qualified ? b->publicp : b->exportp) ||
+        if ((b->exportp ||
+             (qualified && b->publicp) ||
              (imported && b->imported) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
             (all || (!b->deprecated && !hidden))) {
