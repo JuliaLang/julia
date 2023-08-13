@@ -30,7 +30,6 @@ behavior of public symbols is part of the public API. Undocumented behavior of p
 symbols is internal.
 
 Public symbols are those marked with either `public foo` or `export foo`.
-Exported symbols are automatically considered public
 
 In other words:
 
