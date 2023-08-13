@@ -1915,3 +1915,13 @@ end
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end
+
+const libfrobozz = Libdl.find_library("libfrobozz")
+
+function somefunction_not_found()
+    ccall((:somefunction, libfrobozz), Cvoid, ())
+end
+
+@testset "library not found" begin
+    @test_throws "could not load library \"\"" somefunction_not_found()
+end
