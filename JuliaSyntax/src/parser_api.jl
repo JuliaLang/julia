@@ -17,7 +17,13 @@ end
 
 function Base.showerror(io::IO, err::ParseError)
     println(io, "ParseError:")
-    show_diagnostics(io, err.diagnostics, err.source)
+    # Only show the first parse error for now - later errors are often
+    # misleading due to the way recovery works
+    i = findfirst(is_error, err.diagnostics)
+    if isnothing(i)
+        i = lastindex(err.diagnostics)
+    end
+    show_diagnostics(io, err.diagnostics[1:i], err.source)
 end
 
 """
