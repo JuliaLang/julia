@@ -368,15 +368,15 @@ issubset(a) = Fix2(issubset, a)
 """
     ⊇(x)
 
-Create a function that compares its argument to `x` using [`issubset`](@ref), i.e.
-a function equivalent to `y -> issubset(x, y)`.
-The returned function is of type `Base.Fix1{typeof(issubset)}`, which can be
+Create a function that compares its argument to `x` using [`⊇`](@ref), i.e.
+a function equivalent to `y -> y ⊇ x`.
+The returned function is of type `Base.Fix2{typeof(⊇)}`, which can be
 used to implement specialized methods.
 
 !!! compat "Julia 1.11"
     This functionality requires at least Julia 1.11.
 """
-⊇(a) = Fix1(issubset, a)
+⊇(a) = Fix2(⊇, a)
 ## strict subset comparison
 
 function ⊊ end
