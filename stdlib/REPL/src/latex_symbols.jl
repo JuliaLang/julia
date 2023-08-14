@@ -122,6 +122,7 @@ const latex_symbols = Dict(
     # Greek letters
     "\\Mu" => "Μ",
     "\\Nu" => "Ν",
+    "\\Omicron" => "Ο",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -2675,4 +2676,5 @@ const symbols_latex_canonical = Dict(
     "≠" => "\\ne",
     "Μ" => "\\Mu",
     "Ν" => "\\Nu",
+    "Ο" => "\\Omicron",
 )
