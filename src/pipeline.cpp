@@ -374,7 +374,9 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         }
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
-    MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+    if (O.getSpeedupLevel() >= 2) {
+        MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+    }
     // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
     if (options.dump_native) {
         MPM.addPass(StripDeadPrototypesPass());
@@ -387,7 +389,6 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
             FPM.addPass(SROAPass());
             // SROA can duplicate PHI nodes which can block LowerSIMD
             FPM.addPass(InstCombinePass());
-            MPM.addPass(GlobalDCEPass());
             FPM.addPass(JumpThreadingPass());
             FPM.addPass(CorrelatedValuePropagationPass());
             FPM.addPass(ReassociatePass());
@@ -400,6 +401,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         invokePeepholeEPCallbacks(FPM, PB, O);
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
+    MPM.addPass(GlobalDCEPass());
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
 
