@@ -40,7 +40,7 @@ end
     @test julian2datetime(datetime2julian(DateTime(2000, 1, 1), localtime=true), localtime=true) == DateTime(2000, 1, 1)
 
     unix2localdatetime(x::Real) = DateTime(Libc.TmStruct(floor(x))) + Millisecond(round(Int, (x - floor(x)) * 1000))
-    localunixdiff() = value(DateTime(Libc.TmStruct(0))) - Dates.UNIXEPOCH
+    localunixdiff() = Dates.value(DateTime(Libc.TmStruct(0))) - Dates.UNIXEPOCH
     @test unix2datetime(1095379198.75, localtime=true) == unix2localdatetime(1095379198.75)
     @test datetime2unix(unix2datetime(1095379198.75, localtime=true), localtime=true) == 1095379198.75
     @test julian2datetime(1721119.5 - float(localunixdiff()/86400000), localtime=true) == DateTime(0, 3, 1)
