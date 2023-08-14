@@ -543,8 +543,13 @@ function abstract_call_method(interp::AbstractInterpreter,
     if topmost !== nothing
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
-        ls = length(sigtuple.parameters)
         mi = frame_instance(sv)
+
+        if isdefined(method, :recursion_relation)
+            # We don't require the recursion_relation to be transitive, so
+            # apply a hard limit
+            hardlimit = true
+        end
 
         if method === mi.def
             # Under direct self-recursion, permit much greater use of reducers.
@@ -552,14 +557,14 @@ function abstract_call_method(interp::AbstractInterpreter,
             comparison = mi.specTypes
             l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
             spec_len = max(spec_len, l_comparison)
+        elseif !hardlimit && isa(topmost, InferenceState)
+            # Without a hardlimit, permit use of reducers too.
+            comparison = frame_instance(topmost).specTypes
+            # n.b. currently don't allow vararg reducers
+            #l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
+            #spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
-        end
-
-        if isdefined(method, :recursion_relation)
-            # We don't require the recursion_relation to be transitive, so
-            # apply a hard limit
-            hardlimit = true
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
@@ -588,6 +593,7 @@ function abstract_call_method(interp::AbstractInterpreter,
                     poison_callstack!(sv, parentframe === nothing ? topmost : parentframe)
                 end
             end
+            # n.b. this heuristic depends on the non-local state, so we must record the limit later
             sig = newsig
             sparams = svec()
             edgelimited = true
