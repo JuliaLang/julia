@@ -691,11 +691,11 @@ static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
 // heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
-static uint64_t old_pause_time = 0;
-static uint64_t old_mut_time = 0;
+static uint64_t pause_time_avg = 0;
+static uint64_t mut_time_avg = 0;
 static uint64_t old_heap_size = 0;
-static uint64_t old_alloc_diff = 0;
-static uint64_t old_freed_diff = 0;
+static uint64_t alloc_diff_avg = 0;
+static uint64_t heap_size_avg = 0;
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
 static int thrashing = 0;
@@ -3326,18 +3326,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     double min_interval = default_collect_interval;
     if (collection == JL_GC_AUTO) {
         uint64_t alloc_diff = before_free_heap_size - old_heap_size;
-        uint64_t freed_diff = before_free_heap_size - heap_size;
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
         double tuning_factor = 0.03;
-        double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
-        double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
-        double gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
-        old_alloc_diff = alloc_diff;
-        old_mut_time = mutator_time;
-        old_freed_diff = freed_diff;
-        old_pause_time = pause;
+        double alloc_mem = jl_gc_smooth(alloc_diff_avg, alloc_diff, alloc_smooth_factor);
+        double alloc_time = jl_gc_smooth(mut_time_avg, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
+        double gc_mem = jl_gc_smooth(heap_size_avg, heap_size, collect_smooth_factor);
+        double gc_time = jl_gc_smooth(pause_time_avg, pause - sweep_time, collect_smooth_factor);
+        alloc_diff_avg = alloc_mem;
+        mut_time_avg = alloc_time;
+        heap_size_avg = gc_mem;
+        pause_time_avg = pause;
         old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
         if (gc_time > alloc_time * 95 && !(thrash_counter < 4))
             thrash_counter += 1;
