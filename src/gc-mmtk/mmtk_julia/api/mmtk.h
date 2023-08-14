@@ -14,6 +14,17 @@ typedef void* MMTk_TraceLocal;
 typedef void (*ProcessEdgeFn)(void* closure, void* slot);
 typedef void (*ProcessOffsetEdgeFn)(void* closure, void* slot, int offset);
 
+typedef struct {
+    void** ptr;
+    size_t cap;
+} RootsWorkBuffer;
+
+typedef struct {
+    RootsWorkBuffer (*report_edges_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
+    RootsWorkBuffer (*report_nodes_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
+    void* data;
+} RootsWorkClosure;
+
 /**
  * Allocation
  */
@@ -29,9 +40,6 @@ extern void* mmtk_alloc_large(MMTk_Mutator mutator, size_t size,
 
 extern void mmtk_post_alloc(MMTk_Mutator mutator, void* refer,
     size_t bytes, int allocator);
-
-extern void mmtk_add_object_to_mmtk_roots(void *obj);
-extern void mmtk_process_root_edges(void* c, void* slot);
 
 extern bool mmtk_is_live_object(void* ref);
 extern bool mmtk_is_mapped_object(void* ref);
@@ -62,7 +70,6 @@ extern uintptr_t JULIA_MALLOC_BYTES;
 typedef struct {
     void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessEdgeFn process_edge);
     void* (* get_stackbase) (int16_t tid);
-    void (* calculate_roots) (void* tls);
     int (* get_jl_last_err) (void);
     void (* set_jl_last_err) (int e);
     void (* wait_for_the_world) (void);
@@ -82,6 +89,7 @@ typedef struct {
     void* (* get_marked_finalizers_list)(void);
     void (*arraylist_grow)(void* a, size_t n);
     int* (*get_jl_gc_have_pending_finalizers)(void);
+    void (*scan_vm_specific_roots)(RootsWorkClosure* closure);
 } Julia_Upcalls;
 
 /**

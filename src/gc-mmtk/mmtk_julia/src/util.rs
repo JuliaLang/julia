@@ -35,9 +35,46 @@ impl RootLabel {
     }
 }
 
+const PRINT_STRUCT_SIZE: bool = false;
+
+macro_rules! print_sizeof {
+    ($t: ty) => {{
+        let sz = std::mem::size_of::<$t>();
+        if PRINT_STRUCT_SIZE {
+            println!("Rust {} = {} bytes", stringify!($t), sz);
+        }
+        sz
+    }};
+}
+
 pub(crate) fn get_abi_structs_checksum_rust() -> usize {
-    use std::mem;
-    return mem::size_of::<mmtk::Mutator<crate::JuliaVM>>();
+    use crate::julia_types::*;
+    print_sizeof!(mmtk::Mutator<crate::JuliaVM>)
+        ^ print_sizeof!(mmtk__jl_taggedvalue_bits)
+        ^ print_sizeof!(mmtk_jl_taggedvalue_t)
+        ^ print_sizeof!(mmtk_jl_array_flags_t)
+        ^ print_sizeof!(mmtk_jl_datatype_layout_t)
+        ^ print_sizeof!(mmtk_jl_typename_t)
+        ^ print_sizeof!(mmtk_jl_svec_t)
+        ^ print_sizeof!(mmtk_jl_datatype_t)
+        ^ print_sizeof!(mmtk_jl_array_t)
+        ^ print_sizeof!(mmtk_jl_sym_t)
+        ^ print_sizeof!(mmtk_jl_binding_t)
+        ^ print_sizeof!(mmtk_htable_t)
+        ^ print_sizeof!(mmtk_arraylist_t)
+        ^ print_sizeof!(mmtk_jl_uuid_t)
+        ^ print_sizeof!(mmtk_jl_mutex_t)
+        ^ print_sizeof!(mmtk_jl_module_t)
+        ^ print_sizeof!(mmtk_jl_excstack_t)
+        ^ print_sizeof!(mmtk_jl_bt_element_t)
+        ^ print_sizeof!(mmtk_jl_stack_context_t)
+        ^ print_sizeof!(mmtk_jl_ucontext_t)
+        ^ print_sizeof!(mmtk__jl_gcframe_t)
+        ^ print_sizeof!(mmtk_jl_task_t)
+        ^ print_sizeof!(mmtk_jl_weakref_t)
+        ^ print_sizeof!(mmtk_jl_tls_states_t)
+        ^ print_sizeof!(mmtk_jl_thread_heap_t)
+        ^ print_sizeof!(mmtk_jl_thread_gc_num_t)
 }
 
 // The functions below allow accessing the values of bitfields without performing a for loop

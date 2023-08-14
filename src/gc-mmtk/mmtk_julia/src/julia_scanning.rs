@@ -4,7 +4,7 @@ use crate::julia_types::*;
 use crate::object_model::mmtk_jl_array_ndims;
 use crate::JULIA_BUFF_TAG;
 use crate::UPCALLS;
-use mmtk::util::Address;
+use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::edge_shape::SimpleEdge;
 use mmtk::vm::EdgeVisitor;
 use std::sync::atomic::AtomicUsize;
@@ -309,7 +309,7 @@ pub unsafe fn scan_julia_object<EV: EdgeVisitor<JuliaVMEdge>>(obj: Address, clos
     }
 }
 
-unsafe fn mmtk_scan_gcstack<EV: EdgeVisitor<JuliaVMEdge>>(
+pub unsafe fn mmtk_scan_gcstack<EV: EdgeVisitor<JuliaVMEdge>>(
     ta: *const mmtk_jl_task_t,
     closure: &mut EV,
 ) {
@@ -546,4 +546,36 @@ pub unsafe fn mmtk_jl_dt_layout_fields(l: *const mmtk_jl_datatype_layout_t) -> A
 pub unsafe fn mmtk_jl_fielddesc_size(fielddesc_type: u16) -> u32 {
     debug_assert!(fielddesc_type <= 2);
     2 << fielddesc_type
+}
+
+const JL_BT_NON_PTR_ENTRY: usize = usize::MAX;
+
+pub fn mmtk_jl_bt_is_native(bt_entry: *mut mmtk_jl_bt_element_t) -> bool {
+    let entry = unsafe { (*bt_entry).__bindgen_anon_1.uintptr };
+    entry == JL_BT_NON_PTR_ENTRY
+}
+
+pub fn mmtk_jl_bt_entry_size(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+    if mmtk_jl_bt_is_native(bt_entry) {
+        1
+    } else {
+        2 + mmtk_jl_bt_num_jlvals(bt_entry) + mmtk_jl_bt_num_jlvals(bt_entry)
+    }
+}
+
+pub fn mmtk_jl_bt_num_jlvals(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+    debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
+    let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
+    entry & 0x7
+}
+
+pub fn mmtk_jl_bt_num_uintvals(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+    debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
+    let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
+    (entry >> 3) & 0x7
+}
+
+pub fn mmtk_jl_bt_entry_jlvalue(bt_entry: *mut mmtk_jl_bt_element_t, i: usize) -> ObjectReference {
+    let entry = unsafe { (*bt_entry.add(2 + i)).__bindgen_anon_1.jlvalue };
+    ObjectReference::from_raw_address(Address::from_mut_ptr(entry))
 }

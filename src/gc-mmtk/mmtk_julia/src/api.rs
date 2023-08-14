@@ -8,7 +8,6 @@ use crate::JULIA_HEADER_SIZE;
 use crate::SINGLETON;
 use crate::UPCALLS;
 use crate::{BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
-use crate::{ROOT_EDGES, ROOT_NODES};
 
 use libc::c_char;
 use log::*;
@@ -492,19 +491,6 @@ pub extern "C" fn mmtk_start_spawned_controller_thread(
     ctx: *mut GCController<JuliaVM>,
 ) {
     mmtk_start_control_collector(tls, ctx);
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_add_object_to_mmtk_roots(obj: ObjectReference) {
-    // if object is not managed by mmtk it needs to be processed to look for pointers to managed objects (i.e. roots)
-    ROOT_NODES.lock().unwrap().insert(obj);
-}
-
-// Pass this as 'process_edge' so we can reuse scan_julia_task_obj.
-#[no_mangle]
-#[allow(improper_ctypes_definitions)] // closure is a fat pointer, we propelry define its type in C header.
-pub extern "C" fn mmtk_process_root_edges(_closure: Address, addr: Address) {
-    ROOT_EDGES.lock().unwrap().insert(addr);
 }
 
 #[inline(always)]

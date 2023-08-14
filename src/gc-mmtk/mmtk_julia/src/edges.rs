@@ -1,7 +1,10 @@
 use atomic::Atomic;
 use mmtk::{
     util::{Address, ObjectReference},
-    vm::edge_shape::{Edge, SimpleEdge},
+    vm::{
+        edge_shape::{Edge, SimpleEdge},
+        RootsWorkFactory,
+    },
 };
 
 /// If a VM supports multiple kinds of edges, we can use tagged union to represent all of them.
@@ -158,6 +161,103 @@ impl Iterator for JuliaMemorySliceEdgeIterator {
             let edge = self.cursor;
             self.cursor = self.cursor.shift::<ObjectReference>(1);
             Some(JuliaVMEdge::Simple(SimpleEdge::from_address(edge)))
+        }
+    }
+}
+
+const ROOT_WORK_PACKET_SIZE: usize = 4096;
+
+#[repr(C)]
+pub struct RootsWorkBuffer<T: Copy> {
+    pub ptr: *mut T,
+    pub capacity: usize,
+}
+
+impl<T: Copy> RootsWorkBuffer<T> {
+    fn empty() -> Self {
+        Self {
+            ptr: std::ptr::null_mut(),
+            capacity: 0,
+        }
+    }
+    fn new() -> Self {
+        let (buf, _, capacity) = {
+            let new_vec = Vec::with_capacity(ROOT_WORK_PACKET_SIZE);
+            let mut me = std::mem::ManuallyDrop::new(new_vec);
+            (me.as_mut_ptr(), me.len(), me.capacity())
+        };
+        Self { ptr: buf, capacity }
+    }
+}
+
+#[repr(C)]
+pub struct RootsWorkClosure {
+    pub report_edges_func: extern "C" fn(
+        buf: *mut Address,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<Address>,
+    pub report_nodes_func: extern "C" fn(
+        buf: *mut ObjectReference,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<ObjectReference>,
+    pub factory_ptr: *mut libc::c_void,
+}
+
+impl RootsWorkClosure {
+    extern "C" fn report_simple_edges<F: RootsWorkFactory<JuliaVMEdge>>(
+        buf: *mut Address,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<Address> {
+        if !buf.is_null() {
+            let buf = unsafe { Vec::<Address>::from_raw_parts(buf, size, cap) }
+                .into_iter()
+                .map(|addr| JuliaVMEdge::Simple(SimpleEdge::from_address(addr)))
+                .collect();
+            let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
+            factory.create_process_edge_roots_work(buf);
+        }
+
+        if renew {
+            RootsWorkBuffer::new()
+        } else {
+            RootsWorkBuffer::empty()
+        }
+    }
+
+    extern "C" fn report_nodes<F: RootsWorkFactory<JuliaVMEdge>>(
+        buf: *mut ObjectReference,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<ObjectReference> {
+        if !buf.is_null() {
+            let buf = unsafe { Vec::<ObjectReference>::from_raw_parts(buf, size, cap) };
+            let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
+            factory.create_process_node_roots_work(buf);
+        }
+
+        if renew {
+            RootsWorkBuffer::new()
+        } else {
+            RootsWorkBuffer::empty()
+        }
+    }
+
+    pub fn from_roots_work_factory<F: RootsWorkFactory<JuliaVMEdge>>(factory: &mut F) -> Self {
+        RootsWorkClosure {
+            report_edges_func: Self::report_simple_edges::<F>,
+            report_nodes_func: Self::report_nodes::<F>,
+            factory_ptr: factory as *mut F as *mut libc::c_void,
         }
     }
 }

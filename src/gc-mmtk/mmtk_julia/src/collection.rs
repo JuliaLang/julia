@@ -85,10 +85,6 @@ impl Collection<JuliaVM> for VMCollection {
 
         let last_err = unsafe { ((*UPCALLS).get_jl_last_err)() };
 
-        unsafe {
-            ((*UPCALLS).calculate_roots)(tls_ptr);
-        }
-
         {
             let &(ref lock, ref cvar) = &*STW_COND.clone();
             let mut count = lock.lock().unwrap();

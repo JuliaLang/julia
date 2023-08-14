@@ -6,13 +6,11 @@ extern crate lazy_static;
 
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
-use mmtk::util::ObjectReference;
 use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
 use mmtk::MMTK;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -85,8 +83,6 @@ lazy_static! {
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
-    pub static ref ROOT_NODES: Mutex<HashSet<ObjectReference>> = Mutex::new(HashSet::new());
-    pub static ref ROOT_EDGES: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());
 
     // We create a boxed mutator with MMTk core, and we mem copy its content to jl_tls_state_t (shallow copy).
     // This map stores the pair of the mutator address in jl_tls_state_t and the original boxed mutator.
@@ -102,7 +98,6 @@ pub struct Julia_Upcalls {
     pub scan_julia_exc_obj:
         extern "C" fn(obj: Address, closure: Address, process_edge: ProcessEdgeFn),
     pub get_stackbase: extern "C" fn(tid: u16) -> usize,
-    pub calculate_roots: extern "C" fn(tls: OpaquePointer),
     pub get_jl_last_err: extern "C" fn() -> u32,
     pub set_jl_last_err: extern "C" fn(errno: u32),
     pub wait_for_the_world: extern "C" fn(),
@@ -122,6 +117,7 @@ pub struct Julia_Upcalls {
     pub get_marked_finalizers_list: extern "C" fn() -> Address,
     pub arraylist_grow: extern "C" fn(Address, usize),
     pub get_jl_gc_have_pending_finalizers: extern "C" fn() -> *mut i32,
+    pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::edges::RootsWorkClosure),
 }
 
 pub static mut UPCALLS: *const Julia_Upcalls = null_mut();
