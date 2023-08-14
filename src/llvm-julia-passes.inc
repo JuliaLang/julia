@@ -2,7 +2,6 @@
 #ifdef MODULE_PASS
 MODULE_PASS("CPUFeatures", CPUFeaturesPass, CPUFeaturesPass())
 MODULE_PASS("RemoveNI", RemoveNIPass, RemoveNIPass())
-MODULE_PASS("LowerSIMDLoop", LowerSIMDLoopPass, LowerSIMDLoopPass())
 MODULE_PASS("FinalLowerGC", FinalLowerGCPass, FinalLowerGCPass())
 MODULE_PASS("JuliaMultiVersioning", MultiVersioningPass, MultiVersioningPass())
 MODULE_PASS("RemoveJuliaAddrspaces", RemoveJuliaAddrspacesPass, RemoveJuliaAddrspacesPass())
@@ -24,4 +23,5 @@ FUNCTION_PASS("GCInvariantVerifier", GCInvariantVerifierPass, GCInvariantVerifie
 //Loop passes
 #ifdef LOOP_PASS
 LOOP_PASS("JuliaLICM", JuliaLICMPass, JuliaLICMPass())
+LOOP_PASS("LowerSIMDLoop", LowerSIMDLoopPass, LowerSIMDLoopPass())
 #endif
