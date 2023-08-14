@@ -194,7 +194,6 @@ function doc(binding::Binding, sig::Type = Union{})
         end
         # Get parsed docs and concatenate them.
         md = catdoc(mapany(parsedoc, results)...)
-
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             # We don't know how to insert an internal symbol warning into non-markdown
