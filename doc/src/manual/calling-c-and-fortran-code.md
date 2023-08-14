@@ -766,7 +766,6 @@ function permutation_free(p::Ptr{gsl_permutation})
 end
 ```
 
-
 Here is a third example passing Julia arrays:
 
 ```julia
@@ -812,7 +811,6 @@ function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
     return product
 end
 ```
-
 
 ## Garbage Collection Safety
 
@@ -1118,8 +1116,8 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-For tools to create C++ bindings, see e.g. the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl), [CxxCall](https://github.com/jw3126/CxxCall.jl),
-and [CxxInterface](https://github.com/eschnett/CxxInterface.jl) packages.
+For tools to create C++ bindings, see e.g. the following packages [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl); [CxxInterface](https://github.com/eschnett/CxxInterface.jl) which supports not only C++, but also C, Fortran, and Rust as external languages, and [CxxCall](https://github.com/jw3126/CxxCall.jl) a wrapper for the former package.
+
 
 [^1]: Non-library function calls in both C and Julia can be inlined and thus may have
     even less overhead than calls to shared library functions.
