@@ -1128,7 +1128,7 @@ eval(Expr(:public,
 
 # C interface
     :cconvert,
-    :unsafe_convert
+    :unsafe_convert,
 
 # Error handling
     :exit_on_sigint,
