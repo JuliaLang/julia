@@ -1916,7 +1916,7 @@ end
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end
 
-const libfrobozz = Libdl.find_library("libfrobozz")
+const libfrobozz = ""
 
 function somefunction_not_found()
     ccall((:somefunction, libfrobozz), Cvoid, ())
