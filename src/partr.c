@@ -261,14 +261,6 @@ static int wake_thread(int16_t tid) JL_NOTSAFEPOINT
     return 0;
 }
 
-
-static void wake_libuv(void) JL_NOTSAFEPOINT
-{
-    JULIA_DEBUG_SLEEPWAKE( io_wakeup_enter = cycleclock() );
-    jl_wake_libuv();
-    JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
-}
-
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
 {
