@@ -119,6 +119,10 @@ const latex_symbols = Dict(
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
 
+    # Greek letters
+    "\\Mu" => "Μ",
+    "\\Nu" => "Ν",
+
     # Superscripts
     "\\^0" => "⁰",
     "\\^1" => "¹",
