@@ -12,6 +12,7 @@
 // analysis passes
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/GlobalsModRef.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -38,6 +39,7 @@
 #include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
+#include <llvm/Transforms/IPO/GlobalDCE.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
@@ -372,6 +374,8 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         }
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
+    MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+    // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
     if (options.dump_native) {
         MPM.addPass(StripDeadPrototypesPass());
         JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
@@ -383,6 +387,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
             FPM.addPass(SROAPass());
             // SROA can duplicate PHI nodes which can block LowerSIMD
             FPM.addPass(InstCombinePass());
+            MPM.addPass(GlobalDCEPass());
             FPM.addPass(JumpThreadingPass());
             FPM.addPass(CorrelatedValuePropagationPass());
             FPM.addPass(ReassociatePass());
