@@ -327,3 +327,7 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
 end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
+end

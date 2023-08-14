@@ -20,7 +20,7 @@ const heaps = [Vector{taskheap}(undef, 0), Vector{taskheap}(undef, 0)]
 const heaps_lock = [SpinLock(), SpinLock()]
 
 
-cong(max::UInt32) = ccall(:jl_rand_ptls, UInt32, (UInt32,), max) + UInt32(1)
+cong(max::UInt32) = max == UInt32(0) ? UInt32(0) : ccall(:jl_rand_ptls, UInt32, (UInt32,), max) + UInt32(1)
 
 
 function multiq_sift_up(heap::taskheap, idx::Int32)
