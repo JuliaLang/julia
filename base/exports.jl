@@ -1116,6 +1116,8 @@ eval(Expr(:public,
     :moduleroot,
     :jit_total_bytes,
     :summarysize,
+    :isexported,
+    :ispublic,
 
 # Opperators
     :operator_associativity,

@@ -953,8 +953,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int qualified, int all,
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
-        if ((b->exportp ||
-             (qualified && b->publicp) ||
+        if ((b->publicp ||
              (imported && b->imported) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
             (all || (!b->deprecated && !hidden))) {

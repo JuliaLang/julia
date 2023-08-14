@@ -73,29 +73,123 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module; qualified::Bool=true, all::Bool = false, imported::Bool = false)
+    names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the public names of `Module`, excluding deprecated names.
-
-If `qualified` is false, then return only exported names, not public but unexported names.
-If `all` is true, then the list also includes private names defined in the module,
+Get an array of the public names of a `Module`, excluding deprecated names.
+If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
 
 As a special case, all names defined in `Main` are considered \"public\",
-since it is not idiomatic to mark names from `Main` as public.
+since it is not idiomatic to explicitly mark names from `Main` as public.
 
-See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
-names(m::Module; qualified::Bool = true, all::Bool = false, imported::Bool = false) =
-    sort!(unsorted_names(m; qualified, all, imported))
-unsorted_names(m::Module; qualified::Bool = true, all::Bool = false, imported::Bool = false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, qualified, all, imported)
+names(m::Module; all::Bool = false, imported::Bool = false) =
+    sort!(unsorted_names(m; all, imported))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
+"""
+    isexported(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is exported from a module.
+
+See also: [`ispublic`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Main.Mod
+
+julia> Base.isexported(Mod, :foo)
+true
+
+julia> Base.isexported(Mod, :bar)
+false
+
+julia> Base.isexported(Mod, :baz)
+false
+```
+"""
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
-ispublic(m::Module, s::Symbol) = m == Main ? isbindingresolved(m, s) : ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
+
+"""
+    ispublic(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is marked as public in a module.
+
+Exported symbols are considered public.
+
+See also: [`isexported`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Main.Mod
+
+julia> Base.isexported(Mod, :foo)
+true
+
+julia> Base.isexported(Mod, :bar)
+true
+
+julia> Base.isexported(Mod, :baz)
+false
+```
+"""
+ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
+
+"""
+    isdeprecated(m::Module, s::Symbol) -> Bool
+
+Returns whether the binding of a symbol in a module is deprecated.
+
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isbindingresolved`](@ref)
+
+```jldoctest
+julia> module Mod
+           new(x) = x+1
+           @deprecate old(x) new(x)
+       end
+Main.Mod
+
+julia> Base.isdeprecated(Mod, :new)
+false
+
+julia> Base.isdeprecated(Mod, :old)
+true
+
+julia> Base.isdeprecated(Mod, :baz)
+false
+```
+"""
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
+
+"""
+    isbindingresolved(m::Module, s::Symbol) -> Bool
+
+Returns whether the binding of a symbol in a module is resolved.
+
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+
+```jldoctest
+julia> module Mod
+           foo() = 17
+       end
+
+julia> Base.isbindingresolved(Mod, :foo)
+true
+
+julia> Base.isbindingresolved(Mod, :bar)
+false
+```
+"""
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 function binding_module(m::Module, s::Symbol)
