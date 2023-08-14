@@ -1315,7 +1315,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
