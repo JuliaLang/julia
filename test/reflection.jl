@@ -222,10 +222,10 @@ const a_value = 1
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
 @test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
-@test !ispublic(@__MODULE__, :a_value)
-@test ispublic(@__MODULE__, :this_is_not_defined)
-@test ispublic(@__MODULE__, :this_is_public)
-@test !ispublic(@__MODULE__, :this_is_not_exported)
+@test !Base.ispublic(@__MODULE__, :a_value)
+@test Base.ispublic(@__MODULE__, :this_is_not_defined)
+@test Base.ispublic(@__MODULE__, :this_is_public)
+@test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
 # PR 13825
