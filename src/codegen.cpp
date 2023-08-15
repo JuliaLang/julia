@@ -992,14 +992,7 @@ static const auto jl_typeof_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto jl_loopinfo_marker_func = new JuliaFunction<>{
-    "julia.loopinfo_marker",
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadOnly, Attribute::NoRecurse, Attribute::InaccessibleMemOnly}),
-            AttributeSet(),
-            None); },
-};
+
 static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -1609,6 +1602,7 @@ public:
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     Function *f = NULL;
+    MDNode* LoopID = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
     std::map<int, jl_varinfo_t> phic_slots;
@@ -5773,16 +5767,22 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     else if (head == jl_loopinfo_sym) {
         // parse Expr(:loopinfo, "julia.simdloop", ("llvm.loop.vectorize.width", 4))
+        // to LLVM LoopID
         SmallVector<Metadata *, 8> MDs;
+
+        // Reserve first location for self reference to the LoopID metadata node.
+        TempMDTuple TempNode = MDNode::getTemporary(ctx.builder.getContext(), None);
+        MDs.push_back(TempNode.get());
+
         for (int i = 0, ie = nargs; i < ie; ++i) {
             Metadata *MD = to_md_tree(args[i], ctx.builder.getContext());
             if (MD)
                 MDs.push_back(MD);
         }
 
-        MDNode* MD = MDNode::get(ctx.builder.getContext(), MDs);
-        CallInst *I = ctx.builder.CreateCall(prepare_call(jl_loopinfo_marker_func));
-        I->setMetadata("julia.loopinfo", MD);
+        ctx.LoopID = MDNode::getDistinct(ctx.builder.getContext(), MDs);
+        // Replace the temporary node with a self-reference.
+        ctx.LoopID->replaceOperandWith(0, ctx.LoopID);
         return jl_cgval_t();
     }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
@@ -8125,6 +8125,7 @@ static jl_llvm_functions_t
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
     int cursor = 0;
+    int current_label = 0;
     auto find_next_stmt = [&] (int seq_next) {
         // new style ir is always in dominance order, but frontend IR might not be
         // `seq_next` is the next statement we want to emit
@@ -8141,6 +8142,7 @@ static jl_llvm_functions_t
             workstack.pop_back();
             auto nextbb = BB.find(item + 1);
             if (nextbb == BB.end()) {
+                // Not a BB
                 cursor = item;
                 return;
             }
@@ -8151,8 +8153,10 @@ static jl_llvm_functions_t
             seq_next = -1;
             // if this BB is non-empty, we've visited it before so skip it
             if (!nextbb->second->getTerminator()) {
+                // New BB
                 ctx.builder.SetInsertPoint(nextbb->second);
                 cursor = item;
+                current_label = item;
                 return;
             }
         }
@@ -8399,7 +8403,12 @@ static jl_llvm_functions_t
         if (jl_is_gotonode(stmt)) {
             int lname = jl_gotonode_label(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateBr(BB[lname]);
+            auto br = ctx.builder.CreateBr(BB[lname]);
+            // Check if backwards branch
+            if (ctx.LoopID && lname <= current_label) {
+                br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
+                ctx.LoopID = NULL;
+            }
             find_next_stmt(lname - 1);
             continue;
         }
@@ -8417,10 +8426,17 @@ static jl_llvm_functions_t
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
+            Instruction *br;
             if (ifnot == ifso)
-                ctx.builder.CreateBr(ifnot);
+                br = ctx.builder.CreateBr(ifnot);
             else
-                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+                br = ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+
+            // Check if backwards branch
+            if (ctx.LoopID && lname <= current_label) {
+                br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
+                ctx.LoopID = NULL;
+            }
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -9163,7 +9179,6 @@ static void init_jit_functions(void)
     add_named_global(jl_object_id__func, &jl_object_id_);
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
-    add_named_global(jl_loopinfo_marker_func, (void*)NULL);
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_write_barrier_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
