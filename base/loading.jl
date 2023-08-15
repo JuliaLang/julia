@@ -3124,6 +3124,8 @@ end
                 end
                 if isfile(_f) && startswith(_f, Sys.STDLIB)
                     # mtime is changed by extraction
+                    # Note: we intentionally include the value of `ispath(f)` in the following debug message,
+                    # to help debug which branch we went down.
                     @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib" ispath(f)
                     continue
                 end
