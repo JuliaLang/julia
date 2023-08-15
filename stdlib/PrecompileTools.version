@@ -1,0 +1,4 @@
+PRECOMPILETOOLS_BRANCH = main
+PRECOMPILETOOLS_SHA1 = 11410b2970041907c2396d374ad7893d6f89a118
+PRECOMPILETOOLS_GIT_URL := https://github.com/JuliaLang/PrecompileTools.jl
+PRECOMPILETOOLS_TAR_URL = https://github.com/JuliaLang/PrecompileTools.jl/tarball/$1
