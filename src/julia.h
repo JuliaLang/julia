@@ -741,7 +741,7 @@ typedef struct {
     /* XX(slotnumber) */ \
     /* XX(ssavalue) */ \
     /* end of JL_SMALL_TYPEOF */
-enum jlsmall_typeof_tags {
+enum jl_small_typeof_tags {
     jl_null_tag = 0,
 #define XX(name) jl_##name##_tag,
     JL_SMALL_TYPEOF(XX)
@@ -753,11 +753,11 @@ enum jlsmall_typeof_tags {
 #ifndef JL_LIBRARY_EXPORTS
 JL_DLLIMPORT
 #endif
-extern jl_datatype_t *small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+extern jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
 static inline jl_value_t *jl_to_typeof(uintptr_t t)
 {
     if (t < (jl_max_tags << 4))
-        return (jl_value_t*)small_typeof[t / sizeof(*small_typeof)];
+        return (jl_value_t*)jl_small_typeof[t / sizeof(*jl_small_typeof)];
     return (jl_value_t*)t;
 }
 

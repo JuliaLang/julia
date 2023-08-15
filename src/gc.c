@@ -2427,7 +2427,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             vtag == (jl_vararg_tag << 4)) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
-            vtag = (uintptr_t)small_typeof[vtag / sizeof(*small_typeof)];
+            vtag = (uintptr_t)jl_small_typeof[vtag / sizeof(*jl_small_typeof)];
         }
         else if (vtag < jl_max_tags << 4) {
             // these objects either have specialing handling
@@ -2532,7 +2532,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objprofile_count(jl_string_type, bits == GC_OLD_MARKED, dtsz);
             }
             else {
-                jl_datatype_t *vt = small_typeof[vtag / sizeof(*small_typeof)];
+                jl_datatype_t *vt = jl_small_typeof[vtag / sizeof(*jl_small_typeof)];
                 size_t dtsz = jl_datatype_size(vt);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);

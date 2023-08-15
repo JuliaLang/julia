@@ -812,7 +812,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
     }
 
-    res.small_typeof = pointers->small_typeof;
+    res.jl_small_typeof = pointers->jl_small_typeof;
 
     return res;
 }

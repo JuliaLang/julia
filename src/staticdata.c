@@ -1985,7 +1985,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     if (fvars.base == NULL)
         return;
 
-    memcpy(image->small_typeof, &small_typeof, sizeof(small_typeof));
+    memcpy(image->jl_small_typeof, &jl_small_typeof, sizeof(jl_small_typeof));
 
     int img_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
@@ -2914,7 +2914,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             *tag = jl_read_value(&s);
         }
 #define XX(name) \
-        small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type;
+        jl_small_typeof[(jl_##name##_tag << 4) / sizeof(*jl_small_typeof)] = jl_##name##_type;
         JL_SMALL_TYPEOF(XX)
 #undef XX
         jl_global_roots_table = (jl_array_t*)jl_read_value(&s);

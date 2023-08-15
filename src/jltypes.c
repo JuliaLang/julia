@@ -2529,7 +2529,7 @@ static jl_tvar_t *tvar(const char *name)
 }
 
 #define XX(name) \
-    small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type; \
+    jl_small_typeof[(jl_##name##_tag << 4) / sizeof(*jl_small_typeof)] = jl_##name##_type; \
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
