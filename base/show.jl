@@ -2567,7 +2567,7 @@ end
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
+        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true

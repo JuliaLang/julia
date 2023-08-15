@@ -284,8 +284,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(iob, ")")
         str = String(take!(unwrapcontext(iob)[1]))
-        ioc = !haskey(io, :displaysize) ? IOContext(io, :displaysize => displaysize(io)) : io
-        str = type_limited_string_from_context(ioc, str)
+        str = type_limited_string_from_context(io, str)
         print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
