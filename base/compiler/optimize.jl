@@ -130,12 +130,14 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::CFG
+    bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
-                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.insert_coverage)
+                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.bb_vartables,
+                             sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -159,7 +161,8 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
     cfg = compute_basic_blocks(src.code)
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, false)
+    bb_vartables = Union{Nothing,VarTable}[]; fill!(bb_vartables, nothing, length(cfg.blocks))
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, bb_vartables, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     world = get_world_counter(interp)
@@ -659,7 +662,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, nargs)
