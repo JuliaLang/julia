@@ -3118,20 +3118,16 @@ end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
                 if ispath(f)
-                    # `ispath(f)` is true
-                    if isfile(f) && startswith(f, Sys.STDLIB)
-                        # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
-                        continue
-                    end
+                    _f = f
                 else
-                    # `ispath(f)` is false
                     _f = fixup_stdlib_path(f)
-                    if isfile(_f) && startswith(_f, Sys.STDLIB)
-                        # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
-                        continue
-                    end
+                end
+                if isfile(_f) && startswith(_f, Sys.STDLIB)
+                    # mtime is changed by extraction
+                    @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
+                    continue
+                end
+                if !ispath(f)
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
                     return true
                 end
