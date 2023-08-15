@@ -692,6 +692,33 @@ end
     return tmerge_types_slow(typea, typeb)
 end
 
+@nospecializeinfer @noinline function tname_intersect(aname::Core.TypeName, bname::Core.TypeName)
+    aname === bname && return aname
+    if !isabstracttype(aname.wrapper) && !isabstracttype(bname.wrapper)
+        return nothing # fast path
+    end
+    Any.name === aname && return aname
+    a = unwrap_unionall(aname.wrapper)
+    heighta = 0
+    while a !== Any
+        heighta += 1
+        a = a.super
+    end
+    b = unwrap_unionall(bname.wrapper)
+    heightb = 0
+    while b !== Any
+        b.name === aname && return aname
+        heightb += 1
+        b = b.super
+    end
+    a = unwrap_unionall(aname.wrapper)
+    while heighta > heightb
+        a = a.super
+        heighta -= 1
+    end
+    return a.name === bname ? bname : nothing
+end
+
 @nospecializeinfer @noinline function tmerge_types_slow(@nospecialize(typea::Type), @nospecialize(typeb::Type))
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
@@ -716,9 +743,12 @@ end
     # in which case, simplify this tmerge by replacing it with
     # the widest possible version of itself (the wrapper)
     for i in 1:length(types)
+        typenames[i] === Any.name && continue
         ti = types[i]
         for j in (i + 1):length(types)
-            if typenames[i] === typenames[j]
+            typenames[j] === Any.name && continue
+            ijname = tname_intersect(typenames[i], typenames[j])
+            if !(ijname === nothing)
                 tj = types[j]
                 if ti <: tj
                     types[i] = Union{}
@@ -728,27 +758,33 @@ end
                     types[j] = Union{}
                     typenames[j] = Any.name
                 else
-                    if typenames[i] === Tuple.name
+                    if ijname === Tuple.name
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
                     else
-                        wr = typenames[i].wrapper
+                        wr = ijname.wrapper
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
+                        while ui.name !== ijname
+                            ui = ui.super
+                        end
                         uj = unwrap_unionall(tj)::DataType
-                        merged = wr
+                        while uj.name !== ijname
+                            uj = uj.super
+                        end
+                        merged = Vector{Any}(undef, length(uw.parameters))
                         for k = 1:length(uw.parameters)
                             ui_k = ui.parameters[k]
                             if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
-                                merged = merged{ui_k}
+                                merged[k] = ui_k
                             else
-                                merged = merged{uw.parameters[k]}
+                                merged[k] = uw.parameters[k]
                             end
                         end
-                        widen = rewrap_unionall(merged, wr)
+                        widen = rewrap_unionall(wr{merged...}, wr)
                     end
                     types[i] = Union{}
                     typenames[i] = Any.name
@@ -758,14 +794,12 @@ end
             end
         end
     end
-    u = Union{types...}
-    # don't let type unions get too big, if the above didn't reduce it enough
-    if issimpleenoughtype(u)
-        return u
-    end
-    # don't let the slow widening of Tuple cause the whole type to grow too fast
+    # don't let elements of the union get too big, if the above didn't reduce something
     # Specifically widen Tuple{..., Union{lots of stuff}...} to Tuple{..., Any, ...}
     for i in 1:length(types)
+        # this element is too complicated, so
+        # just return the widest possible type now
+        issimpleenoughtype(types[i]) && continue
         if typenames[i] === Tuple.name
             ti = types[i]
             tip = (unwrap_unionall(types[i])::DataType).parameters
@@ -773,16 +807,15 @@ end
             p = Vector{Any}(undef, lt)
             for j = 1:lt
                 ui = tip[j]
-                p[j] = (unioncomplexity(ui)==0) ? ui : isvarargtype(ui) ? Vararg : Any
+                p[j] = issimpleenoughtype(unwrapva(ui)) ? ui : isvarargtype(ui) ? Vararg : Any
             end
             types[i] = rewrap_unionall(Tuple{p...}, ti)
+        else
+            issimpleenoughtype(types[i]) || return Any
         end
     end
     u = Union{types...}
-    if issimpleenoughtype(u)
-        return u
-    end
-    return Any
+    return u
 end
 
 # the inverse of switchtupleunion, with limits on max element union size

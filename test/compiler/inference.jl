@@ -164,7 +164,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 
 
 # PR 22120
-function tmerge_test(a, b, r, commutative=true)
+function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
     if commutative
         @test r == Core.Compiler.tuplemerge(b, a)
@@ -172,32 +172,32 @@ function tmerge_test(a, b, r, commutative=true)
         @test_broken r == Core.Compiler.tuplemerge(b, a)
     end
 end
-tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
-tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
-tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
-tmerge_test(Tuple{Int}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tuplemerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tuplemerge_test(Tuple{Int}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Integer}, Tuple{Int, Int},
     Tuple{Vararg{Integer}})
-tmerge_test(Tuple{}, Tuple{Int, Int},
+tuplemerge_test(Tuple{}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{}, Tuple{Complex},
+tuplemerge_test(Tuple{}, Tuple{Complex},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+tuplemerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}}, false)
-tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
 @test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
@@ -215,8 +215,15 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 # test issue behind https://github.com/JuliaLang/julia/issues/50458
 @test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
-@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specificially test with base types of a trivial type, a simple union, a complicated union, and a tuple.
@@ -2886,7 +2893,7 @@ end
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
-let expected = NTuple{2, Union{Nothing, NTuple{2, Union{Nothing, Tuple{Any, Any}}}}}
+let expected = NTuple{2, Union{Nothing, Tuple{Any, Any}}}
     @test Tuple{Nothing, Nothing} <: only(Base.return_types(f27316, Tuple{Int})) == expected # we may be able to improve this bound in the future
 end
 function g27316()
@@ -3501,8 +3508,8 @@ function pickvarnames(x::Vector{Any})
 end
 @test pickvarnames(:a) === :a
 @test pickvarnames(Any[:a, :b]) === (:a, :b)
-@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
-@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple}}}
 
 @test map(>:, [Int], [Int]) == [true]
 
