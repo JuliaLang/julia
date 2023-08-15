@@ -59,7 +59,7 @@ Standard library changes
 
 #### Statistics
 
-* Statistics has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used. However, functions `mean` and `mean!` are now exported directly by Base. ([#46501])
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
 
