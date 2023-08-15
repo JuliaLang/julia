@@ -415,8 +415,6 @@ export
     max,
     maximum!,
     maximum,
-    mean,
-    mean!,
     min,
     minimum!,
     minimum,
