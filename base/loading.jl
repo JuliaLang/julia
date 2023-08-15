@@ -3117,7 +3117,8 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if ispath(f)
+                f_ispath = ispath(f)
+                if f_ispath
                     _f = f
                 else
                     _f = fixup_stdlib_path(f)
@@ -3126,10 +3127,10 @@ end
                     # mtime is changed by extraction
                     # Note: we intentionally include the value of `ispath(f)` in the following debug message,
                     # to help debug which branch we went down.
-                    @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib" ispath(f)
+                    @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib" f_ispath
                     continue
                 end
-                if !ispath(f)
+                if !f_ispath
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
                     return true
                 end
