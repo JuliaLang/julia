@@ -1588,6 +1588,9 @@ struct JuliaOJIT::DLSymOptimizer {
                     assert(++++CI->use_begin() == CI->use_end());
                     void *addr;
                     if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
+                        // Can happen if the library is the empty string, just give up when that happens
+                        if (isa<ConstantAggregateZero>(GV->getInitializer()))
+                            continue;
                         auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
                         addr = lookup(libname.data(), fname.data());
                     } else {
