@@ -89,6 +89,31 @@ end
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
                    𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance)
+    # Verify CFG graph. Must be well formed to construct domtree
+    if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
+        @verify_error "CFG index length ($(length(ir.cfg.index))) does not correspond to # of blocks $(length(ir.cfg.blocks))"
+        error("")
+    end
+    if length(ir.stmts.stmt) != length(ir.stmts)
+        @verify_error "IR stmt length is invalid $(length(ir.stmts.stmt)) / $(length(ir.stmts))"
+        error("")
+    end
+    if length(ir.stmts.type) != length(ir.stmts)
+        @verify_error "IR type length is invalid $(length(ir.stmts.type)) / $(length(ir.stmts))"
+        error("")
+    end
+    if length(ir.stmts.info) != length(ir.stmts)
+        @verify_error "IR info length is invalid $(length(ir.stmts.info)) / $(length(ir.stmts))"
+        error("")
+    end
+    if length(ir.stmts.line) != length(ir.stmts)
+        @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts))"
+        error("")
+    end
+    if length(ir.stmts.flag) != length(ir.stmts)
+        @verify_error "IR flag length is invalid $(length(ir.stmts.flag)) / $(length(ir.stmts))"
+        error("")
+    end
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -125,6 +150,18 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 error("")
             end
         end
+        if !(1 <= first(block.stmts) <= length(ir.stmts))
+            @verify_error "First statement of BB $idx ($(first(block.stmts))) out of bounds for IR (length=$(length(ir.stmts)))"
+            error("")
+        end
+        if !(1 <= last(block.stmts) <= length(ir.stmts))
+            @verify_error "Last statement of BB $idx ($(last(block.stmts))) out of bounds for IR (length=$(length(ir.stmts)))"
+            error("")
+        end
+        if idx <= length(ir.cfg.index) && last(block.stmts) + 1 != ir.cfg.index[idx]
+            @verify_error "End of BB $idx ($(last(block.stmts))) is not one less than CFG index ($(ir.cfg.index[idx]))"
+            error("")
+        end
     end
     # Verify statements
     domtree = construct_domtree(ir.cfg.blocks)
@@ -145,7 +182,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             end
         elseif isa(terminator, GotoNode)
             if length(block.succs) != 1 || block.succs[1] != terminator.label
-                @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
+                @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator ($(terminator.label))"
                 error("")
             end
         elseif isa(terminator, GotoIfNot)
@@ -167,8 +204,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
             if length(block.succs) != 1 || block.succs[1] != idx + 1
                 # As a special case, we allow extra statements in the BB of an :enter
                 # statement, until we can do proper CFG manipulations during compaction.
-                for idx in first(block.stmts):last(block.stmts)
-                    stmt = ir[SSAValue(idx)][:stmt]
+                for stmt_idx in first(block.stmts):last(block.stmts)
+                    stmt = ir[SSAValue(stmt_idx)][:stmt]
                     if isexpr(stmt, :enter)
                         terminator = stmt
                         @goto enter_check
@@ -187,6 +224,10 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 end
             end
         end
+    end
+    if length(ir.stmts) != last(ir.cfg.blocks[end].stmts)
+        @verify_error "End of last BB $(last(ir.cfg.blocks[end].stmts)) does not match last IR statement $(length(ir.stmts))"
+        error("")
     end
     lastbb = 0
     is_phinode_block = false
