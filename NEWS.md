@@ -35,6 +35,7 @@ Standard library changes
 ------------------------
 
 * `pmap` now defaults to using a `CachingPool` ([#33892]).
+* [PrecompileTools](https://github.com/JuliaLang/PrecompileTools.jl) is now an upgradable standard library ([#50923]).
 
 #### Package Manager
 

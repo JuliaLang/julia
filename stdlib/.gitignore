@@ -1,6 +1,8 @@
 /srccache
 /DelimitedFiles-*
 /DelimitedFiles
+/PrecompileTools-*
+/PrecompileTools
 /Pkg-*
 /Pkg
 /Statistics-*

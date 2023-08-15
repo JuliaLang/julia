@@ -27,7 +27,7 @@ STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SH
 		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
 		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
 		   SharedArrays TOML Test LibCURL Downloads Pkg Dates LazyArtifacts Sockets Unicode Markdown \
-		   InteractiveUtils REPL DelimitedFiles
+		   InteractiveUtils REPL DelimitedFiles PrecompileTools
 
 all-release: $(addprefix cache-release-, $(STDLIBS))
 all-debug:   $(addprefix cache-debug-, $(STDLIBS))
@@ -97,6 +97,7 @@ $(eval $(call sysimg_builder,Printf,Unicode))
 $(eval $(call sysimg_builder,Random,SHA))
 $(eval $(call sysimg_builder,Tar,ArgTools,SHA))
 $(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
+$(eval $(call pkgimg_builder,PrecompileTools,Preferences))
 
 # 2-depth packages
 $(eval $(call pkgimg_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
