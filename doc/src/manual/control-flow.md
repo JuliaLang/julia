@@ -397,7 +397,7 @@ julia> while i <= 3
 3
 ```
 
-The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
+The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long it remains
 `true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
 when the `while` loop is first reached, the body is never evaluated.
 

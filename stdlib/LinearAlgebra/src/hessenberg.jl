@@ -132,11 +132,11 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = _mulmattri!(_initarray(*, eltype(H), eltype(U), H), H, U)
+    HH = mul!(_initarray(*, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = _multrimat!(_initarray(*, eltype(U), eltype(H), H), U, H)
+    HH = mul!(_initarray(*, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 
@@ -600,7 +600,6 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
 end
 
 ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

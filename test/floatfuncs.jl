@@ -209,3 +209,47 @@ end
     struct CustomNumber <: Number end
     @test !isnan(CustomNumber())
 end
+
+@testset "isapprox and integer overflow" begin
+    for T in (Int8, Int16, Int32)
+        T === Int && continue
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), 0)
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test !isapprox(typemin(T), 0, atol=0.99)
+        @test_broken !isapprox(typemin(T), T(0), atol=1)
+        @test_broken !isapprox(typemin(T), unsigned(T)(0), atol=1)
+        @test !isapprox(typemin(T), 0, atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), 10)
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), 10, atol=0.99)
+        @test_broken !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), 10, atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+    for T in (Int, Int64, Int128)
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test_broken !isapprox(typemin(T), T(0), atol=1)
+        @test_broken !isapprox(typemin(T), unsigned(T)(0), atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test_broken !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+end

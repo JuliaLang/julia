@@ -60,7 +60,8 @@ end
 # issue #42835
 @test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1) # maybe should be fixed?
+@test  Core.Compiler.limit_type_size(Type{Int}, Any, Union{}, 0, 0) == Type{Int}
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
@@ -71,22 +72,23 @@ end
 @test  Core.Compiler.type_more_complex(ComplexF32, Type{ComplexF32}, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(Type{Type{ComplexF32}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{ComplexF32}, Type{Type{ComplexF32}}, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.limit_type_size(Type{ComplexF32}, ComplexF32, Union{}, 1, 1) == Type{<:Complex}
 @test  Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, Type{ComplexF32}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, ComplexF32, Core.svec(ComplexF32), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 
 # n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
-@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
 
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
@@ -100,6 +102,44 @@ let # 40336
     r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
     @test t !== r && t <: r
 end
+
+@test Core.Compiler.limit_type_size(Type{Type{Type{Int}}}, Type, Union{}, 0, 0) == Type{<:Type}
+@test Core.Compiler.limit_type_size(Type{Type{Int}}, Type, Union{}, 0, 0) == Type{<:Type}
+@test Core.Compiler.limit_type_size(Type{Int}, Type, Union{}, 0, 0) == Type{Int}
+@test Core.Compiler.limit_type_size(Type{<:Int}, Type, Union{}, 0, 0) == Type{<:Int}
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, ComplexF32, Union{}, 0, 0) == Type{<:Complex} # added nesting
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, Type{ComplexF64}, Union{}, 0, 0) == Type{ComplexF32} # base matches
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, Type, Union{}, 0, 0) == Type{<:Complex}
+@test_broken  Core.Compiler.limit_type_size(Type{<:ComplexF64}, Type, Union{}, 0, 0) == Type{<:Complex}
+@test Core.Compiler.limit_type_size(Type{<:ComplexF64}, Type, Union{}, 0, 0) == Type #50692
+@test Core.Compiler.limit_type_size(Type{Union{ComplexF32,ComplexF64}}, Type, Union{}, 0, 0) == Type
+@test_broken Core.Compiler.limit_type_size(Type{Union{ComplexF32,ComplexF64}}, Type, Union{}, 0, 0) == Type{<:Complex} #50692
+@test Core.Compiler.limit_type_size(Type{Union{Float32,Float64}}, Type, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Union{Type{Int},Type{Type{Int}}}, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
+
+
+# issue #43296 #43296
+struct C43296{t,I} end
+r43296(b) = r43296(typeof(b))
+r43296(::Type) = nothing
+r43296(::Nothing) = nonexistent
+r43296(::Type{C43296{c,d}}) where {c,d} = f43296(r43296(c), e)
+f43296(::Nothing, :) = nothing
+f43296(g, :) = h
+k43296(b, j, :) = l
+k43296(b, j, ::Nothing) = b
+i43296(b, j) = k43296(b, j, r43296(j))
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}, Tuple}}))) == Int
+
+abstract type e43296{a, j} <: AbstractArray{a, j} end
+abstract type b43296{a, j, c, d} <: e43296{a, j} end
+struct h43296{a, j, f, d, i} <: b43296{a, j, f, d} end
+Base.ndims(::Type{f}) where {f<:e43296} = ndims(supertype(f))
+Base.ndims(g::e43296) = ndims(typeof(g))
+@test only(Base.return_types(ndims, (h43296{Any, 0, Any, Int, Any},))) == Int
 
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
@@ -5013,4 +5053,90 @@ let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
         S = Union{Type{String},Type{Int}}[Int][1]
         map(T -> Issue49785{S,T}, (a = S,))
     end isa Vector
+end
+
+# `getindex(::SimpleVector, ::Int)` shuold be concrete-evaluated
+@eval Base.return_types() do
+    $(Core.svec(1,Int,nothing))[2]
+end |> only == Type{Int}
+# https://github.com/JuliaLang/julia/issues/50544
+struct Issue50544{T<:Tuple}
+    t::T
+end
+Base.@propagate_inbounds f_issue50544(x, i, ii...) = f_issue50544(f_issue50544(x, i), ii...)
+Base.@propagate_inbounds f_issue50544(::Type{Issue50544{T}}, i) where T = T.parameters[i]
+g_issue50544(T...) = Issue50544{Tuple{T...}}
+h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2, 1))
+let x = Issue50544((1, Issue50544((2.0, 'x'))))
+    @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
+end
+
+# refine const-prop'ed `PartialStruct` with declared method signature type
+Base.@constprop :aggressive function refine_partial_struct1((a, b)::Tuple{String,Int})
+    if iszero(b)
+        println("b=0") # to prevent semi-concrete eval
+        return nothing
+    else
+        return a
+    end
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct1((s, 42))
+end |> only === String
+
+function refine_partial_struct2(xs::Union{Int,String,Symbol}...)
+    first(xs) isa Int && iszero(first(xs)) && return nothing
+    for x in xs[2:end]
+        if x isa String
+            continue
+        else
+            return nothing
+        end
+    end
+    return string(length(xs))
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct2(42, s)
+end |> only === String
+# JET.test_call(s::AbstractString->Base._string(s, 'c'))
+
+# issue #45759 #46557
+g45759(x::Tuple{Any,Vararg}) = x[1] + _g45759(x[2:end])
+g45759(x::Tuple{}) = 0
+_g45759(x) = g45759(x)
+@test only(Base.return_types(g45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+h45759(x::Tuple{Any,Vararg}; kwargs...) = x[1] + h45759(x[2:end]; kwargs...)
+h45759(x::Tuple{}; kwargs...) = 0
+@test only(Base.return_types(h45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+@test only(Base.return_types((typeof([[[1]]]),)) do x
+    sum(x) do v
+        sum(length, v)
+    end
+end) == Int
+
+struct FunctionSum{Tf}
+    functions::Tf
+end
+(F::FunctionSum)(x) = sum(f -> f(x), F.functions)
+F = FunctionSum((x -> sqrt(x), FunctionSum((x -> x^2, x -> x^3))))
+@test @inferred(F(1.)) === 3.0
+
+f31485(arr::AbstractArray{T, 0}) where {T} = arr
+indirect31485(arr) = f31485(arr)
+f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
+@test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
+
+# override const-prop' return type with the concrete-eval result
+# if concrete-eval returns non-inlineable constant
+Base.@assume_effects :foldable function continue_const_prop(i, j)
+    chars = map(Char, i:j)
+    String(chars)
+end
+@test Base.return_types() do
+    Val(length(continue_const_prop(1, 5)))
+end |> only === Val{5}
+@test fully_eliminated() do
+    length(continue_const_prop(1, 5))
 end

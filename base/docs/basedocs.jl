@@ -1315,7 +1315,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -3277,11 +3281,9 @@ Base.donotdelete
 """
     Base.compilerbarrier(setting::Symbol, val)
 
-This function puts a barrier at a specified compilation phase.
-It is supposed to only influence the compilation behavior according to `setting`,
-and its runtime semantics is just to return the second argument `val` (except that
-this function will perform additional checks on `setting` in a case when `setting`
-isn't known precisely at compile-time.)
+This function acts a compiler barrier at a specified compilation phase.
+The dynamic semantics of this intrinsic are to return the `val` argument, unmodified.
+However, depending on the `setting`, the compiler is prevented from assuming this behavior.
 
 Currently either of the following `setting`s is allowed:
 - Barriers on abstract interpretation:
@@ -3294,9 +3296,9 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    This function is supposed to be used _with `setting` known precisely at compile-time_.
-    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
-    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+    This function is expected to be used with `setting` known precisely at compile-time.
+    If the `setting` is not known precisely at compile-time, the compiler will emit the
+    strongest barrier(s). No compile-time warning is issued.
 
 # Examples
 

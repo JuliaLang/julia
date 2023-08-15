@@ -877,13 +877,10 @@ function fieldcount_noerror(@nospecialize t)
         if t === nothing
             return nothing
         end
-        t = t::DataType
     elseif t === Union{}
         return 0
     end
-    if !(t isa DataType)
-        return nothing
-    end
+    t isa DataType || return nothing
     if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters
         if names isa Tuple
@@ -892,17 +889,16 @@ function fieldcount_noerror(@nospecialize t)
         if types isa DataType && types <: Tuple
             return fieldcount_noerror(types)
         end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
         return nothing
     end
     return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
 
-function try_compute_fieldidx(typ::DataType, @nospecialize(field))
+function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
+    typ = argument_datatype(typ)
+    typ === nothing && return nothing
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
@@ -2347,19 +2343,18 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
-    if length(argtypes) ≥ 2
-        M, s = argtypes[1], argtypes[2]
-        if getglobal_nothrow(M, s)
-            nothrow = true
-            # typeasserts below are already checked in `getglobal_nothrow`
-            Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
-            if isconst(Mval, sval)
-                consistent = ALWAYS_TRUE
-                if is_mutation_free_argtype(rt)
-                    inaccessiblememonly = ALWAYS_TRUE
-                end
+    M, s = argtypes[1], argtypes[2]
+    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
+        nothrow = true
+        # typeasserts below are already checked in `getglobal_nothrow`
+        Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
+        if isconst(Mval, sval)
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
             end
         end
     end
@@ -2386,6 +2381,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         length(argtypes) == 2 || return EFFECTS_THROWS
         effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
         return Effects(EFFECTS_TOTAL; effect_free)
+    elseif f === compilerbarrier
+        length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+        setting = argtypes[1]
+        return Effects(EFFECTS_TOTAL;
+            consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            nothrow = compilerbarrier_nothrow(setting, nothing))
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE

@@ -346,7 +346,7 @@ end
 pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
@@ -571,8 +571,8 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
 """
-function reinterpret(Out::Type, x::In) where {In}
-    if isprimitivetype(Out) && isprimitivetype(In)
+function reinterpret(::Type{Out}, x) where {Out}
+    if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end
     # only available when Base is fully loaded.
@@ -761,7 +761,7 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
+getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
     @_total_meta
     t = @_gc_preserve_begin v

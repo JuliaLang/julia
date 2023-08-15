@@ -183,16 +183,15 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
-function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
-    if !@isdefined T
-        # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
-        # _tuple_error(NT, nt)
-        T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
-        NT1 = NamedTuple{names, T1}
-    else
-        T1 = T
-        NT1 = NT
-    end
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+end
+
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # _tuple_error(NT, nt)
+    T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+    NT1 = NamedTuple{names, T1}
     return NT1(T1(nt))::NT1::NT
 end
 

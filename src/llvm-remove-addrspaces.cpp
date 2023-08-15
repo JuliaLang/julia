@@ -444,7 +444,7 @@ public:
     bool runOnModule(Module &M) override {
         bool modified = removeAddrspaces(M, ASRemapper);
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyModule(M, &errs()));
+        assert(!verifyLLVMIR(M));
 #endif
         return modified;
     }
@@ -468,7 +468,7 @@ RemoveAddrspacesPass::RemoveAddrspacesPass() : RemoveAddrspacesPass(removeAllAdd
 PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
     bool modified = removeAddrspaces(M, ASRemapper);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

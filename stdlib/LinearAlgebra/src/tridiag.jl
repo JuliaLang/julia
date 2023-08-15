@@ -633,7 +633,7 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
 end
 
 @inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
-    @boundscheck checkbounds(A, i, j)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
     if i == j
         return @inbounds isassigned(A.d, i)
     elseif i == j + 1

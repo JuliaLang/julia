@@ -329,6 +329,7 @@ bool LowerPTLS::run(bool *CFGModified)
                 }
             }
             if (pgcstack) {
+                pgcstack->takeName(call);
                 call->replaceAllUsesWith(pgcstack);
                 call->eraseFromParent();
                 continue;
@@ -355,7 +356,7 @@ struct LowerPTLSLegacy: public ModulePass {
         LowerPTLS lower(M, imaging_mode);
         bool modified = lower.run(nullptr);
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyModule(M, &errs()));
+        assert(!verifyLLVMIR(M));
 #endif
         return modified;
     }
@@ -374,7 +375,7 @@ PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
     bool CFGModified = false;
     bool modified = lower.run(&CFGModified);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
     if (modified) {
         if (CFGModified) {
