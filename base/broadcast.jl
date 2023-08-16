@@ -457,7 +457,9 @@ result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
     ArrayConflict()
 # Fallbacks in case users define `rule` for both argument-orders (not recommended)
-result_join(::Any, ::Any, ::S, ::S) where S<:BroadcastStyle = S()
+function result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle
+    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+end
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
     error("""
 conflicting broadcast rules defined
