@@ -761,8 +761,11 @@ ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 julia> foo() = big"1"
 foo (generic function with 1 method)
 
-julia> x, y = foo(), foo() # `x` and `y` point to the same BigInt instance
-(1, 1)
+# `x` and `y` point to the same BigInt instance
+julia> let x = foo(), y = foo()
+           x === y
+       end
+true
 ```
 """
 macro big_str(s)
