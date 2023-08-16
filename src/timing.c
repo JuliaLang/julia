@@ -342,6 +342,7 @@ JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     assert(!block->is_running);
     if (!_jl_timing_enabled(block->event->subsystem)) return;
+    if (jl_get_pgcstack() == NULL) return; // not setup on this thread
 
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_START(&block->counts_ctx, t);
