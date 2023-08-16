@@ -1152,7 +1152,7 @@ Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) 
     @test Broadcast.result_style(MyBroadcastStyleWithField(1), MyBroadcastStyleWithField(1)) ==
         MyBroadcastStyleWithField(1)
     @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
-                                                       MyBroadcastStyleWithField(2)) # order matters
+                                                       MyBroadcastStyleWithField(2))
 end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
