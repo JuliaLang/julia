@@ -1,13 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct TypedSlot
-    id::Int
-    typ
-    TypedSlot(id::Int, @nospecialize(typ)) = new(id, typ)
-end
-
-const UnoptSlot = Union{SlotNumber, TypedSlot}
-
 mutable struct SlotInfo
     defs::Vector{Int}
     uses::Vector{Int}
@@ -29,13 +21,13 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
         end
         stmt = stmt.args[2]
     end
-    if isa(stmt, UnoptSlot)
+    if isa(stmt, SlotNumber)
         push!(result[slot_id(stmt)].uses, idx)
         return
     end
     for op in userefs(stmt)
         val = op[]
-        if isa(val, UnoptSlot)
+        if isa(val, SlotNumber)
             push!(result[slot_id(val)].uses, idx)
         end
     end
@@ -89,7 +81,7 @@ function new_to_regular(@nospecialize(stmt), new_offset::Int)
     return urs[]
 end
 
-function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::UnoptSlot, @nospecialize(ssa), @nospecialize(def_ssa))
+function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::SlotNumber, @nospecialize(ssa), @nospecialize(def_ssa))
     # We don't really have the information here to get rid of these.
     # We'll do so later
     if ssa === UNDEF_TOKEN
@@ -100,14 +92,14 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::UnoptS
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
     end
-    if isa(stmt, SlotNumber) || isa(stmt, TypedSlot)
+    if isa(stmt, SlotNumber)
         return ssa
     end
     @assert false # unreachable
 end
 
 function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt))
-    if isa(stmt, UnoptSlot) && slot_filter(stmt)
+    if isa(stmt, SlotNumber) && slot_filter(stmt)
         return fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename_slot(stmt)...)
     end
     if isexpr(stmt, :(=))
@@ -118,7 +110,7 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
         for i = 1:length(stmt.edges)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]
-            isa(val, UnoptSlot) || continue
+            isa(val, SlotNumber) || continue
             slot_filter(val) || continue
             bb_idx = block_for_inst(ir.cfg, Int(stmt.edges[i]))
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
@@ -128,7 +120,7 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
     end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
-        if isa(val, UnoptSlot)
+        if isa(val, SlotNumber)
             slot = slot_id(val)
             if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
                 return true
@@ -147,7 +139,7 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
     urs = userefs(stmt)
     for op in urs
         val = op[]
-        if isa(val, UnoptSlot) && slot_filter(val)
+        if isa(val, SlotNumber) && slot_filter(val)
             x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename_slot(val)...)
             # We inserted an undef error node. Delete subsequent statement
             # to avoid confusing the optimizer
@@ -156,8 +148,9 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
             end
             op[] = x
         elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            op[] = NewSSAValue(insert_node!(ir, idx,
-                NewInstruction(val, typ_for_val(val, ci, ir.sptypes, idx, Any[]))).id - length(ir.stmts))
+            typ = typ_for_val(val, ci, ir.sptypes, idx, Any[])
+            new_inst = NewInstruction(val, typ)
+            op[] = NewSSAValue(insert_node!(ir, idx, new_inst).id - length(ir.stmts))
         elseif isexpr(val, :static_parameter)
             ty = typ_for_val(val, ci, ir.sptypes, idx, Any[])
             if isa(ty, Const)
@@ -173,12 +166,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(x::UnoptSlot->slot_id(x)==slot, stmt::UnoptSlot->(ssa, true), ir, ci, use, code[use])
+        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, stmt::SlotNumber->(ssa, true), ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Pair{Any, Any}})
-    return fixemup!(stmt::UnoptSlot->true, stmt::UnoptSlot->renames[slot_id(stmt)], ir, ci, idx, stmt)
+    return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
 function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
@@ -236,7 +229,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{VarState}, 
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, UnoptSlot}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber}) && error("unexpected val type")
     return Const(x)
 end
 

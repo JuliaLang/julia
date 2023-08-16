@@ -331,7 +331,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             return (false, false, false)
         end
     end
-    isa(stmt, UnoptSlot) && error("unexpected IR elements")
+    isa(stmt, SlotNumber) && error("unexpected IR elements")
     return (true, true, true)
 end
 
@@ -366,8 +366,6 @@ function argextype(
         @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
-    elseif isa(x, TypedSlot)
-        return x.typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x, src)
     elseif isa(x, Argument)

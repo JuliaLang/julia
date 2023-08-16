@@ -625,7 +625,7 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
+function find_undefs!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
     if isa(x, SlotNumber)
         id = slot_id(x)
         pc = find_dominating_assignment(id, idx, sv)
@@ -634,16 +634,7 @@ function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, 
             state = sv.bb_vartables[block]::VarTable
             vt = state[id]
             undefs[id] |= vt.undef
-            typ = widenslotwrapper(ignorelimited(vt.typ))
-        else
-            typ = sv.ssavaluetypes[pc]
-            @assert typ !== NOT_FOUND "active slot in unreached region"
         end
-        # add type annotations where needed
-        if !⊑(typeinf_lattice(interp), sv.slottypes[id], typ)
-            return TypedSlot(id, typ)
-        end
-        return x
     elseif isa(x, Expr)
         head = x.head
         i0 = 1
@@ -654,15 +645,13 @@ function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, 
             i0 = 2
         end
         for i = i0:length(x.args)
-            x.args[i] = annotate_slot_load!(interp, undefs, idx, sv, x.args[i])
+            find_undefs!(interp, undefs, idx, sv, x.args[i])
         end
-        return x
     elseif isa(x, ReturnNode) && isdefined(x, :val)
-        return ReturnNode(annotate_slot_load!(interp, undefs, idx, sv, x.val))
+        find_undefs!(interp, undefs, idx, sv, x.val)
     elseif isa(x, GotoIfNot)
-        return GotoIfNot(annotate_slot_load!(interp, undefs, idx, sv, x.cond), x.dest)
+        find_undefs!(interp, undefs, idx, sv, x.cond)
     end
-    return x
 end
 
 # find the dominating assignment to the slot `id` in the block containing statement `idx`,
@@ -708,12 +697,11 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     any_unreachable = false
 
     # this statement traversal does five things:
-    # 1. introduce temporary `TypedSlot`s that are supposed to be replaced with π-nodes later
-    # 2. mark used-undef slots (required by the `slot2reg` conversion)
-    # 3. mark unreached statements for a bulk code deletion (see issue #7836)
-    # 4. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
+    # 1. mark used-undef slots (required by the `slot2reg` conversion)
+    # 2. mark unreached statements for a bulk code deletion (see issue #7836)
+    # 3. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     #    NOTE because of this, `was_reached` will no longer be available after this point
-    # 5. eliminate GotoIfNot if either or both branches are statically unreachable
+    # 4. eliminate GotoIfNot if either or both branches are statically unreachable
     changemap = nothing # initialized if there is any dead region
     for i = 1:nstmt
         expr = stmts[i]
@@ -741,14 +729,15 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
-            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
+            find_undefs!(interp, undefs, i, sv, expr) # 1
+            stmts[i] = expr
+            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
             if is_meta_expr(expr) # keep any lexically scoped expressions
-                ssavaluetypes[i] = Any # 4
+                ssavaluetypes[i] = Any # 3
             else
-                ssavaluetypes[i] = Bottom # 4
+                ssavaluetypes[i] = Bottom # 3
                 stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
