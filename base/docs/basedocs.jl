@@ -1692,6 +1692,12 @@ Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a() = sum(i for i in 1:1000);
