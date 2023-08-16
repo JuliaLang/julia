@@ -2347,19 +2347,18 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
-    if length(argtypes) ≥ 2
-        M, s = argtypes[1], argtypes[2]
-        if getglobal_nothrow(M, s)
-            nothrow = true
-            # typeasserts below are already checked in `getglobal_nothrow`
-            Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
-            if isconst(Mval, sval)
-                consistent = ALWAYS_TRUE
-                if is_mutation_free_argtype(rt)
-                    inaccessiblememonly = ALWAYS_TRUE
-                end
+    M, s = argtypes[1], argtypes[2]
+    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
+        nothrow = true
+        # typeasserts below are already checked in `getglobal_nothrow`
+        Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
+        if isconst(Mval, sval)
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
             end
         end
     end

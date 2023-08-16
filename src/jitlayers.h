@@ -193,9 +193,18 @@ struct jl_returninfo_t {
     unsigned return_roots;
 };
 
-typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
+struct jl_codegen_call_target_t {
+    jl_returninfo_t::CallingConv cc;
+    unsigned return_roots;
+    llvm::Function *decl;
+    bool specsig;
+};
 
-typedef struct _jl_codegen_params_t {
+typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> jl_workqueue_t;
+// TODO DenseMap?
+typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
+
+struct jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
     DataLayout DL;
@@ -206,7 +215,8 @@ typedef struct _jl_codegen_params_t {
     }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
-    std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
+    jl_workqueue_t workqueue;
+    jl_compiled_functions_t compiled_functions;
     std::map<void*, GlobalVariable*> globals;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
@@ -238,10 +248,10 @@ typedef struct _jl_codegen_params_t {
     bool external_linkage = false;
     bool imaging;
     int debug_level;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
         : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
             DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
-} jl_codegen_params_t;
+};
 
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
@@ -261,12 +271,9 @@ enum CompilationPolicy {
     Extern = 1,
 };
 
-typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
-
 void jl_compile_workqueue(
-    jl_workqueue_t &emitted,
-    Module &original,
     jl_codegen_params_t &params,
+    Module &original,
     CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,

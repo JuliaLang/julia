@@ -1503,7 +1503,7 @@ endef
 WINE ?= wine
 
 ifeq ($(BINARY),32)
-HEAPLIM := --heap-size-hint=500M
+HEAPLIM := --heap-size-hint=1000M
 else
 HEAPLIM :=
 endif
