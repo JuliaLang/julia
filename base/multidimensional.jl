@@ -1041,9 +1041,9 @@ function diff(r::AbstractRange{T}; dims::Integer=1, prepend = nothing, append = 
     prepend isa Nothing || append isa Nothing || throw(ArgumentError("cannot use perepend/append simultaneously"))
     output = [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
     if !isnothing(prepend)
-        return vcat(prepend, output)
+        return vcat([prepend], output)
     elseif !isnothing(append)
-        return vcat(output, append)
+        return vcat(output, [append])
     else
         returnoutput
     end
