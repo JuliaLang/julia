@@ -343,7 +343,7 @@ The vector `v` must be sorted according to the order defined by the keywords.
 [`sort!`](@ref) for the meaning of the keywords and the definition of
 "greater than" and equivalence. Note that the `by` function is applied to the
 searched value `x` as well as the values in `v`. When `rev=true`, this will
-instead locate the first value less than or equivalent to `x`.
+instead return the index of the first value less than or equivalent to `x`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
@@ -385,7 +385,7 @@ The vector `v` must be sorted according to the order defined by the keywords.
 Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
 "less than" and equivalence. Note that the `by` function is applied to the
 searched value `x` as well as the values in `v`. When `rev=true`, this will
-instead locate the last value greater than or equivalent to `x`.
+instead return the index of the last value greater than or equivalent to `x`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs
