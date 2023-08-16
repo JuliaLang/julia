@@ -247,8 +247,8 @@ end
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
     if startswith(env, '@')
-        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
-        # if you put a `@` in LOAD_PATH manually, it's expanded late
+        # `@.` in JULIA_LOAD_PATH is expanded early (at startup time)
+        # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
