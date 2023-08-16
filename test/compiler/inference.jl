@@ -4565,6 +4565,19 @@ end
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}, Val{Union{Val{Union{}}, Val{Val{Union{}}}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Val
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Val{<:a}, a)
+    @test_broken a != Val{<:Val{Union{}}}
+    @test_broken a == Val{<:Val} || a == Val
 end
 
 # Test that a function-wise `@max_methods` works as expected

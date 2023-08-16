@@ -676,7 +676,7 @@ end
     return tmerge(wl, typea, typeb)
 end
 
-@nospecializeinfer function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
+@nospecializeinfer function tmerge(lattice::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
     # it's always ok to form a Union of two concrete types
     act = isconcretetype(typea)
     bct = isconcretetype(typeb)
@@ -687,8 +687,8 @@ end
     if (act || isType(typea)) && (bct || isType(typeb))
         return Union{typea, typeb}
     end
-    typea <: typeb && return typeb
-    typeb <: typea && return typea
+    u = tmerge_fast_path(lattice, typea, typeb)
+    u === nothing || return u
     return tmerge_types_slow(typea, typeb)
 end
 
