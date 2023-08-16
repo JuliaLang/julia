@@ -1142,11 +1142,11 @@ end
     @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
 end
 
-struct MyBroadcastStyleWithField
+struct MyBroadcastStyleWithField <: Broadcast.BroadcastStyle
     i::Int
 end
 # asymmetry intended
-Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) = a.i
+Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) = a
 
 @testset "issue #50937: styles that have fields" begin
     @test Broadcast.result_style(MyBroadcastStyleWithField(1), MyBroadcastStyleWithField(1)) ==
