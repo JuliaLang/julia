@@ -274,7 +274,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     CompilationPolicy policy = (CompilationPolicy) _policy;
     bool imaging = imaging_default() || _imaging_mode == 1;
-    jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
@@ -286,7 +285,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
         ctx = jl_ExecutionEngine->acquireContext();
-        backing = jl_create_ts_module("text", ctx, imaging);
+        backing = jl_create_ts_module("text", ctx);
     }
     orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
@@ -304,7 +303,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     });
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
-    params.imaging = imaging;
+    params.imaging_mode = imaging;
     params.debug_level = jl_options.debug_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
@@ -335,22 +334,21 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = NULL;
                 jl_ci_cache_lookup(*cgparams, mi, params.world, &codeinst, &src);
-                if (src && !emitted.count(codeinst)) {
+                if (src && !params.compiled_functions.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.imaging,
-                            clone.getModuleUnlocked()->getDataLayout(),
+                            params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
                     jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
                     if (result_m)
-                        emitted[codeinst] = {std::move(result_m), std::move(decls)};
+                        params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                 }
             }
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, *clone.getModuleUnlocked(), params, policy);
+        jl_compile_workqueue(params, policy);
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
@@ -364,12 +362,13 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     size_t idx = 0;
     for (auto &global : params.global_targets) {
         gvars[idx] = global.second->getName().str();
+        global.second->setInitializer(literal_static_pointer_val(global.first, global.second->getValueType()));
         assert(gvars_set.insert(global.second).second && "Duplicate gvar in params!");
         assert(gvars_names.insert(gvars[idx]).second && "Duplicate gvar name in params!");
         data->jl_value_to_llvm[idx] = global.first;
         idx++;
     }
-    CreateNativeMethods += emitted.size();
+    CreateNativeMethods += params.compiled_functions.size();
 
     size_t offset = gvars.size();
     data->jl_external_to_llvm.resize(params.external_fns.size());
@@ -394,7 +393,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Merge);
         Linker L(*clone.getModuleUnlocked());
-        for (auto &def : emitted) {
+        for (auto &def : params.compiled_functions) {
             jl_merge_module(clone, std::move(std::get<0>(def.second)));
             jl_code_instance_t *this_code = def.first;
             jl_llvm_functions_t decls = std::get<1>(def.second);
@@ -432,9 +431,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     for (auto &global : gvars) {
         //Safe b/c context is locked by params
         GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
-        G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalValue::ExternalLinkage);
-        G->setVisibility(GlobalValue::HiddenVisibility);
+        assert(G->hasInitializer());
+        G->setLinkage(GlobalValue::InternalLinkage);
         G->setDSOLocal(true);
         data->jl_sysimg_gvars.push_back(G);
     }
@@ -458,14 +456,14 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         for (GlobalObject &G : clone.getModuleUnlocked()->global_objects()) {
             if (!G.isDeclaration()) {
-                G.setLinkage(GlobalValue::ExternalLinkage);
-                G.setVisibility(GlobalValue::HiddenVisibility);
+                G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
-                if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
-                    // Add unwind exception personalities to functions to handle async exceptions
-                    if (Function *F = dyn_cast<Function>(&G))
+                if (Function *F = dyn_cast<Function>(&G)) {
+                    if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+                        // Add unwind exception personalities to functions to handle async exceptions
                         F->setPersonalityFn(juliapersonality_func);
+                    }
                 }
             }
         }
@@ -653,6 +651,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
+    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -663,6 +662,7 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
+    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -689,11 +689,19 @@ ModuleInfo compute_module_info(Module &M) {
 }
 
 struct Partition {
-    StringSet<> globals;
+    StringMap<bool> globals;
     StringMap<unsigned> fvars;
     StringMap<unsigned> gvars;
     size_t weight;
 };
+
+static bool canPartition(const GlobalValue &G) {
+    if (auto F = dyn_cast<Function>(&G)) {
+        if (F->hasFnAttribute(Attribute::AlwaysInline))
+            return false;
+    }
+    return true;
+}
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
@@ -724,20 +732,36 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             gvars[gvar.second] = i+1;
         }
     }
-    for (auto &GV : M.globals()) {
+    for (auto &GV : M.global_values()) {
         if (GV.isDeclaration()) {
             if (GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
             }
         } else {
+            // Local global values are not partitioned
+            if (!canPartition(GV)) {
+                if (GVNames.count(GV.getName())) {
+                    bad = true;
+                    dbgs() << "Shouldn't have partitioned " << GV.getName() << ", but is in partition " << GVNames[GV.getName()] << "\n";
+                }
+                continue;
+            }
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
             }
-            if (!GV.hasExternalLinkage()) {
-                bad = true;
-                dbgs() << "Global " << GV << " has non-external linkage " << GV.getLinkage() << " but is in partition " << GVNames[GV.getName()] << "\n";
+            for (ConstantUses<GlobalValue> uses(const_cast<GlobalValue*>(&GV), const_cast<Module&>(M)); !uses.done(); uses.next()) {
+                auto val = uses.get_info().val;
+                if (!GVNames.count(val->getName())) {
+                    bad = true;
+                    dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is not in any partition\n";
+                    continue;
+                }
+                if (GVNames[val->getName()] != GVNames[GV.getName()]) {
+                    bad = true;
+                    dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is in partition " << GVNames[GV.getName()] << " but " << val->getName() << " is in partition " << GVNames[val->getName()] << "\n";
+                }
             }
         }
     }
@@ -810,8 +834,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        if (isa<Function>(G)) {
-            partitioner.make(&G, getFunctionWeight(cast<Function>(G)).weight);
+        if (!canPartition(G))
+            continue;
+        G.setLinkage(GlobalValue::ExternalLinkage);
+        G.setVisibility(GlobalValue::HiddenVisibility);
+        if (auto F = dyn_cast<Function>(&G)) {
+            partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
             partitioner.make(&G, 1);
         }
@@ -822,6 +850,8 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
+            // This can fail if we can't partition a global, but it uses something we can partition
+            // This should be fixed by altering canPartition to not permit partitioning this global
             assert(idx != partitioner.node_map.end());
             partitioner.merge(i, idx->second);
         }
@@ -849,35 +879,35 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (unsigned idx = 0; idx < idxs.size(); ++idx) {
         auto i = idxs[idx];
         auto root = partitioner.find(i);
-        assert(root == i || partitioner.nodes[root].GV == nullptr);
-        if (partitioner.nodes[root].GV) {
+        assert(root == i || partitioner.nodes[root].weight == 0);
+        if (partitioner.nodes[root].weight) {
             auto &node = partitioner.nodes[root];
             auto &P = *pq.top();
             pq.pop();
             auto name = node.GV->getName();
-            P.globals.insert(name);
+            P.globals.insert({name, true});
             if (fvars.count(node.GV))
                 P.fvars[name] = fvars[node.GV];
             if (gvars.count(node.GV))
                 P.gvars[name] = gvars[node.GV];
             P.weight += node.weight;
-            node.GV = nullptr;
+            node.weight = 0;
             node.size = &P - partitions.data();
             pq.push(&P);
         }
         if (root != i) {
             auto &node = partitioner.nodes[i];
-            assert(node.GV != nullptr);
+            assert(node.weight != 0);
             // we assigned its root already, so just add it to the root's partition
             // don't touch the priority queue, since we're not changing the weight
             auto &P = partitions[partitioner.nodes[root].size];
             auto name = node.GV->getName();
-            P.globals.insert(name);
+            P.globals.insert({name, true});
             if (fvars.count(node.GV))
                 P.fvars[name] = fvars[node.GV];
             if (gvars.count(node.GV))
                 P.gvars[name] = gvars[node.GV];
-            node.GV = nullptr;
+            node.weight = 0;
             node.size = partitioner.nodes[root].size;
         }
     }
@@ -924,7 +954,6 @@ struct ShardTimers {
     ImageTimer deserialize;
     ImageTimer materialize;
     ImageTimer construct;
-    ImageTimer deletion;
     // impl timers
     ImageTimer unopt;
     ImageTimer optimize;
@@ -938,13 +967,12 @@ struct ShardTimers {
     void print(raw_ostream &out, bool clear=false) {
         StringRef sep = "===-------------------------------------------------------------------------===";
         out << formatv("{0}\n{1}\n{0}\n", sep, fmt_align(name + " : " + desc, AlignStyle::Center, sep.size()));
-        auto total = deserialize.elapsed + materialize.elapsed + construct.elapsed + deletion.elapsed +
+        auto total = deserialize.elapsed + materialize.elapsed + construct.elapsed +
             unopt.elapsed + optimize.elapsed + opt.elapsed + obj.elapsed + asm_.elapsed;
         out << "Time (s)  Name  Description\n";
         deserialize.print(out, clear);
         materialize.print(out, clear);
         construct.print(out, clear);
-        deletion.print(out, clear);
         unopt.print(out, clear);
         optimize.print(out, clear);
         opt.print(out, clear);
@@ -1100,33 +1128,46 @@ static auto serializeModule(const Module &M) {
 // consistent.
 static void materializePreserved(Module &M, Partition &partition) {
     DenseSet<GlobalValue *> Preserve;
-    for (auto &GV : M.global_values()) {
-        if (!GV.isDeclaration()) {
-            if (partition.globals.count(GV.getName())) {
-                Preserve.insert(&GV);
-            }
+    for (auto &Name : partition.globals) {
+        auto *GV = M.getNamedValue(Name.first());
+        assert(GV && !GV->isDeclaration() && !GV->hasLocalLinkage());
+        if (!Name.second) {
+            // We skip partitioning for internal variables, so this has
+            // the same effect as putting it in preserve.
+            // This just avoids a hashtable lookup.
+            GV->setLinkage(GlobalValue::InternalLinkage);
+            assert(GV->hasDefaultVisibility());
+        } else {
+            Preserve.insert(GV);
         }
     }
+
     for (auto &F : M.functions()) {
-        if (!F.isDeclaration()) {
-            if (!Preserve.contains(&F)) {
-                F.deleteBody();
-                F.setLinkage(GlobalValue::ExternalLinkage);
-                F.setVisibility(GlobalValue::HiddenVisibility);
-                F.setDSOLocal(true);
-            }
-        }
+        if (F.isDeclaration())
+            continue;
+        if (F.hasLocalLinkage())
+            continue;
+        if (Preserve.contains(&F))
+            continue;
+        F.deleteBody();
+        F.setLinkage(GlobalValue::ExternalLinkage);
+        F.setVisibility(GlobalValue::HiddenVisibility);
+        F.setDSOLocal(true);
     }
+
     for (auto &GV : M.globals()) {
-        if (!GV.isDeclaration()) {
-            if (!Preserve.contains(&GV)) {
-                GV.setInitializer(nullptr);
-                GV.setLinkage(GlobalValue::ExternalLinkage);
-                GV.setVisibility(GlobalValue::HiddenVisibility);
-                GV.setDSOLocal(true);
-            }
-        }
+        if (GV.isDeclaration())
+            continue;
+        if (Preserve.contains(&GV))
+            continue;
+        if (GV.hasLocalLinkage())
+            continue;
+        GV.setInitializer(nullptr);
+        GV.setLinkage(GlobalValue::ExternalLinkage);
+        GV.setVisibility(GlobalValue::HiddenVisibility);
+        GV.setDSOLocal(true);
     }
+
     // Global aliases are a pain to deal with. It is illegal to have an alias to a declaration,
     // so we need to replace them with either a function or a global variable declaration. However,
     // we can't just delete the alias, because that would break the users of the alias. Therefore,
@@ -1135,25 +1176,27 @@ static void materializePreserved(Module &M, Partition &partition) {
     // to deleting the old alias.
     SmallVector<std::pair<GlobalAlias *, GlobalValue *>> DeletedAliases;
     for (auto &GA : M.aliases()) {
-        if (!GA.isDeclaration()) {
-            if (!Preserve.contains(&GA)) {
-                if (GA.getValueType()->isFunctionTy()) {
-                    auto F = Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M);
-                    // This is an extremely sad hack to make sure the global alias never points to an extern function
-                    auto BB = BasicBlock::Create(M.getContext(), "", F);
-                    new UnreachableInst(M.getContext(), BB);
-                    GA.setAliasee(F);
-
-                    DeletedAliases.push_back({ &GA, F });
-                }
-                else {
-                    auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
-                    DeletedAliases.push_back({ &GA, GV });
-                }
-            }
+        assert(!GA.isDeclaration() && "Global aliases can't be declarations!"); // because LLVM says so
+        if (Preserve.contains(&GA))
+            continue;
+        if (GA.hasLocalLinkage())
+            continue;
+        if (GA.getValueType()->isFunctionTy()) {
+            auto F = Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M);
+            // This is an extremely sad hack to make sure the global alias never points to an extern function
+            auto BB = BasicBlock::Create(M.getContext(), "", F);
+            new UnreachableInst(M.getContext(), BB);
+            GA.setAliasee(F);
+            DeletedAliases.push_back({ &GA, F });
+        }
+        else {
+            auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
+            DeletedAliases.push_back({ &GA, GV });
         }
     }
+
     cantFail(M.materializeAll());
+
     for (auto &Deleted : DeletedAliases) {
         Deleted.second->takeName(Deleted.first);
         Deleted.first->replaceAllUsesWith(Deleted.second);
@@ -1189,7 +1232,7 @@ static void construct_vars(Module &M, Partition &partition) {
     std::vector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
     gvar_pairs.reserve(partition.gvars.size());
     for (auto &gvar : partition.gvars) {
-        auto GV = M.getGlobalVariable(gvar.first());
+        auto GV = M.getNamedGlobal(gvar.first());
         assert(GV);
         assert(!GV->isDeclaration());
         gvar_pairs.push_back({ gvar.second, GV });
@@ -1222,20 +1265,6 @@ static void construct_vars(Module &M, Partition &partition) {
     gidxs_var->setDSOLocal(true);
 }
 
-// Materialization will leave many unused declarations, which multiversioning would otherwise clone.
-// This function removes them to avoid unnecessary cloning of declarations.
-// The GlobalDCEPass is much better at this, but we only care about removing unused
-// declarations, not actually about seeing if code is dead (codegen knows it is live, by construction).
-static void dropUnusedGlobals(Module &M) {
-    std::vector<GlobalValue *> unused;
-    for (auto &G : M.global_values()) {
-        if (G.isDeclaration() && G.use_empty())
-            unused.push_back(&G);
-    }
-    for (auto &G : unused)
-        G->eraseFromParent();
-}
-
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
 template<typename ModuleReleasedFunc>
@@ -1254,7 +1283,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         timers[i].deserialize.init("deserialize_" + idx, "Deserialize module");
         timers[i].materialize.init("materialize_" + idx, "Materialize declarations");
         timers[i].construct.init("construct_" + idx, "Construct partitioned definitions");
-        timers[i].deletion.init("deletion_" + idx, "Delete dead declarations");
         timers[i].unopt.init("unopt_" + idx, "Emit unoptimized bitcode");
         timers[i].optimize.init("optimize_" + idx, "Optimize shard");
         timers[i].opt.init("opt_" + idx, "Emit optimized bitcode");
@@ -1348,10 +1376,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                     CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
-                timers[i].deletion.startTimer();
-                dropUnusedGlobals(*M);
-                timers[i].deletion.stopTimer();
-
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
             });
         }
@@ -1390,6 +1414,13 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
+    // for any of our other symbols that we insert during compilation.
+    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
+        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
+        return 1;
+    }
+
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
@@ -1546,6 +1577,11 @@ void jl_dump_native_impl(void *native_code,
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
 
+        // Wipe the global initializers, we'll reset them at load time
+        for (auto gv : data->jl_sysimg_gvars) {
+            cast<GlobalVariable>(gv)->setInitializer(Constant::getNullValue(gv->getValueType()));
+        }
+
         // add metadata information
         if (imaging_mode) {
             multiversioning_preannotate(dataM);
@@ -1596,16 +1632,6 @@ void jl_dump_native_impl(void *native_code,
             fidxs_var->setDSOLocal(true);
             dataM.addModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(Context, "_0"));
 
-            // reflect the address of the jl_RTLD_DEFAULT_handle variable
-            // back to the caller, so that we can check for consistency issues
-            GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&dataM);
-            addComdat(new GlobalVariable(dataM,
-                                        jlRTLD_DEFAULT_var->getType(),
-                                        true,
-                                        GlobalVariable::ExternalLinkage,
-                                        jlRTLD_DEFAULT_var,
-                                        "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
-
             // let the compiler know we are going to internalize a copy of this,
             // if it has a current usage with ExternalLinkage
             auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
@@ -1637,6 +1663,16 @@ void jl_dump_native_impl(void *native_code,
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);
+
+        // reflect the address of the jl_RTLD_DEFAULT_handle variable
+        // back to the caller, so that we can check for consistency issues
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
+        addComdat(new GlobalVariable(metadataM,
+                                    jlRTLD_DEFAULT_var->getType(),
+                                    true,
+                                    GlobalVariable::ExternalLinkage,
+                                    jlRTLD_DEFAULT_var,
+                                    "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
 
         Type *T_size = DL.getIntPtrType(Context);
         Type *T_psize = T_size->getPointerTo();
@@ -1861,8 +1897,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    if (dump_native)
+    if (dump_native) {
+        PM->add(createStripDeadPrototypesPass());
         PM->add(createMultiVersioningPass(external_use));
+    }
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
@@ -2095,7 +2133,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->getContext();
-        orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx, imaging_default());
+        orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
@@ -2107,7 +2145,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
-        output.imaging = imaging_default();
+        output.imaging_mode = imaging_default();
         // This would be nice, but currently it causes some assembly regressions that make printed output
         // differ very significantly from the actual non-imaging mode code.
         // // Force imaging mode for names of pointers
@@ -2144,6 +2182,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
                     global.second->setVisibility(GlobalValue::DefaultVisibility);
                 }
+            }
+            if (!jl_options.image_codegen) {
+                optimizeDLSyms(*m.getModuleUnlocked());
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {

@@ -33,6 +33,9 @@ macro gensym(names...)
     return blk
 end
 
+## line numbers ##
+convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
+
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
@@ -578,7 +581,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
 
 !!! note
     The compiler will consider this a strong indication that the method will
-    terminate relatively *quickly* and may (if otherwise legal), call this
+    terminate relatively *quickly* and may (if otherwise legal) call this
     method at compile time. I.e. it is a bad idea to annotate this setting
     on a method that *technically*, but not *practically*, terminates.
 

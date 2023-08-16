@@ -5403,6 +5403,21 @@ function g37690()
 end
 @test g37690().x === 0
 
+# issue #48889
+function f48889()
+    let j=0, f, i
+        while j < 3
+            i = j + 1
+            if j == 0
+                f = ()->i
+            end
+            j += 1
+        end
+        f
+    end
+end
+@test f48889()() == 3
+
 function _assigns_and_captures_arg(a)
     a = a
     return ()->a
@@ -8044,3 +8059,7 @@ end
 # `SimpleVector`-operations should be concrete-eval eligible
 @test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
 @test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
+
+let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
+    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
+end

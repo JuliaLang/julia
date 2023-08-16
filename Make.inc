@@ -897,6 +897,17 @@ else
 ISX86:=0
 endif
 
+
+#If nothing is set default to native
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+MCPU=native
+else
+MARCH=native
+MTUNE=native
+endif
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
@@ -971,6 +982,14 @@ CC += -mcpu=$(MCPU)
 CXX += -mcpu=$(MCPU)
 FC += -mcpu=$(MCPU)
 JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+# Set MTUNE-specific flags
+ifneq ($(MTUNE),)
+CC += -mtune=$(MTUNE)
+CXX += -mtune=$(MTUNE)
+FC += -mtune=$(MTUNE)
+JULIA_CPU_TARGET ?= $(MTUNE)
 endif
 
 ifneq ($(MARCH)$(MCPU),)
@@ -1503,7 +1522,7 @@ endef
 WINE ?= wine
 
 ifeq ($(BINARY),32)
-HEAPLIM := --heap-size-hint=500M
+HEAPLIM := --heap-size-hint=1000M
 else
 HEAPLIM :=
 endif

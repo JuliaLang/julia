@@ -501,15 +501,40 @@ precompile_test_harness(false) do dir
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          true && __precompile__(false)
+          haskey(Base.loaded_modules, Base.PkgId("UseBaz")) || __precompile__(false)
           module Baz
           baz() = 1
           end
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    UseBaz_file = joinpath(dir, "UseBaz.jl")
+    write(UseBaz_file,
+          """
+          module UseBaz
+          biz() = 1
+          @assert haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+          @assert !haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          using Baz
+          @assert haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          buz() = 2
+          const generating = ccall(:jl_generating_output, Cint, ())
+          const incremental = Base.JLOptions().incremental
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("UseBaz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using UseBaz
+    @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+    @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
+    @test Base.invokelatest(UseBaz.biz) === 1
+    @test Base.invokelatest(UseBaz.buz) === 2
+    @test UseBaz.generating == 0
+    @test UseBaz.incremental == 0
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) == 1
+    @test Base.invokelatest(Baz.baz) === 1
+    @test Baz === UseBaz.Baz
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")

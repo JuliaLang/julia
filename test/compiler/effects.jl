@@ -998,3 +998,35 @@ f50198() = (hf50198(Ref(:x)[]); nothing)
 f50311(x, s) = Symbol(s)
 g50311(x) = Val{f50311((1.0, x), "foo")}()
 @test fully_eliminated(g50311, Tuple{Float64})
+
+# getglobal effects
+const my_defined_var = 42
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end |> Core.Compiler.is_foldable_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo, nothing)
+end |> !Core.Compiler.is_nothrow
+
+# irinterp should refine `:nothrow` information only if profitable
+Base.@assume_effects :nothrow function irinterp_nothrow_override(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test Base.infer_effects((Float64,)) do y
+    isinf(y) && return zero(y)
+    irinterp_nothrow_override(true, y)
+end |> Core.Compiler.is_nothrow
+
+# Effects for :compilerbarrier
+f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
+f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
+@test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))

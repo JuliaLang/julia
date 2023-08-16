@@ -146,7 +146,13 @@ function threading_run(fun, static)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        if static
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        else
+            # TODO: this should be the current pool (except interactive) if there
+            # are ever more than two pools.
+            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+        end
         tasks[i] = t
         schedule(t)
     end

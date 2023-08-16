@@ -2349,22 +2349,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
 
-                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
-                // `julia.gc_alloc_obj` except it doesn't set the tag.
-                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
-                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
-                auto newI = builder.CreateCall(
-                    allocBytesIntrinsic,
-                    {
-                        ptls,
-                        builder.CreateIntCast(
-                            CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
-                            false)
-                    });
-                newI->takeName(CI);
-
                 // LLVM alignment/bit check is not happy about addrspacecast and refuse
                 // to remove write barrier because of it.
                 // We pretty much only load using `T_size` so try our best to strip
@@ -2386,8 +2370,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
                         Type *T_int64 = Type::getInt64Ty(LI->getContext());
                         auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
-                        LI->setMetadata(LLVMContext::MD_align,
-                                        MDNode::get(LI->getContext(), { op }));
+                        LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
                     }
                 }
                 // As a last resort, if we didn't manage to strip down the tag
@@ -2403,7 +2386,35 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                         builder.CreateAlignmentAssumption(DL, tag, 16);
                     }
                 }
-                // Set the tag.
+
+                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
+                // `julia.gc_alloc_obj` except it specializes the call based on the constant
+                // size of the object to allocate, to save one indirection, and doesn't set
+                // the type tag. (Note that if the size is not a constant, it will call
+                // gc_alloc_obj, and will redundantly set the tag.)
+                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
+                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
+                auto newI = builder.CreateCall(
+                    allocBytesIntrinsic,
+                    {
+                        ptls,
+                        builder.CreateIntCast(
+                            CI->getArgOperand(1),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false),
+                        builder.CreatePtrToInt(tag, T_size),
+                    });
+                newI->takeName(CI);
+
+                // Now, finally, set the tag. We do this in IR instead of in the C alloc
+                // function, to provide possible optimization opportunities. (I think? TBH
+                // the most recent editor of this code is not entirely clear on why we
+                // prefer to set the tag in the generated code. Providing optimziation
+                // opportunities is the most likely reason; the tradeoff is slightly
+                // larger code size and increased compilation time, compiling this
+                // instruction at every allocation site, rather than once in the C alloc
+                // function.)
                 auto &M = *builder.GetInsertBlock()->getModule();
                 StoreInst *store = builder.CreateAlignedStore(
                     tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
@@ -2468,7 +2479,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    (allocaAddressSpace ? Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)) : Frame));
+                    Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now

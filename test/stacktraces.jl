@@ -241,8 +241,7 @@ struct F49231{a,b,c,d,e,f,g} end
     catch e
         stacktrace(catch_backtrace())
     end
-    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,105)))
-    @test endswith(str, "to see complete types.")
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
     @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0mTuple\e[90m{…}\e[39m\e[0m\e[1m)\e[22m\n\e[90m")
 
     st = try
@@ -250,6 +249,6 @@ struct F49231{a,b,c,d,e,f,g} end
     catch e
         stacktrace(catch_backtrace())
     end
-    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,132)))
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
 end
