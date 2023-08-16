@@ -74,8 +74,8 @@ Create an arbitrary precision integer. `x` may be an `Int` (or anything that can
 converted to an `Int`). The usual mathematical operators are defined for this type, and
 results are promoted to a [`BigInt`](@ref).
 
-Instances can be constructed from strings via [`parse`](@ref), or using the `big`
-string literal.
+Instances can be constructed from strings via [`parse`](@ref) or at macro expansion time
+via the `big` string literal.
 
 # Examples
 ```jldoctest

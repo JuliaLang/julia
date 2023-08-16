@@ -742,6 +742,10 @@ Parse a string into a [`BigInt`](@ref) or [`BigFloat`](@ref),
 and throw an `ArgumentError` if the string is not a valid number.
 For integers `_` is allowed in the string as a separator.
 
+Each invocation of `@big_str` constructs a unique instance at
+macro expansion time, and this instance is shared by all subsequent
+variable assignments.
+
 # Examples
 ```jldoctest
 julia> big"123_456"
@@ -753,6 +757,12 @@ julia> big"7891.5"
 julia> big"_"
 ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 [...]
+
+julia> foo() = big"1"
+foo (generic function with 1 method)
+
+julia> x, y = foo(), foo() # `x` and `y` point to the same BigInt instance
+(1, 1)
 ```
 """
 macro big_str(s)
