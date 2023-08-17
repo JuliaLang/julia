@@ -648,6 +648,10 @@ export
     sprint,
     summary,
 
+# ScopedVariable
+    scoped,
+    ScopedVariable,
+
 # logging
     @debug,
     @info,

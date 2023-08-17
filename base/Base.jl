@@ -331,10 +331,6 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
 const liblapack_name = libblas_name
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
 # Concurrency (part 2)
 # Note that `atomics.jl` here should be deprecated
 Core.eval(Threads, :(include("atomics.jl")))
@@ -343,6 +339,14 @@ include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# ScopedVariables
+include("scopedvariables.jl")
+using .ScopedVariables
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
