@@ -25,8 +25,8 @@ Stop the program with an exit code. The default exit code is zero, indicating th
 program completed successfully. In an interactive session, `exit()` can be called with
 the keyboard shortcut `^D`.
 """
-exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
-exit() = exit(0)
+exit(n; wait_task::Bool=false) = ccall(:jl_exit, Cvoid, (Int32, Int32), n, wait_task)
+exit(; kwargs...) = exit(0; kwargs...)
 
 const roottask = current_task()
 

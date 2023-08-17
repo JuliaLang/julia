@@ -202,8 +202,10 @@ static void jl_close_item_atexit(uv_handle_t *handle)
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 
 // cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
-JL_DLLEXPORT void jl_exit(int exitcode)
+JL_DLLEXPORT void jl_exit(int exitcode, int wait_task)
 {
+    if (wait_task)
+        jl_task_wait_empty();
     jl_atexit_hook(exitcode);
     exit(exitcode);
 }
