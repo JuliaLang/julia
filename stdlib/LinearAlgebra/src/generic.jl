@@ -1680,7 +1680,7 @@ function logabsdet(A::AbstractMatrix)
     if istriu(A) || istril(A)
         return logabsdet(UpperTriangular(A))
     end
-    logabsdet(lu(A, check=false))
+    return logabsdet(lu(A, check=false))
 end
 logabsdet(a::Number) = log(abs(a)), sign(a)
 
