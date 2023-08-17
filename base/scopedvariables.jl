@@ -74,9 +74,6 @@ end
 
 function __set_var!(scope::Scope, var::ScopedVariable{T}, val::T) where T
     # PRIVATE API! Wrong usage will break invariants of ScopedVariable.
-    if scope === nothing
-        error("ScopedVariable: Currently not in scope.")
-    end
     @lock var.values begin
         if haskey(var.values.ht, scope)
             error("ScopedVariable: Variable is already set for this scope.")
