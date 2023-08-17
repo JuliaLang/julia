@@ -64,7 +64,7 @@ function _tpid_to_sym(tpid::Int8)
     elseif tpid == 1
         return :default
     elseif tpid == -1
-        return :unassociated
+        return :foreign
     else
         throw(ArgumentError("Unrecognized threadpool id $tpid"))
     end
@@ -75,7 +75,7 @@ function _sym_to_tpid(tp::Symbol)
         return Int8(0)
     elseif tp === :default
         return Int8(1)
-    elseif tp == :unassociated
+    elseif tp == :foreign
         return Int8(-1)
     else
         throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
@@ -85,7 +85,7 @@ end
 """
     Threads.threadpool(tid = threadid()) -> Symbol
 
-Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:unassociated`.
+Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -112,8 +112,8 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
-    elseif pool == :unassociated
-        error("Threadpool size of `:unassociated` is indeterminant")
+    elseif pool == :foreign
+        error("Threadpool size of `:foreign` is indeterminant")
     else
         error("invalid threadpool specified")
     end
