@@ -58,9 +58,9 @@ This pass removes the non-integral address spaces from the module's datalayout s
 
 * Filename: `llvm-simdloop.cpp`
 * Class Name: `LowerSIMDLoopPass`
-* Opt Name: `module(LowerSIMDLoop)`
+* Opt Name: `loop(LowerSIMDLoop)`
 
-This pass acts as the main driver of the `@simd` annotation. Codegen inserts a call to a marker intrinsic (`julia.simdloop`), which this pass uses to identify loops that were originally marked with `@simd`. Then, this pass looks for a chain of floating point operations that form a reduce and adds the `contract` and `reassoc` fast math flags to allow reassociation (and thus vectorization). This pass does not preserve either loop information nor inference correctness, so it may violate Julia semantics in surprising ways. If the loop was annotated with `ivdep` as well, then the pass marks the loop as having no loop-carried dependencies (the resulting behavior is undefined if the user annotation was incorrect or gets applied to the wrong loop).
+This pass acts as the main driver of the `@simd` annotation. Codegen inserts a `!llvm.loopid` marker at the back branch of a loop, which this pass uses to identify loops that were originally marked with `@simd`. Then, this pass looks for a chain of floating point operations that form a reduce and adds the `contract` and `reassoc` fast math flags to allow reassociation (and thus vectorization). This pass does not preserve either loop information nor inference correctness, so it may violate Julia semantics in surprising ways. If the loop was annotated with `ivdep` as well, then the pass marks the loop as having no loop-carried dependencies (the resulting behavior is undefined if the user annotation was incorrect or gets applied to the wrong loop).
 
 ### LowerPTLS
 
