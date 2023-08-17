@@ -213,6 +213,21 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+# test issue behind https://github.com/JuliaLang/julia/issues/50458
+@test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+
+# test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
+# Specificially test with base types of a trivial type, a simple union, a complicated union, and a tuple.
+for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
+    Ta, Tb = T, T
+    for i in 1:10
+        Ta = Union{Tuple{Ta}, Nothing}
+        Tb = Core.Compiler.tmerge(Tuple{Tb}, Nothing)
+        @test Ta <: Tb <: Union{Nothing, Tuple}
+    end
+end
 
 struct SomethingBits
     x::Base.BitIntegerType
