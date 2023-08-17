@@ -103,8 +103,8 @@ scrub_repl_backtrace(stack::ExceptionStack) =
     ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
-    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
-    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace; MethodError see #50803
 
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
