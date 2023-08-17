@@ -5100,6 +5100,34 @@ end
 end |> only === String
 # JET.test_call(s::AbstractString->Base._string(s, 'c'))
 
+# issue #45759 #46557
+g45759(x::Tuple{Any,Vararg}) = x[1] + _g45759(x[2:end])
+g45759(x::Tuple{}) = 0
+_g45759(x) = g45759(x)
+@test only(Base.return_types(g45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+h45759(x::Tuple{Any,Vararg}; kwargs...) = x[1] + h45759(x[2:end]; kwargs...)
+h45759(x::Tuple{}; kwargs...) = 0
+@test only(Base.return_types(h45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+@test only(Base.return_types((typeof([[[1]]]),)) do x
+    sum(x) do v
+        sum(length, v)
+    end
+end) == Int
+
+struct FunctionSum{Tf}
+    functions::Tf
+end
+(F::FunctionSum)(x) = sum(f -> f(x), F.functions)
+F = FunctionSum((x -> sqrt(x), FunctionSum((x -> x^2, x -> x^3))))
+@test @inferred(F(1.)) === 3.0
+
+f31485(arr::AbstractArray{T, 0}) where {T} = arr
+indirect31485(arr) = f31485(arr)
+f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
+@test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
+
 # override const-prop' return type with the concrete-eval result
 # if concrete-eval returns non-inlineable constant
 Base.@assume_effects :foldable function continue_const_prop(i, j)

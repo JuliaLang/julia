@@ -2559,17 +2559,22 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     str = String(take!(unwrapcontext(io)[1]))
+    str = type_limited_string_from_context(out, str)
+    print(out, str)
+    nothing
+end
+
+function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
+        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
         end
         str = str_lim
     end
-    print(out, str)
-    nothing
+    return str
 end
 
 # limit nesting depth of `{ }` until string textwidth is less than `n`

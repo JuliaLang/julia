@@ -441,8 +441,25 @@ end
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
 
-@test big(5)^true == big(5)
-@test big(5)^false == one(BigInt)
+
+@testset "Exponentiation operator" begin
+    @test big(5)^true == big(5)
+    @test big(5)^false == one(BigInt)
+    testvals = Int8[-128:-126; -3:3; 125:127]
+    @testset "BigInt and Int8 are consistent: $i^$j" for i in testvals, j in testvals
+        int8_res = try
+            i^j
+        catch e
+            e
+        end
+        if int8_res isa Int8
+            @test (big(i)^big(j)) % Int8 === int8_res
+        else
+            # Test both have exception of the same type
+            @test_throws typeof(int8_res) big(i)^big(j)
+        end
+    end
+end
 
 @testset "math ops returning BigFloat" begin
     # operations that when applied to Int64 give Float64, should give BigFloat
