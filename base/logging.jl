@@ -492,8 +492,10 @@ end
 
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
+const CURRENT_LOGSTATE = ScopedValue{Union{Nothing, LogState}}(nothing)
+
 function current_logstate()
-    logstate = current_task().logstate
+    logstate = CURRENT_LOGSTATE[]
     return (logstate !== nothing ? logstate : _global_logstate)::LogState
 end
 
@@ -506,17 +508,7 @@ end
     return nothing
 end
 
-function with_logstate(f::Function, logstate)
-    @nospecialize
-    t = current_task()
-    old = t.logstate
-    try
-        t.logstate = logstate
-        f()
-    finally
-        t.logstate = old
-    end
-end
+with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering

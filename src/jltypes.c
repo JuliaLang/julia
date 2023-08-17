@@ -3227,7 +3227,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "storage",
                                         "donenotify",
                                         "result",
-                                        "logstate",
+                                        "scope",
                                         "code",
                                         "rngState0",
                                         "rngState1",
