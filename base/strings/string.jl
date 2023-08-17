@@ -404,7 +404,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return iterate_continued(s, i, u)
 end
 
-function iterate_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function iterate_continued(s, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -433,7 +434,8 @@ end
     return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function getindex_continued(s, i::Int, u::UInt32)
     if u < 0xc0000000
         # called from `getindex` which checks bounds
         @inbounds isvalid(s, i) && @goto ret

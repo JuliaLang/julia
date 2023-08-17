@@ -1558,3 +1558,9 @@ for T in (Float16, Float32, Float64)
     @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
     @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
 end
+
+@testset "BigInt Rationals with special funcs" begin
+    @test sinpi(big(1//1)) == big(0.0)
+    @test tanpi(big(1//1)) == big(0.0)
+    @test cospi(big(1//1)) == big(-1.0)
+end
