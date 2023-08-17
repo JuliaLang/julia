@@ -4,12 +4,6 @@ module ScopedVariables
 
 export ScopedVariable, scoped
 
-mutable struct Scope
-    const parent::Union{Nothing, Scope}
-end
-
-current_scope() = current_task().scope::Union{Nothing, Scope}
-
 """
     ScopedVariable(x)
 
@@ -40,28 +34,55 @@ julia> scoped(svar => 2) do
     is available from the package ScopedVariables.jl.
 """
 mutable struct ScopedVariable{T}
-    const values::WeakKeyDict{Scope, T}
     const initial_value::T
-    ScopedVariable{T}(initial_value) where {T} = new{T}(WeakKeyDict{Scope, T}(), initial_value)
+    ScopedVariable{T}(initial_value) where {T} = new{T}(initial_value)
 end
 ScopedVariable(initial_value::T) where {T} = ScopedVariable{T}(initial_value)
 
 Base.eltype(::Type{ScopedVariable{T}}) where {T} = T
 
+mutable struct Scope
+    const parent::Union{Nothing, Scope}
+    # XXX: Probably want this to be an upgradeable RWLock
+    const lock::Base.Threads.SpinLock
+    # IdDict trades off some potential space savings for performance.
+    # IdDict ~60ns; WeakKeyDict ~100ns
+    # Space savings would come from ScopedVariables being GC'd.
+    # Now we hold onto them until Scope get's GC'd
+    const values::IdDict{<:ScopedVariable, Any}
+    Scope(parent) = new(parent, Base.Threads.SpinLock(), IdDict{ScopedVariable, Any}())
+end
+
+current_scope() = current_task().scope::Union{Nothing, Scope}
+
+function Base.show(io::IO, ::Scope)
+    print(io, Scope)
+end
+
+Base.lock(scope::Scope) = lock(scope.lock)
+Base.unlock(scope::Scope) = unlock(scope.lock)
+
 function Base.getindex(var::ScopedVariable{T})::T where T
-    scope = current_scope()
-    if scope === nothing
-        return var.initial_value
-    end
-    @lock var.values begin
-        while scope !== nothing
-            if haskey(var.values.ht, scope)
-                return var.values.ht[scope]
+    cs = scope = current_scope()
+    val = var.initial_value
+    while scope !== nothing
+        @lock scope begin
+            if haskey(scope.values, var)
+                val = scope.values[var]
+                break
             end
-            scope = scope.parent
+        end
+        scope = scope.parent
+    end
+    if scope !== cs
+        # found the value in an upper scope, copy it down to cache.
+        # this is beneficial since in contrast to storing the values in the ScopedVariable
+        # we now need to acquire n-Locks for an n-depth scope.
+        @lock cs begin
+            cs.values[var] = val
         end
     end
-    return var.initial_value
+    return val
 end
 
 function Base.show(io::IO, var::ScopedVariable)
@@ -74,12 +95,8 @@ end
 
 function __set_var!(scope::Scope, var::ScopedVariable{T}, val::T) where T
     # PRIVATE API! Wrong usage will break invariants of ScopedVariable.
-    @lock var.values begin
-        if haskey(var.values.ht, scope)
-            error("ScopedVariable: Variable is already set for this scope.")
-        end
-        var.values[scope] = val
-    end
+    @assert !haskey(scope.values, var)
+    scope.values[var] = val
 end
 
 """
@@ -91,10 +108,13 @@ function scoped(f, pair::Pair{<:ScopedVariable{T}, T}) where T
     @nospecialize
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
-    try
-        scope = Scope(current_scope)
+    scope = Scope(current_scope)
+    @lock scope begin
         __set_var!(scope, pair...)
-        ct.scope = scope
+    end
+
+    ct.scope = scope
+    try
         return f()
     finally
         ct.scope = current_scope
@@ -110,12 +130,15 @@ function scoped(f, pairs::Pair{<:ScopedVariable}...)
     @nospecialize
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
-    try
-        scope = Scope(current_scope)
+    scope = Scope(current_scope)
+    @lock scope begin
         for (var, val) in pairs
             __set_var!(scope, var, val)
         end
-        ct.scope = scope
+    end
+
+    ct.scope = scope
+    try
         return f()
     finally
         ct.scope = current_scope
