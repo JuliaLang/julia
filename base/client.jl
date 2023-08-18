@@ -225,6 +225,7 @@ function incomplete_tag(ex::Expr)
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
@@ -238,10 +239,7 @@ function exec_options(opts)
     repl = !arg_is_program
     cmds = unsafe_load_commands(opts.commands)
     for (cmd, arg) in cmds
-        if cmd == 'e'
-            arg_is_program = false
-            repl = false
-        elseif cmd == 'E'
+        if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
