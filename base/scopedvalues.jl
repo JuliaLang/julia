@@ -84,7 +84,7 @@ function Base.getindex(var::ScopedValue{T})::T where T
         scope = scope.parent
     end
     return var.initial_value
-en
+end
 
 function Base.show(io::IO, var::ScopedValue)
     print(io, ScopedValue)
