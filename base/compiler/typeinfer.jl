@@ -550,8 +550,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
+        type_annotate!(interp, me)
         doopt = (me.cached || me.parent !== nothing)
-        type_annotate!(interp, me, doopt)
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
         else
@@ -642,7 +642,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST, preparing for optimization
-function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
+function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     # widen `Conditional`s from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
@@ -676,27 +676,25 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     for i = 1:nstmt
         expr = stmts[i]
         if was_reached(sv, i)
-            if run_optimizer
-                if isa(expr, GotoIfNot)
-                    # 5: replace this live GotoIfNot with:
-                    # - no-op if :nothrow and the branch target is unreachable
-                    # - cond if :nothrow and both targets are unreachable
-                    # - typeassert if must-throw
-                    if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
-                        block = block_for_inst(sv.cfg, i)
-                        if !was_reached(sv, i+1)
-                            cfg_delete_edge!(sv.cfg, block, block + 1)
-                            expr = GotoNode(expr.dest)
-                        elseif !was_reached(sv, expr.dest)
-                            cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                            expr = nothing
-                        end
-                    elseif ssavaluetypes[i] === Bottom
-                        block = block_for_inst(sv.cfg, i)
+            if isa(expr, GotoIfNot)
+                # 5: replace this live GotoIfNot with:
+                # - no-op if :nothrow and the branch target is unreachable
+                # - cond if :nothrow and both targets are unreachable
+                # - typeassert if must-throw
+                if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                    block = block_for_inst(sv.cfg, i)
+                    if !was_reached(sv, i+1)
                         cfg_delete_edge!(sv.cfg, block, block + 1)
+                        expr = GotoNode(expr.dest)
+                    elseif !was_reached(sv, expr.dest)
                         cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                        expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+                        expr = nothing
                     end
+                elseif ssavaluetypes[i] === Bottom
+                    block = block_for_inst(sv.cfg, i)
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                 end
             end
             stmts[i] = expr

@@ -81,7 +81,7 @@ function new_to_regular(@nospecialize(stmt), new_offset::Int)
     return urs[]
 end
 
-function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::SlotNumber, @nospecialize(ssa), @nospecialize(def_ssa))
+function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecialize(ssa), @nospecialize(def_ssa))
     # We don't really have the information here to get rid of these.
     # We'll do so later
     if ssa === UNDEF_TOKEN
@@ -92,15 +92,12 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::SlotNu
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
     end
-    if isa(stmt, SlotNumber)
-        return ssa
-    end
-    @assert false # unreachable
+    return ssa
 end
 
 function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt))
     if isa(stmt, SlotNumber) && slot_filter(stmt)
-        return fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename_slot(stmt)...)
+        return fixup_slot!(ir, ci, idx, slot_id(stmt), rename_slot(stmt)...)
     end
     if isexpr(stmt, :(=))
         stmt.args[2] = fixemup!(slot_filter, rename_slot, ir, ci, idx, stmt.args[2])
@@ -114,14 +111,13 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
             slot_filter(val) || continue
             bb_idx = block_for_inst(ir.cfg, Int(stmt.edges[i]))
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
-            stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename_slot(val)...)
+            stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), rename_slot(val)...)
         end
         return stmt
     end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
         if isa(val, SlotNumber)
-            slot = slot_id(val)
             ssa, undef_ssa = rename_slot(val)
             return undef_ssa
         end
@@ -131,7 +127,7 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
     for op in urs
         val = op[]
         if isa(val, SlotNumber) && slot_filter(val)
-            x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename_slot(val)...)
+            x = fixup_slot!(ir, ci, idx, slot_id(val), rename_slot(val)...)
             # We inserted an undef error node. Delete subsequent statement
             # to avoid confusing the optimizer
             if x === UNDEF_TOKEN

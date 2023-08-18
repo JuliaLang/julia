@@ -1961,32 +1961,31 @@ g26339(T) = T === Int ? 1 : ""
 @test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
 @test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
 
-# TODO: Re-write test
-# # Test that Conditional doesn't get widened to Bool too quickly
-# f25261() = (1, 1)
-# f25261(s) = i == 1 ? (1, 2) : nothing
-# function foo25261()
-    # next = f25261()
-    # while next !== nothing
-        # next = f25261(Core.getfield(next, 2))
-    # end
-# end
-# let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
-    # i = 1
-    # # Skip to after the branch
-    # while !isa(opt25261[i], GotoIfNot)
-        # i += 1
-    # end
-    # foundslot = false
-    # for expr25261 in opt25261[i:end]
-        # if expr25261 isa Core.Compiler.TypedSlot && expr25261.typ === Tuple{Int, Int}
-            # # This should be the assignment to the SSAValue into the getfield
-            # # call - make sure it's a TypedSlot
-            # foundslot = true
-        # end
-    # end
-    # @test foundslot
-# end
+# Test that Conditional doesn't get widened to Bool too quickly
+f25261() = (1, 1)
+f25261(s) = i == 1 ? (1, 2) : nothing
+function foo25261()
+    next = f25261()
+    while next !== nothing
+        next = f25261(Core.getfield(next, 2))
+    end
+end
+let opt25261 = code_typed(foo25261, Tuple{}, optimize=true)[1].first.code
+    i = 1
+    # Skip to after the branch
+    while !isa(opt25261[i], GotoIfNot)
+        i += 1
+    end
+    foundslot = false
+    for expr25261 in opt25261[i:end]
+        if expr25261 isa Core.Compiler.PiNode && expr25261.typ === Tuple{Int, Int}
+            # This should be the assignment to the SSAValue into the getfield
+            # call - make sure it's a TypedSlot
+            foundslot = true
+        end
+    end
+    @test foundslot
+end
 
 @testset "inter-procedural conditional constraint propagation" begin
     # simple cases

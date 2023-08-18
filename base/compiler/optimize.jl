@@ -161,7 +161,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
     cfg = compute_basic_blocks(src.code)
-    bb_vartables = VarTable[]
+    bb_vartables = Union{VarTable,Nothing}[]
     for block = 1:length(cfg.blocks)
         push!(bb_vartables, VarState[
             VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
