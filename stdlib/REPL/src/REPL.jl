@@ -1506,4 +1506,7 @@ end
 
 import .Numbered.numbered_prompt!
 
+# TODO: Move more of this implementation into REPL.
+main(ARGS) = Base.exec_options(Base.JLOptions())
+
 end # module
