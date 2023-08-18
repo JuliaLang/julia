@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module ScopedVariables
+module ScopedValues
 
-export ScopedVariable, scoped
+export ScopedValue, scoped
 
 """
-    ScopedVariable(x)
+    ScopedValue(x)
 
 Create a container that propagates values across scopes.
 Use [`scoped`](@ref) to create and enter a new scope.
@@ -18,7 +18,7 @@ Dynamic scopes are propagated across tasks.
 
 # Examples
 ```jldoctest
-julia> const svar = ScopedVariable(1);
+julia> const svar = ScopedValue(1);
 
 julia> svar[]
 1
@@ -31,15 +31,15 @@ julia> scoped(svar => 2) do
 
 !!! compat "Julia 1.11"
     This method requires at least Julia 1.11. In Julia 1.7+ this
-    is available from the package ScopedVariables.jl.
+    is available from the package ScopedValues.jl.
 """
-mutable struct ScopedVariable{T}
+mutable struct ScopedValue{T}
     const initial_value::T
-    ScopedVariable{T}(initial_value) where {T} = new{T}(initial_value)
+    ScopedValue{T}(initial_value) where {T} = new{T}(initial_value)
 end
-ScopedVariable(initial_value::T) where {T} = ScopedVariable{T}(initial_value)
+ScopedValue(initial_value::T) where {T} = ScopedValue{T}(initial_value)
 
-Base.eltype(::Type{ScopedVariable{T}}) where {T} = T
+Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 
 mutable struct Scope
     const parent::Union{Nothing, Scope}
@@ -47,10 +47,10 @@ mutable struct Scope
     const lock::Base.Threads.SpinLock
     # IdDict trades off some potential space savings for performance.
     # IdDict ~60ns; WeakKeyDict ~100ns
-    # Space savings would come from ScopedVariables being GC'd.
+    # Space savings would come from ScopedValues being GC'd.
     # Now we hold onto them until Scope get's GC'd
-    const values::IdDict{<:ScopedVariable, Any}
-    Scope(parent) = new(parent, Base.Threads.SpinLock(), IdDict{ScopedVariable, Any}())
+    const values::IdDict{<:ScopedValue, Any}
+    Scope(parent) = new(parent, Base.Threads.SpinLock(), IdDict{ScopedValue, Any}())
 end
 
 current_scope() = current_task().scope::Union{Nothing, Scope}
@@ -62,7 +62,7 @@ end
 Base.lock(scope::Scope) = lock(scope.lock)
 Base.unlock(scope::Scope) = unlock(scope.lock)
 
-function Base.getindex(var::ScopedVariable{T})::T where T
+function Base.getindex(var::ScopedValue{T})::T where T
     cs = scope = current_scope()
     val = var.initial_value
     while scope !== nothing
@@ -76,7 +76,7 @@ function Base.getindex(var::ScopedVariable{T})::T where T
     end
     if scope !== cs
         # found the value in an upper scope, copy it down to cache.
-        # this is beneficial since in contrast to storing the values in the ScopedVariable
+        # this is beneficial since in contrast to storing the values in the ScopedValue
         # we now need to acquire n-Locks for an n-depth scope.
         @lock cs begin
             cs.values[var] = val
@@ -85,26 +85,26 @@ function Base.getindex(var::ScopedVariable{T})::T where T
     return val
 end
 
-function Base.show(io::IO, var::ScopedVariable)
-    print(io, ScopedVariable)
+function Base.show(io::IO, var::ScopedValue)
+    print(io, ScopedValue)
     print(io, '{', eltype(var), '}')
     print(io, '(')
     show(io, var[])
     print(io, ')')
 end
 
-function __set_var!(scope::Scope, var::ScopedVariable{T}, val::T) where T
-    # PRIVATE API! Wrong usage will break invariants of ScopedVariable.
+function __set_var!(scope::Scope, var::ScopedValue{T}, val::T) where T
+    # PRIVATE API! Wrong usage will break invariants of ScopedValue.
     @assert !haskey(scope.values, var)
     scope.values[var] = val
 end
 
 """
-    scoped(f, var::ScopedVariable{T} => val::T)
+    scoped(f, var::ScopedValue{T} => val::T)
 
 Execute `f` in a new scope with `var` set to `val`.
 """
-function scoped(f, pair::Pair{<:ScopedVariable{T}, T}) where T
+function scoped(f, pair::Pair{<:ScopedValue{T}, T}) where T
     @nospecialize
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
@@ -122,11 +122,11 @@ function scoped(f, pair::Pair{<:ScopedVariable{T}, T}) where T
 end
 
 """
-    scoped(f, vars...::ScopedVariable{T} => val::T)
+    scoped(f, vars...::ScopedValue{T} => val::T)
 
-Execute `f` in a new scope with each scoped variable set to the provided `val`.
+Execute `f` in a new scope with each scoped value set to the provided `val`.
 """
-function scoped(f, pairs::Pair{<:ScopedVariable}...)
+function scoped(f, pairs::Pair{<:ScopedValue}...)
     @nospecialize
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
@@ -145,4 +145,4 @@ function scoped(f, pairs::Pair{<:ScopedVariable}...)
     end
 end
 
-end # module ScopedVariables
+end # module ScopedValues

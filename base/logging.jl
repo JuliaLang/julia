@@ -492,7 +492,7 @@ end
 
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
-const CURRENT_LOGSTATE = ScopedVariable{Union{Nothing, LogState}}(nothing)
+const CURRENT_LOGSTATE = ScopedValue{Union{Nothing, LogState}}(nothing)
 
 function current_logstate()
     logstate = CURRENT_LOGSTATE[]

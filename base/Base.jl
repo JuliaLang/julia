@@ -340,9 +340,9 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
-# ScopedVariables
-include("scopedvariables.jl")
-using .ScopedVariables
+# ScopedValues
+include("scopedvalues.jl")
+using .ScopedValues
 
 # Logging
 include("logging.jl")

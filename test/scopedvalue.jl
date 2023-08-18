@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const svar1 = ScopedVariable(1)
+const svar1 = ScopedValue(1)
 
 @testset "errors" begin
-    var = ScopedVariable(1)
+    var = ScopedValue(1)
     @test_throws MethodError var[] = 2
     scoped() do
         @test_throws MethodError var[] = 2
     end
 end
 
-const svar = ScopedVariable(1)
+const svar = ScopedValue(1)
 @testset "inheritance" begin
     @test svar[] == 1
     scoped() do
@@ -26,9 +26,9 @@ const svar = ScopedVariable(1)
     @test svar[] == 1
 end
 
-const svar_float = ScopedVariable(1.0)
+const svar_float = ScopedValue(1.0)
 
-@testset "multiple scoped variables" begin
+@testset "multiple scoped values" begin
     scoped(svar => 2, svar_float => 2.0) do
         @test svar[] == 2
         @test svar_float[] == 2.0

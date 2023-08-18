@@ -648,9 +648,9 @@ export
     sprint,
     summary,
 
-# ScopedVariable
+# ScopedValue
     scoped,
-    ScopedVariable,
+    ScopedValue,
 
 # logging
     @debug,
