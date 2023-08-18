@@ -638,12 +638,17 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     jl_ptls_t* gc_all_tls_states;
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    // this is called from `jl_atexit_hook`; threads could still be running
+    // so we have to guard the finalizers' lists
+    JL_LOCK_NOGC(&finalizers_lock);
     schedule_all_finalizers(&finalizer_list_marked);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2)
             schedule_all_finalizers(&ptls2->finalizers);
     }
+    // unlock here because `run_finalizers` locks this
+    JL_UNLOCK_NOGC(&finalizers_lock);
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     run_finalizers(ct);
@@ -1410,6 +1415,8 @@ static inline jl_taggedvalue_t *reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *
     pg->has_marked = 0;
     pg->fl_begin_offset = -1;
     pg->fl_end_offset = -1;
+    pg->prev_nold = 0;
+    pg->nold = 0;
     return beg;
 }
 

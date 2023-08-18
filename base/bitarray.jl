@@ -1791,9 +1791,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & (~_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[len_Ac]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac aliases destc
+    destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
@@ -1812,9 +1813,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[end], Bc[end]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac or Bc aliases destc
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
     dest
 end
 
