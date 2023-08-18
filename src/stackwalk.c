@@ -856,7 +856,17 @@ _os_ptr_munge(uintptr_t ptr)
 
 extern bt_context_t *jl_to_bt_context(void *sigctx);
 
-void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
+// Record the specified task's backtrace (into `ptls->bt_size and
+// `ptls->bt_data`). A task that is currently running on another
+// thread cannot be backtraced (since 2005; see Linus' post at
+// https://yarchive.net/comp/linux/ptrace_self_attach.html).
+//
+// However, we cannot tell whether a sticky task is currently
+// running because `t->tid` is never reset for sticky tasks. If
+// you want to try to get the backtrace anyway, call this with
+// `ignore_tid` set. This could go boom, so only do this as a Hail
+// Mary to try and retrieve useful information before crashing.
+void jl_rec_backtrace(jl_task_t *t, int ignore_tid) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -868,8 +878,9 @@ void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
     if (t->copy_stack || !t->started || t->stkbuf == NULL)
         return;
     int16_t old = -1;
-    if (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid)
-        return;
+    if (!ignore_tid)
+        if (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid)
+            return;
     bt_context_t *context = NULL;
 #if defined(_OS_WINDOWS_)
     bt_context_t c;
@@ -1079,8 +1090,16 @@ void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
 #endif
     if (context)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context, t->gcstack);
-    if (old == -1)
+    if (!ignore_tid && old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
+}
+
+void print_bt(size_t bt_size, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT
+{
+    size_t i;
+    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_print_bt_entry_codeloc(bt_data + i);
+    }
 }
 
 //--------------------------------------------------
@@ -1100,11 +1119,7 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
     jl_excstack_t *s = ct->excstack;
     if (!s)
         return;
-    size_t i, bt_size = jl_excstack_bt_size(s, s->top);
-    jl_bt_element_t *bt_data = jl_excstack_bt_data(s, s->top);
-    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
-    }
+    print_bt(jl_excstack_bt_size(s, s->top), jl_excstack_bt_data(s, s->top));
 }
 
 // Print backtrace for specified task
@@ -1112,12 +1127,8 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    jl_rec_backtrace(t);
-    size_t i, bt_size = ptls->bt_size;
-    jl_bt_element_t *bt_data = ptls->bt_data;
-    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
-    }
+    jl_rec_backtrace(t, 0);
+    print_bt(ptls->bt_size, ptls->bt_data);
 }
 
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
@@ -1125,11 +1136,16 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
     jlbacktrace();
 }
 
-// Print backtraces for all live tasks, for all threads.
-// WARNING: this is dangerous and can crash if used outside of gdb, if
-// all of Julia's threads are not stopped!
+// Print backtraces for all live tasks, for all threads. Only use in
+// `gdb` with `set scheduler-locking on` otherwise this will likely
+// crash. Also, if a thread is stopped in the middle of getting a
+// stack trace, this call can deadlock. Treat this as a Hail Mary
+// attempt to get some useful information before a Julia process is
+// killed.
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
@@ -1143,7 +1159,8 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
                 ptls2->root_task->sticky, ptls2->root_task->started,
                 jl_atomic_load_relaxed(&ptls2->root_task->_state),
                 jl_atomic_load_relaxed(&ptls2->root_task->tid) + 1);
-        jlbacktracet(ptls2->root_task);
+        jl_rec_backtrace(ptls2->root_task, 1);
+        print_bt(ptls->bt_size, ptls->bt_data);
 
         void **lst = live_tasks->items;
         for (size_t j = 0; j < live_tasks->len; j++) {
@@ -1156,10 +1173,17 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
                     t->sticky, t->started, t_state,
                     jl_atomic_load_relaxed(&t->tid) + 1);
-            if (t->stkbuf != NULL)
-                jlbacktracet(t);
-            else
+            jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+            if (t == ct2) {
+                jl_safe_printf("      running\n");
+            }
+            else if (t->stkbuf == NULL) {
                 jl_safe_printf("      no stack\n");
+            }
+            else {
+                jl_rec_backtrace(t, 1);
+                print_bt(ptls->bt_size, ptls->bt_data);
+            }
             jl_safe_printf("     ---- End task %zu\n", j + 1);
         }
         jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);
