@@ -982,6 +982,7 @@ const _nothing = _Nothing()
 """
     diff(A::AbstractVector; [prepend], [append])
     diff(A::AbstractArray; dims::Integer, [prepend], [append])
+    diff(A::AbstractRange; dims::Integer=1, [prepend], [append])
 
 Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
