@@ -976,10 +976,6 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
-# We need to use `_diff`` to distinguish AbstractVector probably because number of optional arguments varies.
-diff(a::AbstractVector; args...) = _diff(a; dims=1, args...)
-diff(a::AbstractArray{T,N}; dims::Integer, args...) where {T,N} = _diff(a; dims=dims, args...)
-
 """
     diff(A::AbstractVector)
     diff(A::AbstractArray; dims::Integer)
@@ -1010,6 +1006,22 @@ julia> diff(vec(a))
  12
 ```
 """
+diff(a::AbstractVector; args...) = _diff(a; dims=1, args...)
+diff(a::AbstractArray{T,N}; dims::Integer, args...) where {T,N} = _diff(a; dims=dims, args...)
+function diff(r::AbstractRange{T}; dims::Integer=1, prepend = nothing, append = nothing) where {T}
+    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
+    isnothing(prepend) || isnothing(append) || throw(ArgumentError("cannot use prepend/append simultaneously"))
+    output = [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    if !isnothing(prepend)
+        return vcat([prepend], output)
+    elseif !isnothing(append)
+        return vcat(output, [append])
+    else
+        returnoutput
+    end
+end
+
+# We need to use `_diff`` to distinguish AbstractVector probably because number of optional arguments varies.
 function _diff(a::AbstractArray{T,N}; dims::Integer, prepend = nothing, append = nothing) where {T,N}
     require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
@@ -1033,18 +1045,6 @@ function _diff(a::AbstractArray{T,N}; dims::Integer, prepend = nothing, append =
         return out
     else
         return view(a, r1...) .- view(a, r0...)
-    end
-end
-function diff(r::AbstractRange{T}; dims::Integer=1, prepend = nothing, append = nothing) where {T}
-    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    isnothing(prepend) || isnothing(append) || throw(ArgumentError("cannot use prepend/append simultaneously"))
-    output = [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
-    if !isnothing(prepend)
-        return vcat([prepend], output)
-    elseif !isnothing(append)
-        return vcat(output, [append])
-    else
-        returnoutput
     end
 end
 
