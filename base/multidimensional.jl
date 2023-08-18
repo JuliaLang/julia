@@ -1014,7 +1014,7 @@ julia> diff(vec(a))
 function _diff(a::AbstractArray{T,N}; dims::Integer, prepend = nothing, append = nothing) where {T,N}
     Base.require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
-    prepend isa Nothing || append isa Nothing || throw(ArgumentError("cannot use perepend/append simultaneously"))
+    prepend isa Nothing || append isa Nothing || throw(ArgumentError("cannot use prepend/append simultaneously"))
 
     r = axes(a)
     r0 = ntuple(i -> i == dims ? UnitRange(1, last(r[i]) - 1) : UnitRange(r[i]), N)
