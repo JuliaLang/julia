@@ -1017,7 +1017,7 @@ function diff(r::AbstractRange{T}; dims::Integer=1, prepend = nothing, append = 
     elseif !isnothing(append)
         return vcat(output, [append])
     else
-        returnoutput
+        return output
     end
 end
 
