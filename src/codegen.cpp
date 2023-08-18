@@ -188,6 +188,37 @@ void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()>
     }
 }
 
+void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
+{
+    assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
+    if (params.debug_level >= 2 && !isa<Constant>(V)) {
+        if (jl_is_tuple_type(jt)){
+            V->setName(Twine(GetObjName()) + "[" + Twine(idx + 1) + "]"+ suffix);
+            return;
+        }
+
+        if (jl_is_namedtuple_type(jt)) {
+            auto names = jl_tparam0(jt);
+            assert(jl_is_tuple(names));
+            if (idx < jl_nfields(names)) {
+                auto name = jl_fieldref(names, idx);
+                assert(jl_is_symbol(name));
+                V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
+                return;
+            }
+        } else {
+            auto flds = jl_field_names(jt);
+            if (idx < jl_svec_len(flds)) {
+                auto name = jl_svec_ref(flds, idx);
+                assert(jl_is_symbol(name));
+                V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
+                return;
+            }
+        }
+        V->setName(Twine(GetObjName()) + "." + Twine("unknown field") + suffix);
+    }
+}
+
 STATISTIC(EmittedAllocas, "Number of allocas emitted");
 STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
 STATISTIC(ModulesCreated, "Number of LLVM Modules created");
