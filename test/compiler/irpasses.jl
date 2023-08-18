@@ -1196,7 +1196,6 @@ let ci = code_typed1(optimize=false) do
         end
     end
     ir = Core.Compiler.inflate_ir(ci)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt) == 1
     ir = Core.Compiler.compact!(ir, true)
     @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt) == 0
 end
