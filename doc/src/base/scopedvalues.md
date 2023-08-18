@@ -7,7 +7,7 @@ In particular dynamical scopes are propagated through [Task](@ref)s.
     Scoped values were introduced in Julia 1.11. In Julia 1.7+ a compatible
     implementation is available from the package ScopedValues.jl.
 
-In it's simplest form you can create a [`ScopedValue`](@ref) with a
+In its simplest form you can create a [`ScopedValue`](@ref) with a
 default value and then use [`scoped`](@ref) to enter a new dynamical
 scope. The new scope will inherit all values from the parent scope
 (and recursivly from all outer scopes) with the the provided scoped
@@ -20,7 +20,7 @@ const scoped_val2 = ScopedValue(2)
 # Enter a new dynamic scope and set value
 scoped(scoped_val => 2) do
     @show scoped_val[] # 2
-    @show scoped_val2[] # 1
+    @show scoped_val2[] # 2
     scoped(scoped_val => 3, scoped_val2 => 5) do
         @show scoped_val[] # 3
         @show scoped_val2[] # 5
