@@ -625,35 +625,6 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function find_undefs!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
-    if isa(x, SlotNumber)
-        id = slot_id(x)
-        pc = find_dominating_assignment(id, idx, sv)
-        if pc === nothing
-            block = block_for_inst(sv.cfg, idx)
-            state = sv.bb_vartables[block]::VarTable
-            vt = state[id]
-            undefs[id] |= vt.undef
-        end
-    elseif isa(x, Expr)
-        head = x.head
-        i0 = 1
-        if is_meta_expr_head(head) || head === :const
-            return x
-        end
-        if head === :(=) || head === :method
-            i0 = 2
-        end
-        for i = i0:length(x.args)
-            find_undefs!(interp, undefs, idx, sv, x.args[i])
-        end
-    elseif isa(x, ReturnNode) && isdefined(x, :val)
-        find_undefs!(interp, undefs, idx, sv, x.val)
-    elseif isa(x, GotoIfNot)
-        find_undefs!(interp, undefs, idx, sv, x.cond)
-    end
-end
-
 # find the dominating assignment to the slot `id` in the block containing statement `idx`,
 # returns `nothing` otherwise
 function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
@@ -693,7 +664,6 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     ssavaluetypes = sv.ssavaluetypes
     slotflags = src.slotflags
     nslots = length(slotflags)
-    undefs = fill(false, nslots)
     any_unreachable = false
 
     # this statement traversal does five things:
@@ -729,7 +699,6 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            find_undefs!(interp, undefs, i, sv, expr) # 1
             stmts[i] = expr
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
@@ -740,13 +709,6 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 ssavaluetypes[i] = Bottom # 3
                 stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
-        end
-    end
-
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
         end
     end
 

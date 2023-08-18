@@ -122,17 +122,8 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
         val = stmt.args[1]
         if isa(val, SlotNumber)
             slot = slot_id(val)
-            if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
-                return true
-            else
-                ssa, undef_ssa = rename_slot(val)
-                if ssa === UNDEF_TOKEN
-                    return false
-                elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
-                    return true
-                end
-                return undef_ssa
-            end
+            ssa, undef_ssa = rename_slot(val)
+            return undef_ssa
         end
         return stmt
     end
@@ -569,7 +560,7 @@ end
 struct NewSlotPhi{Phi}
     ssaval::NewSSAValue
     node::Phi
-    undef_ssaval::Union{NewSSAValue, Nothing}
+    undef_ssaval::Union{NewSSAValue, Bool}
     undef_node::Union{Phi, Nothing}
 end
 
@@ -646,11 +637,18 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # an upsilon node in the corresponding enter block
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
+                @assert sv.bb_vartables[li] !== nothing
+                vt = sv.bb_vartables[li][idx]
+                typ = widenslotwrapper(ignorelimited(vt.typ))
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
-                        NewInstruction(node, Union{})).id - length(ir.stmts))
+                        NewInstruction(node, typ)).id - length(ir.stmts))
                 undef_node = undef_ssaval = nothing
-                if (ci.slotflags[idx] & SLOT_USEDUNDEF) != 0
+                if vt.typ === Union{}
+                    undef_ssaval = false
+                elseif !vt.undef
+                    undef_ssaval = true
+                else
                     undef_node = PhiCNode(Any[])
                     undef_ssaval = NewSSAValue(insert_node!(ir,
                         insertpoint, NewInstruction(undef_node, Bool)).id - length(ir.stmts))
@@ -667,14 +665,17 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            typ = sv.slottypes[idx]
-            if sv.bb_vartables[block] !== nothing
-                typ = widenslotwrapper(ignorelimited(sv.bb_vartables[block][idx].typ))
-            end
+            @assert sv.bb_vartables[block] !== nothing
+            vt = sv.bb_vartables[block][idx]
+            typ = widenslotwrapper(ignorelimited(vt.typ))
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, typ)).id - length(ir.stmts))
             undef_node = undef_ssaval = nothing
-            if (ci.slotflags[idx] & SLOT_USEDUNDEF) != 0
+            if vt.typ === Union{}
+                undef_ssaval = false
+            elseif !vt.undef
+                undef_ssaval = true
+            else
                 undef_node = PhiNode()
                 undef_ssaval = NewSSAValue(insert_node!(ir,
                     first_insert_for_bb(code, cfg, block), NewInstruction(undef_node, Bool)).id - length(ir.stmts))
@@ -728,38 +729,38 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 push!(node.values, incoming_val)
             end
-            outgoing_def = true
-            if (ci.slotflags[slot] & SLOT_USEDUNDEF) != 0
+            if undef_node !== nothing
                 push!(undef_node.edges, pred)
                 push!(undef_node.values, incoming_def)
-                outgoing_def = undef_ssaval
             end
 
-            incoming_vals[slot] = Pair{Any, Any}(ssaval, outgoing_def)
+            incoming_vals[slot] = Pair{Any, Any}(ssaval, undef_ssaval)
         end
         (item in visited) && continue
-        # Record Pi nodes if necessary
-        if sv.bb_vartables[item] !== nothing
-            for slot in 1:length(sv.slottypes)
-                (ival, idef) = incoming_vals[slot]
-                (ival === SSAValue(-1)) && continue
-                (ival === SSAValue(-2)) && continue
-
-                varstate = sv.bb_vartables[item][slot]
-                typ = widenslotwrapper(ignorelimited(varstate.typ))
-                if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
-                    node = PiNode(ival, typ)
-                    ival = NewSSAValue(insert_node!(ir,
-                        first_insert_for_bb(code, cfg, item), NewInstruction(node, typ)).id - length(ir.stmts))
-                    incoming_vals[slot] = Pair{Any, Any}(ival, idef)
-                end
-            end
-        end
         # Record phi_C nodes if necessary
         if haskey(new_phic_nodes, item)
             for (; slot, insert) in new_phic_nodes[item]
                 (; ssaval, undef_ssaval) = insert
-                incoming_vals[slot_id(slot)] = Pair{Any, Any}(ssaval, undef_ssaval === nothing ? true : undef_ssaval)
+                incoming_vals[slot_id(slot)] = Pair{Any, Any}(ssaval, undef_ssaval)
+            end
+        end
+        # Record Pi nodes if necessary
+        has_pinode = fill(false, length(sv.slottypes))
+        for slot in 1:length(sv.slottypes)
+            (ival, idef) = incoming_vals[slot]
+            (ival === SSAValue(-1)) && continue
+            (ival === SSAValue(-2)) && continue
+            (ival === UNDEF_TOKEN) && continue
+
+            @assert sv.bb_vartables[item] !== nothing
+            varstate = sv.bb_vartables[item][slot]
+            typ = widenslotwrapper(ignorelimited(varstate.typ))
+            if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
+                node = PiNode(ival, typ)
+                ival = NewSSAValue(insert_node!(ir,
+                    first_insert_for_bb(code, cfg, item), NewInstruction(node, typ)).id - length(ir.stmts))
+                incoming_vals[slot] = Pair{Any, Any}(ival, idef)
+                has_pinode[slot] = true
             end
         end
         # Record initial upsilon nodes if necessary
@@ -788,6 +789,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             (isa(stmt, PhiNode) || (isexpr(stmt, :(=)) && isa(stmt.args[2], PhiNode))) && continue
             if isa(stmt, NewvarNode)
                 incoming_vals[slot_id(stmt.slot)] = Pair{Any, Any}(UNDEF_TOKEN, false)
+                has_pinode[slot_id(stmt.slot)] = false
                 code[idx] = nothing
             else
                 stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
@@ -814,6 +816,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                             thisdef = false
                         end
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
+                        has_pinode[id] = false
                         enter_block = item
                         while haskey(exc_handlers, enter_block)
                             (; enter_block, leave_block) = exc_handlers[enter_block]
@@ -840,11 +843,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         # Unwrap any PiNodes before continuing, since they weren't considered during our
         # dominance frontier calculation and so have to be used locally in each BB.
         for (i, (ival, idef)) in enumerate(incoming_vals)
-            if ival isa NewSSAValue
+            if has_pinode[i]
                 stmt = ir[new_to_regular(ival::NewSSAValue, length(ir.stmts))][:stmt]
-                if stmt isa PiNode
-                    incoming_vals[i] = Pair{Any, Any}(stmt.val, idef)
-                end
+                incoming_vals[i] = Pair{Any, Any}(stmt.val, idef)
             end
         end
         for succ in cfg.blocks[item].succs
@@ -894,20 +895,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 new_code[idx] = stmt
             end
-        end
-    end
-    for (_, nodes) in new_phic_nodes
-        for (; insert) in nodes
-            (; node, ssaval) = insert
-            new_typ = Union{}
-            new_idx = ssaval.id
-            node = new_nodes.stmts[new_idx]
-            phic_values = (node[:stmt]::PhiCNode).values
-            for i = 1:length(phic_values)
-                typ = typ_for_val(phic_values[i], ci, ir, -1, sv.slottypes)
-                new_typ = tmerge(𝕃ₒ, new_typ, typ)
-            end
-            node[:type] = new_typ
         end
     end
     # Renumber SSA values

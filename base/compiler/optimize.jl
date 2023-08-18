@@ -136,8 +136,8 @@ end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
-                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.bb_vartables,
-                             sv.insert_coverage)
+                             sv.sptypes, sv.slottypes, inlining, sv.cfg,
+                             sv.bb_vartables, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -161,7 +161,13 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
     cfg = compute_basic_blocks(src.code)
-    bb_vartables = Union{Nothing,VarTable}[]; fill!(bb_vartables, nothing, length(cfg.blocks))
+    bb_vartables = VarTable[]
+    for block = 1:length(cfg.blocks)
+        push!(bb_vartables, VarState[
+            VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            for slot = 1:nslots
+        ])
+    end
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, bb_vartables, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
