@@ -58,61 +58,33 @@ import Base: ImmutableDict
 # - Values are GC'd when scopes become unreachable, one could use
 #   a WeakKeyDict to also ensure that values get GC'd when ScopedValues
 #   become unreachable.
+# - Scopes are an inline implementation of an ImmutableDict, if we wanted
+#   be really fance we could use a CTrie or HAMT.
 
-mutable struct Scope
+mutable struct Scope{T}
     const parent::Union{Nothing, Scope}
-    @atomic values::ImmutableDict{ScopedValue, Any}
+    const key::ScopedValue{T}
+    const value::T
 end
-Scope(parent) = Scope(parent, ImmutableDict{ScopedValue, Any}())
+Scope(parent, key::ScopedValue{T}, value) where T =
+    Scope(parent, key, convert(T, value))
+
 current_scope() = current_task().scope::Union{Nothing, Scope}
 
 function Base.show(io::IO, ::Scope)
     print(io, Scope)
 end
 
-# VC: I find it rather useful to have one function to use for both
-# haskey and get.
-@inline function get(dict::ImmutableDict, key, ::Type{T}) where T
-    while isdefined(dict, :parent)
-        isequal(dict.key, key) && return Some(dict.value::T)
-        dict = dict.parent
-    end
-    return nothing
-end
-
 function Base.getindex(var::ScopedValue{T})::T where T
     scope = current_scope()
-    if scope === nothing
-        return var.initial_value
-    end
-    cs = scope
-
-    val = var.initial_value
     while scope !== nothing
-        values = @atomic :acquire scope.values
-        _val = get(values, var, T)
-        if _val !== nothing
-            val = something(_val)
-            break
+        if scope.key === var
+            return scope.value::T
         end
         scope = scope.parent
     end
-
-    if cs != scope
-        # found the value in an upper scope, copy it down to the cache.
-        # We are using the same dict for both cache and values.
-        # One can split these and potentially use `ImmutableDict` only for values
-        # and a Dict with SpinLock for the cache.
-        success = false
-        old = @atomic :acquire cs.values
-        while !success
-            new = ImmutableDict(old, var => val)
-            old, success = @atomicreplace :acquire_release :acquire cs.values old => new
-        end
-    end
-
-    return val
-end
+    return var.initial_value
+en
 
 function Base.show(io::IO, var::ScopedValue)
     print(io, ScopedValue)
@@ -129,13 +101,13 @@ Execute `f` in a new scope with `var` set to `val`.
 """
 function scoped(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
     @nospecialize
-    values = ImmutableDict{ScopedValue, Any}(pair...)
-    for pair in rest
-        values = ImmutableDict{ScopedValue, Any}(values, pair...)
-    end
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
-    ct.scope = Scope(current_scope, values)
+    scope = Scope(current_scope, pair...)
+    for pair in rest
+        scope = Scope(scope, pair...)
+    end
+    ct.scope = scope
     try
         return f()
     finally
