@@ -2712,6 +2712,19 @@ end
     @test_throws UndefKeywordError diff(X)
     @test_throws ArgumentError diff(X,dims=3)
     @test_throws ArgumentError diff(X,dims=-1)
+
+    A = [1 2;3 5]
+    @test diff(A, dims = 1) == [2 3]
+    @test diff(A, dims = 2) == [1; 2;;]
+    @test diff(A, dims = 1, prepend = 0) == [0 0; 2 3]
+    @test diff(A, dims = 2, prepend = 0) == [0 1; 0 2]
+    @test diff(A, dims = 1, append = 0) == [2 3; 0 0]
+    @test diff(A, dims = 2, append = 0) == [1 0; 2 0]
+    @test_throws ArgumentError diff(A, dims = 1, prepend = 0, append = 0)
+
+    @test diff([[1],[2]], prepend = [0]) == [[0], [1]]
+    @test diff([1,2], prepend = [0,1]) == Any[[0, 1], 1]
+    @test diff([1,2], append = [0,1]) == Any[1, [0, 1]]
 end
 
 @testset "accumulate, accumulate!" begin

@@ -2041,6 +2041,16 @@ end
     end
 end
 
+@testset "diff of ranges, prepend/append" begin
+    @test diff(1:3) == [1, 1]
+    @test diff(1:3, prepend = 0) == [0, 1, 1]
+    @test diff(1:3, append = 0) == [1, 1, 0]
+
+    @test diff(1:2, prepend = [0]) == Any[[0], 1]
+    @test diff(1:2, append = [0]) == Any[1, [0]]
+    @test_throws ArgumentError diff(1:2, prepend = 0, append = 0)
+end
+
 @testset "Return type of indexing with ranges" begin
     for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
         @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
