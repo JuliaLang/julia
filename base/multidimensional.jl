@@ -1038,7 +1038,7 @@ function _diff(a::AbstractArray{T,N}; dims::Integer, prepend = nothing, append =
 end
 function diff(r::AbstractRange{T}; dims::Integer=1, prepend = nothing, append = nothing) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    prepend isa Nothing || append isa Nothing || throw(ArgumentError("cannot use perepend/append simultaneously"))
+    prepend isa Nothing || append isa Nothing || throw(ArgumentError("cannot use prepend/append simultaneously"))
     output = [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
     if !isnothing(prepend)
         return vcat([prepend], output)
