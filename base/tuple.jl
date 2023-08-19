@@ -73,11 +73,6 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
-function throw_eachindex_mismatch_indices(::Tuple{}, inds...)
-    @noinline
-    throw(DimensionMismatch("all inputs to eachindex must have the same length, got $(join(inds, ", ", " and "))"))
-end
-
 function keys(t::Tuple, t2::Tuple...)
     @inline
     lent = length(t)
