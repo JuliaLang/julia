@@ -854,8 +854,8 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         end
     end
     if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
-        # If the current statement is @inbounds or we propagate inbounds, the call's consistency
-        # is tainted and not consteval eligible.
+        # If the current statement is @inbounds or we propagate inbounds,
+        # the call's :consistent-cy is tainted and not consteval eligible.
         add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return :none
     end
@@ -1999,13 +1999,16 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
-        if f === getfield && (fargs !== nothing && isexpr(fargs[end], :boundscheck)) && !is_nothrow(effects) && isa(sv, InferenceState)
-            # As a special case, we delayed tainting `noinbounds` for getfield calls in case we can prove
-            # in-boundedness indepedently. Here we need to put that back in other cases.
-            # N.B.: This isn't about the effects of the call itself, but a delayed contribution of the :boundscheck
-            # statement, so we need to merge this directly into sv, rather than modifying thte effects.
+        if (isa(sv, InferenceState) && f === getfield && fargs !== nothing &&
+            isexpr(fargs[end], :boundscheck) && !is_nothrow(effects))
+            # As a special case, we delayed tainting `noinbounds` for `getfield` calls
+            # in case we can prove in-boundedness indepedently.
+            # Here we need to put that back in other cases.
+            # N.B. This isn't about the effects of the call itself,
+            # but a delayed contribution of the :boundscheck statement,
+            # so we need to merge this directly into sv, rather than modifying the effects.
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
         end
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
@@ -2209,7 +2212,6 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    rt = Any
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
@@ -2218,6 +2220,8 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
             sp = sv.sptypes[n]
             rt = sp.typ
             nothrow = !sp.undef
+        else
+            rt = Any
         end
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
         return rt
@@ -2228,26 +2232,26 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
                 f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
                 if f isa Const && f.val === getfield
                     # boundscheck of `getfield` call is analyzed by tfunc potentially without
-                    # tainting :inbounds or :consistent when it's known to be nothrow
-                    @goto delay_effects_analysis
+                    # tainting :noinbounds or :noub when it's known to be nothrow
+                    return Bool
                 end
             end
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
-            # which will subsequently taint `:consistent`-cy if this function is called from another
+            # which will subsequently taint `:consistent` if this function is called from another
             # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
             # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
             # `:consistent`-cy here also.
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
         end
-        @label delay_effects_analysis
-        rt = Bool
+        return Bool
     elseif head === :inbounds
-        @assert false && "Expected this to have been moved into flags"
+        @assert false "Expected `:inbounds` expression to have been moved into SSA flags"
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+        return Any
     end
-    return rt
+    return Any
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
@@ -2361,7 +2365,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         ut = unwrap_unionall(t)
         consistent = ALWAYS_FALSE
-        nothrow = false
+        nothrow = noub = false
         if isa(ut, DataType) && !isabstracttype(ut)
             ismutable = ismutabletype(ut)
             fcount = datatype_fieldcount(ut)
@@ -2369,14 +2373,15 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             if (fcount === nothing || (fcount > nargs && (let t = t
                     any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
                 end)))
-                # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
-                consistent = ALWAYS_FALSE
+                # allocation with undefined field leads to undefined behavior and should taint `:noub`
             elseif ismutable
-                # mutable object isn't `:consistent`, but we can still give the return
-                # type information a chance to refine this `:consistent`-cy later
+                # mutable object isn't `:consistent`, but we still have a chance that
+                # return type information later refines the `:consistent`-cy of the method
                 consistent = CONSISTENT_IF_NOTRETURNED
+                noub = true
             else
                 consistent = ALWAYS_TRUE
+                noub = true
             end
             if isconcretedispatch(t)
                 nothrow = true
@@ -2420,7 +2425,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = refine_partial_type(t)
             end
         end
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+        effects = Effects(EFFECTS_TOTAL; consistent, nothrow, noub)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2563,15 +2568,14 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
         override = decode_effects_override(v[2])
-        effects = Effects(
-            override.consistent          ? ALWAYS_TRUE : effects.consistent,
-            override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
-            override.nothrow             ? true        : effects.nothrow,
-            override.terminates_globally ? true        : effects.terminates,
-            override.notaskstate         ? true        : effects.notaskstate,
-            override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            effects.nonoverlayed,
-            effects.noinbounds)
+        effects = Effects(effects;
+            consistent          = override.consistent ? ALWAYS_TRUE : effects.consistent,
+            effect_free         = override.effect_free ? ALWAYS_TRUE : effects.effect_free,
+            nothrow             = override.nothrow ? true : effects.nothrow,
+            terminates          = override.terminates_globally ? true : effects.terminates,
+            notaskstate         = override.notaskstate ? true : effects.notaskstate,
+            inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
+            noub                = override.noub ? true : effects.noub)
     end
     return RTEffects(t, effects)
 end
@@ -2606,8 +2610,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             # we ourselves don't read our parent's inbounds.
             effects = Effects(effects; noinbounds=true)
         end
-        if (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
-            effects = Effects(effects; consistent=ALWAYS_FALSE)
+        if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
+            effects = Effects(effects; consistent=ALWAYS_FALSE, noub=false)
         end
     end
     merge_effects!(interp, sv, effects)

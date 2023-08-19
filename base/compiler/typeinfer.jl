@@ -497,6 +497,9 @@ function adjust_effects(sv::InferenceState)
         if is_effect_overridden(override, :inaccessiblememonly)
             ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
+        if is_effect_overridden(override, :noub)
+            ipo_effects = Effects(ipo_effects; noub=true)
+        end
     end
 
     return ipo_effects
