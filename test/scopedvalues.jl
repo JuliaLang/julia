@@ -38,8 +38,8 @@ end
 emptyf() = nothing
 
 @testset "conversion" begin
-    scoped(emptyf, gvar_float=>2)
-    @test_throws MethodError scoped(emptyf, gvar_float=>"hello")
+    scoped(emptyf, svar_float=>2)
+    @test_throws MethodError scoped(emptyf, svar_float=>"hello")
 end
 
 import Base.Threads: @spawn
