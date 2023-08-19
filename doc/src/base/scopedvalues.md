@@ -1,7 +1,7 @@
 # Scoped Values
 
 Scoped values provide an implementation of dynamical scoping in Julia.
-In particular dynamical scopes are propagated through [Task](@ref)s.
+In particular dynamical scopes are propagated through [`Task`](@ref)s.
 
 !!! compat "Julia 1.11"
     Scoped values were introduced in Julia 1.11. In Julia 1.7+ a compatible
