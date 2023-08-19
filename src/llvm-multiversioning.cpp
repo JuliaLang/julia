@@ -49,6 +49,7 @@
 using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&, const Triple &TT);
+extern Optional<bool> always_have_fminmax(Function&, const Triple &TT);
 
 namespace {
 constexpr uint32_t clone_mask =
@@ -106,6 +107,11 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
                             // for some platforms we know they always do (or don't) support
                             // FMA. in those cases we don't need to clone the function.
                             if (!always_have_fma(*callee, TT).hasValue())
+                                flag |= JL_TARGET_CLONE_CPU;
+                        } else if (name.startswith("julia.cpu.have_fminmax.")) {
+                            // for some platforms we know they always do (or don't) support
+                            // FMIN/FMAX. in those cases we don't need to clone the function.
+                            if (!always_have_fminmax(*callee, TT).hasValue())
                                 flag |= JL_TARGET_CLONE_CPU;
                         } else {
                             flag |= JL_TARGET_CLONE_CPU;

@@ -881,18 +881,15 @@ minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
 _isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
-const has_native_fminmax = Sys.ARCH === :aarch64
-@static if has_native_fminmax
-    @eval begin
-        Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-        Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-        Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-        Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    end
+@eval begin
+    Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+    Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
+    Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+    Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
 end
 
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
+    if Core.Intrinsics.have_fminmax(T)
         return llvm_min(x,y)
     end
     diff = x - y
@@ -902,7 +899,7 @@ function min(x::T, y::T) where {T<:Union{Float32,Float64}}
 end
 
 function max(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
+    if Core.Intrinsics.have_fminmax(T)
         return llvm_max(x,y)
     end
     diff = x - y
@@ -912,7 +909,7 @@ function max(x::T, y::T) where {T<:Union{Float32,Float64}}
 end
 
 function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
+    if Core.Intrinsics.have_fminmax(T)
         return llvm_min(x, y), llvm_max(x, y)
     end
     diff = x - y
