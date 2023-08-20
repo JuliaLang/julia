@@ -285,6 +285,11 @@ iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
 length(m::RegexMatch) = length(m.captures)
 eltype(m::RegexMatch) = eltype(m.captures)
 
+NamedTuple(m::RegexMatch) = NamedTuple{Symbol.(Tuple(keys(m)))}(values(m))
+Dict(m::RegexMatch) = Dict(pairs(m))
+Dict{String}(m::RegexMatch) = Dict(string.(keys(m)) .=> values(m))
+Dict{Symbol}(m::RegexMatch) = Dict(Symbol.(keys(m)) .=> values(m))
+
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
