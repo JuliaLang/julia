@@ -1712,7 +1712,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
         try
             # isvalid_cache_header returns checksum id or zero
             Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
-            depmodnames = Base.parse_cache_header(io, cachefile)[3]
+            depmodnames = Base.parse_cache_header(io)[3]
             Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally
             close(io)

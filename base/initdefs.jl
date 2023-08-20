@@ -115,40 +115,6 @@ function init_depot_path()
     nothing
 end
 
-# replace leading dirname of `path` with `@depot` if `path` and `cachefile` are located
-# on the same depot path; otherwise just return `path`
-function replace_depot_path(path::AbstractString, cachefile::AbstractString)
-    for depot in DEPOT_PATH
-        if startswith(path, depot) && startswith(cachefile, depot)
-            depot_w_sep = joinpath(depot, "") # append the path separator
-            alias = joinpath("@depot", path[1+length(depot_w_sep):end])
-            return alias
-        end
-    end
-    # TODO Emit debug message when cachefile is not in a depot; can this even happen?
-    # TODO Emit debug message when path is not in the same depot as cachefile the cache file.
-    return path
-end
-
-# resolve a leading `@depot` tag from `depotalias` to point to a valid path located
-# in the same depot as the `cachefile` it was loaded from
-# TODO IDK if returning an unresolved @depot on failure is ok? atm it is need to not break precompile tests
-function resolve_depot_path(depotalias::AbstractString, cachefile::AbstractString)
-    !startswith(depotalias, "@depot") && return depotalias
-    for depot in DEPOT_PATH
-        if startswith(cachefile, depot)
-            tag = joinpath("@depot", "") # append the path separator
-            path = joinpath(depot, depotalias[1+length(tag):end])
-            # if !ispath(path)
-            #     error("Failed to resolve `$depotalias` to a valid path located in the same depot (`$depot`) as the cachefile `$cachefile`")
-            # end
-            return path
-        end
-    end
-    return depotalias
-    # error("Failed to resolve `$depotalias` to a valid path, because the cachefile `$cachefile` is not on located on any `DEPOT_PATH`")
-end
-
 
 ## LOAD_PATH & ACTIVE_PROJECT ##
 
