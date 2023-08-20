@@ -470,6 +470,7 @@ zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail..
 
 reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+pairs(z::Zip) = enumerate(z)
 
 # filter
 
