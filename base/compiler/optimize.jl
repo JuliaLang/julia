@@ -502,7 +502,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         return (cfg, domtree)
     end
 
-
     function scan_non_dataflow_flags!(flag)
         all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
         all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
@@ -557,7 +556,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             end
         end
 
-        return all_retpaths_consistent
+        return true
     end
     if !scan!(scan_stmt!, scanner, true)
         if !all_retpaths_consistent

@@ -890,8 +890,7 @@ end |> Core.Compiler.is_foldable_nothrow
     return 1
 end |> Core.Compiler.is_foldable_nothrow
 
-# TODO: Needs noub split
-@test_broken Base.infer_effects(Tuple{Int64}) do i
+@test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_noub
 
