@@ -8890,6 +8890,15 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
     return declarations;
 }
 
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           ((effects >> 10) & 0x01) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free
+           ((effects >> 6) & 0x01); // is_terminates
+}
+
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &m,
         jl_code_instance_t *codeinst,
@@ -8963,6 +8972,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                 // Julia-level optimization will never need to see it
                 else if (jl_is_method(def) && // don't delete toplevel code
                          inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
+                         !effects_foldable(codeinst->ipo_purity_bits) && // don't delete code we may want for irinterp
                          ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
                           jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) && // unless it is constant
                          !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file
