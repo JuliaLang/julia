@@ -8,7 +8,7 @@ export ppshuffle!, ppshuffle, pprandperm!, pprandperm
 ## ppshuffle! & ppshuffle
 
 """
-    _ppshuffle!(rng::TaskLocalRNG, B::AbstractArray{T}, A::Union{AbstractArray{T}, Base.OneTo{T}}, mask<:Union{UInt8, UInt16})
+    _ppshuffle!(rng::TaskLocalRNG, B::AbstractArray{T}, A::AbstractArray{T}, mask<:Union{UInt8, UInt16})
 
 Parallel Partitioned Shuffle
 1. partition input randomly
@@ -16,7 +16,7 @@ Parallel Partitioned Shuffle
 
 Arg `mask` determines number of partitions (mask + 1) to be used.
 """
-function _ppshuffle!(r::TaskLocalRNG, B::AbstractArray{T}, A::Union{AbstractArray{T}, Base.OneTo{T}}, mask::Tu) where {T, Tu<:Union{UInt8, UInt16}}
+function _ppshuffle!(r::TaskLocalRNG, B::AbstractArray{T}, A::AbstractArray{T}, mask::Tu) where {T, Tu<:Union{UInt8, UInt16}}
     # determine number of partitions
     nparts = mask + 1
     @assert ispow2(nparts) "invalid mask $(mask)"
@@ -74,7 +74,7 @@ function _ppshuffle!(r::TaskLocalRNG, B::AbstractArray{T}, A::Union{AbstractArra
 end
 
 """
-    ppshuffle!([rng::TaskLocalRNG=default_rng(),] B::AbstractArray{T}, A::Union{AbstractArray{T}, Base.OneTo{T}}, mask<:Union{UInt8, UInt16})
+    ppshuffle!([rng::TaskLocalRNG=default_rng(),] B::AbstractArray{T}, A::AbstractArray{T}, mask<:Union{UInt8, UInt16})
 
 A multi-threaded implementation of [`shuffle!`](@ref).
 Construct in `B` a permuted copy of `A`.
@@ -90,13 +90,13 @@ julia> isperm(b)
 true
 ```
 """
-function ppshuffle!(r::TaskLocalRNG, B::AbstractArray{T}, A::Union{AbstractArray{T}, Base.OneTo{T}}) where {T<:Integer}
+function ppshuffle!(r::TaskLocalRNG, B::AbstractArray{T}, A::AbstractArray{T}) where {T<:Integer}
     nparts = max(2, (length(A) * sizeof(T)) >> 21)
     nparts = nextpow(2, nparts)
     mask = nparts <= typemax(UInt8) + 1 ? UInt8(nparts - 1) : UInt16(nparts - 1)
     _ppshuffle!(r, B, A, mask)
 end
-ppshuffle!(B::AbstractArray{T}, A::Union{AbstractArray{T}, Base.OneTo{T}}) where {T<:Integer} = ppshuffle!(default_rng(), B, A)
+ppshuffle!(B::AbstractArray{T}, A::AbstractArray{T}) where {T<:Integer} = ppshuffle!(default_rng(), B, A)
 
 
 """
@@ -116,8 +116,8 @@ julia> isperm(ppshuffle(Vector(1:16)))
 true
 ```
 """
-ppshuffle(r::TaskLocalRNG, A::Union{AbstractArray{T}, Base.OneTo{T}}) where {T<:Integer} = ppshuffle!(r, similar(A), A)
-ppshuffle(A::Union{AbstractArray{T}, Base.OneTo{T}}) where {T<:Integer} = ppshuffle(default_rng(), A)
+ppshuffle(r::TaskLocalRNG, A::AbstractArray{T}) where {T<:Integer} = ppshuffle!(r, similar(A), A)
+ppshuffle(A::AbstractArray{T}) where {T<:Integer} = ppshuffle(default_rng(), A)
 
 
 ## pprandperm! & pprandperm
