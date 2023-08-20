@@ -1024,8 +1024,8 @@ julia> diff(a, dims=2, append = 0)
  10  0
 ```
 """
-diff(a::AbstractVector; args...) = _diff(a; dims=1, args...)
-diff(a::AbstractArray{T,N}; dims::Integer, args...) where {T,N} = _diff(a; dims=dims, args...)
+diff(a::AbstractVector; kw...) = _diff(a; dims=1, kw...)
+diff(a::AbstractArray{T,N}; dims::Integer, kw...) where {T,N} = _diff(a; dims=dims, kw...)
 function diff(r::AbstractRange{T}; dims::Integer=1, prepend = _nothing, append = _nothing) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
     prepend isa _Nothing || append isa _Nothing || throw(ArgumentError("cannot use prepend/append simultaneously"))
