@@ -497,6 +497,9 @@ function adjust_effects(sv::InferenceState)
         if is_effect_overridden(override, :inaccessiblememonly)
             ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
+        if is_effect_overridden(override, :noub)
+            ipo_effects = Effects(ipo_effects; noub=true)
+        end
     end
 
     return ipo_effects
@@ -551,9 +554,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        recompute_cfg = type_annotate!(interp, me, doopt)
+        type_annotate!(interp, me, doopt)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, interp, recompute_cfg)
+            me.result.src = OptimizationState(me, interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -713,20 +716,31 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # 3. mark unreached statements for a bulk code deletion (see issue #7836)
     # 4. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     #    NOTE because of this, `was_reached` will no longer be available after this point
-    # 5. eliminate GotoIfNot if either branch target is unreachable
+    # 5. eliminate GotoIfNot if either or both branches are statically unreachable
     changemap = nothing # initialized if there is any dead region
     for i = 1:nstmt
         expr = stmts[i]
         if was_reached(sv, i)
             if run_optimizer
-                if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                if isa(expr, GotoIfNot)
                     # 5: replace this live GotoIfNot with:
-                    # - GotoNode if the fallthrough target is unreachable
-                    # - no-op if the branch target is unreachable
-                    if !was_reached(sv, i+1)
-                        expr = GotoNode(expr.dest)
-                    elseif !was_reached(sv, expr.dest)
-                        expr = nothing
+                    # - no-op if :nothrow and the branch target is unreachable
+                    # - cond if :nothrow and both targets are unreachable
+                    # - typeassert if must-throw
+                    if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                        block = block_for_inst(sv.cfg, i)
+                        if !was_reached(sv, i+1)
+                            cfg_delete_edge!(sv.cfg, block, block + 1)
+                            expr = GotoNode(expr.dest)
+                        elseif !was_reached(sv, expr.dest)
+                            cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                            expr = nothing
+                        end
+                    elseif ssavaluetypes[i] === Bottom
+                        block = block_for_inst(sv.cfg, i)
+                        cfg_delete_edge!(sv.cfg, block, block + 1)
+                        cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                        expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                     end
                 end
             end

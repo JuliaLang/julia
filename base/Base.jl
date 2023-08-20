@@ -359,7 +359,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions

@@ -74,6 +74,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------

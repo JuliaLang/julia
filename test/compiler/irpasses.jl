@@ -849,6 +849,7 @@ function each_stmt_a_bb(stmts, preds, succs)
     empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
+    empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
     Core.Compiler.verify_ir(ir)
     return ir
 end
