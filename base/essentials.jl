@@ -933,9 +933,10 @@ Determine whether a collection is empty (has no elements).
 !!! warning
 
     `isempty(itr)` may consume the next element of a stateful iterator `itr`
-    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
-    Use of `isempty` should therefore be avoided when writing generic
-    code which should support any iterator type.
+    unless an appropriate [`Base.isdone(itr)`](@ref) method is defined.
+    Stateful iterators *should* implement `isdone`, but you may want to avoid
+    using `isempty` when writing generic code which should support any iterator
+    type.
 
 # Examples
 ```jldoctest
@@ -1044,17 +1045,21 @@ end
 
 # Iteration
 """
-    isdone(itr, state...) -> Union{Bool, Missing}
+    isdone(itr, [state]) -> Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
-This is useful for mutable iterators that want to avoid having elements
-consumed, if they are not going to be exposed to the user (e.g. to check
-for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature should define an isdone method that returns
-true/false depending on whether the iterator is done or not. Stateless
-iterators need not implement this function. If the result is `missing`,
-callers may go ahead and compute `iterate(x, state...) === nothing` to
-compute a definite answer.
+This is useful for stateful iterators that want to avoid having elements
+consumed if they are not going to be exposed to the user (e.g. when checking
+for done-ness in `isempty` or `zip`).
+
+Stateful iterators that want to opt into this feature should define an `isdone`
+method that returns true/false depending on whether the iterator is done or
+not. Stateless iterators need not implement this function.
+
+If the result is `missing`, callers may go ahead and compute
+`iterate(x, state) === nothing` to compute a definite answer.
+
+See also [`iterate`](@ref), [`isempty`](@ref)
 """
 isdone(itr, state...) = missing
 
