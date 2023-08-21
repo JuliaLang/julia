@@ -386,6 +386,19 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     return SSASubstitute(mi, argexprs, spvals_ssa, linetable_offset)
 end
 
+function adjust_boundscheck!(inline_compact, idx′, stmt, boundscheck)
+    if boundscheck === :off
+        if length(stmt.args) == 0
+            inline_compact[SSAValue(idx′)][:flag] |= IR_FLAG_INBOUNDS
+        end
+    elseif boundscheck !== :propagate
+        if (inline_compact[SSAValue(idx′)][:flag] & IR_FLAG_INBOUNDS) == 0
+            # Prevent future inlining passes from setting IR_FLAG_INBOUNDS
+            length(stmt.args) == 0 && push!(stmt.args, true)
+        end
+    end
+end
+
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
@@ -424,6 +437,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 # Everything legal in value position is guaranteed to be effect free in stmt position
                 inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
                 break
+            elseif isexpr(stmt′, :boundscheck)
+                adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
             end
             inline_compact[idx′] = stmt′
         end
@@ -460,6 +475,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
                 stmt′ = PhiNode(Int32[edge+bb_offset for edge in stmt′.edges], stmt′.values)
+            elseif isexpr(stmt′, :boundscheck)
+                adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
             end
             inline_compact[idx′] = stmt′
         end
@@ -1805,7 +1822,6 @@ end
 
 function ssa_substitute!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
                          ssa_substitute::SSASubstitute, boundscheck::Symbol)
-    subst_inst[:flag] &= ~IR_FLAG_INBOUNDS
     subst_inst[:line] += ssa_substitute.linetable_offset
     return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute, boundscheck)
 end
@@ -1874,14 +1890,6 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
                         ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, msig, sparam_vals)
                         for argt in e.args[3]::SimpleVector ]...)
                 end
-            end
-        elseif head === :boundscheck
-            if boundscheck === :off # inbounds == true
-                return false
-            elseif boundscheck === :propagate
-                return e
-            else # on or default
-                return true
             end
         end
     end

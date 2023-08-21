@@ -381,6 +381,10 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             }
             bd[j] = jl_nothing;
         }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_boundscheck_sym) {
+            // Don't set IR_FLAG_INBOUNDS on boundscheck at the same level
+            is_flag_stmt = 1;
+        }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
@@ -392,7 +396,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else {
             uint8_t flag = 0;
             if (inbounds_depth > 0)
-                flag |= 1 << 0;
+                flag |= IR_FLAG_INBOUNDS;
             if (inline_flags->len > 0) {
                 void* inline_flag = inline_flags->items[inline_flags->len - 1];
                 flag |= 1 << (inline_flag ? 1 : 2);

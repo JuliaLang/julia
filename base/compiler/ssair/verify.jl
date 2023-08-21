@@ -20,7 +20,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_value_pos_expr_head(head::Symbol) = head === :boundscheck
+is_value_pos_expr_head(head::Symbol) = false
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)

@@ -234,7 +234,7 @@ is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
-       isa(x, GlobalRef) || isa(x, QuoteNode) || isexpr(x, (:static_parameter, :boundscheck)) ||
+       isa(x, GlobalRef) || isa(x, QuoteNode) || is_value_pos_expr_head(x) ||
        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true

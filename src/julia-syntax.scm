@@ -4256,7 +4256,7 @@ f(x) = yt(x)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck)))))
+                                 slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
