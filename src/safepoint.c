@@ -172,7 +172,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                         size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
                         // Print the backtrace of the straggler
                         for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
-                            jl_print_bt_entry_codeloc(ptls->bt_data + i);
+                            jl_print_bt_entry_codeloc(-1, ptls->bt_data + i);
                         }
                     }
                 }
