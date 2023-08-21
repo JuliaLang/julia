@@ -2322,8 +2322,8 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                 return jl_cgval_t();
             }
         }
-        if (jl_is_concrete_type(v.typ) && !jl_is_kind(v.typ)) {
-            if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
+        if (jl_is_concrete_type(v.typ)) {
+            if (jl_is_concrete_type(typ)) {
                 // type mismatch: changing from one leaftype to another
                 if (skip)
                     *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
