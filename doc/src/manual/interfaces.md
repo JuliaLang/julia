@@ -7,29 +7,44 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
-|:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
-| **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
-| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
-| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
-| `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
-| `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
-| `Base.isdone(iter[, state])`   | `missing`              | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
+### Required methods
 
-| Value returned by `IteratorSize(IterType)` | Required Methods                           |
-|:------------------------------------------ |:------------------------------------------ |
-| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
-| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
-| `Base.IsInfinite()`                        | (*none*)                                   |
-| `Base.SizeUnknown()`                       | (*none*)                                   |
+| Method                 | Brief description                                                                        |
+|:---------------------- |:---------------------------------------------------------------------------------------- |
+| `iterate(iter)`        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty |
+| `iterate(iter, state)` | Returns either a tuple of the next item and next state or `nothing` if no items remain   |
 
-| Value returned by `IteratorEltype(IterType)` | Required Methods   |
-|:-------------------------------------------- |:------------------ |
-| `Base.HasEltype()`                           | `eltype(IterType)` |
-| `Base.EltypeUnknown()`                       | (*none*)           |
+Depending on the definition of `Base.IteratorSize(IterType)`, you may need to define additional methods:
+
+| Value returned by `Base.IteratorSize(IterType)` | Required Methods                               |
+|:----------------------------------------------- |:---------------------------------------------- |
+| `Base.HasLength()`                              | [`length(iter)`](@ref)                         |
+| `Base.HasShape{N}()`                            | `length(iter)` and [`size(iter, [dim])`](@ref) |
+| `Base.IsInfinite()`                             | (*none*)                                       |
+| `Base.SizeUnknown()`                            | (*none*)                                       |
+
+Because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`, you will need to define at least one of `Base.IteratorSize(IterType)` and `length(iter)`.
+
+| Method                       | Default definition | Brief description                                                                                            |
+|:---------------------------- |:------------------ |:------------------------------------------------------------------------------------------------------------ |
+| `Base.IteratorSize(IterType)`| `Base.HasLength()` | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| `length(iter)`               | (*undefined*)      | The number of items, if known                                                                                |
+| `size(iter, [dim])`          | (*undefined*)      | The number of items in each dimension, if known                                                              |
+
+### Optional methods
+
+| Method                          | Default definition | Brief description                                                                                                                                                    |
+|:------------------------------- |:------------------ |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base.IteratorEltype(IterType)` | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                                                                                                   |
+| `eltype(IterType)`              | `Any`              | The type of the first entry of the tuple returned by `iterate()`                                                                                                     |
+| `Base.isdone(iter[, state])`    | `missing`          | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
+
+| Value returned by `Base.IteratorEltype(IterType)` | Required Methods   |
+|:------------------------------------------------- |:------------------ |
+| `Base.HasEltype()`                                | `eltype(IterType)` |
+| `Base.EltypeUnknown()`                            | (*none*)           |
+
+### Description
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
@@ -233,7 +248,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices. The axes should be their own axes, that is `axes.(axes(A),1) == axes(A)` should be satisfied. |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -462,10 +477,17 @@ Not all types support `axes` and indexing, but many are convenient to allow in b
 The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
-support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
-`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+support `axes` and indexing.
+
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
+```julia
+Base.broadcastable(o::MyType) = Ref(o)
+```
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
+
+Custom array-like types can specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though

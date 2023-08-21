@@ -47,7 +47,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
             isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
@@ -164,7 +164,8 @@ function doc(binding::Binding, sig::Type = Union{})
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             push!(groups, multidoc)
@@ -226,7 +227,11 @@ function lookup_doc(ex)
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            if op in ("&&", "||")
+                return Markdown.parse("`x $ex y` broadcasts the boolean operator `$op` to `x` and `y`. See [`broadcast`](@ref).")
+            else
+                return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            end
         end
     end
     binding = esc(bindingexpr(namify(ex)))
@@ -250,7 +255,11 @@ function summarize(binding::Binding, sig)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        if Base.isbindingresolved(binding.mod, binding.var)
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        end
     end
     md = Markdown.parse(seekstart(io))
     # Save metadata in the generated markdown.
@@ -470,7 +479,8 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main)
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
+        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
+               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief))
@@ -561,7 +571,8 @@ Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             if haskey(multidoc.docs, Union{})
@@ -613,22 +624,61 @@ bestmatch(needle, haystack) =
     longer(matchinds(needle, haystack, acronym = true),
            matchinds(needle, haystack))
 
-avgdistance(xs) =
-    isempty(xs) ? 0 :
-    (xs[end] - xs[1] - length(xs)+1)/length(xs)
+# Optimal string distance: Counts the minimum number of insertions, deletions,
+# transpositions or substitutions to go from one string to the other.
+function string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
+    if lena > lenb
+        a, b = b, a
+        lena, lenb = lenb, lena
+    end
+    start = 0
+    for (i, j) in zip(a, b)
+        if a == b
+            start += 1
+        else
+            break
+        end
+    end
+    start == lena && return lenb - start
+    vzero = collect(1:(lenb - start))
+    vone = similar(vzero)
+    prev_a, prev_b = first(a), first(b)
+    current = 0
+    for (i, ai) in enumerate(a)
+        i > start || (prev_a = ai; continue)
+        left = i - start - 1
+        current = i - start
+        transition_next = 0
+        for (j, bj) in enumerate(b)
+            j > start || (prev_b = bj; continue)
+            # No need to look beyond window of lower right diagonal
+            above = current
+            this_transition = transition_next
+            transition_next = vone[j - start]
+            vone[j - start] = current = left
+            left = vzero[j - start]
+            if ai != bj
+                # Minimum between substitution, deletion and insertion
+                current = min(current + 1, above + 1, left + 1)
+                if i > start + 1 && j > start + 1 && ai == prev_b && prev_a == bj
+                    current = min(current, (this_transition += 1))
+                end
+            end
+            vzero[j - start] = current
+            prev_b = bj
+        end
+        prev_a = ai
+    end
+    current
+end
 
-function fuzzyscore(needle, haystack)
-    score = 0.
-    is, acro = bestmatch(needle, haystack)
-    score += (acro ? 2 : 1)*length(is) # Matched characters
-    score -= 2(length(needle)-length(is)) # Missing characters
-    !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
-    return score
+function fuzzyscore(needle::AbstractString, haystack::AbstractString)
+    lena, lenb = length(needle), length(haystack)
+    1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
 end
 
 function fuzzysort(search::String, candidates::Vector{String})
-    scores = map(cand -> (fuzzyscore(search, cand), -Float64(levenshtein(search, cand))), candidates)
+    scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -679,7 +729,7 @@ function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
-        fuzzyscore(word, match) < 0 && break
+        fuzzyscore(word, match) < 0.5 && break
         print(io, " ")
         printmatch(io, word, match)
         total += length(match) + 1
@@ -732,7 +782,7 @@ function doc_completions(name, mod::Module=Main)
     idxs = findall(!isnothing, ms)
 
     # avoid messing up the order while inserting
-    for i in reverse(idxs)
+    for i in reverse!(idxs)
         c = only((ms[i]::AbstractMatch).captures)
         insert!(res, i, "$(c)\"\"")
     end
@@ -830,7 +880,9 @@ function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
         docsearch(doc(mod), needle) && println(io, mod)
-        for (k, v) in meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
+        for (k, v) in dict
             docsearch(v, needle) && println(io, k)
         end
     end

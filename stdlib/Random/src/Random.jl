@@ -16,7 +16,6 @@ using Base.GMP: Limb
 import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
-
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
 
@@ -256,7 +255,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X}   = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
@@ -325,6 +324,8 @@ Pick a random element or array of random elements from the set of values specifi
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
 as a collection of values (`S`) and not as `dims`.
 
+
+See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) and [`randn!`](@ref) for the in-place equivalents.
 
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.

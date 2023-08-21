@@ -256,7 +256,7 @@ runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
-testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+testfull = Base.get_bool_env("JULIA_TESTFULL", false)
 
 ### Views from Arrays ###
 index5 = (1, :, 2:5, [4,1,5], reshape([2]), view(1:5,[2 3 4 1]))  # all work with at least size 5
@@ -275,9 +275,6 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9], reshape(2:11, 2, 5))
 
-_ndims(::AbstractArray{T,N}) where {T,N} = N
-_ndims(x) = 1
-
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         @testset "full tests: ($o1,$o2,$o3)" for o3 in oindex, o2 in oindex, o1 in oindex
@@ -288,7 +285,8 @@ if testfull
 end
 
 let B = copy(reshape(1:13^3, 13, 13, 13))
-    @testset "spot checks: $oind" for oind in ((:,:,:),
+    @testset "spot checks: $oind" for oind in (
+                 (:,:,:),
                  (:,:,6),
                  (:,6,:),
                  (6,:,:),
@@ -296,7 +294,6 @@ let B = copy(reshape(1:13^3, 13, 13, 13))
                  (3:7,:,:),
                  (3:7,6,:),
                  (3:7,6,0x6),
-                 (6,UInt(3):UInt(7),3:7),
                  (13:-2:1,:,:),
                  ([8,4,6,12,5,7],:,3:7),
                  (6,CartesianIndex.(6,[8,4,6,12,5,7])),
@@ -307,7 +304,29 @@ let B = copy(reshape(1:13^3, 13, 13, 13))
                  (3,reshape(2:11,5,2),4),
                  (3,reshape(2:2:13,3,2),4),
                  (view(1:13,[9,12,4,13,1]),2:6,4),
-                 ([1:5 2:6 3:7 4:8 5:9], :, 3))
+                 ([1:5 2:6 3:7 4:8 5:9], :, 3),
+        )
+        runsubarraytests(B, oind...)
+        viewB = view(B, oind...)
+        runviews(viewB, index5, index25, index125)
+    end
+end
+
+let B = copy(reshape(1:13^3, 13, 13, 13))
+    @testset "spot checks (other BitIntegers): $oind" for oind in (
+                 (:,:,0x6),
+                 (:,0x00000006,:),
+                 (0x0006,:,:),
+                 (:,0x00000003:0x00000007,:),
+                 (0x0000000000000003:0x0000000000000007,:,:),
+                 (0x0003:0x0007,0x6,:),
+                 (6,UInt(3):UInt(7),3:7),
+                 (Int16(3):Int16(7),Int16(6),:),
+                 (CartesianIndex(0xD,0x6),UInt8[8,4,6,12,5,7]),
+                 (Int8(1),:,view(1:13,[9,12,4,13,1])),
+                 (view(1:13,Int16[9,12,4,13,1]),UInt8(2):UInt16(6),Int8(4)),
+                 (Int8[1:5 2:6 3:7 4:8 5:9],:,UInt64(3)),
+        )
         runsubarraytests(B, oind...)
         viewB = view(B, oind...)
         runviews(viewB, index5, index25, index125)

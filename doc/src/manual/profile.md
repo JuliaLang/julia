@@ -59,12 +59,13 @@ julia> @profile myfunc()
 
 To see the profiling results, there are several graphical browsers.
 One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timholy/FlameGraphs.jl), with each family member providing a different user interface:
-- [Juno](https://junolab.org/) is a full IDE with built-in support for profile visualization
+- [VS Code](https://www.julia-vscode.org/) is a full IDE with built-in support for profile visualization
 - [ProfileView.jl](https://github.com/timholy/ProfileView.jl) is a stand-alone visualizer based on GTK
 - [ProfileVega.jl](https://github.com/davidanthoff/ProfileVega.jl) uses VegaLight and integrates well with Jupyter notebooks
 - [StatProfilerHTML.jl](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
 - [ProfileSVG.jl](https://github.com/timholy/ProfileSVG.jl) renders SVG
 - [PProf.jl](https://github.com/JuliaPerf/PProf.jl) serves a local website for inspecting graphs, flamegraphs and more
+- [ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl) is a HTML canvas based profile viewer UI, used by the [Julia VS Code extension](https://www.julia-vscode.org/), but can also generate interactive HTML files.
 
 An entirely independent approach to profile visualization is [PProf.jl](https://github.com/vchuravy/PProf.jl), which uses the external `pprof` tool.
 
@@ -303,14 +304,129 @@ provides several tools measure this:
 
 ### `@time`
 
-The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
-specific lines triggering allocation can often be inferred from profiling via the cost of garbage
+The total amount of allocation can be measured with [`@time`](@ref), [`@allocated`](@ref) and [`@allocations`](@ref),
+and specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
 
-### Line-by-Line Allocation Tracking
+### GC Logging
 
-To measure allocation line-by-line, start Julia with the `--track-allocation=<setting>` command-line
+While [`@time`](@ref) logs high-level stats about memory usage and garbage collection over the course
+of evaluating an expression, it can be useful to log each garbage collection event, to get an
+intuitive sense of how often the garbage collector is running, how long it's running each time,
+and how much garbage it collects each time. This can be enabled with
+[`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
+a garbage collection happens.
+
+### [Allocation Profiler](@id allocation-profiler)
+
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
+
+The allocation profiler records the stack trace, type, and size of each
+allocation while it is running. It can be invoked with
+[`Profile.Allocs.@profile`](@ref).
+
+This information about the allocations is returned as an array of `Alloc`
+objects, wrapped in an `AllocResults` object. The best way to visualize these is
+currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl) and
+[ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl) packages, which
+can visualize the call stacks which are making the most allocations.
+
+The allocation profiler does have significant overhead, so a `sample_rate`
+argument can be passed to speed it up by making it skip some allocations.
+Passing `sample_rate=1.0` will make it record everything (which is slow);
+`sample_rate=0.1` will record only 10% of the allocations (faster), etc.
+
+!!! compat "Julia 1.11"
+
+    Older versions of Julia could not capture types in all cases. In older versions of
+    Julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
+    the profiler doesn't know what type of object was allocated. This mainly happened when
+    the allocation was coming from generated code produced by the compiler. See
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688) for more info.
+
+    Since Julia 1.11, all allocations should have a type reported.
+
+For more details on how to use this tool, please see the following talk from JuliaCon 2022:
+https://www.youtube.com/watch?v=BFvpwC8hEWQ
+
+##### Allocation Profiler Example
+
+In this simple example, we use PProf to visualize the alloc profile. You could use another
+visualization tool instead. We collect the profile (specifying a sample rate), then we visualize it.
+```julia
+using Profile, PProf
+Profile.Allocs.clear()
+Profile.Allocs.@profile sample_rate=0.0001 my_function()
+PProf.Allocs.pprof()
+```
+
+Here is a more in-depth example, showing how we can tune the sample rate. A
+good number of samples to aim for is around 1 - 10 thousand. Too many, and the
+profile visualizer can get overwhelmed, and profiling will be slow. Too few,
+and you don't have a representative sample.
+
+
+```julia-repl
+julia> import Profile
+
+julia> @time my_function()  # Estimate allocations from a (second-run) of the function
+  0.110018 seconds (1.50 M allocations: 58.725 MiB, 17.17% gc time)
+500000
+
+julia> Profile.Allocs.clear()
+
+julia> Profile.Allocs.@profile sample_rate=0.001 begin   # 1.5 M * 0.001 = ~1.5K allocs.
+           my_function()
+       end
+500000
+
+julia> prof = Profile.Allocs.fetch();  # If you want, you can also manually inspect the results.
+
+julia> length(prof.allocs)  # Confirm we have expected number of allocations.
+1515
+
+julia> using PProf  # Now, visualize with an external tool, like PProf or ProfileCanvas.
+
+julia> PProf.Allocs.pprof(prof; from_c=false)  # You can optionally pass in a previously fetched profile result.
+Analyzing 1515 allocation samples... 100%|████████████████████████████████| Time: 0:00:00
+Main binary filename not available.
+Serving web UI on http://localhost:62261
+"alloc-profile.pb.gz"
+```
+Then you can view the profile by navigating to http://localhost:62261, and the profile is saved to disk.
+See PProf package for more options.
+
+##### Allocation Profiling Tips
+
+As stated above, aim for around 1-10 thousand samples in your profile.
+
+Note that we are uniformly sampling in the space of _all allocations_, and are not weighting
+our samples by the size of the allocation. So a given allocation profile may not give a
+representative profile of where most bytes are allocated in your program, unless you had set
+`sample_rate=1`.
+
+Allocations can come from users directly constructing objects, but can also come from inside
+the runtime or be inserted into compiled code to handle type instability. Looking at the
+"source code" view can be helpful to isolate them, and then other external tools such as
+[`Cthulhu.jl`](https://github.com/JuliaDebug/Cthulhu.jl) can be useful for identifying the
+cause of the allocation.
+
+##### Allocation Profile Visualization Tools
+
+There are several profiling visualization tools now that can all display Allocation
+Profiles. Here is a small list of some of the main ones we know about:
+- [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
+- [ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl)
+- VSCode's built-in profile visualizer (`@profview_allocs`) [docs needed]
+- Viewing the results directly in the REPL
+  - You can inspect the results in the REPL via [`Profile.Allocs.fetch()`](@ref), to view
+    the stacktrace and type of each allocation.
+
+#### Line-by-Line Allocation Tracking
+
+An alternative way to measure allocations is to start Julia with the `--track-allocation=<setting>` command-line
 option, for which you can choose `none` (the default, do not measure allocation), `user` (measure
 memory allocation everywhere except Julia's core code), or `all` (measure memory allocation at
 each line of Julia code). Allocation gets measured for each line of compiled code. When you quit
@@ -328,41 +444,11 @@ you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset al
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
 
-### GC Logging
-
-While [`@time`](@ref) logs high-level stats about memory usage and garbage collection over the course
-of evaluating an expression, it can be useful to log each garbage collection event, to get an
-intuitive sense of how often the garbage collector is running, how long it's running each time,
-and how much garbage it collects each time. This can be enabled with
-[`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
-a garbage collection happens.
-
-### Allocation Profiler
-
-The allocation profiler records the stack trace, type, and size of each
-allocation while it is running. It can be invoked with
-[`Profile.Allocs.@profile`](@ref).
-
-This information about the allocations is returned as an array of `Alloc`
-objects, wrapped in an `AllocResults` object. The best way to visualize
-these is currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
-library, which can visualize the call stacks which are making the most
-allocations.
-
-The allocation profiler does have significant overhead, so a `sample_rate`
-argument can be passed to speed it up by making it skip some allocations.
-Passing `sample_rate=1.0` will make it record everything (which is slow);
-`sample_rate=0.1` will record only 10% of the allocations (faster), etc.
-
 !!! note
 
-    The current implementation of the Allocations Profiler _does not
-    capture types for all allocations._ Allocations for which the profiler
-    could not capture the type are represented as having type
-    `Profile.Allocs.UnknownType`.
-
-    You can read more about the missing types and the plan to improve this, here:
-    https://github.com/JuliaLang/julia/issues/43688.
+    `--track-allocation` changes code generation to log the allocations, and so the allocations may
+    be different than what happens without the option. We recommend using the
+    [allocation profiler](@ref allocation-profiler) instead.
 
 ## External Profiling
 

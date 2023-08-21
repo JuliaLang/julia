@@ -175,7 +175,7 @@
               ,(if (equal? rett '(core Any))
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
-                                                            (memq (car x) '(line meta))))
+                                                            (memq (car x) '(lineinfo line meta))))
                                            (cdr body)))
                          (R (make-ssavalue)))
                      `(,(car body) ,@meta
@@ -187,7 +187,7 @@
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
   (define (check-sym s)
-    (if (symbol? s)
+    (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
@@ -296,7 +296,8 @@
                                   (if (eq? n '|#self#|) (gensy) n))
                                 arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
-                                   `((meta nospecialize ,@arg-names)))))
+                                   ;; arg-names slots start at 2 (after name)
+                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
         (function (call ,name ,@arg-names) ,body)))))
@@ -366,9 +367,9 @@
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
-         (error "function static parameter names not unique"))
+         (error (string "function static parameter name not unique: \"" (car (has-dups names)) "\"")))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
-         (error "function argument and static parameter names must be distinct"))
+         (error (string "function argument and static parameter name not distinct: \"" (car (intersect names unused_anames)) "\"")))
      (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
@@ -382,13 +383,8 @@
                                          `((meta generated
                                                  (new (core GeneratedFunctionStub)
                                                       ,gname
-                                                      ,(cons 'list anames)
-                                                      ,(if (null? sparams)
-                                                           'nothing
-                                                           (cons 'list (map car sparams)))
-                                                      ,(cadr loc)
-                                                      (inert ,(caddr loc))
-                                                      (false))))))
+                                                      (call (core svec) ,@(map quotify anames))
+                                                      (call (core svec) ,@(map quotify names)))))))
                              (list gf))
                            '()))
             (types (llist-types argl))
@@ -512,6 +508,7 @@
                               positional-sparams)))
                   sparams))
          (kw      (gensy))
+         (kwdecl  `(|::| ,kw (core NamedTuple)))
          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
@@ -559,8 +556,8 @@
           name positional-sparams
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
-             ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
+             ,(if (any kwarg? `(,@pargl ,@vararg)) (gensy) UNUSED)
+             (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
             ;; propagate method metadata to keyword sorter
             ,@(map propagate-method-meta (filter meta? prologue))
@@ -666,7 +663,10 @@
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
-                       (if (any (lambda (defaultv)
+                       (if (any vararg? (butlast vals))
+                         ;; Forbid splat in all but the final default value
+                         (error "invalid \"...\" in non-final positional argument default value")
+                         (if (any (lambda (defaultv)
                                   ;; does any default val expression...
                                   (contains (lambda (e)
                                               ;; contain "e" such that...
@@ -685,7 +685,7 @@
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -756,8 +756,18 @@
 
 (define (default-inner-ctors name field-names field-types params bounds locs)
   (let* ((field-names (safe-field-names field-names field-types))
-         (any-ctor
+         (all-ctor (if (null? params)
+          ;; definition with exact types for all arguments
+          `(function (call ,name
+                          ,@(map make-decl field-names field-types))
+                    (block
+                     ,@locs
+                     (new (outerref ,name) ,@field-names)))
+          #f))
+         (any-ctor (if (or (not all-ctor) (any (lambda (t) (not (equal? t '(core Any))))
+                                 field-types))
           ;; definition with Any for all arguments
+          ;; only if any field type is not Any, checked at runtime
           `(function (call (|::| |#ctor-self#|
                             ,(with-wheres
                               `(curly (core Type) ,(if (pair? params)
@@ -767,23 +777,18 @@
                            ,@field-names)
                      (block
                       ,@locs
-                      (call new ,@field-names)))))
-    (if (and (null? params) (any (lambda (t) (not (equal? t '(core Any))))
-                                 field-types))
-        (list
-         ;; definition with field types for all arguments
-         ;; only if any field type is not Any, checked at runtime
-         `(if ,(foldl (lambda (t u)
-                        `(&& ,u (call (core ===) (core Any) ,t)))
-                      `(call (core ===) (core Any) ,(car field-types))
-                      (cdr field-types))
-            (block)
-            (function (call ,name
-                            ,@(map make-decl field-names field-types))
-                      (block
-                       ,@locs
-                       (new (outerref ,name) ,@field-names))))
-         any-ctor)
+                      (call new ,@field-names))) ; this will add convert calls later
+          #f)))
+    (if all-ctor
+        (if any-ctor
+            (list all-ctor
+                  `(if ,(foldl (lambda (t u)
+                           `(&& ,u (call (core ===) (core Any) ,t)))
+                         `(call (core ===) (core Any) ,(car field-types))
+                         (cdr field-types))
+                       '(block)
+                       ,any-ctor))
+            (list all-ctor))
         (list any-ctor))))
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
@@ -793,7 +798,7 @@
                  (map (lambda (b) (cons 'var-bounds b)) bounds))
                (block
                 ,@locs
-                (call (curly ,name ,@params) ,@field-names)))))
+                (new (curly ,name ,@params) ,@field-names)))))
 
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
@@ -818,12 +823,14 @@
          (field-convert (lambda (fld fty val)
                           (if (equal? fty '(core Any))
                               val
-                              `(call (top convert)
-                                     ,(if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
-                                          fty ; the field type is a simple parameter, the usage here is of a
-                                              ; local variable (currently just handles sparam) for the bijection of params to type-params
-                                          `(call (core fieldtype) ,tn ,(+ fld 1)))
-                                     ,val)))))
+                              (convert-for-type-decl val
+                                                     ; for ty, usually use the fieldtype, not the fty expression
+                                                     (if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
+                                                      fty ; the field type is a simple parameter, the usage here is of a
+                                                          ; local variable (currently just handles sparam) for the bijection of params to type-params
+                                                      `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                                      #f
+                                                      #f)))))
     (cond ((> (num-non-varargs args) (length field-names))
            `(call (core throw) (call (top ArgumentError)
                                      ,(string "new: too many arguments (expected " (length field-names) ")"))))
@@ -1094,7 +1101,7 @@
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
-(define (lower-ccall name RT atypes args cconv)
+(define (lower-ccall name RT atypes args cconv nreq)
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
@@ -1111,13 +1118,15 @@
       (if (null? A)
           `(block
             ,.(reverse! stmts)
-            (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
-                         ,(if isseq (- (length atypes) 1) 0) ; 0 or number of arguments before ... in definition
+            (foreigncall ,(expand-forms name) ,(expand-forms RT) (call (core svec) ,@(reverse! T))
+                         ;; 0 or number of arguments before ... in definition
+                         ,(or nreq
+                              (if isseq (- (length atypes) 1) 0))
                          ',cconv
                          ,.(reverse! C)
                          ,@GC)) ; GC root ordering is arbitrary
-          (let* ((a     (car A))
-                 (ty    (if isseq (cadar F) (car F))))
+          (let* ((a     (expand-forms (car A)))
+                 (ty    (expand-forms (if isseq (cadar F) (car F)))))
             (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
             (if (eq? ty 'Any)
                 (loop (if isseq F (cdr F)) (cdr A) stmts (list* '(core Any) T) (list* a C) GC)
@@ -1662,7 +1671,7 @@
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
     `(if (call (top isempty) ,kw-container-test)
          (call ,f ,@pa)
-         (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
+         (call (core kwcall) ,kw-container ,f ,@pa)))
 
   (let ((f            (if (sym-ref? fexpr) fexpr (make-ssavalue)))
         (kw-container (make-ssavalue)))
@@ -1676,7 +1685,7 @@
                                            #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
-           `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
+           `(call (core kwcall) ,kw-container ,f ,@pa)))))
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
@@ -2264,7 +2273,7 @@
 ;; `n`:    total nr of lhs args
 ;; `end`:  car collects statements to be executed afterwards.
 ;;         In general, actual assignments should only happen after
-;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()
@@ -2613,7 +2622,9 @@
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
-                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
+                         (have-cconv-expr (and (pair? cconv) (eq? (car cconv) 'cconv)))
+                         (have-cconv (or have-cconv-expr
+                                         (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
                          (name (caddr e))
                          (RT   (car after-cconv))
@@ -2626,9 +2637,13 @@
                                        (eq? (car RT) 'tuple))
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
-                          (expand-forms
-                           (lower-ccall name RT (cdr argtypes) args
-                                        (if have-cconv cconv 'ccall))))))
+                          (lower-ccall name RT (cdr argtypes) args
+                                       (if have-cconv
+                                           (if have-cconv-expr
+                                               (cadr cconv)
+                                               cconv)
+                                           'ccall)
+                                       (and have-cconv-expr (caddr cconv))))))
                  ((any kwarg? (cddr e))       ;; f(..., a=b, ...)
                   (expand-forms (lower-kw-call f (cddr e))))
                  ((has-parameters? (cddr e))  ;; f(...; ...)
@@ -2910,17 +2925,16 @@
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
 
-(define (lhs-vars e)
-  (cond ((symdecl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
-
 (define (lhs-decls e)
   (cond ((symdecl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
@@ -3254,8 +3268,9 @@
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
-         (let ((bound (lambda-all-vars e)))
-           (for-each (lambda (v) (if (not (memq v bound)) (put! tab v #t)))
+         (let ((bound (table)))
+           (for-each (lambda (b) (put! bound b #t)) (lambda-all-vars e))
+           (for-each (lambda (v) (if (not (has? bound v)) (put! tab v #t)))
                      (free-vars (lam:body e))))
          tab)
         (else
@@ -3348,9 +3363,9 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           ;; calls to functions with keyword args go through `kwfunc` first
-           (if (and (length= e 3) (equal? (cadr e) '(core kwfunc)))
-               (let ((vi2 (get tab (caddr e) #f)))
+           ;; calls to functions with keyword args have head of `kwcall` first
+           (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
+               (let ((vi2 (get tab (cadddr e) #f)))
                  (if vi2
                      (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
@@ -3473,13 +3488,13 @@ f(x) = yt(x)
 
 (define (convert-lambda lam fname interp capt-sp opaq)
   (let ((body (add-box-inits-to-body
-               lam (cl-convert (cadddr lam) fname lam (table) (table) #f interp opaq))))
+               lam (cl-convert (cadddr lam) fname lam (table) (table) #f interp opaq (table) (vinfo-to-table (car (lam:vinfo lam)))))))
     `(lambda ,(lam:args lam)
        (,(clear-capture-bits (car (lam:vinfo lam)))
         ()
         ,(caddr (lam:vinfo lam))
         ,(delete-duplicates (append (lam:sp lam) capt-sp)))
-      ,body)))
+       ,body)))
 
 ;; renumber ssavalues assigned in an expr, allowing it to be repeated
 (define (renumber-assigned-ssavalues e)
@@ -3499,26 +3514,34 @@ f(x) = yt(x)
                     (cons (car x)
                           (map do-replace (cdr x))))))))))
 
-(define (convert-for-type-decl rhs t)
+(define (convert-for-type-decl rhs t assert lam)
   (if (equal? t '(core Any))
       rhs
-      (let* ((temp (if (or (atom? t) (ssavalue? t) (quoted? t))
+      (let* ((new-mutable-var
+               (lambda () (let ((g (gensy)))
+                               (if lam (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 10)))))
+                               g)))
+             (left (if (or (atom? t) (ssavalue? t) (quoted? t))
                        #f
                        (make-ssavalue)))
-             (ty   (or temp t))
-             (ex   `(call (core typeassert)
-                          (call (top convert) ,ty ,rhs)
-                          ,ty)))
-        (if temp
-            `(block (= ,temp ,(renumber-assigned-ssavalues t)) ,ex)
-            ex))))
+             (temp (new-mutable-var)) ; use a slot to permit union-splitting this in inference
+             (ty   (or left t))
+             (ex   `(call (top convert) ,ty ,temp))
+             (ex   (if assert `(call (core typeassert) ,ex ,ty) ex))
+             (ex   `(= ,temp ,ex))
+             (ex   `(if (call (core isa) ,temp ,ty) (null) ,ex))
+             (t    (if left (renumber-assigned-ssavalues t) t))
+             (ex   `((= ,temp ,rhs) ,ex ,temp))
+             (ex   (if left (cons `(= ,left ,t) ex) ex))
+             (ex   (if lam ex (cons `(local-def ,temp) ex))))
+        (cons 'block ex))))
 
 (define (capt-var-access var fname opaq)
   (if opaq
       `(call (core getfield) ,fname ,(get opaq var))
       `(call (core getfield) ,fname (inert ,var))))
 
-(define (convert-global-assignment var rhs0 globals)
+(define (convert-global-assignment var rhs0 globals lam)
   (let* ((rhs1 (if (or (simple-atom? rhs0)
                        (equal? rhs0 '(the_exception)))
                    rhs0
@@ -3526,7 +3549,7 @@ f(x) = yt(x)
          (ref   (binding-to-globalref var))
          (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
          (rhs  (if (get globals ref #t) ;; no type declaration for constants
-                   (convert-for-type-decl rhs1 ty)
+                   (convert-for-type-decl rhs1 ty #f lam)
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)
@@ -3540,10 +3563,10 @@ f(x) = yt(x)
 ;; declared types.
 ;; when doing this, the original value needs to be preserved, to
 ;; ensure the expression `a=b` always returns exactly `b`.
-(define (convert-assignment var rhs0 fname lam interp opaq globals)
+(define (convert-assignment var rhs0 fname lam interp opaq globals locals)
   (cond
     ((symbol? var)
-     (let* ((vi (assq var (car  (lam:vinfo lam))))
+     (let* ((vi (get locals var #f))
             (cv (assq var (cadr (lam:vinfo lam))))
             (vt  (or (and vi (vinfo:type vi))
                      (and cv (vinfo:type cv))
@@ -3553,14 +3576,12 @@ f(x) = yt(x)
        (if (and (not closed) (not capt) (equal? vt '(core Any)))
            (if (or (local-in? var lam) (underscore-symbol? var))
                `(= ,var ,rhs0)
-               (convert-global-assignment var rhs0 globals))
+               (convert-global-assignment var rhs0 globals lam))
            (let* ((rhs1 (if (or (simple-atom? rhs0)
                                 (equal? rhs0 '(the_exception)))
                             rhs0
                             (make-ssavalue)))
-                  (rhs  (if (equal? vt '(core Any))
-                            rhs1
-                            (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq))))
+                  (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq (table) locals) #t lam))
                   (ex (cond (closed `(call (core setfield!)
                                            ,(if interp
                                                 `($ ,var)
@@ -3575,7 +3596,7 @@ f(x) = yt(x)
                          ,ex
                          ,rhs1))))))
      ((or (outerref? var) (globalref? var))
-      (convert-global-assignment var rhs0 globals))
+      (convert-global-assignment var rhs0 globals lam))
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
@@ -3635,12 +3656,22 @@ f(x) = yt(x)
               (loop (cdr xs))
               elt)))))
 
+; try to ignore some metadata expressions for implicit return sometimes
+(define (only-meta? blk)
+  (let loop ((xs blk))
+    (if (null? xs)
+        #t
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (memq (car elt) '(lineinfo line loopinfo)))
+              (loop (cdr xs))
+              #f)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (if (null? stmts)
       body
       (let ((meta (take-while (lambda (x) (and (pair? x)
-                                               (memq (car x) '(line meta))))
+                                               (memq (car x) '(lineinfo line meta))))
                               (cdr body))))
         `(,(car body)
           ,@meta
@@ -3672,15 +3703,16 @@ f(x) = yt(x)
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
 (define lambda-opt-ignored-exprs
-  (Set '(quote top core line inert local-def unnecessary copyast
+  (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export inline noinline)))
 
-(define (local-in? s lam)
-  (or (assq s (car  (lam:vinfo lam)))
+(define (local-in? s lam (tab #f))
+  (or (and tab (has? tab s))
+      (assq s (car  (lam:vinfo lam)))
       (assq s (cadr (lam:vinfo lam)))))
 
 ;; Try to identify never-undef variables, and then clear the `captured` flag for single-assigned,
@@ -3780,8 +3812,6 @@ f(x) = yt(x)
              (let ((prev  (table.clone live))
                    (decl- (table.clone decl)))
                (let ((result (eager-any visit (cdr e))))
-                 (if (eq? (car e) '_while)
-                     (kill))  ;; body might not have run
                  (leave-loop! decl-)
                  (if result
                      #t
@@ -3835,17 +3865,17 @@ f(x) = yt(x)
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
-(define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq (globals (table)))
+(define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if toplevel
       (map (lambda (x)
              (let ((tl (lift-toplevel (cl-convert x fname lam namemap defined
                                                   (and toplevel (toplevel-preserving? x))
-                                                  interp opaq globals))))
+                                                  interp opaq globals locals))))
                (if (null? (cdr tl))
                    (car tl)
                    `(block ,@(cdr tl) ,(car tl)))))
            exprs)
-      (map (lambda (x) (cl-convert x fname lam namemap defined #f interp opaq globals)) exprs)))
+      (map (lambda (x) (cl-convert x fname lam namemap defined #f interp opaq globals locals)) exprs)))
 
 (define (prepare-lambda! lam)
   ;; mark all non-arguments as assigned, since locals that are never assigned
@@ -3854,11 +3884,11 @@ f(x) = yt(x)
             (list-tail (car (lam:vinfo lam)) (length (lam:args lam))))
   (lambda-optimize-vars! lam))
 
-(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)))
+(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if (and (not lam)
            (not (and (pair? e) (memq (car e) '(lambda method macro opaque_closure)))))
       (if (atom? e) e
-          (cons (car e) (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals)))
+          (cons (car e) (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals)))
       (cond
        ((symbol? e)
         (define (new-undef-var name)
@@ -3877,12 +3907,12 @@ f(x) = yt(x)
                  (val (if (equal? typ '(core Any))
                           val
                           `(call (core typeassert) ,val
-                                 ,(cl-convert typ fname lam namemap defined toplevel interp opaq globals)))))
+                                 ,(cl-convert typ fname lam namemap defined toplevel interp opaq globals locals)))))
             `(block
                ,@(if (eq? box access) '() `((= ,access ,box)))
                ,undefcheck
                ,val)))
-        (let ((vi (assq e (car  (lam:vinfo lam))))
+        (let ((vi (get locals e #f))
               (cv (assq e (cadr (lam:vinfo lam)))))
           (cond ((eq? e fname) e)
                 ((memq e (lam:sp lam)) e)
@@ -3901,7 +3931,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref thismodule line break inert module toplevel null true false meta) e)
+          ((quote top core globalref outerref thismodule lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -3909,15 +3939,15 @@ f(x) = yt(x)
            e)
           ((=)
            (let ((var (cadr e))
-                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq globals)))
-             (convert-assignment var rhs fname lam interp opaq globals)))
+                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq globals locals)))
+             (convert-assignment var rhs fname lam interp opaq globals locals)))
           ((local-def) ;; make new Box for local declaration of defined variable
-           (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+           (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
                  '(null))))
           ((local) ;; convert local declarations to newvar statements
-           (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+           (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
                  (if (vinfo:never-undef vi)
@@ -3928,12 +3958,12 @@ f(x) = yt(x)
            e)
           ((atomic) e)
           ((const-if-global)
-           (if (local-in? (cadr e) lam)
+           (if (local-in? (cadr e) lam locals)
                '(null)
                `(const ,(cadr e))))
           ((isdefined) ;; convert isdefined expr to function for closure converted variables
            (let* ((sym (cadr e))
-                  (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
+                  (vi (and (symbol? sym) (get locals sym #f)))
                   (cv (and (symbol? sym) (assq sym (cadr (lam:vinfo lam))))))
              (cond ((eq? sym fname) e)
                    ((memq sym (lam:sp lam)) e)
@@ -3973,13 +4003,13 @@ f(x) = yt(x)
                   (lam2  (if short #f (cadddr e)))
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
-                  (local? (lambda (s) (and lam (symbol? s) (local-in? s lam))))
+                  (local? (lambda (s) (and lam (symbol? s) (local-in? s lam locals))))
                   (local (and (not (outerref? (cadr e))) (local? name)))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
                                 (map-cl-convert (butlast (cdr sig))
-                                                fname lam namemap defined toplevel interp opaq globals)))
+                                                fname lam namemap defined toplevel interp opaq globals locals)))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
@@ -4006,10 +4036,11 @@ f(x) = yt(x)
                                           ;; anonymous functions with keyword args generate global
                                           ;; functions that refer to the type of a local function
                                           (rename-sig-types sig namemap)
-                                          fname lam namemap defined toplevel interp opaq globals)
+                                          fname lam namemap defined toplevel interp opaq globals locals)
                                   ,(let ((body (add-box-inits-to-body
                                                 lam2
-                                                (cl-convert (cadddr lam2) 'anon lam2 (table) (table) #f interp opaq))))
+                                                (cl-convert (cadddr lam2) 'anon lam2 (table) (table) #f interp opaq (table)
+                                                            (vinfo-to-table (car (lam:vinfo lam2)))))))
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
@@ -4020,7 +4051,7 @@ f(x) = yt(x)
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (method ,name ,(cl-convert sig fname lam namemap defined toplevel interp opaq globals)
+                                   (method ,name ,(cl-convert sig fname lam namemap defined toplevel interp opaq globals locals)
                                            ,(julia-bq-macro newlam)))
                             ,@top-stmts))))
 
@@ -4123,7 +4154,7 @@ f(x) = yt(x)
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
                                             closure-param-syms closure-param-names)
-                                       `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq globals)
+                                       `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq globals locals)
                                                  ,(convert-lambda lam2
                                                                   (if iskw
                                                                       (caddr (lam:args lam2))
@@ -4162,7 +4193,7 @@ f(x) = yt(x)
                        (begin
                          (put! defined name #t)
                          `(toplevel-butfirst
-                           ,(convert-assignment name mk-closure fname lam interp opaq globals)
+                           ,(convert-assignment name mk-closure fname lam interp opaq globals locals)
                            ,@typedef
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
@@ -4170,42 +4201,43 @@ f(x) = yt(x)
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
+           (lambda-optimize-vars! e)
            (let ((body (map-cl-convert (cdr (lam:body e)) 'anon
-                                       (lambda-optimize-vars! e)
+                                       e
                                        (table)
                                        (table)
                                        (null? (cadr e)) ;; only toplevel thunks have 0 args
-                                       interp opaq globals)))
+                                       interp opaq globals (vinfo-to-table (car (lam:vinfo e))))))
              `(lambda ,(cadr e)
                 (,(clear-capture-bits (car (lam:vinfo e)))
                  () ,@(cddr (lam:vinfo e)))
                 (block ,@body))))
           ;; remaining `::` expressions are type assertions
           ((|::|)
-           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq globals))
+           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq globals locals))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
           ((decl)
            (cond ((and (symbol? (cadr e))
-                       (local-in? (cadr e) lam))
+                       (local-in? (cadr e) lam locals))
                   '(null))
                  (else
                   (cl-convert
-                    (let ((ref (binding-to-globalref (cadr e))))
-                      (if ref
-                          (begin
-                            (put! globals ref #t)
-                            `(block
-                               (toplevel-only set_binding_type! ,(cadr e))
-                               (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
-                          `(call (core typeassert) ,@(cdr e))))
-                    fname lam namemap defined toplevel interp opaq globals))))
+                   (let ((ref (binding-to-globalref (cadr e))))
+                     (if ref
+                         (begin
+                           (put! globals ref #t)
+                           `(block
+                             (toplevel-only set_binding_type! ,(cadr e))
+                             (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
+                         `(call (core typeassert) ,@(cdr e))))
+                   fname lam namemap defined toplevel interp opaq globals locals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
-           (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq globals))
+           (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq globals locals))
           (else
            (cons (car e)
-                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals))))))))
+                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals))))))))
 
 (define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
@@ -4249,6 +4281,7 @@ f(x) = yt(x)
         (current-loc #f)
         (rett #f)
         (global-const-error #f)
+        (vinfo-table (vinfo-to-table (car (lam:vinfo lam))))
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
@@ -4261,6 +4294,7 @@ f(x) = yt(x)
         (handler-level 0)     ;; exception handler nesting depth
         (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
     (define (emit c)
+      (or c (raise "missing value in IR"))
       (set! code (cons c code))
       c)
     (define (make-label)
@@ -4316,7 +4350,7 @@ f(x) = yt(x)
               x)))
       (define (actually-return x)
         (let* ((x (if rett
-                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      (compile (convert-for-type-decl (emit- x) rett #t lam) '() #t #f)
                       x))
                (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
@@ -4381,10 +4415,12 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core globalref outerref boundscheck))))
+                                                   (memq (car arg) '(quote inert top core boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
-                                         (not (and (symbol? arg)
+                                         (not (and (or (symbol? arg)
+                                                       (and (pair? arg)
+                                                            (memq (car arg) '(globalref outerref))))
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
                                     (let ((tmp (make-ssavalue)))
@@ -4403,6 +4439,9 @@ f(x) = yt(x)
             cnd)))
     (define (emit-cond cnd break-labels endl)
       (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                      (flatten-ex 'block cnd)
+                      cnd))
+             (cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
                        (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
                               (last cnd))
                        cnd))
@@ -4430,7 +4469,8 @@ f(x) = yt(x)
               (emit `(= ,lhs ,rhs))
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,rhs))
-                (emit `(= ,lhs ,rr)))))
+                (emit `(= ,lhs ,rr))))
+          (emit `(= ,lhs (null)))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
@@ -4448,7 +4488,7 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (error (string "all-underscore identifier used as rvalue" (format-loc current-loc))))
+                (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
@@ -4525,12 +4565,14 @@ f(x) = yt(x)
                     (file-diff  (not (eq? fname last-fname)))
                     ;; don't need a filename node for start of function
                     (need-meta  (and file-diff last-fname
-                                     (not (eq? e (lam:body lam))))))
+                                     (not (eq? e (lam:body lam)))))
+                    (emit-final-meta (lambda ())))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))
                (let ((v (let loop ((xs (cdr e)))
-                  (if (null? (cdr xs))
-                      (compile (car xs) break-labels value tail)
+                  (if (only-meta? (cdr xs))
+                      (begin (set! emit-final-meta (lambda () (map (lambda (v) (compile v break-labels #f #f)) (cdr xs))))
+                             (compile (car xs) break-labels value tail))
                       (begin (compile (car xs) break-labels #f #f)
                              (loop (cdr xs)))))))
                   (if need-meta
@@ -4546,16 +4588,20 @@ f(x) = yt(x)
                                    (let ((tmp (make-ssavalue)))
                                      (emit `(= ,tmp ,retv))
                                      (set! retv tmp)))
+                                 (emit-final-meta)
                                  (emit '(meta pop_loc))
                                  (emit `(return ,retv)))
                                (emit '(meta pop_loc))))
-                          ((and value (not (simple-atom? v)))
+                          ((and v value (not (simple-atom? v)))
                            (let ((tmp (make-ssavalue)))
                              (emit `(= ,tmp ,v))
                              (set! v tmp)
+                             (emit-final-meta)
                              (emit `(meta pop_loc))))
                           (else
-                           (emit `(meta pop_loc)))))
+                           (emit-final-meta)
+                           (emit `(meta pop_loc))))
+                    (emit-final-meta))
                   (if file-diff (set! filename last-fname))
                   v)))
             ((return)
@@ -4678,7 +4724,7 @@ f(x) = yt(x)
                      (begin (mark-label els)
                             (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
                               (if val (emit-assignment val v3)))
-                            (emit `(goto ,endl))))
+                            (if endl (emit `(goto ,endl)))))
                  ;; emit either catch or finally block
                  (mark-label catch)
                  (emit `(leave 1))
@@ -4719,7 +4765,7 @@ f(x) = yt(x)
              ;; avoid duplicate newvar nodes
              (if (and (not (and (pair? code) (equal? (car code) e)))
                       ;; exclude deleted vars
-                      (assq (cadr e) (car (lam:vinfo lam))))
+                      (has? vinfo-table (cadr e)))
                  (emit e)
                  #f))
             ((global) ; keep global declarations as statements
@@ -4801,7 +4847,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
+            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -4932,24 +4978,24 @@ f(x) = yt(x)
   (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
+        (linetablelen 0)
         (labltable    (table))
         (ssavtable    (table))
-        (reachable    #t)
         (current-loc  0)
         (current-file file)
         (current-line line)
         (locstack     '())
         (i            1))
     (define (emit e)
+      (or e (raise "missing value in IR"))
       (if (and (null? (cdr linetable))
                (not (and (pair? e) (eq? (car e) 'meta))))
           (begin (set! linetable (cons (make-lineinfo name file line) linetable))
+                 (set! linetablelen (+ linetablelen 1))
                  (set! current-loc 1)))
-      (if (or reachable
-              (and (pair? e) (memq (car e) '(meta inbounds gc_preserve_begin gc_preserve_end aliasscope popaliasscope inline noinline))))
-          (begin (set! code (cons e code))
-                 (set! i (+ i 1))
-                 (set! locs (cons current-loc locs)))))
+      (set! code (cons e code))
+      (set! i (+ i 1))
+      (set! locs (cons current-loc locs)))
     (let loop ((stmts (cdr body)))
       (if (pair? stmts)
           (let ((e (car stmts)))
@@ -4967,13 +5013,15 @@ f(x) = yt(x)
                                                    (make-lineinfo name current-file current-line)
                                                    (make-lineinfo name current-file current-line (caar locstack)))
                                                linetable))
-                         (set! current-loc (- (length linetable) 1)))))
+                         (set! linetablelen (+ linetablelen 1))
+                         (set! current-loc linetablelen))))
                   ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
                    (set! locstack (cons (list current-loc current-line current-file) locstack))
                    (set! current-file (caddr e))
                    (set! current-line 0)
                    (set! linetable (cons (make-lineinfo name current-file current-line current-loc) linetable))
-                   (set! current-loc (- (length linetable) 1)))
+                   (set! linetablelen (+ linetablelen 1))
+                   (set! current-loc linetablelen))
                   ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
                    (let ((l (car locstack)))
                      (set! locstack (cdr locstack))
@@ -4981,7 +5029,6 @@ f(x) = yt(x)
                      (set! current-line (cadr l))
                      (set! current-file (caddr l))))
                   ((eq? (car e) 'label)
-                   (set! reachable #t)
                    (put! labltable (cadr e) i))
                   ((and (assignment? e) (ssavalue? (cadr e)))
                    (let ((idx (and (ssavalue? (caddr e)) (get ssavtable (cadr (caddr e)) #f))))
@@ -4992,9 +5039,7 @@ f(x) = yt(x)
                            (put! ssavtable (cadr (cadr e)) i)
                            (emit (caddr e))))))
                   (else
-                   (emit e)
-                   (if (or (eq? (car e) 'goto) (eq? (car e) 'return))
-                       (set! reachable #f))))
+                   (emit e)))
             (loop (cdr stmts)))))
     (vector (reverse code) (reverse locs) (reverse linetable) ssavtable labltable)))
 
@@ -5012,7 +5057,8 @@ f(x) = yt(x)
     (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
     (define sp-table (symbol-to-idx-map (lam:sp lam)))
     (define (renumber-stuff e)
-      (cond ((symbol? e)
+      (cond ((eq? e UNUSED) (error "Attempted to use slot marked unused"))
+            ((symbol? e)
              (let ((idx (get slot-table e #f)))
                (if idx
                    `(slot ,idx)
@@ -5028,8 +5074,8 @@ f(x) = yt(x)
             ((or (atom? e) (quoted? e) (eq? (car e) 'global))
              e)
             ((ssavalue? e)
-             (let ((idx (or (get ssavalue-table (cadr e) #f)
-                            (error "ssavalue with no def"))))
+             (let ((idx (get ssavalue-table (cadr e) #f)))
+               (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
                `(ssavalue ,idx)))
             ((memq (car e) '(goto enter))
              (list* (car e) (get label-table (cadr e)) (cddr e)))
@@ -5075,8 +5121,8 @@ f(x) = yt(x)
 
 (define *current-desugar-loc* #f)
 
-(define (julia-expand0 ex file line)
-  (with-bindings ((*current-desugar-loc* `(line ,line ,file)))
+(define (julia-expand0 ex lno)
+  (with-bindings ((*current-desugar-loc* lno))
    (trycatch (expand-forms ex)
              (lambda (e)
                (if (and (pair? e) (eq? (car e) 'error))
@@ -5091,4 +5137,4 @@ f(x) = yt(x)
 (define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex) file line) file line))
+    (julia-expand-macroscope ex) `(line ,line ,file)) file line))

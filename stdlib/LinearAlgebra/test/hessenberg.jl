@@ -24,6 +24,11 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
+        for k in -2:2
+            @test istril(H, k) == istril(AH, k)
+            @test istriu(H, k) == istriu(AH, k)
+            @test (k <= -1 ? istriu(H, k) : !istriu(H, k))
+        end
         @test UpperHessenberg(H) === H
         @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH
@@ -92,10 +97,10 @@ let n = 10
             @testset "Multiplication/division" begin
                 for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
                             UpperTriangular(A), UnitUpperTriangular(A))
-                    @test (H*x)::UpperHessenberg == Array(H)*x
-                    @test (x*H)::UpperHessenberg == x*Array(H)
-                    @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                    @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test (H*x)::UpperHessenberg ≈ Array(H)*x
+                    @test (x*H)::UpperHessenberg ≈ x*Array(H)
+                    @test H/x ≈ Array(H)/x# broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test x\H ≈ x\Array(H)# broken = eltype(H) <: Furlong && x isa UpperTriangular
                     @test H/x isa UpperHessenberg
                     @test x\H isa UpperHessenberg
                 end
@@ -108,13 +113,12 @@ let n = 10
             H = UpperHessenberg(Furlong.(Areal))
             for A in (A, Furlong.(A))
                 @testset "Multiplication/division Furlong" begin
-                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U))
-                        @test (H*x)::UpperHessenberg == Array(H)*x
-                        @test (x*H)::UpperHessenberg == x*Array(H)
-                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test H/x isa UpperHessenberg
-                        @test x\H isa UpperHessenberg
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                                UpperTriangular(A), UnitUpperTriangular(A))
+                        @test map(x -> x.val, (H*x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)*x)
+                        @test map(x -> x.val, (x*H)::UpperHessenberg) ≈ map(x -> x.val, x*Array(H))
+                        @test map(x -> x.val, (H/x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)/x)
+                        @test map(x -> x.val, (x\H)::UpperHessenberg) ≈ map(x -> x.val, x\Array(H))
                     end
                     x = Bidiagonal(d, dl, :L)
                     @test H*x == Array(H)*x
@@ -144,15 +148,17 @@ let n = 10
         @test_throws ErrorException H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
-        @test (H.Q' *A) * H.Q ≈ H.H
+        @test (H.Q' * A) * H.Q ≈ H.H
         #getindex for HessenbergQ
         @test H.Q[1,1] ≈ Array(H.Q)[1,1]
+        @test det(H.Q) ≈ det(Matrix(H.Q))
+        @test logabsdet(H.Q)[1] ≈ logabsdet(Matrix(H.Q))[1] atol=2n*eps(float(real(eltya)))
 
         # REPL show
         hessstring = sprint((t, s) -> show(t, "text/plain", s), H)
         qstring = sprint((t, s) -> show(t, "text/plain", s), H.Q)
         hstring = sprint((t, s) -> show(t, "text/plain", s), H.H)
-        @test hessstring == "$(summary(H))\nQ factor:\n$qstring\nH factor:\n$hstring"
+        @test hessstring == "$(summary(H))\nQ factor: $qstring\nH factor:\n$hstring"
 
         #iterate
         q,h = H
@@ -172,8 +178,10 @@ let n = 10
         @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
         @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
-        @test b' / H ≈ b' / A ≈ complex.(b') / H
+        @test b' / H ≈ b' / A ≈ complex(b') / H
+        @test transpose(b) / H ≈ transpose(b) / A ≈ transpose(complex(b)) / H
         @test B' / H ≈ B' / A ≈ complex(B') / H
+        @test b' / H' ≈ complex(b)' / H'
         @test B' / (H - I) ≈ B' / (A - I)
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
         @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
@@ -189,6 +197,13 @@ let n = 10
         c = b .+ 1
         @test dot(b, h, c) ≈ dot(h'b, c) ≈ dot(b, HM, c) ≈ dot(HM'b, c)
     end
+end
+
+@testset "hessenberg(::AbstractMatrix)" begin
+    n = 10
+    A = Tridiagonal(rand(n-1), rand(n), rand(n-1))
+    H = hessenberg(A)
+    @test convert(Array, H) ≈ A
 end
 
 # check logdet on a matrix that has a positive determinant

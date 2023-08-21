@@ -233,23 +233,10 @@ function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
     tt = Base.signature_type(f, types)
-    specs = m.specializations
-    if isa(specs, Nothing)
-    elseif isa(specs, Core.SimpleVector)
-        for i = 1:length(specs)
-            mi = specs[i]
-            if mi isa Core.MethodInstance
-                if mi.specTypes <: tt && tt <: mi.specTypes
-                    inst = mi
-                    break
-                end
-            end
-        end
-    else
-        Base.visit(specs) do mi
-            if mi.specTypes === tt
-                inst = mi
-            end
+    for mi in Base.specializations(m)
+        if mi.specTypes <: tt && tt <: mi.specTypes
+            inst = mi
+            break
         end
     end
     return inst
@@ -355,7 +342,7 @@ inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
 inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
 inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
 @test outer(Ref{Any}([1,2,3])) == "1   false"
-mi = method_instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+mi = method_instance(Core.kwcall, (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
 w = worlds(mi)
 abstract type Container{T} end
 Base.eltype(::Type{C}) where {T,C<:Container{T}} = T
@@ -408,3 +395,27 @@ wc_aiw2 = get_world_counter()
 @test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
 @test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
 @test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
+
+# logging
+mc48954(x, y) = false
+mc48954(x::Int, y::Int) = x == y
+mc48954(x::Symbol, y::Symbol) = x == y
+function mcc48954(container, y)
+    x = container[1]
+    return mc48954(x, y)
+end
+
+mcc48954(Any[1], 1)
+mc48954i = method_instance(mc48954, (Any, Int))
+mcc48954i = method_instance(mcc48954, (Vector{Any}, Int))
+list48954 = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+mc48954(x::AbstractFloat, y::Int) = x == y
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+@test list48954 == [
+    mcc48954i,
+    1,
+    mc48954i,
+    "jl_method_table_insert",
+    which(mc48954, (AbstractFloat, Int)),
+    "jl_method_table_insert"
+]

@@ -27,7 +27,7 @@ import ._TOP_MOD:     # Base definitions
     pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
     ismutabletype
 import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, InferenceResult, IRCode, IR_FLAG_NOTHROW,
+    Bottom, InferenceResult, IRCode, IR_FLAG_NOTHROW, SimpleInferenceLattice,
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
@@ -42,6 +42,7 @@ end
 
 const AInfo = IdSet{Any}
 const LivenessSet = BitSet
+const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
@@ -670,7 +671,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
         local anyupdate = false
 
         for pc in nstmts:-1:1
-            stmt = getinst(ir, pc)[:inst]
+            stmt = getinst(ir, pc)[:stmt]
 
             # collect escape information
             if isa(stmt, Expr)
@@ -706,7 +707,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
                     continue
                 elseif head === :static_parameter ||  # this exists statically, not interested in its escape
                        head === :copyast ||           # XXX can this account for some escapes?
-                       head === :undefcheck ||        # XXX can this account for some escapes?
                        head === :isdefined ||         # just returns `Bool`, nothing accounts for any escapes
                        head === :gc_preserve_begin || # `GC.@preserve` expressions themselves won't be used anywhere
                        head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
@@ -784,12 +784,13 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     end
     for idx in 1:nstmts+nnewnodes
         inst = getinst(ir, idx)
-        stmt = inst[:inst]
+        stmt = inst[:stmt]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
-            check_effect_free!(ir, idx, stmt, inst[:type])
+            check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
         end
         if callinfo !== nothing && isexpr(stmt, :call)
+            # TODO: pass effects here
             callinfo[idx] = resolve_call(ir, stmt, inst[:info])
         elseif isexpr(stmt, :enter)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
@@ -1290,7 +1291,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any}, callinf
         # now cascade to the builtin handling
         escape_call!(astate, pc, args)
         return
-    elseif isa(info, CallInfo)
+    elseif isa(info, EACallInfo)
         for linfo in info.linfos
             escape_invoke!(astate, pc, args, linfo, 1)
         end
@@ -1596,12 +1597,16 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    argtypes = Any[]
-    for i = 2:length(args)
-        push!(argtypes, argextype(args[i], ir))
+    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
+        return true
+    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir))
+        return true
+    else
+        add_thrown_escapes!(astate, pc, args, 2)
+        return true
     end
-    setfield!_nothrow(argtypes) || add_thrown_escapes!(astate, pc, args, 2)
-    return true
 end
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})

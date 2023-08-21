@@ -12,6 +12,8 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
+using .Main.DualNumbers
 
 Random.seed!(123)
 
@@ -78,30 +80,7 @@ n = 5 # should be odd
     end
 
     @testset "det with nonstandard Number type" begin
-        struct MyDual{T<:Real} <: Real
-            val::T
-            eps::T
-        end
-        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
-        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
-        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
-        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
-        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
-        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
-        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
-        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
-        # the following line is required for BigFloat, IDK why it doesn't work via
-        # promote_rule like for all other types
-        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
-            MyDual{promote_type(T, S)}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
-            MyDual{promote_type(T, S)}
-        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
-            MyDual(convert(T, x.val), convert(T, x.eps))
-        if elty <: Real
-            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
-        end
+        elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
     end
 end
 
@@ -117,12 +96,12 @@ end
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
     α, β = 'f', 'g'
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,['g'])
-    @test_throws DimensionMismatch LinearAlgebra.axpby!(α,x,β,['g'])
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(-1:5),y,Vector(1:7))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(-1:5))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(1:7))
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,Vector(1:3),y,Vector(1:5))
+    @test_throws DimensionMismatch axpy!(α, x, ['g'])
+    @test_throws DimensionMismatch axpby!(α, x, β, ['g'])
+    @test_throws BoundsError axpy!(α, x, Vector(-1:5), y, Vector(1:7))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(-1:5))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(1:7))
+    @test_throws DimensionMismatch axpy!(α, x, Vector(1:3), y, Vector(1:5))
 end
 
 @test !issymmetric(fill(1,5,3))
@@ -269,6 +248,24 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "norm of transpose/adjoint equals norm of parent #32739" begin
+    for t in (transpose, adjoint), elt in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        # Vector/matrix of scalars
+        for sz in ((2,), (2, 3))
+            A = rand(elt, sz...)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Aᵀ))
+        end
+
+        # Vector/matrix of vectors/matrices
+        for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
+            A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Matrix.(Aᵀ)))
+        end
+    end
+end
+
 @testset "rotate! and reflect!" begin
     x = rand(ComplexF64, 10)
     y = rand(ComplexF64, 10)
@@ -302,44 +299,50 @@ end
     end
 end
 
-@testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
+@testset "axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
     x = fill([ 9 10; 11 12], 3)
     y = fill([13 14; 15 16], 3)
-    axpy = LinearAlgebra.axpy!(α, x, deepcopy(y))
-    axpby = LinearAlgebra.axpby!(α, x, β, deepcopy(y))
+    axpy = axpy!(α, x, deepcopy(y))
+    axpby = axpby!(α, x, β, deepcopy(y))
     @test axpy == x .* [α] .+ y
     @test axpy != [α] .* x .+ y
     @test axpby == x .* [α] .+ y .* [β]
     @test axpby != [α] .* x .+ [β] .* y
+    axpy = axpy!(zero(α), x, deepcopy(y))
+    axpby = axpby!(zero(α), x, one(β), deepcopy(y))
+    @test axpy == y
+    @test axpy == y
+    @test axpby == y
+    @test axpby == y
 end
 
-@testset "LinearAlgebra.axpy! for x and y of different dimensions" begin
+@testset "axpy! for x and y of different dimensions" begin
     α = 5
     x = 2:5
     y = fill(1, 2, 4)
     rx = [1 4]
     ry = [2 8]
-    @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
+    @test axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
-@testset "LinearAlgebra.axp(b)y! for non strides input" begin
+@testset "axp(b)y! for non strides input" begin
     a = rand(5, 5)
-    @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
-    @test LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
-    @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
-    @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+    @test axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test axpy!(1, 1.:5, zeros(5)) == 1.:5
 end
 
 @testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
     for T in (Float32, Float64, ComplexF32, ComplexF64)
         a = rand(T, 5, 5)
-        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
-        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        @test axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
         b = view(a, 25:-2:1)
-        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
-        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+        @test axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test axpy!(1, b, zeros(T, size(b))) == b
     end
 end
 
@@ -366,6 +369,7 @@ end
         [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
         rand(1,2,3),                # higher dims
         rand(1,2,3,4),
+        Dual.(randn(2,3), randn(2,3)),
         OffsetArray([-1,0], (-2,))  # no index 1
     )
         @test normalize(arr) == normalize!(copy(arr))
@@ -445,6 +449,7 @@ Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
+Base.isfinite(a::ModInt{n}) where {n} = isfinite(a.k)
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
@@ -543,10 +548,17 @@ end
 
 @testset "missing values" begin
     @test ismissing(norm(missing))
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    for p in (-Inf, -1, 1, 2, 3, Inf)
+        @test ismissing(norm(x, p))
+        @test ismissing(norm(y, p))
+    end
+    @test_broken ismissing(norm(x, 0))
 end
 
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin

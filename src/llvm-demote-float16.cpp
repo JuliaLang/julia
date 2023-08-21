@@ -25,6 +25,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
+#include "julia.h"
+#include "jitlayers.h"
 
 #define DEBUG_TYPE "demote_float16"
 
@@ -43,13 +45,41 @@ INST_STATISTIC(FRem);
 INST_STATISTIC(FCmp);
 #undef INST_STATISTIC
 
+extern JuliaOJIT *jl_ExecutionEngine;
+
 namespace {
+
+static bool have_fp16(Function &caller, const Triple &TT) {
+    Attribute FSAttr = caller.getFnAttribute("target-features");
+    StringRef FS = "";
+    if (FSAttr.isValid())
+        FS = FSAttr.getValueAsString();
+    else if (jl_ExecutionEngine)
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    // else probably called from opt, just do nothing
+    if (TT.isAArch64()) {
+        if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
+            return true;
+        }
+    } else if (TT.getArch() == Triple::x86_64) {
+        if (FS.find("+avx512fp16") != llvm::StringRef::npos){
+            return true;
+        }
+    }
+    if (caller.hasFnAttribute("julia.hasfp16")) {
+        return true;
+    }
+    return false;
+}
 
 static bool demoteFloat16(Function &F)
 {
+    auto TT = Triple(F.getParent()->getTargetTriple());
+    if (have_fp16(F, TT))
+        return false;
+
     auto &ctx = F.getContext();
     auto T_float32 = Type::getFloatTy(ctx);
-
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {
@@ -153,7 +183,9 @@ static bool demoteFloat16(Function &F)
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
-        assert(!verifyFunction(F, &errs()));
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyLLVMIR(F));
+#endif
         return true;
     }
     else
@@ -162,7 +194,7 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses DemoteFloat16Pass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (demoteFloat16(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -195,7 +227,8 @@ Pass *createDemoteFloat16Pass()
     return new DemoteFloat16Legacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createDemoteFloat16Pass());
 }

@@ -2,6 +2,9 @@
 
 // Fallback processor detection and dispatch
 
+static constexpr FeatureName *feature_names = nullptr;
+static constexpr uint32_t nfeature_names = 0;
+
 namespace Fallback {
 
 static inline const std::string &host_cpu_name()
@@ -33,7 +36,7 @@ static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host
     return res;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -48,6 +51,22 @@ static uint32_t sysimg_init_cb(const void *id)
         }
     }
     jit_targets.push_back(std::move(target));
+    return best_idx;
+}
+
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
+{
+    TargetData<1> target = jit_targets.front();
+    // Find the last name match or use the default one.
+    uint32_t best_idx = 0;
+    auto pkgimg = deserialize_target_data<1>((const uint8_t*)id);
+    for (uint32_t i = 0; i < pkgimg.size(); i++) {
+        auto &imgt = pkgimg[i];
+        if (imgt.name == target.name) {
+            best_idx = i;
+        }
+    }
+
     return best_idx;
 }
 
@@ -96,11 +115,20 @@ get_llvm_target_str(const TargetData<1> &data)
 
 using namespace Fallback;
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
@@ -139,10 +167,26 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
 JL_DLLEXPORT void jl_dump_host_cpu(void)
 {
     jl_safe_printf("CPU: %s\n", host_cpu_name().c_str());
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
+}
+
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
+{
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)

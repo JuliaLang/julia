@@ -12,17 +12,16 @@ endef
 
 # CSL bundles lots of system compiler libraries, and while it is quite bleeding-edge
 # as compared to what most distros ship, if someone tries to build an older branch,
-# the version of CSL that ships with that branch may become relatively old.  This is
-# not a problem for code that is built in BB, but when we build Julia with the system
+# the version of CSL that ships with that branch may be relatively old. This is not
+# a problem for code that is built in BB, but when we build Julia with the system
 # compiler, that compiler uses the version of `libstdc++` that it is bundled with,
-# and we can get linker errors when trying to run that `julia` executable with the
+# and we can get linker errors when trying to run that 	`julia` executable with the
 # `libstdc++` that comes from the (now old) BB-built CSL.
 #
 # To fix this, we take note when the system `libstdc++.so` is newer than whatever we
 # would get from CSL (by searching for a `GLIBCXX_3.4.X` symbol that does not exist
 # in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
 # this case.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 # First, check to see if BB is disabled on a global setting
 ifeq ($(USE_BINARYBUILDER),0)
@@ -33,8 +32,8 @@ ifeq ($(USE_SYSTEM_CSL),1)
 USE_BINARYBUILDER_CSL ?= 0
 else
 # If it's not, see if we should disable it due to `libstdc++` being newer:
-LIBSTDCXX_PATH := $(eval $(call pathsearch,libstdc++,$(STD_LIB_PATH)))
-ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p $(LIBSTDCXX_PATH) | grep $(CSL_NEXT_GLIBCXX_VERSION))))
+LIBSTDCXX_PATH := $(call pathsearch,$(call versioned_libname,libstdc++,6),$(STD_LIB_PATH))
+ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p '$(LIBSTDCXX_PATH)' | grep '$(CSL_NEXT_GLIBCXX_VERSION)')))
 # Found `libstdc++`, grepped it for strings and found a `GLIBCXX` symbol
 # that is newer that whatever we have in CSL.  Default to not using BB.
 USE_BINARYBUILDER_CSL ?= 0
@@ -51,8 +50,8 @@ ifeq ($(USE_BINARYBUILDER_CSL),0)
 define copy_csl
 install-csl: | $$(build_shlibdir) $$(build_shlibdir)/$(1)
 $$(build_shlibdir)/$(1): | $$(build_shlibdir)
-	-@SRC_LIB=$$(call pathsearch,$(1),$$(STD_LIB_PATH)); \
-	[ -n "$$$${SRC_LIB}" ] && cp $$$${SRC_LIB} $$(build_shlibdir)
+	-@SRC_LIB='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
+	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_shlibdir)'
 endef
 
 # libgfortran has multiple names; we're just going to copy any version we can find
@@ -69,7 +68,7 @@ $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 ifeq ($(OS),WINNT)
-# Windwos has special gcc_s names
+# Windows has special gcc_s names
 ifeq ($(ARCH),i686)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))
 else

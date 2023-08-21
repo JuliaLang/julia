@@ -159,8 +159,17 @@ end
         test_matrix = rand(typeof(eltya),3,3)
         test_matrix[1,3] = eltya
         @test_throws(ArgumentError, eigen(test_matrix))
+        @test_throws(ArgumentError, eigvals(test_matrix))
+        @test_throws(ArgumentError, eigvecs(test_matrix))
         @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
+        @test_throws(ArgumentError, eigvals(Symmetric(test_matrix)))
+        @test_throws(ArgumentError, eigvecs(Symmetric(test_matrix)))
         @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
+        @test_throws(ArgumentError, eigvals(Hermitian(test_matrix)))
+        @test_throws(ArgumentError, eigvecs(Hermitian(test_matrix)))
+        @test_throws(ArgumentError, eigen(Hermitian(complex.(test_matrix))))
+        @test_throws(ArgumentError, eigvals(Hermitian(complex.(test_matrix))))
+        @test_throws(ArgumentError, eigvecs(Hermitian(complex.(test_matrix))))
         @test eigen(Symmetric(test_matrix, :L)) isa Eigen
         @test eigen(Hermitian(test_matrix, :L)) isa Eigen
     end

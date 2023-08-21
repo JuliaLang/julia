@@ -265,8 +265,10 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
-        @test_throws BoundsError map(foo, (), (1,))
-        @test_throws BoundsError map(foo, (1,), ())
+        @test map(foo, longtuple, vlongtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, (), (1,)) === ()
+        @test map(foo, (1,), ()) === ()
     end
 
     @testset "n arguments" begin
@@ -276,8 +278,11 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
         @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
-        @test_throws BoundsError map(foo, (), (1,), (1,))
-        @test_throws BoundsError map(foo, (1,), (1,), ())
+        @test map(foo, vlongtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, vlongtuple) === ntuple(i->3i,20)
+        @test map(foo, (), (1,), (1,)) === ()
+        @test map(foo, (1,), (1,), ()) === ()
     end
 end
 
@@ -644,7 +649,7 @@ end
     @test @inferred(f()) == (9, 2:2, 3:3)
 end
 
-@testset "inferrable range indexing with constant values" begin
+@testset "inferable range indexing with constant values" begin
     whole(t) = t[1:end]
     tail(t) = t[2:end]
     ttail(t) = t[3:end]
@@ -757,3 +762,42 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
+
+# issue #47326
+function fun1_47326(args...)
+    head..., tail = args
+    head
+end
+function fun2_47326(args...)
+    head, tail... = args
+    tail
+end
+@test @inferred(fun1_47326(1,2,3)) === (1, 2)
+@test @inferred(fun2_47326(1,2,3)) === (2, 3)
+
+f47326(x::Union{Tuple, NamedTuple}) = Base.split_rest(x, 1)
+tup = (1, 2, 3)
+namedtup = (;a=1, b=2, c=3)
+@test only(Base.return_types(f47326, (typeof(tup),))) == Tuple{Tuple{Int, Int}, Tuple{Int}}
+@test only(Base.return_types(f47326, (typeof(namedtup),))) ==
+    Tuple{
+        NamedTuple{(:a, :b), Tuple{Int, Int}},
+        NamedTuple{(:c,), Tuple{Int}},
+    }
+
+# Make sure that tuple iteration is foldable
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
+@test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
+
+# some basic equivalence handling tests for Union{} appearing in Tuple Vararg parameters
+@test Tuple{} <: Tuple{Vararg{Union{}}}
+@test Tuple{Int} <: Tuple{Int, Vararg{Union{}}}
+@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Int, Vararg{Union{},1}}
+@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
+@test Tuple{} <: Tuple{Vararg{Union{},N}} where N
+@test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+
+@test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
+@test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
+@test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
+@test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}

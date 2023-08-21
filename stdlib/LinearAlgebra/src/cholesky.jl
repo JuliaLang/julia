@@ -178,10 +178,8 @@ Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
 
 
 # make a copy that allow inplace Cholesky factorization
-@inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
-@inline cholcopy(A::StridedMatrix) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::RealHermSymComplexHerm) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::AbstractMatrix) = copy_similar(A, choltype(A))
+choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
+cholcopy(A::AbstractMatrix) = eigencopy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
 ## BLAS/LAPACK element types
@@ -208,7 +206,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             A[k,k] = Akk
             Akk, info = _chol!(Akk, UpperTriangular)
             if info != 0
-                return UpperTriangular(A), info
+                return UpperTriangular(A), convert(BlasInt, k)
             end
             A[k,k] = Akk
             AkkInv = inv(copy(Akk'))
@@ -235,7 +233,7 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             A[k,k] = Akk
             Akk, info = _chol!(Akk, LowerTriangular)
             if info != 0
-                return LowerTriangular(A), info
+                return LowerTriangular(A), convert(BlasInt, k)
             end
             A[k,k] = Akk
             AkkInv = inv(Akk)
@@ -253,11 +251,12 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
 end
 
 ## Numbers
-function _chol!(x::Number, uplo)
+function _chol!(x::Number, _)
     rx = real(x)
+    iszero(rx) && return (rx, convert(BlasInt, 1))
     rxr = sqrt(abs(rx))
     rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
-    rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
+    return (rval, convert(BlasInt, rx != abs(x)))
 end
 
 ## for StridedMatrices, check that matrix is symmetric/Hermitian
@@ -557,7 +556,7 @@ issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 adjoint(C::Union{Cholesky,CholeskyPivoted}) = C
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky)
     if issuccess(C)
         summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
@@ -567,7 +566,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
     end
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted)
     summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
@@ -578,7 +577,7 @@ end
 ldiv!(C::Cholesky{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.potrs!(C.uplo, C.factors, B)
 
-function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
+function ldiv!(C::Cholesky, B::AbstractVecOrMat)
     if C.uplo == 'L'
         return ldiv!(adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
@@ -586,10 +585,10 @@ function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     end
 end
 
-function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T,<:StridedMatrix}, B::StridedVector{T}) where T<:BlasFloat
     invpermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T,<:StridedMatrix}, B::StridedMatrix{T}) where T<:BlasFloat
     n = size(C, 1)
     for i=1:size(B, 2)
         permute!(view(B, 1:n, i), C.piv)
@@ -630,7 +629,7 @@ function ldiv!(C::CholeskyPivoted, B::AbstractMatrix)
     B
 end
 
-function rdiv!(B::AbstractMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+function rdiv!(B::AbstractMatrix, C::Cholesky)
     if C.uplo == 'L'
         return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
     else
@@ -705,7 +704,7 @@ inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
 
 inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
 
-function inv(C::CholeskyPivoted)
+function inv(C::CholeskyPivoted{<:BlasFloat,<:StridedMatrix})
     ipiv = invperm(C.piv)
     copytri!(LAPACK.potri!(C.uplo, copy(C.factors)), C.uplo, true)[ipiv, ipiv]
 end

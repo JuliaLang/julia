@@ -37,10 +37,10 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
 
         @testset for isview in (false,true)
             let a = isview ? view(a, 1:m - 1, 1:n - 1) : a, b = isview ? view(b, 1:m - 1) : b, m = m - isview, n = n - isview
-                lqa   = lq(a)
+                lqa = lq(a)
                 x = lqa\b
-                l,q   = lqa.L, lqa.Q
-                qra   = qr(a, ColumnNorm())
+                l, q = lqa.L, lqa.Q
+                qra = qr(a, ColumnNorm())
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
@@ -62,18 +62,20 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @testset "Binary ops" begin
+                    k = size(a, 2)
+                    T = Tridiagonal(rand(eltya, k-1), rand(eltya, k), rand(eltya, k-1))
+                    @test lq(T) * T ≈ T * T rtol=3000ε
+                    @test lqa * T ≈ a * T rtol=3000ε
                     @test a*x ≈ b rtol=3000ε
                     @test x ≈ qra \ b rtol=3000ε
                     @test lqa*x ≈ a*x rtol=3000ε
                     @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) rtol=5000ε
                     if eltya != Int
-                        @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
+                        @test Matrix{eltyb}(I, n, n)*q ≈ Matrix(I, n, n) * convert(LinearAlgebra.AbstractQ{tab}, q)
                     end
                     @test q*x ≈ squareQ(q)*x rtol=100ε
-                    @test transpose(q)*x ≈ transpose(squareQ(q))*x rtol=100ε
                     @test q'*x ≈ squareQ(q)'*x rtol=100ε
                     @test a*q ≈ a*squareQ(q) rtol=100ε
-                    @test a*transpose(q) ≈ a*transpose(squareQ(q)) rtol=100ε
                     @test a*q' ≈ a*squareQ(q)' rtol=100ε
                     @test q*a'≈ squareQ(q)*a' rtol=100ε
                     @test q'*a' ≈ squareQ(q)'*a' rtol=100ε
@@ -85,7 +87,6 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                         pad_a = vcat(I, a)
                         pad_x = hcat(I, x)
                         @test pad_a*q ≈ pad_a*squareQ(q) rtol=100ε
-                        @test transpose(q)*pad_x ≈ transpose(squareQ(q))*pad_x rtol=100ε
                         @test q'*pad_x ≈ squareQ(q)'*pad_x rtol=100ε
                     end
                 end
@@ -189,12 +190,12 @@ end
     @testset for n in 1:3, m in 1:3
         @testset "real" begin
             _, Q = lq(randn(n, m))
-            @test det(Q) ≈ det(collect(Q))
+            @test det(Q) ≈ det(Q*I)
             @test abs(det(Q)) ≈ 1
         end
         @testset "complex" begin
             _, Q = lq(randn(ComplexF64, n, m))
-            @test det(Q) ≈ det(collect(Q))
+            @test det(Q) ≈ det(Q*I)
             @test abs(det(Q)) ≈ 1
         end
     end
@@ -212,12 +213,7 @@ L factor:
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
-Q factor:
-4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
- 1.0  0.0  0.0  0.0
- 0.0  1.0  0.0  0.0
- 0.0  0.0  1.0  0.0
- 0.0  0.0  0.0  1.0"""
+Q factor: 4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}"""
 end
 
 @testset "adjoint of LQ" begin

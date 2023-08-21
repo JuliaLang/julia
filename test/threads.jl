@@ -124,7 +124,7 @@ end
 
 function get_nthreads(options = ``; cpus = nothing)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
-    cmd = `$cmd -e "print(Threads.nthreads())"`
+    cmd = `$cmd -e "print(Threads.threadpoolsize())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
@@ -154,7 +154,7 @@ end
 
 # issue #34769
 function idle_callback(handle)
-    idle = @Base.handle_as handle UvTestIdle
+    idle = Base.@handle_as handle UvTestIdle
     if idle.active
         idle.count += 1
         if idle.count == 1
@@ -312,7 +312,7 @@ close(proc.in)
         if ( !success(proc) ) || ( timeout )
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows()
+        if Sys.iswindows() || Sys.isapple()
             # Known failure: https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else
@@ -326,4 +326,8 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
 end

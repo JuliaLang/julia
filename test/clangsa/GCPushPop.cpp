@@ -36,7 +36,6 @@ void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     JL_GC_POP();
 }
 
-void safepoint(void);
 bool testfunc1() JL_NOTSAFEPOINT
 {
     struct implied_struct1 { // expected-note{{Tried to call method defined here}}

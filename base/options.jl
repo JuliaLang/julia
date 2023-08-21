@@ -11,6 +11,8 @@ struct JLOptions
     cpu_target::Ptr{UInt8}
     nthreadpools::Int16
     nthreads::Int16
+    nmarkthreads::Int16
+    nsweepthreads::Int8
     nthreads_per_pool::Ptr{Int16}
     nprocs::Int32
     machine_file::Ptr{UInt8}
@@ -38,6 +40,7 @@ struct JLOptions
     handle_signals::Int8
     use_sysimage_native_code::Int8
     use_compiled_modules::Int8
+    use_pkgimages::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
@@ -52,6 +55,7 @@ struct JLOptions
     rr_detach::Int8
     strip_metadata::Int8
     strip_ir::Int8
+    permalloc_pkgimg::Int8
     heap_size_hint::UInt64
 end
 

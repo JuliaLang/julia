@@ -273,6 +273,11 @@ end
 
 end
 
+@testset "timer" begin
+    @test hasmethod(Timer, (Period,))
+    @test hasmethod(Timer, (Function, Period))
+end
+
 @testset "timedwait" begin
     @test timedwait(() -> false, Second(0); pollint=Millisecond(1)) === :timed_out
 end
