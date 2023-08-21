@@ -15,7 +15,7 @@ There are two methods that are always required:
 | `iterate(iter, state)`  | Returns either a tuple of the next item and next state or `nothing` if no items remain   |
 
 There are several more methods that should be defined in some circumstances.
-Note that you should always define at least one of `Base.IteratorSize(IterType)` and `length(iter)` because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`.
+Please note that you should always define at least one of `Base.IteratorSize(IterType)` and `length(iter)` because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`.
 
 | Method                                  | When should this method be defined?                                         | Default definition | Brief description |
 |:--- |:--- |:--- |:--- |
@@ -24,7 +24,7 @@ Note that you should always define at least one of `Base.IteratorSize(IterType)`
 | [`size(iter, [dim])`](@ref)             | If `Base.IteratorSize()` returns `Base.HasShape{N}()`                       | (*undefined*)      | The number of items in each dimension, if known |
 | [`Base.IteratorEltype(IterType)`](@ref) | If default is not appropriate                                               | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate |
 | [`eltype(IterType)`](@ref)              | If default is not appropriate                                               | `Any`              | The type of the first entry of the tuple returned by `iterate()` |
-| [`Base.isdone(iter, [state])`](@ref)    | If iterator is stateful                                                     | `missing`          | Fast-path hint for iterator completion. If not defined for a stateful iterator then methods that are not intended to have side effects, like `isempty(iter)`, may mutate the iterator and result in buggy behaviour |
+| [`Base.isdone(iter, [state])`](@ref)    | **Must** be defined if iterator is stateful                                 | `missing`          | Fast-path hint for iterator completion. If not defined for a stateful iterator then functions that check for done-ness, like `isempty()` and `zip()`, may mutate the iterator and cause buggy behaviour! |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
