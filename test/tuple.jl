@@ -796,3 +796,8 @@ namedtup = (;a=1, b=2, c=3)
 @test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
 @test Tuple{} <: Tuple{Vararg{Union{},N}} where N
 @test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+
+@test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
+@test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
+@test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
+@test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}

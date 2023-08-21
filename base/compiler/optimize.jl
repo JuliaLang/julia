@@ -120,8 +120,6 @@ end
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
-include("compiler/ssair/driver.jl")
-
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
@@ -131,15 +129,13 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     sptypes::Vector{VarState}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
-    cfg::Union{Nothing,CFG}
+    cfg::CFG
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
-                           recompute_cfg::Bool=true)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
-    cfg = recompute_cfg ? nothing : sv.cfg
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
-                             sv.sptypes, sv.slottypes, inlining, cfg, sv.insert_coverage)
+                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -162,7 +158,8 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
+    cfg = compute_basic_blocks(src.code)
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     world = get_world_counter(interp)
@@ -170,6 +167,9 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
 end
+
+
+include("compiler/ssair/driver.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
@@ -534,7 +534,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     nstmts = length(code)
-    ssachangemap = labelchangemap = nothing
+    ssachangemap = labelchangemap = blockchangemap = nothing
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
@@ -555,54 +555,93 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             if oldidx < length(labelchangemap)
                 labelchangemap[oldidx + 1] += 1
             end
+            if blockchangemap === nothing
+                blockchangemap = fill(0, length(sv.cfg.blocks))
+            end
+            blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
             idx += 1
             prevloc = codeloc
         end
-        if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
+        if ssavaluetypes[idx] === Union{} && !(code[idx] isa Core.Const)
+            # Type inference should have converted any must-throw terminators to an equivalent w/o control-flow edges
+            @assert !isterminator(code[idx])
+
+            block = block_for_inst(sv.cfg, oldidx)
+            block_end = last(sv.cfg.blocks[block].stmts) + (idx - oldidx)
+
+            # Delete all successors to this basic block
+            for succ in sv.cfg.blocks[block].succs
+                preds = sv.cfg.blocks[succ].preds
+                deleteat!(preds, findfirst(x::Int->x==block, preds)::Int)
+            end
+            empty!(sv.cfg.blocks[block].succs)
+
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
-                # insert unreachable in the same basic block after the current instruction (splitting it)
-                insert!(code, idx + 1, ReturnNode())
-                insert!(codelocs, idx + 1, codelocs[idx])
-                insert!(ssavaluetypes, idx + 1, Union{})
-                insert!(stmtinfo, idx + 1, NoCallInfo())
-                insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
-                if ssachangemap === nothing
-                    ssachangemap = fill(0, nstmts)
+                # Any statements from here to the end of the block have been wrapped in Core.Const(...)
+                # by type inference (effectively deleting them). Only task left is to replace the block
+                # terminator with an explicit `unreachable` marker.
+                if block_end > idx
+                    code[block_end] = ReturnNode()
+                    codelocs[block_end] = codelocs[idx]
+                    ssavaluetypes[block_end] = Union{}
+                    stmtinfo[block_end] = NoCallInfo()
+                    ssaflags[block_end] = IR_FLAG_NOTHROW
+
+                    # Verify that type-inference did its job
+                    if JLOptions().debug_level == 2
+                        for i = (idx + 1):(block_end - 1)
+                            @assert (code[i] isa Core.Const) || is_meta_expr(code[i])
+                        end
+                    end
+
+                    idx += block_end - idx
+                else
+                    insert!(code, idx + 1, ReturnNode())
+                    insert!(codelocs, idx + 1, codelocs[idx])
+                    insert!(ssavaluetypes, idx + 1, Union{})
+                    insert!(stmtinfo, idx + 1, NoCallInfo())
+                    insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
+                    if ssachangemap === nothing
+                        ssachangemap = fill(0, nstmts)
+                    end
+                    if labelchangemap === nothing
+                        labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
+                    end
+                    if oldidx < length(ssachangemap)
+                        ssachangemap[oldidx + 1] += 1
+                        sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
+                    end
+                    if blockchangemap === nothing
+                        blockchangemap = fill(0, length(sv.cfg.blocks))
+                    end
+                    blockchangemap[block] += 1
+                    idx += 1
                 end
-                if labelchangemap === nothing
-                    labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
-                end
-                if oldidx < length(ssachangemap)
-                    ssachangemap[oldidx + 1] += 1
-                    sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
-                end
-                idx += 1
+                oldidx = last(sv.cfg.blocks[block].stmts)
             end
         end
         idx += 1
         oldidx += 1
     end
 
-    cfg = sv.cfg
     if ssachangemap !== nothing && labelchangemap !== nothing
         renumber_ir_elements!(code, ssachangemap, labelchangemap)
-        cfg = nothing # recompute CFG
+    end
+    if blockchangemap !== nothing
+        renumber_cfg_stmts!(sv.cfg, blockchangemap)
     end
 
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
     end
-    strip_trailing_junk!(ci, code, stmtinfo)
+    strip_trailing_junk!(ci, sv.cfg, code, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    if cfg === nothing
-        cfg = compute_basic_blocks(code)
-    end
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -763,8 +802,8 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     return maxcost
 end
 
-function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int})
-    return renumber_ir_elements!(body, ssachangemap, ssachangemap)
+function renumber_ir_elements!(body::Vector{Any}, cfg::Union{CFG,Nothing}, ssachangemap::Vector{Int})
+    return renumber_ir_elements!(body, cfg, ssachangemap, ssachangemap)
 end
 
 function cumsum_ssamap!(ssachangemap::Vector{Int})
@@ -844,6 +883,22 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     end
                 end
             end
+        end
+    end
+end
+
+function renumber_cfg_stmts!(cfg::CFG, blockchangemap::Vector{Int})
+    any_change = cumsum_ssamap!(blockchangemap)
+    any_change || return
+
+    last_end = 0
+    for i = 1:length(cfg.blocks)
+        old_range = cfg.blocks[i].stmts
+        new_range = StmtRange(first(old_range) + ((i > 1) ? blockchangemap[i - 1] : 0),
+                              last(old_range) + blockchangemap[i])
+        cfg.blocks[i] = BasicBlock(cfg.blocks[i], new_range)
+        if i <= length(cfg.index)
+            cfg.index[i] = cfg.index[i] + blockchangemap[i]
         end
     end
 end
