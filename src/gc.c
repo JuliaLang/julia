@@ -4007,6 +4007,9 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offs
     errno = last_errno;
     if (__unlikely(pool == MAP_FAILED))
         return NULL;
+#ifdef MADV_NOHUGEPAGE
+    madvise(pool, GC_PERM_POOL_SIZE, MADV_NOHUGEPAGE);
+#endif
 #endif
     gc_perm_pool = (uintptr_t)pool;
     gc_perm_end = gc_perm_pool + GC_PERM_POOL_SIZE;

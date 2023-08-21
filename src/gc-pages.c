@@ -74,6 +74,10 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
         return NULL;
     poolmem_bytes_allocated += pages_sz;
     poolmem_blocks_allocated_total++;
+
+#ifdef MADV_NOHUGEPAGE
+    madvise(mem, pages_sz, MADV_NOHUGEPAGE);
+#endif
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
