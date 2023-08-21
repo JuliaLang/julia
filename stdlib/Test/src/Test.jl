@@ -775,7 +775,7 @@ macro test_throws(extype, ex)
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e,  Base.current_exceptions(), $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
     return :(do_test_throws($result, $orig_ex, $(esc(extype))))
