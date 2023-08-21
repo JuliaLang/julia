@@ -77,6 +77,11 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
         return NULL;
+
+#ifdef MADV_NOHUGEPAGE
+    madvise(mem, pages_sz, MADV_NOHUGEPAGE);
+#endif
+
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
