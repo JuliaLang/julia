@@ -60,7 +60,7 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSp
 	done
 	echo 1 > $@
 
-UNINSTALL_suitesparse := $(LIBSUITESPARSE_VER) manual_suitesparse $(LIBSUITESPARSE_LIBS)
+UNINSTALL_libsuitesparse := $(LIBSUITESPARSE_VER) manual_libsuitesparse $(LIBSUITESPARSE_LIBS)
 
 $(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
 	echo $(UNINSTALL_libsuitesparse) > $@
