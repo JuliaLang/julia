@@ -52,6 +52,8 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
         // round data pointer up to the nearest gc_page_data-aligned
         // boundary if mmap didn't already do so.
         mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, pages_sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, pages_sz);
     return mem;
 }
 
@@ -100,7 +102,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_lazily_freed`
     meta = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         // page is already mapped
         return meta;
     }
@@ -108,14 +110,15 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_clean`
     meta = pop_lf_page_metadata_back(&global_page_pool_clean);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
     // try to get page from `pool_freed`
     meta = pop_lf_page_metadata_back(&global_page_pool_freed);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, 1);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
@@ -155,7 +158,7 @@ exit:
 void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
-    gc_alloc_map_set((char*)p, 0);
+    gc_alloc_map_set((char*)p, GC_PAGE_FREED);
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {
@@ -188,6 +191,7 @@ void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
     msan_unpoison(p, decommit_size);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
 }
 
 #ifdef __cplusplus

@@ -120,8 +120,6 @@ end
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
-include("compiler/ssair/driver.jl")
-
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
@@ -131,15 +129,13 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     sptypes::Vector{VarState}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
-    cfg::Union{Nothing,CFG}
+    cfg::CFG
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
-                           recompute_cfg::Bool=true)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
-    cfg = recompute_cfg ? nothing : sv.cfg
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
-                             sv.sptypes, sv.slottypes, inlining, cfg, sv.insert_coverage)
+                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -162,7 +158,8 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
+    cfg = compute_basic_blocks(src.code)
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     world = get_world_counter(interp)
@@ -170,6 +167,9 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
 end
+
+
+include("compiler/ssair/driver.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
@@ -214,6 +214,41 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
 is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+
+function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
+    Targ = args[1]
+    atyp = argextype(Targ, src)
+    # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    typ, isexact = instanceof_tfunc(atyp)
+    if !isexact
+        atyp = unwrap_unionall(widenconst(atyp))
+        if isType(atyp) && isTypeDataType(atyp.parameters[1])
+            typ = atyp.parameters[1]
+        else
+            return (false, false, false)
+        end
+        isabstracttype(typ) && return (false, false, false)
+    else
+        isconcretedispatch(typ) || return (false, false, false)
+    end
+    typ = typ::DataType
+    fcount = datatype_fieldcount(typ)
+    fcount === nothing && return (false, false, false)
+    fcount >= length(args) - 1 || return (false, false, false)
+    for fidx in 1:(length(args) - 1)
+        farg = args[fidx + 1]
+        eT = argextype(farg, src)
+        fT = fieldtype(typ, fidx)
+        if !isexact && has_free_typevars(fT)
+            if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
+                continue
+            end
+            return (false, false, false)
+        end
+        ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
+    end
+    return (false, true, true)
+end
 
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
@@ -264,36 +299,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            atyp = argextype(args[1], src)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(atyp)
-            if !isexact
-                atyp = unwrap_unionall(widenconst(atyp))
-                if isType(atyp) && isTypeDataType(atyp.parameters[1])
-                    typ = atyp.parameters[1]
-                else
-                    return (false, false, false)
-                end
-                isabstracttype(typ) && return (false, false, false)
-            else
-                isconcretedispatch(typ) || return (false, false, false)
-            end
-            typ = typ::DataType
-            fcount = datatype_fieldcount(typ)
-            fcount === nothing && return (false, false, false)
-            fcount >= length(args) - 1 || return (false, false, false)
-            for fld_idx in 1:(length(args) - 1)
-                eT = argextype(args[fld_idx + 1], src)
-                fT = fieldtype(typ, fld_idx)
-                # Currently, we cannot represent any type equality constraints
-                # in the lattice, so if we see any type of type parameter,
-                # there is very little we can say about it
-                if !isexact && has_free_typevars(fT)
-                    return (false, false, false)
-                end
-                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
-            end
-            return (false, true, true)
+            return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
             effects = foreigncall_effects(stmt) do @nospecialize x
                 argextype(x, src)
@@ -400,18 +406,9 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     opt.ir = ir
 
     # determine and cache inlineability
-    union_penalties = false
     if !force_noinline
         sig = unwrap_unionall(specTypes)
-        if isa(sig, DataType) && sig.name === Tuple.name
-            for P in sig.parameters
-                P = unwrap_unionall(P)
-                if isa(P, Union)
-                    union_penalties = true
-                    break
-                end
-            end
-        else
+        if !(isa(sig, DataType) && sig.name === Tuple.name)
             force_noinline = true
         end
         if !is_declared_inline(src) && result === Bottom
@@ -442,7 +439,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, cost_threshold)
         end
     end
     return nothing
@@ -537,7 +534,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     nstmts = length(code)
-    ssachangemap = labelchangemap = nothing
+    ssachangemap = labelchangemap = blockchangemap = nothing
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
@@ -558,54 +555,93 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             if oldidx < length(labelchangemap)
                 labelchangemap[oldidx + 1] += 1
             end
+            if blockchangemap === nothing
+                blockchangemap = fill(0, length(sv.cfg.blocks))
+            end
+            blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
             idx += 1
             prevloc = codeloc
         end
-        if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
+        if ssavaluetypes[idx] === Union{} && !(code[idx] isa Core.Const)
+            # Type inference should have converted any must-throw terminators to an equivalent w/o control-flow edges
+            @assert !isterminator(code[idx])
+
+            block = block_for_inst(sv.cfg, oldidx)
+            block_end = last(sv.cfg.blocks[block].stmts) + (idx - oldidx)
+
+            # Delete all successors to this basic block
+            for succ in sv.cfg.blocks[block].succs
+                preds = sv.cfg.blocks[succ].preds
+                deleteat!(preds, findfirst(x::Int->x==block, preds)::Int)
+            end
+            empty!(sv.cfg.blocks[block].succs)
+
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
-                # insert unreachable in the same basic block after the current instruction (splitting it)
-                insert!(code, idx + 1, ReturnNode())
-                insert!(codelocs, idx + 1, codelocs[idx])
-                insert!(ssavaluetypes, idx + 1, Union{})
-                insert!(stmtinfo, idx + 1, NoCallInfo())
-                insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
-                if ssachangemap === nothing
-                    ssachangemap = fill(0, nstmts)
+                # Any statements from here to the end of the block have been wrapped in Core.Const(...)
+                # by type inference (effectively deleting them). Only task left is to replace the block
+                # terminator with an explicit `unreachable` marker.
+                if block_end > idx
+                    code[block_end] = ReturnNode()
+                    codelocs[block_end] = codelocs[idx]
+                    ssavaluetypes[block_end] = Union{}
+                    stmtinfo[block_end] = NoCallInfo()
+                    ssaflags[block_end] = IR_FLAG_NOTHROW
+
+                    # Verify that type-inference did its job
+                    if JLOptions().debug_level == 2
+                        for i = (idx + 1):(block_end - 1)
+                            @assert (code[i] isa Core.Const) || is_meta_expr(code[i])
+                        end
+                    end
+
+                    idx += block_end - idx
+                else
+                    insert!(code, idx + 1, ReturnNode())
+                    insert!(codelocs, idx + 1, codelocs[idx])
+                    insert!(ssavaluetypes, idx + 1, Union{})
+                    insert!(stmtinfo, idx + 1, NoCallInfo())
+                    insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
+                    if ssachangemap === nothing
+                        ssachangemap = fill(0, nstmts)
+                    end
+                    if labelchangemap === nothing
+                        labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
+                    end
+                    if oldidx < length(ssachangemap)
+                        ssachangemap[oldidx + 1] += 1
+                        sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
+                    end
+                    if blockchangemap === nothing
+                        blockchangemap = fill(0, length(sv.cfg.blocks))
+                    end
+                    blockchangemap[block] += 1
+                    idx += 1
                 end
-                if labelchangemap === nothing
-                    labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
-                end
-                if oldidx < length(ssachangemap)
-                    ssachangemap[oldidx + 1] += 1
-                    sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
-                end
-                idx += 1
+                oldidx = last(sv.cfg.blocks[block].stmts)
             end
         end
         idx += 1
         oldidx += 1
     end
 
-    cfg = sv.cfg
     if ssachangemap !== nothing && labelchangemap !== nothing
         renumber_ir_elements!(code, ssachangemap, labelchangemap)
-        cfg = nothing # recompute CFG
+    end
+    if blockchangemap !== nothing
+        renumber_cfg_stmts!(sv.cfg, blockchangemap)
     end
 
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
     end
-    strip_trailing_junk!(ci, code, stmtinfo)
+    strip_trailing_junk!(ci, sv.cfg, code, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    if cfg === nothing
-        cfg = compute_basic_blocks(code)
-    end
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -621,7 +657,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     svdef = sv.linfo.def
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
+    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
@@ -639,7 +675,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
+                        params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -649,7 +685,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         if ftyp === IntrinsicFunction && farg isa SSAValue
             # if this comes from code that was already inlined into another function,
             # Consts have been widened. try to recover in simple cases.
-            farg = isa(src, CodeInfo) ? src.code[farg.id] : src.stmts[farg.id][:inst]
+            farg = isa(src, CodeInfo) ? src.code[farg.id] : src[farg][:stmt]
             if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
                 ftyp = argextype(farg, src, sptypes)
             end
@@ -677,13 +713,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
-            elseif f === Core.isa
-                # If we're in a union context, we penalize type computations
-                # on union types. In such cases, it is usually better to perform
-                # union splitting on the outside.
-                if union_penalties && isa(argextype(ex.args[2],  src, sptypes), Union)
-                    return params.inline_nonleaf_penalty
-                end
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -714,7 +743,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, union_penalties, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -730,11 +759,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                                  union_penalties::Bool, params::OptimizationParams)
+                                  params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, union_penalties, params,
+        thiscost = statement_cost(stmt, line, src, sptypes, params,
                                   is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
@@ -747,24 +776,24 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+function inline_cost(ir::IRCode, params::OptimizationParams,
                        cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
-        stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
+        stmt = ir[SSAValue(line)][:stmt]
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return MAX_INLINE_COST
     end
     return inline_cost_clamp(bodycost)
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, params::OptimizationParams)
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
-                                            unionpenalties, params)
+                                            params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
@@ -773,8 +802,8 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     return maxcost
 end
 
-function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int})
-    return renumber_ir_elements!(body, ssachangemap, ssachangemap)
+function renumber_ir_elements!(body::Vector{Any}, cfg::Union{CFG,Nothing}, ssachangemap::Vector{Int})
+    return renumber_ir_elements!(body, cfg, ssachangemap, ssachangemap)
 end
 
 function cumsum_ssamap!(ssachangemap::Vector{Int})
@@ -854,6 +883,22 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     end
                 end
             end
+        end
+    end
+end
+
+function renumber_cfg_stmts!(cfg::CFG, blockchangemap::Vector{Int})
+    any_change = cumsum_ssamap!(blockchangemap)
+    any_change || return
+
+    last_end = 0
+    for i = 1:length(cfg.blocks)
+        old_range = cfg.blocks[i].stmts
+        new_range = StmtRange(first(old_range) + ((i > 1) ? blockchangemap[i - 1] : 0),
+                              last(old_range) + blockchangemap[i])
+        cfg.blocks[i] = BasicBlock(cfg.blocks[i], new_range)
+        if i <= length(cfg.index)
+            cfg.index[i] = cfg.index[i] + blockchangemap[i]
         end
     end
 end

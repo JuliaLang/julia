@@ -178,8 +178,10 @@ let n = 10
         @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
         @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
-        @test b' / H ≈ b' / A ≈ complex.(b') / H
+        @test b' / H ≈ b' / A ≈ complex(b') / H
+        @test transpose(b) / H ≈ transpose(b) / A ≈ transpose(complex(b)) / H
         @test B' / H ≈ B' / A ≈ complex(B') / H
+        @test b' / H' ≈ complex(b)' / H'
         @test B' / (H - I) ≈ B' / (A - I)
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
         @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B

@@ -83,11 +83,10 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    // one-extend unbias back to 64-bits
-    return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
+    return cong(max, &ptls->rngseed);
 }
 
 // initialize the threading infrastructure
@@ -130,11 +129,11 @@ void jl_gc_mark_threadfun(void *arg)
     free(targ);
 
     while (1) {
-        uv_mutex_lock(&ptls->sleep_lock);
+        uv_mutex_lock(&gc_threads_lock);
         while (!may_mark()) {
-            uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
-        uv_mutex_unlock(&ptls->sleep_lock);
+        uv_mutex_unlock(&gc_threads_lock);
         gc_mark_loop_parallel(ptls, 0);
     }
 }

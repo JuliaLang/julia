@@ -86,7 +86,8 @@ end
 """
     Experimental.@sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
 rethrown. It is the responsibility of the user to cancel any still-running operations
 during error handling.

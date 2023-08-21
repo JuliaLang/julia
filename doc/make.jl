@@ -143,6 +143,7 @@ DevDocs = [
         "devdocs/isbitsunionarrays.md",
         "devdocs/sysimg.md",
         "devdocs/pkgimg.md",
+        "devdocs/llvm-passes.md",
         "devdocs/llvm.md",
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
@@ -152,8 +153,10 @@ DevDocs = [
         "devdocs/inference.md",
         "devdocs/ssair.md",
         "devdocs/EscapeAnalysis.md",
+        "devdocs/aot.md",
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
+        "devdocs/jit.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",

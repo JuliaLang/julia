@@ -252,6 +252,8 @@ $(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/juli
 	$(INSTALL_F) $^ $(build_includedir)/julia/uv
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+libccalllazyfoo: $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+libccalllazybar: $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT)
 libllvmcalltest: $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT)
 
 ifeq ($(OS), Linux)
@@ -275,6 +277,12 @@ endif
 	@#rm -rf $@.dSYM && mv $@.tmp.dSYM $@.dSYM
 	mv $@.tmp $@
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
+
+$(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,ccalllazyfoo.$(SHLIB_EXT)))
+
+$(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,ccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(FLAGS) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread

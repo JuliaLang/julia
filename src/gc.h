@@ -10,6 +10,7 @@
 #define JL_GC_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -82,6 +83,7 @@ typedef struct {
     uint64_t    total_sweep_time;
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
+    uint64_t    last_incremental_sweep;
 } jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of
@@ -257,6 +259,18 @@ typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
 } pagetable_t;
 
+typedef struct {
+    _Atomic(size_t) bytes_mapped;
+    _Atomic(size_t) bytes_resident;
+    _Atomic(size_t) heap_size;
+    _Atomic(size_t) heap_target;
+} gc_heapstatus_t;
+
+#define GC_PAGE_UNMAPPED        0
+#define GC_PAGE_ALLOCATED       1
+#define GC_PAGE_LAZILY_FREED    2
+#define GC_PAGE_FREED           3
+
 extern pagetable_t alloc_map;
 
 STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
@@ -272,7 +286,7 @@ STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
     if (r0 == NULL)
         return 0;
     i = REGION0_INDEX(data);
-    return r0->meta[i];
+    return (r0->meta[i] == GC_PAGE_ALLOCATED);
 }
 
 STATIC_INLINE void gc_alloc_map_set(char *_data, uint8_t v) JL_NOTSAFEPOINT
@@ -369,6 +383,7 @@ extern int64_t lazy_freed_pages;
 extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
+extern gc_heapstatus_t gc_heap_stats;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -429,6 +444,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern uv_mutex_t gc_threads_lock;
+extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -630,7 +647,7 @@ void gc_count_pool(void);
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable);
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

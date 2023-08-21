@@ -257,33 +257,28 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         caller.valid_worlds = valid_worlds
-        finish(caller, interp)
+        finish(caller, caller.interp)
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
-              frames[i].cached )
-        for i in 1:length(frames) ]
-    empty!(frames)
-    for (caller, _, _) in results
-        opt = caller.src
-        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            optimize(interp, opt, caller)
+    for caller in frames
+        opt = caller.result.src
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+            optimize(caller.interp, opt, caller.result)
         end
     end
-    for (caller, edges, cached) in results
-        valid_worlds = caller.valid_worlds
+    for caller in frames
+        (; result ) = caller
+        valid_worlds = result.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(result, caller.stmt_edges[1])
         end
-        if cached
-            cache_result!(interp, caller)
+        if caller.cached
+            cache_result!(caller.interp, result)
         end
-        finish!(interp, caller)
+        finish!(caller.interp, result)
     end
+    empty!(frames)
     return true
 end
 
@@ -502,6 +497,9 @@ function adjust_effects(sv::InferenceState)
         if is_effect_overridden(override, :inaccessiblememonly)
             ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
+        if is_effect_overridden(override, :noub)
+            ipo_effects = Effects(ipo_effects; noub=true)
+        end
     end
 
     return ipo_effects
@@ -556,9 +554,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        recompute_cfg = type_annotate!(interp, me, doopt)
+        type_annotate!(interp, me, doopt)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, interp, recompute_cfg)
+            me.result.src = OptimizationState(me, interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -703,13 +701,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    stmt_info = sv.stmt_info
     src = sv.src
-    body = src.code
-    nexpr = length(body)
-    codelocs = src.codelocs
+    stmts = src.code
+    nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
     undefs = fill(false, nslots)
@@ -721,24 +716,35 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # 3. mark unreached statements for a bulk code deletion (see issue #7836)
     # 4. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     #    NOTE because of this, `was_reached` will no longer be available after this point
-    # 5. eliminate GotoIfNot if either branch target is unreachable
+    # 5. eliminate GotoIfNot if either or both branches are statically unreachable
     changemap = nothing # initialized if there is any dead region
-    for i = 1:nexpr
-        expr = body[i]
+    for i = 1:nstmt
+        expr = stmts[i]
         if was_reached(sv, i)
             if run_optimizer
-                if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                if isa(expr, GotoIfNot)
                     # 5: replace this live GotoIfNot with:
-                    # - GotoNode if the fallthrough target is unreachable
-                    # - no-op if the branch target is unreachable
-                    if !was_reached(sv, i+1)
-                        expr = GotoNode(expr.dest)
-                    elseif !was_reached(sv, expr.dest)
-                        expr = nothing
+                    # - no-op if :nothrow and the branch target is unreachable
+                    # - cond if :nothrow and both targets are unreachable
+                    # - typeassert if must-throw
+                    if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                        block = block_for_inst(sv.cfg, i)
+                        if !was_reached(sv, i+1)
+                            cfg_delete_edge!(sv.cfg, block, block + 1)
+                            expr = GotoNode(expr.dest)
+                        elseif !was_reached(sv, expr.dest)
+                            cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                            expr = nothing
+                        end
+                    elseif ssavaluetypes[i] === Bottom
+                        block = block_for_inst(sv.cfg, i)
+                        cfg_delete_edge!(sv.cfg, block, block + 1)
+                        cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                        expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                     end
                 end
             end
-            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
+            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
@@ -746,7 +752,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 ssavaluetypes[i] = Any # 4
             else
                 ssavaluetypes[i] = Bottom # 4
-                body[i] = Const(expr) # annotate that this statement actually is dead
+                stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
     end
@@ -878,26 +884,10 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             # since the inliner will request to use it later
             cache = :local
         else
+            rt = cached_return_type(code)
             effects = ipo_effects(code)
             update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
-            rettype = code.rettype
-            if isdefined(code, :rettype_const)
-                rettype_const = code.rettype_const
-                # the second subtyping/egal conditions are necessary to distinguish usual cases
-                # from rare cases when `Const` wrapped those extended lattice type objects
-                if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                    rettype = PartialStruct(rettype, rettype_const)
-                elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
-                    rettype = rettype_const
-                elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
-                    rettype = rettype_const
-                elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
-                    rettype = rettype_const
-                else
-                    rettype = Const(rettype_const)
-                end
-            end
-            return EdgeCallResult(rettype, mi, effects)
+            return EdgeCallResult(rt, mi, effects)
         end
     else
         cache = :global # cache edge targets by default
@@ -939,6 +929,25 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
     return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
+end
+
+function cached_return_type(code::CodeInstance)
+    rettype = code.rettype
+    isdefined(code, :rettype_const) || return rettype
+    rettype_const = code.rettype_const
+    # the second subtyping/egal conditions are necessary to distinguish usual cases
+    # from rare cases when `Const` wrapped those extended lattice type objects
+    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+        return PartialStruct(rettype, rettype_const)
+    elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
+        return rettype_const
+    elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
+        return rettype_const
+    else
+        return Const(rettype_const)
+    end
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -1015,7 +1024,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.slotflags = fill(IR_FLAG_NULL, nargs)
             tree.ssavaluetypes = 1
             tree.codelocs = Int32[1]
-            tree.linetable = LineInfoNode[LineInfoNode(method.module, mi, method.file, method.line, Int32(0))]
+            tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
             tree.ssaflags = UInt8[0]
             set_inlineable!(tree, true)
             tree.parent = mi

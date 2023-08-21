@@ -66,6 +66,9 @@ static bool have_fp16(Function &caller, const Triple &TT) {
             return true;
         }
     }
+    if (caller.hasFnAttribute("julia.hasfp16")) {
+        return true;
+    }
     return false;
 }
 
@@ -181,7 +184,7 @@ static bool demoteFloat16(Function &F)
         for (auto V : erase)
             V->eraseFromParent();
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
+        assert(!verifyLLVMIR(F));
 #endif
         return true;
     }

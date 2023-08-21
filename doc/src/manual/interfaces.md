@@ -7,29 +7,44 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
-|:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
-| **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
-| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
-| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
-| `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
-| `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
-| `Base.isdone(iter[, state])`   | `missing`              | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
+### Required methods
 
-| Value returned by `IteratorSize(IterType)` | Required Methods                           |
-|:------------------------------------------ |:------------------------------------------ |
-| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
-| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
-| `Base.IsInfinite()`                        | (*none*)                                   |
-| `Base.SizeUnknown()`                       | (*none*)                                   |
+| Method                 | Brief description                                                                        |
+|:---------------------- |:---------------------------------------------------------------------------------------- |
+| `iterate(iter)`        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty |
+| `iterate(iter, state)` | Returns either a tuple of the next item and next state or `nothing` if no items remain   |
 
-| Value returned by `IteratorEltype(IterType)` | Required Methods   |
-|:-------------------------------------------- |:------------------ |
-| `Base.HasEltype()`                           | `eltype(IterType)` |
-| `Base.EltypeUnknown()`                       | (*none*)           |
+Depending on the definition of `Base.IteratorSize(IterType)`, you may need to define additional methods:
+
+| Value returned by `Base.IteratorSize(IterType)` | Required Methods                               |
+|:----------------------------------------------- |:---------------------------------------------- |
+| `Base.HasLength()`                              | [`length(iter)`](@ref)                         |
+| `Base.HasShape{N}()`                            | `length(iter)` and [`size(iter, [dim])`](@ref) |
+| `Base.IsInfinite()`                             | (*none*)                                       |
+| `Base.SizeUnknown()`                            | (*none*)                                       |
+
+Because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`, you will need to define at least one of `Base.IteratorSize(IterType)` and `length(iter)`.
+
+| Method                       | Default definition | Brief description                                                                                            |
+|:---------------------------- |:------------------ |:------------------------------------------------------------------------------------------------------------ |
+| `Base.IteratorSize(IterType)`| `Base.HasLength()` | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| `length(iter)`               | (*undefined*)      | The number of items, if known                                                                                |
+| `size(iter, [dim])`          | (*undefined*)      | The number of items in each dimension, if known                                                              |
+
+### Optional methods
+
+| Method                          | Default definition | Brief description                                                                                                                                                    |
+|:------------------------------- |:------------------ |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base.IteratorEltype(IterType)` | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                                                                                                   |
+| `eltype(IterType)`              | `Any`              | The type of the first entry of the tuple returned by `iterate()`                                                                                                     |
+| `Base.isdone(iter[, state])`    | `missing`          | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
+
+| Value returned by `Base.IteratorEltype(IterType)` | Required Methods   |
+|:------------------------------------------------- |:------------------ |
+| `Base.HasEltype()`                                | `eltype(IterType)` |
+| `Base.EltypeUnknown()`                            | (*none*)           |
+
+### Description
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track

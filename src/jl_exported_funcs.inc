@@ -158,6 +158,7 @@
     XX(jl_gc_alloc_3w) \
     XX(jl_gc_alloc_typed) \
     XX(jl_gc_big_alloc) \
+    XX(jl_gc_big_alloc_instrumented) \
     XX(jl_gc_collect) \
     XX(jl_gc_conservative_gc_support_enabled) \
     XX(jl_gc_counted_calloc) \
@@ -185,12 +186,14 @@
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_pool_alloc) \
+    XX(jl_gc_pool_alloc_instrumented) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
     XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
     XX(jl_gc_set_cb_notify_external_free) \
+    XX(jl_gc_set_cb_notify_gc_pressure) \
     XX(jl_gc_set_cb_post_gc) \
     XX(jl_gc_set_cb_pre_gc) \
     XX(jl_gc_set_cb_root_scanner) \
@@ -212,6 +215,7 @@
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
+    XX(jl_get_cpu_features) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -509,6 +513,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \
@@ -559,6 +564,7 @@
     YY(jl_get_libllvm) \
     YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
+    YY(jl_register_passbuilder_callbacks) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \
     YY(LLVMExtraAddPropagateJuliaAddrspaces) \
@@ -576,8 +582,6 @@
     YY(LLVMExtraAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
-    YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
-    YY(LLVMExtraMPMAddFinalLowerGCPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \
     YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
     YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
@@ -589,7 +593,9 @@
     YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
     YY(LLVMExtraFPMAddLowerExcHandlersPass) \
     YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraFPMAddFinalLowerGCPass) \
     YY(LLVMExtraLPMAddJuliaLICMPass) \
+    YY(LLVMExtraLPMAddLowerSIMDLoopPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \
