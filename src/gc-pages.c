@@ -19,7 +19,6 @@ extern "C" {
 #define MIN_BLOCK_PG_ALLOC (1) // 16 KB
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
-static size_t current_pg_count = 0;
 static int never_use_madv_free = 0;
 
 void jl_gc_init_page(void)
