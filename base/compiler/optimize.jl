@@ -469,10 +469,37 @@ function visit_bb_phis!(callback, ir::IRCode, bb::Int)
     end
 end
 
+function any_stmt_may_throw(ir::IRCode, bb)
+    for stmt in ir.cfg.blocks[bb].stmts
+        if (ir[SSAValue(stmt)][:flag] & IR_FLAG_NOTHROW) != 0
+            return true
+        end
+    end
+    return false
+end
+
+function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
+    visited = BitSet((bb,))
+    worklist = Int[bb]
+    postdomtree = get!(lazypostdomtree)
+    while !isempty(worklist)
+        thisbb = pop!(worklist)
+        for succ in ir.cfg.blocks[thisbb].succs
+            succ in visited && continue
+            push!(visited, succ)
+            postdominates(postdomtree, succ, thisbb) && continue
+            any_stmt_may_throw(ir, succ) && return true
+            push!(worklist, succ)
+        end
+    end
+    return false
+end
+
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
     inconsistent = BitSet()
     inconsistent_bbs = BitSet()
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+    lazypostdomtree = LazyPostDomtree(ir)
 
     all_effect_free = true # TODO refine using EscapeAnalysis
     all_nothrow = true
@@ -480,6 +507,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     had_trycatch = false
 
     scanner = BBScanner(ir)
+
+    effects = result.ipo_effects
 
     cfg = nothing
     domtree = nothing
@@ -541,15 +570,25 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             elseif isa(stmt, GotoIfNot) && stmt_inconsistent
                 # Conditional Branch with inconsistent condition.
                 sa, sb = ir.cfg.blocks[bb].succs
-                (cfg, domtree) = get_augmented_domtree()
-                for succ in iterated_dominance_frontier(cfg, BlockLiveness((sa, sb), nothing), domtree)
-                    if succ == length(cfg.blocks)
-                        # Phi node in the virtual exit -> We have a conditional
-                        # return. TODO: Check if all the retvals are egal.
-                        all_retpaths_consistent = false
-                    else
-                        visit_bb_phis!(ir, succ) do phiidx::Int, phi::PhiNode
-                            push!(inconsistent, phiidx)
+                # If we do not know this function terminates, taint consistency, now,
+                # :consistent requires consistent termination. TODO: Just look at the
+                # inconsistent region.
+                if !effects.terminates
+                    all_retpaths_consistent = false
+                    # Check if there are potential throws that require
+                elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
+                    all_retpaths_consistent = false
+                else
+                    (cfg, domtree) = get_augmented_domtree()
+                    for succ in iterated_dominance_frontier(cfg, BlockLiveness((sa, sb), nothing), domtree)
+                        if succ == length(cfg.blocks)
+                            # Phi node in the virtual exit -> We have a conditional
+                            # return. TODO: Check if all the retvals are egal.
+                            all_retpaths_consistent = false
+                        else
+                            visit_bb_phis!(ir, succ) do phiidx::Int, phi::PhiNode
+                                push!(inconsistent, phiidx)
+                            end
                         end
                     end
                 end
@@ -603,7 +642,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     end
 
     had_trycatch && return
-    effects = result.ipo_effects
     if all_effect_free
         effects = Effects(effects; effect_free = true)
     end

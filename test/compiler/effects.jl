@@ -1036,7 +1036,7 @@ function f1_optrefine(b)
     end
     return b
 end
-@test Core.Compiler.is_consistent(Base.infer_effects(f1_optrefine, (Bool,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_optrefine, (Bool,)))
 
 function f2_optrefine()
     if Ref(false)[]
@@ -1051,3 +1051,16 @@ function f3_optrefine(x)
     return x
 end
 @test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+
+# Check that :consistent is properly modeled for throwing statements
+const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
+
+check_switch(switch::Base.RefValue{Bool}) = (switch[] && error(); return nothing)
+check_switch2() = check_switch(GLOBAL_MUTABLE_SWITCH)
+
+@test (Base.return_types(check_switch2) |> only) === Nothing
+GLOBAL_MUTABLE_SWITCH[] = true
+# Check that flipping the switch doesn't accidentally change the return type
+@test (Base.return_types(check_switch2) |> only) === Nothing
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))
