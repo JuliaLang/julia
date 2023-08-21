@@ -1159,8 +1159,8 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
+void jl_print_native_codeloc(char *pre_str, uintptr_t ip) JL_NOTSAFEPOINT;
+void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif

@@ -475,7 +475,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_print_bt_entry_codeloc(sig, bt_data + i);
     }
     jl_gc_debug_print_status();
     jl_gc_debug_critical_error();
