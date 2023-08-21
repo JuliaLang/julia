@@ -268,6 +268,7 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_terminates_locally  : 1;
         uint8_t ipo_notaskstate         : 1;
         uint8_t ipo_inaccessiblememonly : 1;
+        uint8_t ipo_noub                : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;

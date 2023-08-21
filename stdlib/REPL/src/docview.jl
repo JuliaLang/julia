@@ -47,7 +47,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
             isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
@@ -624,22 +624,61 @@ bestmatch(needle, haystack) =
     longer(matchinds(needle, haystack, acronym = true),
            matchinds(needle, haystack))
 
-avgdistance(xs) =
-    isempty(xs) ? 0 :
-    (xs[end] - xs[1] - length(xs)+1)/length(xs)
+# Optimal string distance: Counts the minimum number of insertions, deletions,
+# transpositions or substitutions to go from one string to the other.
+function string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
+    if lena > lenb
+        a, b = b, a
+        lena, lenb = lenb, lena
+    end
+    start = 0
+    for (i, j) in zip(a, b)
+        if a == b
+            start += 1
+        else
+            break
+        end
+    end
+    start == lena && return lenb - start
+    vzero = collect(1:(lenb - start))
+    vone = similar(vzero)
+    prev_a, prev_b = first(a), first(b)
+    current = 0
+    for (i, ai) in enumerate(a)
+        i > start || (prev_a = ai; continue)
+        left = i - start - 1
+        current = i - start
+        transition_next = 0
+        for (j, bj) in enumerate(b)
+            j > start || (prev_b = bj; continue)
+            # No need to look beyond window of lower right diagonal
+            above = current
+            this_transition = transition_next
+            transition_next = vone[j - start]
+            vone[j - start] = current = left
+            left = vzero[j - start]
+            if ai != bj
+                # Minimum between substitution, deletion and insertion
+                current = min(current + 1, above + 1, left + 1)
+                if i > start + 1 && j > start + 1 && ai == prev_b && prev_a == bj
+                    current = min(current, (this_transition += 1))
+                end
+            end
+            vzero[j - start] = current
+            prev_b = bj
+        end
+        prev_a = ai
+    end
+    current
+end
 
-function fuzzyscore(needle, haystack)
-    score = 0.
-    is, acro = bestmatch(needle, haystack)
-    score += (acro ? 2 : 1)*length(is) # Matched characters
-    score -= 2(length(needle)-length(is)) # Missing characters
-    !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
-    return score
+function fuzzyscore(needle::AbstractString, haystack::AbstractString)
+    lena, lenb = length(needle), length(haystack)
+    1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
 end
 
 function fuzzysort(search::String, candidates::Vector{String})
-    scores = map(cand -> (fuzzyscore(search, cand), -Float64(levenshtein(search, cand))), candidates)
+    scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -690,7 +729,7 @@ function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
-        fuzzyscore(word, match) < 0 && break
+        fuzzyscore(word, match) < 0.5 && break
         print(io, " ")
         printmatch(io, word, match)
         total += length(match) + 1

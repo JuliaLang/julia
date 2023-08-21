@@ -1315,7 +1315,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -1743,6 +1747,12 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest

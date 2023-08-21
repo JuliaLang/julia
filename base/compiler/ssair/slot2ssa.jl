@@ -183,7 +183,7 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt::UnoptSlot->true, stmt::UnoptSlot->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{CallInfo})
+function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
@@ -207,6 +207,12 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Call
         push!(codelocs, 0)
         push!(info, NoCallInfo())
         push!(ssaflags, IR_FLAG_NOTHROW)
+
+        # Update CFG to include appended terminator
+        old_range = cfg.blocks[end].stmts
+        new_range = StmtRange(first(old_range), last(old_range) + 1)
+        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
+        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
     end
     nothing
 end

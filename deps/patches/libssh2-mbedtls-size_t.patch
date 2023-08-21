@@ -1,0 +1,105 @@
+From 6cad964056848d3d78ccc74600fbff6298baddcb Mon Sep 17 00:00:00 2001
+From: Viktor Szakats <commit@vsz.me>
+Date: Tue, 30 May 2023 17:28:03 +0000
+Subject: [PATCH 1/1] mbedtls: use more size_t to sync up with crypto.h
+
+Ref: 5a96f494ee0b00282afb2db2e091246fc5e1774a #846 #879
+
+Fixes #1053
+Closes #1054
+---
+ src/mbedtls.c | 14 ++++++++------
+ src/mbedtls.h | 13 ++++++-------
+ 2 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/src/mbedtls.c b/src/mbedtls.c
+index e387cdb..cd14a4b 100644
+--- a/src/mbedtls.c
++++ b/src/mbedtls.c
+@@ -186,7 +186,7 @@ _libssh2_mbedtls_cipher_dtor(_libssh2_cipher_ctx *ctx)
+ int
+ _libssh2_mbedtls_hash_init(mbedtls_md_context_t *ctx,
+                            mbedtls_md_type_t mdtype,
+-                           const unsigned char *key, unsigned long keylen)
++                           const unsigned char *key, size_t keylen)
+ {
+     const mbedtls_md_info_t *md_info;
+     int ret, hmac;
+@@ -221,7 +221,7 @@ _libssh2_mbedtls_hash_final(mbedtls_md_context_t *ctx, unsigned char *hash)
+ }
+ 
+ int
+-_libssh2_mbedtls_hash(const unsigned char *data, unsigned long datalen,
++_libssh2_mbedtls_hash(const unsigned char *data, size_t datalen,
+                       mbedtls_md_type_t mdtype, unsigned char *hash)
+ {
+     const mbedtls_md_info_t *md_info;
+@@ -497,8 +497,9 @@ int
+ _libssh2_mbedtls_rsa_sha2_verify(libssh2_rsa_ctx * rsactx,
+                                  size_t hash_len,
+                                  const unsigned char *sig,
+-                                 unsigned long sig_len,
+-                                 const unsigned char *m, unsigned long m_len)
++                                 size_t sig_len,
++                                 const unsigned char *m,
++                                 size_t m_len)
+ {
+     int ret;
+     int md_type;
+@@ -548,8 +549,9 @@ _libssh2_mbedtls_rsa_sha2_verify(libssh2_rsa_ctx * rsactx,
+ int
+ _libssh2_mbedtls_rsa_sha1_verify(libssh2_rsa_ctx * rsactx,
+                                  const unsigned char *sig,
+-                                 unsigned long sig_len,
+-                                 const unsigned char *m, unsigned long m_len)
++                                 size_t sig_len,
++                                 const unsigned char *m,
++                                 size_t m_len)
+ {
+     return _libssh2_mbedtls_rsa_sha2_verify(rsactx, SHA_DIGEST_LENGTH,
+                                             sig, sig_len, m, m_len);
+diff --git a/src/mbedtls.h b/src/mbedtls.h
+index d9592f7..03484da 100644
+--- a/src/mbedtls.h
++++ b/src/mbedtls.h
+@@ -478,12 +478,12 @@ _libssh2_mbedtls_cipher_dtor(_libssh2_cipher_ctx *ctx);
+ int
+ _libssh2_mbedtls_hash_init(mbedtls_md_context_t *ctx,
+                            mbedtls_md_type_t mdtype,
+-                           const unsigned char *key, unsigned long keylen);
++                           const unsigned char *key, size_t keylen);
+ 
+ int
+ _libssh2_mbedtls_hash_final(mbedtls_md_context_t *ctx, unsigned char *hash);
+ int
+-_libssh2_mbedtls_hash(const unsigned char *data, unsigned long datalen,
++_libssh2_mbedtls_hash(const unsigned char *data, size_t datalen,
+                       mbedtls_md_type_t mdtype, unsigned char *hash);
+ 
+ _libssh2_bn *
+@@ -526,9 +526,8 @@ _libssh2_mbedtls_rsa_new_private_frommemory(libssh2_rsa_ctx **rsa,
+ int
+ _libssh2_mbedtls_rsa_sha1_verify(libssh2_rsa_ctx *rsa,
+                                  const unsigned char *sig,
+-                                 unsigned long sig_len,
+-                                 const unsigned char *m,
+-                                 unsigned long m_len);
++                                 size_t sig_len,
++                                 const unsigned char *m, size_t m_len);
+ int
+ _libssh2_mbedtls_rsa_sha1_sign(LIBSSH2_SESSION *session,
+                                libssh2_rsa_ctx *rsa,
+@@ -540,8 +539,8 @@ int
+ _libssh2_mbedtls_rsa_sha2_verify(libssh2_rsa_ctx * rsactx,
+                                  size_t hash_len,
+                                  const unsigned char *sig,
+-                                 unsigned long sig_len,
+-                                 const unsigned char *m, unsigned long m_len);
++                                 size_t sig_len,
++                                 const unsigned char *m, size_t m_len);
+ int
+ _libssh2_mbedtls_rsa_sha2_sign(LIBSSH2_SESSION *session,
+                                libssh2_rsa_ctx *rsa,
+-- 
+2.31.0
+

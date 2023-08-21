@@ -89,6 +89,7 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique

@@ -209,8 +209,17 @@ JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEA
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
+    // This is nopl 0(%rax, %rax, 1), but assembler are incosistent about whether
+    // they emit that as a 4 or 5 byte sequence and we need to be guaranteed to use
+    // the 5 byte one.
+#define NOP5_OVERRIDE_NOP ".byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n\t"
     uint64_t low, high;
-    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    // This instruction sequence is promised by rr to be patchable. rr can usually
+    // also patch `rdtsc` in regular code, but without the preceeding nop, there could
+    // be an interfering branch into the middle of rr's patch region. Using this
+    // sequence prevents a massive rr-induced slowdown if the compiler happens to emit
+    // an unlucky pattern. See https://github.com/rr-debugger/rr/pull/3580.
+    __asm__ volatile(NOP5_OVERRIDE_NOP "rdtsc" : "=a"(low), "=d"(high));
     return (high << 32) | low;
 #elif defined(_CPU_X86_)
     int64_t ret;
@@ -1220,6 +1229,8 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 
 STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
 {
+    if (max == 0)
+        return 0;
     uint64_t mask = ~(uint64_t)0;
     --max;
     mask >>= __builtin_clzll(max|1);
