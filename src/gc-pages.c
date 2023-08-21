@@ -20,11 +20,19 @@ extern "C" {
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
 static size_t current_pg_count = 0;
+static int never_use_madv_free = 0;
 
 void jl_gc_init_page(void)
 {
     if (GC_PAGE_SZ * block_pg_cnt < jl_page_size)
         block_pg_cnt = jl_page_size / GC_PAGE_SZ; // exact division
+    // If environment variable JULIA_NEVER_USE_MADV_FREE is set to anything
+    // besides 0, then we use MADV_DONTNEED rather than MADV_FREE when freeing
+    // pages.
+    char *env = getenv("JULIA_NEVER_USE_MADV_FREE");
+    if (env && strcmp(env, "0") != 0) {
+      never_use_madv_free = 1;
+    }
 }
 
 #ifndef MAP_NORESERVE // not defined in POSIX, FreeBSD, etc.
@@ -303,7 +311,7 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #elif defined(MADV_FREE)
-    static int supports_madv_free = 1;
+    static int supports_madv_free = !never_use_madv_free;
     if (supports_madv_free) {
         if (madvise(p, decommit_size, MADV_FREE) == -1) {
             assert(errno == EINVAL);
