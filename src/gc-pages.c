@@ -192,7 +192,7 @@ void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
             supports_madv_free = 0;
         }
     }
-    if (never_use_madv_free | !supports_madv_free) {
+    if (never_use_madv_free || !supports_madv_free) {
         madvise(p, decommit_size, MADV_DONTNEED);
     }
 #else
