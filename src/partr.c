@@ -70,7 +70,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
 {
-    if (tpid < 0 || tpid >= jl_n_threadpools)
+    if (tpid < -1 || tpid >= jl_n_threadpools)
         return 0;
     task->threadpoolid = tpid;
     return 1;

@@ -95,6 +95,7 @@ end
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
+    @assert tpid > -1
     heap_p = multiq_size(tpid)
     tp = tpid + 1
 
@@ -131,6 +132,9 @@ function multiq_deletemin()
 
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return nothing
+    end
     tpheaps = heaps[tp]
 
     @label retry
@@ -182,6 +186,9 @@ end
 function multiq_check_empty()
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return true
+    end
     for i = UInt32(1):length(heaps[tp])
         if heaps[tp][i].ntasks != 0
             return false
