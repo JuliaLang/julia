@@ -18,7 +18,7 @@ import ._TOP_MOD: ==, getindex, setindex!
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
     ReturnNode, GotoNode, GotoIfNot, SimpleVector, MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize
+    sizeof, arrayset, arrayref, arraysize
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
     @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
@@ -1355,24 +1355,6 @@ escape_builtin!(::typeof(===), _...) = return false
 # not really safe, but `ThrownEscape` will be imposed later
 escape_builtin!(::typeof(isdefined), _...) = return false
 escape_builtin!(::typeof(throw), _...) = return false
-
-function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
-    length(args) == 4 || return false
-    f, cond, th, el = args
-    ret = SSAValue(pc)
-    condt = argextype(cond, astate.ir)
-    if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
-        if cond
-            add_alias_change!(astate, th, ret)
-        else
-            add_alias_change!(astate, el, ret)
-        end
-    else
-        add_alias_change!(astate, th, ret)
-        add_alias_change!(astate, el, ret)
-    end
-    return false
-end
 
 function escape_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 3 || return false

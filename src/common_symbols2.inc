@@ -1,4 +1,3 @@
-jl_symbol("namedtuple.jl"),
 jl_symbol("pop"),
 jl_symbol("inbounds"),
 jl_symbol("strings/string.jl"),

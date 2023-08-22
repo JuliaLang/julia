@@ -570,13 +570,6 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
-JL_CALLABLE(jl_f_ifelse)
-{
-    JL_NARGS(ifelse, 3, 3);
-    JL_TYPECHK(ifelse, bool, args[0]);
-    return (args[0] == jl_false ? args[2] : args[1]);
-}
-
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
@@ -1994,7 +1987,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_typeassert = add_builtin_func("typeassert", jl_f_typeassert);
     jl_builtin_throw = add_builtin_func("throw", jl_f_throw);
     jl_builtin_tuple = add_builtin_func("tuple", jl_f_tuple);
-    jl_builtin_ifelse = add_builtin_func("ifelse", jl_f_ifelse);
 
     // field access
     jl_builtin_getfield = add_builtin_func("getfield",  jl_f_getfield);

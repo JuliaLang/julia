@@ -244,7 +244,7 @@ Starting at `val` walk use-def chains to get all the leaves feeding into this `v
 (pruning those leaves ruled out by path conditions).
 
 `predecessors(def, compact)` is a callback which should return the set of possible
-predecessors for a "phi-like" node (PhiNode or Core.ifelse) or `nothing` otherwise.
+predecessors for a "phi-like" node (PhiNode) or `nothing` otherwise.
 """
 function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors, 𝕃ₒ::AbstractLattice)
     visited_philikes = AnySSAValue[]
@@ -562,9 +562,8 @@ function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
-function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
+function phi_predecessors(@nospecialize(def), compact::IncrementalCompact)
     isa(def, PhiNode) && return def.values
-    is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
     return nothing
 end
 
@@ -579,7 +578,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
 
 
-    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
+    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
@@ -605,15 +604,11 @@ function lift_comparison_leaves!(@specialize(tfunc),
     compact[idx] = lifted_val.val
 end
 
-struct IfElseCall
-    call::Expr
-end
-
 # An intermediate data structure used for lifting expressions through a
-# "phi-like" instruction (either a PhiNode or a call to Core.ifelse)
+# "phi-like" instruction (a PhiNode)
 struct LiftedPhilike
     ssa::AnySSAValue
-    node::Union{PhiNode,IfElseCall}
+    node::PhiNode
     need_argupdate::Bool
 end
 
@@ -710,30 +705,12 @@ function perform_lifting!(compact::IncrementalCompact,
         cached = false
         if cached
             ssa = lifting_cache[ckey]
-            if isa(old_node, PhiNode)
-                lifted_philikes[i] = LiftedPhilike(ssa, old_node, false)
-            else
-                lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(old_node), false)
-            end
+            lifted_philikes[i] = LiftedPhilike(ssa, old_node, false)
             continue
         end
-        if isa(old_node, PhiNode)
-            new_node = PhiNode()
-            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
-            lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
-        else
-            @assert is_known_call(old_node, Core.ifelse, compact)
-            ifelse_func, condition = old_node.args
-            if is_old(compact, old_ssa) && isa(condition, SSAValue)
-                condition = OldSSAValue(condition.id)
-            end
-
-            new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
-            new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
-
-            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
-            lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
-        end
+        new_node = PhiNode()
+        ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
+        lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
         # lifting_cache[ckey] = ssa
     end
 
@@ -759,40 +736,6 @@ function perform_lifting!(compact::IncrementalCompact,
                     push!(new_node.values, val)
                 end
             end
-        elseif isa(lfnode, IfElseCall)
-            old_node = compact[old_node_ssa][:stmt]::Expr
-            then_result, else_result = old_node.args[3], old_node.args[4]
-
-            then_result = lifted_value(compact, old_node_ssa, then_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
-            else_result = lifted_value(compact, old_node_ssa, else_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
-
-            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
-            # to a PiNode from a guarding conditional, replace with the remaining branch.
-            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
-                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
-
-                # Replace Core.ifelse(%cond, %a, %b) with %a
-                compact[lf.ssa][:stmt] = only_result
-                should_count && _count_added_node!(compact, only_result)
-
-                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
-                # we have not deleted the preceding statement that this was derived from, this
-                # replacement is safe, i.e. it will not affect the effects observed.
-                continue
-            end
-
-            @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
-            @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
-
-            if should_count
-                _count_added_node!(compact, then_result)
-                _count_added_node!(compact, else_result)
-            end
-
-            push!(lfnode.call.args, then_result)
-            push!(lfnode.call.args, else_result)
         end
     end
 
@@ -1154,7 +1097,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
-        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
+        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_predecessors)
         isempty(leaves) && continue
 
         lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)

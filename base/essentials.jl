@@ -644,7 +644,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
+ifelse(condition::Bool, x, y) = condition ? x : y
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)

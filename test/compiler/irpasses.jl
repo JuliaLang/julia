@@ -557,10 +557,10 @@ let # lifting `===` through PhiNode
     end
 end
 
-let # lifting `===` through Core.ifelse
+let # lifting `===` through ifelse
     src = code_typed1((Bool,Int,)) do c, x
-        y = Core.ifelse(c, x, nothing)
-        y === nothing # => Core.ifelse(c, false, true)
+        y = ifelse(c, x, nothing)
+        y === nothing # => ifelse(c, false, true)
     end
     @test count(iscall((src, ===)), src.code) == 0
 end
@@ -588,10 +588,10 @@ let # lifting `isa` through PhiNode
     end
 end
 
-let # lifting `isa` through Core.ifelse
+let # lifting `isa` through ifelse
     src = code_typed1((Bool,Int,)) do c, x
-        y = Core.ifelse(c, x, nothing)
-        isa(y, Int) # => Core.ifelse(c, true, false)
+        y = ifelse(c, x, nothing)
+        isa(y, Int) # => ifelse(c, true, false)
     end
     @test count(iscall((src, isa)), src.code) == 0
 end
@@ -620,10 +620,10 @@ let # lifting `isdefined` through PhiNode
     end
 end
 
-let # lifting `isdefined` through Core.ifelse
+let # lifting `isdefined` through ifelse
     src = code_typed1((Bool,Some{Int},)) do c, x
-        y = Core.ifelse(c, x, nothing)
-        isdefined(y, 1) # => Core.ifelse(c, true, false)
+        y = ifelse(c, x, nothing)
+        isdefined(y, 1) # => ifelse(c, true, false)
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
@@ -742,7 +742,7 @@ let m = Meta.@lower 1 + 1
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
-# A lifted Core.ifelse with an eliminated branch (#50276)
+# A lifted ifelse with an eliminated branch (#50276)
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
     src = m.args[1]::CodeInfo
@@ -750,11 +750,11 @@ let m = Meta.@lower 1 + 1
         # block 1
         #=  %1: =# Core.Argument(2),
         # block 2
-        #=  %2: =# Expr(:call, Core.ifelse, SSAValue(1), true, missing),
+        #=  %2: =# Expr(:call, ifelse, SSAValue(1), true, missing),
         #=  %3: =# GotoIfNot(SSAValue(2), 11),
         # block 3
         #=  %4: =# PiNode(SSAValue(2), Bool), # <-- This PiNode is the trigger of the bug, since it
-                                              #     means that only one branch of the Core.ifelse
+                                              #     means that only one branch of the ifelse
                                               #     is lifted.
         #=  %5: =# GotoIfNot(false, 8),
         # block 2
@@ -1379,18 +1379,6 @@ struct Wrap1{T}
     @eval @inline (T::Type{Wrap1{X}} where X)(x) = $(Expr(:new, :T, :x))
 end
 Wrap1(x) = Wrap1{typeof(x)}(x)
-
-function wrap1_wrap1_ifelse(b, x, w1)
-    w2 = Wrap1(Wrap1(x))
-    w3 = Wrap1(typeof(w1)(w1.x))
-    Core.ifelse(b, w3, w2).x.x
-end
-function wrap1_wrap1_wrapper(b, x, y)
-    w1 = Base.inferencebarrier(Wrap1(y))::Wrap1{<:Union{Int, Float64}}
-    wrap1_wrap1_ifelse(b, x, w1)
-end
-@test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
-@test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
 
 # Test unswitching-union optimization within SRO Apass
 function sroaunswitchuniontuple(c, x1, x2)

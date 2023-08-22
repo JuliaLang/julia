@@ -1313,7 +1313,6 @@ static const auto &builtin_func_map() {
           { jl_f_issubtype_addr,          new JuliaFunction<>{XSTR(jl_f_issubtype), get_func_sig, get_func_attrs} },
           { jl_f_isa_addr,                new JuliaFunction<>{XSTR(jl_f_isa), get_func_sig, get_func_attrs} },
           { jl_f_typeassert_addr,         new JuliaFunction<>{XSTR(jl_f_typeassert), get_func_sig, get_func_attrs} },
-          { jl_f_ifelse_addr,             new JuliaFunction<>{XSTR(jl_f_ifelse), get_func_sig, get_func_attrs} },
           { jl_f__apply_iterate_addr,     new JuliaFunction<>{XSTR(jl_f__apply_iterate), get_func_sig, get_func_attrs} },
           { jl_f__apply_pure_addr,        new JuliaFunction<>{XSTR(jl_f__apply_pure), get_func_sig, get_func_attrs} },
           { jl_f__call_latest_addr,       new JuliaFunction<>{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
@@ -4632,8 +4631,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
 
     if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
-        if (f.constant == jl_builtin_ifelse && nargs == 4)
-            return emit_ifelse(ctx, argv[1], argv[2], argv[3], rt);
         jl_cgval_t result;
         bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
         if (handled) {

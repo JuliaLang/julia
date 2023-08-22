@@ -1710,29 +1710,6 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑ᵢ = ⊑(𝕃ᵢ)
-    if has_conditional(𝕃ᵢ, sv) && f === Core.ifelse && fargs isa Vector{Any} && la == 4
-        cnd = argtypes[2]
-        if isa(cnd, Conditional)
-            newcnd = widenconditional(cnd)
-            tx = argtypes[3]
-            ty = argtypes[4]
-            if isa(newcnd, Const)
-                # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
-                return newcnd.val::Bool ? tx : ty
-            else
-                # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
-                a = ssa_def_slot(fargs[3], sv)
-                b = ssa_def_slot(fargs[4], sv)
-                if isa(a, SlotNumber) && cnd.slot == slot_id(a)
-                    tx = (cnd.thentype ⊑ᵢ tx ? cnd.thentype : tmeet(𝕃ᵢ, tx, widenconst(cnd.thentype)))
-                end
-                if isa(b, SlotNumber) && cnd.slot == slot_id(b)
-                    ty = (cnd.elsetype ⊑ᵢ ty ? cnd.elsetype : tmeet(𝕃ᵢ, ty, widenconst(cnd.elsetype)))
-                end
-                return tmerge(𝕃ᵢ, tx, ty)
-            end
-        end
-    end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
         a3 = argtypes[3]

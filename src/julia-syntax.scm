@@ -519,7 +519,7 @@
                                     (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
-      `(call (core ifelse) (false) (false) (block
+      `(call (core typeassert) (block
         ;; forward-declare function so its type can occur in the signature of the inner method below
         ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
 
@@ -625,7 +625,7 @@
                               ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
-             '(null) name)))))
+             '(null) name)) (core Any))))
 
 ;; prologue includes line number node and eventual meta nodes
 (define (extract-method-prologue body)

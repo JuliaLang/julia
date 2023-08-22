@@ -286,28 +286,6 @@ add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->I
 # builtin functions
 # =================
 
-@nospecs function ifelse_tfunc(𝕃::AbstractLattice, cnd, x, y)
-    cnd = widenslotwrapper(cnd)
-    if isa(cnd, Const)
-        if cnd.val === true
-            return x
-        elseif cnd.val === false
-            return y
-        else
-            return Bottom
-        end
-    elseif !hasintersect(widenconst(cnd), Bool)
-        return Bottom
-    end
-    return tmerge(𝕃, x, y)
-end
-add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
-
-@nospecs function ifelse_nothrow(𝕃::AbstractLattice, cond, x, y)
-    ⊑ = Core.Compiler.:⊑(𝕃)
-    return cond ⊑ Bool
-end
-
 @nospecs egal_tfunc(𝕃::AbstractLattice, x, y) = egal_tfunc(widenlattice(𝕃), x, y)
 @nospecs function egal_tfunc(𝕃::MustAliasesLattice, x, y)
     return egal_tfunc(widenlattice(𝕃), widenmustalias(x), widenmustalias(y))
@@ -2125,9 +2103,6 @@ end
     elseif f === Core.sizeof
         na == 1 || return false
         return sizeof_nothrow(argtypes[1])
-    elseif f === Core.ifelse
-        na == 3 || return false
-        return ifelse_nothrow(𝕃, argtypes[1], nothing, nothing)
     elseif f === typeassert
         na == 2 || return false
         return typeassert_nothrow(𝕃, argtypes[1], argtypes[2])
@@ -2181,7 +2156,6 @@ const _CONSISTENT_BUILTINS = Any[
     isa,
     UnionAll,
     Core.sizeof,
-    Core.ifelse,
     (<:),
     typeassert,
     throw,
@@ -2201,7 +2175,6 @@ const _EFFECT_FREE_BUILTINS = [
     const_arrayref,
     isdefined,
     Core.sizeof,
-    Core.ifelse,
     Core._typevar,
     (<:),
     typeassert,
@@ -2214,7 +2187,6 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     (<:),
     (===),
     apply_type,
-    Core.ifelse,
     Core.sizeof,
     svec,
     fieldtype,
