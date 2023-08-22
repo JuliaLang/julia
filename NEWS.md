@@ -3,6 +3,7 @@ Julia v1.11 Release Notes
 
 New language features
 ---------------------
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes
 ----------------
