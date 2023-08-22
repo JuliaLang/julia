@@ -552,14 +552,14 @@ const JL_BT_NON_PTR_ENTRY: usize = usize::MAX;
 
 pub fn mmtk_jl_bt_is_native(bt_entry: *mut mmtk_jl_bt_element_t) -> bool {
     let entry = unsafe { (*bt_entry).__bindgen_anon_1.uintptr };
-    entry == JL_BT_NON_PTR_ENTRY
+    entry != JL_BT_NON_PTR_ENTRY
 }
 
 pub fn mmtk_jl_bt_entry_size(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
     if mmtk_jl_bt_is_native(bt_entry) {
         1
     } else {
-        2 + mmtk_jl_bt_num_jlvals(bt_entry) + mmtk_jl_bt_num_jlvals(bt_entry)
+        2 + mmtk_jl_bt_num_jlvals(bt_entry) + mmtk_jl_bt_num_uintvals(bt_entry)
     }
 }
 
