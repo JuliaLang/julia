@@ -164,7 +164,7 @@ macro scoped(exprs...)
     exprs = map(esc, exprs)
     ct = gensym(:ct)
     current_scope = gensym(:current_scope)
-    body = Expr(:tryfinally, esc(ex), :($(ct).scope = $cs))
+    body = Expr(:tryfinally, esc(ex), :($(ct).scope = $(current_scope)))
     quote
         $(ct) = $(Base.current_task)()
         $(current_scope) = $(ct).scope::$(Union{Nothing, Scope})
