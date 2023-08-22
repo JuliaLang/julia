@@ -3,7 +3,7 @@
 const svar1 = ScopedValue(1)
 
 @testset "errors" begin
-    @test ScopedValue{Float64}(1) == 1.0
+    @test ScopedValue{Float64}(1)[] == 1.0
     var = ScopedValue(1)
     @test_throws MethodError var[] = 2
     scoped() do

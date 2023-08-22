@@ -35,13 +35,9 @@ julia> scoped(svar => 2) do
 """
 mutable struct ScopedValue{T}
     const initial_value::T
-    ScopedValue{T}(initial_value) where {T} = new{T}(initial_value)
 end
-ScopedValue(initial_value::T) where {T} = ScopedValue{T}(initial_value)
 
 Base.eltype(::Type{ScopedValue{T}}) where {T} = T
-
-import Base: ImmutableDict
 
 ##
 # Notes on the implementation.
