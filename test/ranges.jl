@@ -630,10 +630,10 @@ end
         @test Duck(0) ∉ Duck(1):Duck(5)
     end
     @testset "unique" begin
-        struct MyStepRangeLen{T,S,R} <: OrdinalRange{T,S}
+        struct MyStepRangeLen{T,R} <: AbstractRange{T}
            x :: R
         end
-        MyStepRangeLen(s::StepRangeLen{T,R,S}) where {T,R,S} = MyStepRangeLen{T,S,typeof(s)}(s)
+        MyStepRangeLen(s::StepRangeLen{T}) where {T} = MyStepRangeLen{T,typeof(s)}(s)
         Base.first(s::MyStepRangeLen) = first(s.x)
         Base.last(s::MyStepRangeLen) = last(s.x)
         Base.length(s::MyStepRangeLen) = length(s.x)
