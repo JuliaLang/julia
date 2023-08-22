@@ -205,7 +205,7 @@ void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
     }
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
-#elif defined(MADV_FREE)
+#elif 0
     static int supports_madv_free = 1;
     if (supports_madv_free) {
         if (madvise(p, decommit_size, MADV_FREE) == -1) {
