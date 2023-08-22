@@ -3,11 +3,14 @@
 const svar1 = ScopedValue(1)
 
 @testset "errors" begin
+    @test ScopedValue{Float64}(1) == 1.0
     var = ScopedValue(1)
     @test_throws MethodError var[] = 2
     scoped() do
         @test_throws MethodError var[] = 2
     end
+    @test_throws MethodError ScopedValue{Int}()
+    @test_throws MethodError ScopedValue()
 end
 
 const svar = ScopedValue(1)
@@ -32,6 +35,9 @@ const svar_float = ScopedValue(1.0)
     scoped(svar => 2, svar_float => 2.0) do
         @test svar[] == 2
         @test svar_float[] == 2.0
+    end
+    scoped(svar => 2, svar => 3) do
+        @test svar[] == 3
     end
 end
 

@@ -1,14 +1,14 @@
 # Scoped Values
 
-Scoped values provide an implementation of dynamical scoping in Julia.
-In particular dynamical scopes are propagated through [`Task`](@ref)s.
+Scoped values provide an implementation of dynamic scoping in Julia.
+In particular dynamic scopes are propagated through [`Task`](@ref)s.
 
 !!! compat "Julia 1.11"
     Scoped values were introduced in Julia 1.11. In Julia 1.7+ a compatible
     implementation is available from the package ScopedValues.jl.
 
 In its simplest form you can create a [`ScopedValue`](@ref) with a
-default value and then use [`scoped`](@ref) to enter a new dynamical
+default value and then use [`scoped`](@ref) to enter a new dynamic
 scope. The new scope will inherit all values from the parent scope
 (and recursivly from all outer scopes) with the provided scoped
 value taking priority over previous definitions.
@@ -42,7 +42,7 @@ Care is also required when storing references to mutable state in scoped
 values. You might want to explicitly unshare when entering a new dynamic scope.
 
 ```julia
-import Threads: @spawn
+import Base.Threads: @spawn
 const sval_dict = ScopedValue(Dict())
 
 # Example of using a mutable value wrongly

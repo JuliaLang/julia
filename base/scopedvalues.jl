@@ -90,7 +90,7 @@ function Base.show(io::IO, var::ScopedValue)
     print(io, ScopedValue)
     print(io, '{', eltype(var), '}')
     print(io, '(')
-    show(io, var[])
+    show(IOContext(io, :typeinfo => eltype(var)), var[])
     print(io, ')')
 end
 
