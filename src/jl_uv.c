@@ -78,7 +78,7 @@ void jl_wait_empty_begin(void)
         uv_run(jl_io_loop, UV_RUN_NOWAIT);
         uv_timer_init(jl_io_loop, &wait_empty_worker);
         uv_update_time(jl_io_loop);
-        uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
+        uv_timer_start(&wait_empty_worker, wait_empty_func, 30, 15000);
         uv_unref((uv_handle_t*)&wait_empty_worker);
     }
     JL_UV_UNLOCK();
