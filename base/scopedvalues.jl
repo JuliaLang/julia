@@ -65,10 +65,30 @@ end
 Scope(parent, key::ScopedValue{T}, value) where T =
     Scope(parent, key, convert(T, value))
 
+"""
+    current_scope()::Union{Nothing, Scope}
+
+Return the current dynamic scope.
+"""
 current_scope() = current_task().scope::Union{Nothing, Scope}
 
-function Base.show(io::IO, ::Scope)
-    print(io, Scope)
+function Base.show(io::IO, scope::Scope)
+    print(io, Scope, "(")
+    seen = Set{ScopedValue}()
+    while scope !== nothing
+        if scope.key ∉ seen
+            if !isempty(seen)
+                print(io, ", ")
+            end
+            print(io, typeof(scope.key), "@")
+            show(io, Base.objectid(scope.key))
+            print(io, " => ")
+            show(IOContext(io, :typeinfo => eltype(scope.key)), scope.value)
+            push!(seen, scope.key)
+        end
+        scope = scope.parent
+    end
+    print(io, ")")
 end
 
 function Base.getindex(var::ScopedValue{T})::T where T

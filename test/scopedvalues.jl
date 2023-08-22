@@ -1,9 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const svar1 = ScopedValue(1)
-
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
+    @test_throws InexactError ScopedValue{Int}(1.5)
     var = ScopedValue(1)
     @test_throws MethodError var[] = 2
     scoped() do
@@ -57,5 +56,53 @@ import Base.Threads: @spawn
         @test fetch(@spawn begin
             svar[]
         end) == 2
+    end
+end
+
+@testset "show" begin
+    @test sprint(show, svar) == "ScopedValue{$Int}(1)"
+    @test sprint(show, ScopedValues.current_scope()) == "nothing"
+    scoped(svar => 2.0) do
+        @test sprint(show, svar) == "ScopedValue{$Int}(2)"
+        objid = sprint(show, Base.objectid(svar))
+        @test sprint(show, ScopedValues.current_scope()) == "ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+    end
+end
+
+const depth = ScopedValue(0)
+function nth_scoped(f, n)
+    if n <= 0
+        f()
+    else
+        scoped(depth => n) do
+            nth_scoped(f, n-1)
+        end
+    end
+end
+
+
+@testset "nested scoped" begin
+    @testset for depth in 1:16
+        nth_scoped(depth) do
+            @test svar_float[] == 1.0
+        end
+        scoped(svar_float=>2.0) do
+            nth_scoped(depth) do
+                @test svar_float[] == 2.0
+            end
+        end
+        nth_scoped(depth) do
+            scoped(svar_float=>2.0) do
+                @test svar_float[] == 2.0
+            end
+        end
+    end
+    scoped(svar_float=>2.0) do
+        nth_scoped(15) do
+            @test svar_float[] == 2.0
+            scoped(svar_float => 3.0) do
+                @test svar_float[] == 3.0
+            end
+        end
     end
 end
