@@ -112,4 +112,9 @@ end
         @test svar[] == 2
         @test svar_float[] == 2.0
     end
+    # Doesn't do much...
+    @scoped begin
+        @test svar[] == 1
+        @test svar_float[] == 1.0
+    end
 end

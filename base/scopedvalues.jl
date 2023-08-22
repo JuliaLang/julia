@@ -69,8 +69,7 @@ end
 Scope(parent, key::ScopedValue{T}, value) where T =
     Scope(parent, key, convert(T, value))
 
-function Scope(parent, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
-    scope = Scope(parent, pair...)
+function Scope(scope, pairs::Pair{<:ScopedValue}...)
     for pair in rest
         scope = Scope(scope, pair...)
     end
