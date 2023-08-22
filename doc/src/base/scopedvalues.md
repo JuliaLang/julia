@@ -1,10 +1,12 @@
 # Scoped Values
 
 Scoped values provide an implementation of dynamic scoping in Julia.
-In particular dynamic scopes are propagated through [`Task`](@ref)s.
+Dynamic scope means that the state of the value is dependent on the execution path
+of the program. This means that for a scoped value you may observe
+multiple different values at the same time.
 
 !!! compat "Julia 1.11"
-    Scoped values were introduced in Julia 1.11. In Julia 1.7+ a compatible
+    Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 
 In its simplest form you can create a [`ScopedValue`](@ref) with a
@@ -32,6 +34,27 @@ scoped(scoped_val => 2) do
 end
 @show scoped_val[] # 1
 @show scoped_val2[] # 0
+```
+
+!!! note
+    Dynamic scopes are propagated through [`Task`](@ref)s.
+
+In the example below we open a new dynamic scope before launching a task.
+The parent task and the two child tasks observe independent values of the
+same scoped value at the same time.
+
+```julia
+import Base.Threads: @spawn
+const scoped_val = ScopedValue(1)
+@sync begin
+    scoped(scoped_val => 2)
+        @spawn @show scoped_val[] # 2
+    end
+    scoped(scoped_val => 3)
+        @spawn @show scoped_val[] # 3
+    end
+    @show scoped_val[] # 1
+end
 ```
 
 Scoped values are constant throughout a scope, but you can store mutable
