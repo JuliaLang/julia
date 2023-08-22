@@ -2,7 +2,7 @@
 
 module ScopedValues
 
-export ScopedValue, scoped
+export ScopedValue, scoped, @scoped
 
 """
     ScopedValue(x)
@@ -138,5 +138,29 @@ function scoped(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
 end
 
 scoped(@nospecialize(f)) = f()
+
+macro scoped(exprs...)
+    ex = last(exprs)
+    if length(exprs) > 1
+        exprs = exprs[1:end-1]
+    else
+        exprs = ()
+    end
+    for expr in exprs
+        if expr.head !== :call || first(expr.args) !== :(=>)
+            error("@scoped expects arguments of the form `A => 2` got $expr")
+        end
+    end
+    exprs = map(esc, exprs)
+    ct = gensym(:ct)
+    current_scope = gensym(:current_scope)
+    body = Expr(:tryfinally, esc(ex), :($(ct).scope = $cs))
+    quote
+        $(ct) = $(Base.current_task)()
+        $(current_scope) = $(ct).scope::$(Union{Nothing, Scope})
+        $(ct).scope = $(Scope)($(current_scope), $(exprs...))
+        $body
+    end
+end
 
 end # module ScopedValues
