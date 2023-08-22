@@ -629,6 +629,17 @@ end
         @test Duck(4) ∈ Duck(1):Duck(5)
         @test Duck(0) ∉ Duck(1):Duck(5)
     end
+    @testset "unique" begin
+        struct MyStepRangeLen{T,S,R} <: OrdinalRange{T,S}
+           x :: R
+        end
+        MyStepRangeLen(s::StepRangeLen{T,R,S}) where {T,R,S} = MyStepRangeLen{T,S,typeof(s)}(s)
+        Base.first(s::MyStepRangeLen) = first(s.x)
+        Base.last(s::MyStepRangeLen) = last(s.x)
+        Base.length(s::MyStepRangeLen) = length(s.x)
+        Base.step(s::MyStepRangeLen) = step(s.x)
+        @test unique(MyStepRangeLen(StepRangeLen(1,0,4))) == MyStepRangeLen(StepRangeLen(1,0,1))
+    end
 end
 @testset "indexing range with empty range (#4309)" begin
     @test (3:6)[5:4] === 7:6
