@@ -369,4 +369,25 @@ adding them to the global method table.
 """
 :@MethodTable
 
+"""
+   Experimental.@make_all_arithmetic_checked()
+
+This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+are not affected.
+
+!!! warning
+    This macro is temporary and will likely be replaced by a more complete mechanism in the
+    future. It is subject to change or removal without notice.
+"""
+macro make_all_arithmetic_checked()
+    esc(quote
+        Base.:(-)(x::BitInteger)                    = Base.Checked.checked_neg(x)
+        Base.:(-)(x::T, y::T) where {T<:BitInteger} = Base.Checked.checked_sub(x, y)
+        Base.:(+)(x::T, y::T) where {T<:BitInteger} = Base.Checked.checked_add(x, y)
+        Base.:(*)(x::T, y::T) where {T<:BitInteger} = Base.Checked.checked_mul(x, y)
+        Base.:(-)(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
+    end)
+end
+
 end

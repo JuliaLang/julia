@@ -384,3 +384,14 @@ macro pure(ex)
 end
 
 # END 1.10 deprecations
+
+# BEGIN 1.11 deprecations
+
+# These operators are new in 1.11, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
+# END 1.11 deprecations

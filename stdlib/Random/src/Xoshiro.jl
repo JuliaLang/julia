@@ -116,7 +116,7 @@ rng_native_52(::TaskLocalRNG) = UInt64
 function setstate!(
     x::TaskLocalRNG,
     s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64, # xoshiro256 state
-    s4::UInt64 = 1s0 + 3s1 + 5s2 + 7s3, # internal splitmix state
+    s4::UInt64 = s0 +% (3 *% s1) +% (5 *% s2) +% (7 *% s3), # internal splitmix state
 )
     t = current_task()
     t.rngState0 = s0
@@ -130,8 +130,8 @@ end
 @inline function rand(::TaskLocalRNG, ::SamplerType{UInt64})
     task = current_task()
     s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
-    tmp = s0 + s3
-    res = ((tmp << 23) | (tmp >> 41)) + s0
+    tmp = s0 +% s3
+    res = ((tmp << 23) | (tmp >> 41)) +% s0
     t = s1 << 17
     s2 ⊻= s0
     s3 ⊻= s1

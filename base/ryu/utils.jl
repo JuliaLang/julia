@@ -61,7 +61,23 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
 
 Return `true` if `5^p` is a divisor of `x`.
 """
-pow5(x, p) = x % (UInt64(5)^p) == 0
+function pow5(x, p)
+    # Assumptions:
+    #   0 < x < (1 << 53)
+    #   0 <= p <= 308
+    wrapped_pow = Base.power_by_squaring(*%, UInt64(5), p)
+
+    # We are using wrapping arithmetic here, which can overflow, but we get the right answer anyway
+    # by the following argument (#47511):
+    # 1. False Negative
+    #   No overflow occurs unless big(5)^p > typemax(UInt64), but typemax(UInt64) > (1 << 53), so
+    #   z is never divisible by big(5)^p. QED.
+    # 2. False Positive
+    #   We ask ∃ m2, p s.t. big(5)^p && m2 % wrapped_pow == 0.
+    #   By exhaustive checking `all(p->UInt64(5)^p > 1<<53, 28:308)`, so there does not exist any such
+    #   `m2` that satiesfies our assumptions above. QED.
+    x % wrapped_pow == 0
+end
 
 """
     Ryu.pow2(x, p)
@@ -166,6 +182,14 @@ Compute `pHi = (a*b)>>128` where `b = bLo + bHi<<64`.
 """
 umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
 
+function mod1e9(v::UInt128)
+    # TODO: Fix LLVM to perform this optimization itself on 128 bit integers
+    # return (v % 10^9) % UInt32
+    multiplied = umul256_hi(v, 0x89705F4136B4A597, 0x31680A88F8953031)
+    shifted = (multiplied >> 29) % UInt32
+    return (v % UInt32) -% UInt32(1000000000) *% shifted
+end
+
 """
     Ryu.mulshiftmod1e9(m, mula, mulb, mulc, j)::UInt32
 
@@ -178,9 +202,7 @@ function mulshiftmod1e9(m, mula, mulb, mulc, j)
     mid = b1 + ((b0 >> 64) % UInt64)
     s1 = b2 + ((mid >> 64) % UInt64)
     v = s1 >> (j - 128)
-    multiplied = umul256_hi(v, 0x89705F4136B4A597, 0x31680A88F8953031)
-    shifted = (multiplied >> 29) % UInt32
-    return (v % UInt32) - UInt32(1000000000) * shifted
+    return mod1e9(v)
 end
 
 function append_sign(x, plus, space, buf, pos)

@@ -579,7 +579,7 @@ function afoldl(op, a, bs...)
 end
 setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
-for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
+for op in (:+, :(+%), :*, :(*%), :&, :|, :xor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so

@@ -272,7 +272,7 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     "\nMake x a float matrix by adding a zero decimal ",
     "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
-@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer)
+@assume_effects :terminates_locally function power_by_squaring(*, x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
@@ -301,6 +301,7 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     end
     return y
 end
+power_by_squaring(x_, p::Integer) = power_by_squaring(*, x_, p)
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
     p < 0 && !x && throw_domerr_powbysq(x, p)
@@ -711,7 +712,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     i = n
     @inbounds while i >= 4
         b = UInt32((x % UInt8)::UInt8)
-        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
         a[i-3] = (d >> 0x00) % UInt8
         a[i-2] = (d >> 0x08) % UInt8
         a[i-1] = (d >> 0x10) % UInt8
@@ -874,7 +875,7 @@ function bitstring(x::T) where {T}
     i = sz
     @inbounds while i >= 4
         b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
         str[i-3] = (d >> 0x00) % UInt8
         str[i-2] = (d >> 0x08) % UInt8
         str[i-1] = (d >> 0x10) % UInt8

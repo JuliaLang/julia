@@ -317,7 +317,16 @@ function +(x::Rational, y::Rational)
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(checked_add(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function +%(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(+%(+*(x.num,yd), +*(y.num,xd)), +*(x.den,yd))
 end
 
 function -(x::Rational, y::Rational)
@@ -326,7 +335,16 @@ function -(x::Rational, y::Rational)
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(checked_sub(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function -%(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == -y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(-%(*%(x.num, yd), *%(y.num, xd)), *%(x.den, yd))
 end
 
 for (op,chop) in ((:rem,:rem), (:mod,:mod))

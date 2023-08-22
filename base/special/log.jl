@@ -566,9 +566,9 @@ function _log_ext(xu)
     # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near the center of the interval.
-    tmp = reinterpret(Int64, xu - 0x3fe6955500000000) #0x1.69555p-1
+    tmp = reinterpret(Int64, xu -% 0x3fe6955500000000) #0x1.69555p-1
     i = (tmp >> 45) & 127
-    z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
+    z = reinterpret(Float64, xu -% (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
     # getfield instead of getindex to satisfy effect analysis not knowing whether this is inbounds

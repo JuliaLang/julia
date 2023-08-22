@@ -43,7 +43,7 @@ try
     if !iswindows()
         @test isvalidpid("", 1 % Cuint)
         @test !isvalidpid("", -1 % Cuint)
-        @test !isvalidpid("", -mypid)
+        @test !isvalidpid("", -getpid() % Cuint)
     end
 end
 

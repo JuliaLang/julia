@@ -417,7 +417,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
-    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    off = Int[ unsafe_load(p,2i+1) == PCRE.UNSET ? 0 : unsafe_load(p,2i+1)+1 for i=1:n ]
     result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result

@@ -345,7 +345,7 @@ function steprange_last(start, step, stop)::typeof(stop)
         else
             # Compute absolute value of difference between `start` and `stop`
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
-            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+            absdiff, absstep = stop > start ? (stop -% start, step) : (start -% stop, -step)
 
             # Compute remainder as a nonnegative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
@@ -997,7 +997,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         f = first(r)
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)))
+        stop = start + oftype(f, len - oneunit(len))
         return range(start, stop)
     end
 end

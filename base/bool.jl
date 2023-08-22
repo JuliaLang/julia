@@ -160,12 +160,17 @@ isone(x::Bool) = x
 
 ## do arithmetic as Int ##
 
-+(x::Bool) =  Int(x)
--(x::Bool) = -Int(x)
++(x::Bool)  =    Int(x)
++%(x::Bool) =    Int(x)
+-(x::Bool)  = -%(Int(x))
+-%(x::Bool) = -%(Int(x))
 
-+(x::Bool, y::Bool) = Int(x) + Int(y)
--(x::Bool, y::Bool) = Int(x) - Int(y)
++(x::Bool, y::Bool) = Int(x) +% Int(y)
+-(x::Bool, y::Bool) = Int(x) -% Int(y)
++%(x::Bool, y::Bool) = Int(x) +% Int(y)
+-%(x::Bool, y::Bool) = Int(x) -% Int(y)
 *(x::Bool, y::Bool) = x & y
+*%(x::Bool, y::Bool) = x & y
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 

@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
+import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
@@ -334,7 +334,7 @@ function BigInt(x::Integer)
     isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    ux = unsigned(x < 0 ? -x : x)
+    ux = unsigned(x < 0 ? -%(x) : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
@@ -494,6 +494,7 @@ big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
+                 (:+%, :add), (:-%,:sub), (:*%, :mul),
                  (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
@@ -552,10 +553,10 @@ end
 -(x::BigInt, c::CulongMax) = MPZ.sub_ui(x, c)
 -(c::CulongMax, x::BigInt) = MPZ.ui_sub(c, x)
 
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
--(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
--(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
+-(x::BigInt, c::ClongMax) = c < 0 ? +(x, -%(c % Culong)) : -(x, convert(Culong, c))
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + -%(c % Culong)) : -(convert(Culong, c), x)
 
 *(x::BigInt, c::CulongMax) = MPZ.mul_ui(x, c)
 *(c::CulongMax, x::BigInt) = x * c
@@ -873,7 +874,7 @@ if Limb === UInt64 === UInt
                 return hash(unsafe_load(ptr), h)
             elseif sz == -1
                 limb = unsafe_load(ptr)
-                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+                limb <= typemin(Int) % UInt && return hash(-%(limb % Int), h)
             end
             pow = trailing_zeros(x)
             nd = Base.ndigits0z(x, 2)

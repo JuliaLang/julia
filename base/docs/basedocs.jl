@@ -2655,6 +2655,30 @@ julia> +(1, 20, 4)
 (+)(x, y...)
 
 """
+    +%(x::Integer, y::Integer...)
+
+Addition operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular addition operator `+`. However, some users may choose to overwrite
+`+` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `+%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 1 +% 20 +% 4
+25
+
+julia> +%(1, 20, 4)
+25
+
+julia> typemax(Int) +% 1
+-9223372036854775808
+```
+"""
+(+%)(x, y...)
+
+"""
     -(x)
 
 Unary minus operator.
@@ -2694,6 +2718,27 @@ julia> -(2, 4.5)
 -(x, y)
 
 """
+    -%(x::Integer, y::Integer...)
+
+Subtraction operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular subtraction operator `-`. However, some users may choose to overwrite
+`-` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `-%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 2 -% 3
+-1
+
+julia> -(typemin(Int))
+-9223372036854775808
+```
+"""
+(-%)(x, y...)
+
+"""
     *(x, y...)
 
 Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
@@ -2708,6 +2753,30 @@ julia> *(2, 7, 8)
 ```
 """
 (*)(x, y...)
+
+"""
+    *%(x::Integer, y::Integer, z::Integer...)
+
+Multiplication operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular multiplication operator `*`. However, some users may choose to overwrite
+`*` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `*%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 2 *% 7 *% 8
+112
+
+julia> *(2, 7, 8)
+112
+
+julia> 0xff *% 0xff
+0x01
+```
+"""
+(*%)(x, y, z...)
 
 """
     /(x, y)
