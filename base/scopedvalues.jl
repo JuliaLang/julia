@@ -41,7 +41,7 @@ Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 
 ##
 # Notes on the implementation.
-# We want lookup to be unreasonable fast.
+# We want lookup to be unreasonably fast.
 # - IDDict/Dict are ~10ns
 # - ImmutableDict is faster up to about ~15 entries
 # - ScopedValue are meant to be constant, Immutabilty
@@ -55,15 +55,24 @@ Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 #   a WeakKeyDict to also ensure that values get GC'd when ScopedValues
 #   become unreachable.
 # - Scopes are an inline implementation of an ImmutableDict, if we wanted
-#   be really fance we could use a CTrie or HAMT.
+#   be really fancy we could use a CTrie or HAMT.
 
-mutable struct Scope{T}
+mutable struct Scope
     const parent::Union{Nothing, Scope}
-    const key::ScopedValue{T}
-    const value::T
+    const key::ScopedValue
+    const value::Any
+    Scope(parent, key::ScopedValue{T}, value::T) where T = new(parent, key, value)
 end
 Scope(parent, key::ScopedValue{T}, value) where T =
     Scope(parent, key, convert(T, value))
+
+Scope(parent, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
+    scope = Scope(parent, pair...)
+    for pair in rest
+        scope = Scope(scope, pair...)
+    end
+    return scope
+end
 
 """
     current_scope()::Union{Nothing, Scope}
@@ -119,10 +128,7 @@ function scoped(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
     @nospecialize
     ct = Base.current_task()
     current_scope = ct.scope::Union{Nothing, Scope}
-    scope = Scope(current_scope, pair...)
-    for pair in rest
-        scope = Scope(scope, pair...)
-    end
+    scope = Scope(current_scope, pair, rest...)
     ct.scope = scope
     try
         return f()
