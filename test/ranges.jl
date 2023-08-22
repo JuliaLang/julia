@@ -638,7 +638,8 @@ end
         Base.last(s::MyStepRangeLen) = last(s.x)
         Base.length(s::MyStepRangeLen) = length(s.x)
         Base.step(s::MyStepRangeLen) = step(s.x)
-        @test unique(MyStepRangeLen(StepRangeLen(1,0,4))) == MyStepRangeLen(StepRangeLen(1,0,1))
+        sr = StepRangeLen(1,0,4)
+        @test unique(MyStepRangeLen(sr)) == unique(sr)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
