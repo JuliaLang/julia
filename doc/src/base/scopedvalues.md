@@ -10,9 +10,10 @@ multiple different values at the same time.
     implementation is available from the package ScopedValues.jl.
 
 In its simplest form you can create a [`ScopedValue`](@ref) with a
-default value and then use [`scoped`](@ref) to enter a new dynamic
-scope. The new scope will inherit all values from the parent scope
-(and recursivly from all outer scopes) with the provided scoped
+default value and then use [`scoped`](@ref) or [`@scoped`](@ref) to
+enter a new dynamic scope.
+The new scope will inherit all values from the parent scope
+(and recursively from all outer scopes) with the provided scoped
 value taking priority over previous definitions.
 
 ```julia
@@ -34,6 +35,14 @@ scoped(scoped_val => 2) do
 end
 @show scoped_val[] # 1
 @show scoped_val2[] # 0
+```
+
+Since `scoped` requires a closure or a function and creates another call-frame,
+it can sometimes be beneficial to use the macro form.
+
+```julia
+const STATE = ScopedValue{Union{Nothing, State}}()
+with_state(f, state::State) = @scoped(STATE => state, f())
 ```
 
 !!! note
@@ -62,7 +71,8 @@ state in a scoped value. Just keep in mind that the usual caveats
 for global variables apply in the context of concurrent programming.
 
 Care is also required when storing references to mutable state in scoped
-values. You might want to explicitly unshare when entering a new dynamic scope.
+values. You might want to explicitly [unshare mutable state](@ref unshare_mutable_state)
+when entering a new dynamic scope.
 
 ```julia
 import Base.Threads: @spawn
@@ -85,17 +95,9 @@ end
         @spawn (sval_dict[][:b] = 3)
     end
 end
-
-# If you want to add new values to the dict, instead of replacing
-# it, unshare the values explicitly. In this example we use `merge`
-# to unshare the state of the dictonary in parent scope.
-@sync begin
-    scoped(sval_dict => merge(sval_dict, Dict(:a => 10))) do
-        @spawn @show sval_dict[][:a]
-    end
-    @spawn sval_dict[][:a] = 3 # Not a race since they are unshared.
-end
 ```
+
+## Example
 
 In the example below we use a scoped value to implement a permission check in
 a web-application. After determining the permissions of the request,
@@ -130,9 +132,43 @@ function handle(request, response)
 end
 ```
 
+## Idioms
+### [Unshare mutable state]((@id unshare_mutable_state))
+
+```julia
+import Base.Threads: @spawn
+const sval_dict = ScopedValue(Dict())
+
+# If you want to add new values to the dict, instead of replacing
+# it, unshare the values explicitly. In this example we use `merge`
+# to unshare the state of the dictonary in parent scope.
+@sync begin
+    scoped(sval_dict => merge(sval_dict, Dict(:a => 10))) do
+        @spawn @show sval_dict[][:a]
+    end
+    @spawn sval_dict[][:a] = 3 # Not a race since they are unshared.
+end
+```
+
+### Local caching
+
+Since lookup of a scoped variable is linear in scope depth, it can be beneficial
+for a library at an API boundary to cache the state of the scoped value.
+
+```julia
+const DEVICE = ScopedValue(:CPU)
+
+function solve_problem(args...)
+    # Cache current device
+    @scoped DEVICE => DEVICE[] begin
+        # call functions that use `DEVICE[]` repeatedly.
+    end
+```
+
 ## API docs
 
 ```@docs
 Base.ScopedValues.ScopedValue
 Base.ScopedValues.scoped
+Base.ScopedValues.@scoped
 ```

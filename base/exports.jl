@@ -650,6 +650,7 @@ export
 
 # ScopedValue
     scoped,
+    @scoped,
     ScopedValue,
 
 # logging

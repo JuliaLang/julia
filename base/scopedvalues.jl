@@ -27,10 +27,13 @@ julia> scoped(svar => 2) do
            svar[]
        end
 2
+
+julia> svar[]
+1
 ```
 
 !!! compat "Julia 1.11"
-    Scoped values were introduced in Julia 1.11. In Julia 1.7+ a compatible
+    Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 """
 mutable struct ScopedValue{T}
@@ -66,7 +69,7 @@ end
 Scope(parent, key::ScopedValue{T}, value) where T =
     Scope(parent, key, convert(T, value))
 
-Scope(parent, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
+function Scope(parent, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
     scope = Scope(parent, pair...)
     for pair in rest
         scope = Scope(scope, pair...)
@@ -139,6 +142,13 @@ end
 
 scoped(@nospecialize(f)) = f()
 
+"""
+    @scoped vars... expr
+
+Macro version of `scoped(f, vars...)` but with `expr` instead of `f` function.
+This is similar to using [`scoped`](@ref) with a `do` block, but avoids creating
+a closure.
+"""
 macro scoped(exprs...)
     ex = last(exprs)
     if length(exprs) > 1
