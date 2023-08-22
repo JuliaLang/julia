@@ -24,6 +24,10 @@ LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DLAPACK_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
 	  -DLAPACK_LINKER_FLAGS="blastrampoline"
 
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/Wimmerer/SuiteSparse/archive/v$(LIBSUITESPARSE_VER).tar.gz
 
