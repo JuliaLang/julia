@@ -22,7 +22,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power           |
 | `x % y`    | remainder      | equivalent to `rem(x, y)`               |
 
-A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x + y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
@@ -204,9 +204,9 @@ as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 (see the [dot syntax documentation](@ref man-vectorized)).
 
 Note the dot syntax is also applicable to user-defined operators.
-For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
+For example, if you define `⊗(A, B) = kron(A, B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
-`[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
+`[A, B] .⊗ [C, D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
 Combining dot operators with numeric literals can be ambiguous.
 For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
@@ -457,7 +457,7 @@ Juxtaposition parses like a unary operator, which has the same natural asymmetry
 Julia supports three forms of numerical conversion, which differ in their handling of inexact
 conversions.
 
-  * The notation `T(x)` or `convert(T,x)` converts `x` to a value of type `T`.
+  * The notation `T(x)` or `convert(T, x)` converts `x` to a value of type `T`.
 
       * If `T` is a floating-point type, the result is the nearest representable value, which could be
         positive or negative infinity.
@@ -534,7 +534,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`mod1(x, y)`](@ref)       | `mod` with offset 1; returns `r∈(0, y]` for `y>0` or `r∈[y, 0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)        | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
 | [`divrem(x, y)`](@ref)     | returns `(div(x, y),rem(x, y))`                                                                           |
-| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y),mod(x, y ))`                                                                          |
+| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y), mod(x, y))`                                                                          |
 | [`gcd(x, y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
 | [`lcm(x, y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
@@ -557,13 +557,13 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
 | [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
 | [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x)-1` for `x` near zero                                      |
-| [`ldexp(x, n)`](@ref)    | `x*2^n` computed efficiently for integer values of `n`                     |
+| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
+| [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
 | [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
 | [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
 | [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
 | [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1+x)` for `x` near zero                                      |
+| [`log1p(x)`](@ref)       | accurate `log(1 + x)` for `x` near zero                                    |
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
@@ -587,7 +587,7 @@ These are all single-argument functions, with [`atan`](@ref) also accepting two 
 corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
-of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
+of [`sin(pi * x)`](@ref) and [`cos(pi * x)`](@ref) respectively.
 
 In order to compute trigonometric functions with degrees instead of radians, suffix the function
 with `d`. For example, [`sind(x)`](@ref) computes the sine of `x` where `x` is specified in degrees.

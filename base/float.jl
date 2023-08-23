@@ -138,6 +138,68 @@ i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 function exponent_raw_max end
 
 """
+IEEE 754 definition of the minimum exponent.
+"""
+ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
+
+exponent_min(::Type{Float16}) = ieee754_exponent_min(Float16)
+exponent_min(::Type{Float32}) = ieee754_exponent_min(Float32)
+exponent_min(::Type{Float64}) = ieee754_exponent_min(Float64)
+
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, exponent_field::Integer, significand_field::Integer
+) where {F<:IEEEFloat}
+    T = uinttype(F)
+    ret::T = sign_bit
+    ret <<= exponent_bits(F)
+    ret |= exponent_field
+    ret <<= significand_bits(F)
+    ret |= significand_field
+end
+
+# ±floatmax(T)
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:omega}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, exponent_raw_max(F) - 1, significand_mask(F))
+end
+
+# NaN or an infinity
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, significand_field::Integer, ::Val{:nan}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, exponent_raw_max(F), significand_field)
+end
+
+# NaN with default payload
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:nan}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, one(uinttype(F)) << (significand_bits(F) - 1), Val(:nan))
+end
+
+# Infinity
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:inf}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, Val(:nan))
+end
+
+# Subnormal or zero
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, significand_field::Integer, ::Val{:subnormal}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, significand_field)
+end
+
+# Zero
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:zero}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, Val(:subnormal))
+end
+
+"""
     uabs(x::Integer)
 
 Return the absolute value of `x`, possibly returning a different type should the

@@ -159,7 +159,6 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
     println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
 

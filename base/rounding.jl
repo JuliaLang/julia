@@ -109,6 +109,65 @@ Rounds to nearest integer, with ties rounded toward positive infinity (Java/Java
 """
 const RoundNearestTiesUp = RoundingMode{:NearestTiesUp}()
 
+# Rounding mode predicates. TODO: better names
+
+# Overload these for other rounding modes
+rounds_to_nearest(::RoundingMode) = false
+rounds_to_nearest(::RoundingMode{:Nearest}) = true
+rounds_to_nearest(::RoundingMode{:NearestTiesUp}) = true
+rounds_to_nearest(::RoundingMode{:NearestTiesAway}) = true
+rounds_away_from_zero(::RoundingMode{:Up},   sign_bit::Bool) = !sign_bit
+rounds_away_from_zero(::RoundingMode{:Down}, sign_bit::Bool) = sign_bit
+rounds_away_from_zero(::RoundingMode{:FromZero}, ::Bool) = true
+rounds_away_from_zero(::RoundingMode{:ToZero},   ::Bool) = false
+tie_breaker_is_to_even(::RoundingMode{:Nearest}) = true
+tie_breaker_is_to_even(::RoundingMode{:NearestTiesUp}) = false
+tie_breaker_is_to_even(::RoundingMode{:NearestTiesAway}) = false
+tie_breaker_rounds_away_from_zero(::RoundingMode{:NearestTiesUp}, sign_bit::Bool) = !sign_bit
+tie_breaker_rounds_away_from_zero(::RoundingMode{:NearestTiesAway},       ::Bool) = true
+
+rounds_to_nearest(t::Tuple{Any,Bool}) = rounds_to_nearest(first(t))
+rounds_away_from_zero(t::Tuple{Any,Bool}) = rounds_away_from_zero(t...)
+tie_breaker_is_to_even(t::Tuple{Any,Bool}) = tie_breaker_is_to_even(first(t))
+tie_breaker_rounds_away_from_zero(t::Tuple{Any,Bool}) = tie_breaker_rounds_away_from_zero(t...)
+
+abstract type RoundingIncrementHelper end
+struct FinalBit <: RoundingIncrementHelper end
+struct RoundBit <: RoundingIncrementHelper end
+struct StickyBit <: RoundingIncrementHelper end
+
+function correct_rounding_requires_increment(x, rounding_mode, sign_bit::Bool)
+    r = (rounding_mode, sign_bit)
+    f = let y = x
+        (z::RoundingIncrementHelper) -> y(z)::Bool
+    end
+    if rounds_to_nearest(r)
+        if f(RoundBit())
+            if f(StickyBit())
+                true
+            else
+                if tie_breaker_is_to_even(r)
+                    f(FinalBit())
+                else
+                    tie_breaker_rounds_away_from_zero(r)::Bool
+                end
+            end
+        else
+            false
+        end
+    else
+        if rounds_away_from_zero(r)
+            if f(RoundBit())
+                true
+            else
+                f(StickyBit())
+            end
+        else
+            false
+        end
+    end::Bool
+end
+
 to_fenv(::RoundingMode{:Nearest}) = JL_FE_TONEAREST
 to_fenv(::RoundingMode{:ToZero}) = JL_FE_TOWARDZERO
 to_fenv(::RoundingMode{:Up}) = JL_FE_UPWARD

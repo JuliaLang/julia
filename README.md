@@ -93,7 +93,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.9.0
+    git checkout v1.9.2
 
 To build the `julia` executable, run `make` from within the julia directory.
 

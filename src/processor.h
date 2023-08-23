@@ -226,7 +226,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
-JL_DLLEXPORT void jl_check_pkgimage_clones(char* data);
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
@@ -274,6 +274,15 @@ struct jl_target_spec_t {
 extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
+
+struct FeatureName {
+    const char *name;
+    uint32_t bit; // bit index into a `uint32_t` array;
+    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
+};
+
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets();
+extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **feature_names, size_t *nfeatures);
 #endif
 
 #endif

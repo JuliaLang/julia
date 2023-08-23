@@ -213,6 +213,21 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+# test issue behind https://github.com/JuliaLang/julia/issues/50458
+@test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+
+# test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
+# Specificially test with base types of a trivial type, a simple union, a complicated union, and a tuple.
+for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
+    Ta, Tb = T, T
+    for i in 1:10
+        Ta = Union{Tuple{Ta}, Nothing}
+        Tb = Core.Compiler.tmerge(Tuple{Tb}, Nothing)
+        @test Ta <: Tb <: Union{Nothing, Tuple}
+    end
+end
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -3450,8 +3465,12 @@ end
 @test Base.return_types(h33768, ()) == Any[Union{}]
 
 # constant prop of `Symbol("")`
-f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
-@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+@test Base.return_types() do
+    Val(Symbol("julia"))
+end |> only == Val{:julia}
+@test Base.return_types() do p::Pair{Int8,String}
+    getfield(p, Symbol("first"))
+end |> only == Int8
 
 # issue #33954
 struct X33954
@@ -4565,6 +4584,19 @@ end
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}, Val{Union{Val{Union{}}, Val{Val{Union{}}}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Val
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Val{<:a}, a)
+    @test_broken a != Val{<:Val{Union{}}}
+    @test_broken a == Val{<:Val} || a == Val
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -5099,6 +5131,34 @@ end
     refine_partial_struct2(42, s)
 end |> only === String
 # JET.test_call(s::AbstractString->Base._string(s, 'c'))
+
+# issue #45759 #46557
+g45759(x::Tuple{Any,Vararg}) = x[1] + _g45759(x[2:end])
+g45759(x::Tuple{}) = 0
+_g45759(x) = g45759(x)
+@test only(Base.return_types(g45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+h45759(x::Tuple{Any,Vararg}; kwargs...) = x[1] + h45759(x[2:end]; kwargs...)
+h45759(x::Tuple{}; kwargs...) = 0
+@test only(Base.return_types(h45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+@test only(Base.return_types((typeof([[[1]]]),)) do x
+    sum(x) do v
+        sum(length, v)
+    end
+end) == Int
+
+struct FunctionSum{Tf}
+    functions::Tf
+end
+(F::FunctionSum)(x) = sum(f -> f(x), F.functions)
+F = FunctionSum((x -> sqrt(x), FunctionSum((x -> x^2, x -> x^3))))
+@test @inferred(F(1.)) === 3.0
+
+f31485(arr::AbstractArray{T, 0}) where {T} = arr
+indirect31485(arr) = f31485(arr)
+f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
+@test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
 
 # override const-prop' return type with the concrete-eval result
 # if concrete-eval returns non-inlineable constant
