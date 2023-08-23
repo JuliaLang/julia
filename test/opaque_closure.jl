@@ -297,3 +297,9 @@ for f in (const_int, const_int_barrier)
         @test_throws TypeError eval_oc_spec(oc_mismatch)
     end
 end
+
+# Opaque closure with mismatch struct argtype
+const op_arg_restrict2 = @opaque (x::Tuple{Int64}, y::Base.RefValue{Int64})->x+y
+ccall_op_arg_restrict2_bad_args() = op_arg_restrict2((1.,), 2)
+
+@test_throws TypeError ccall_op_arg_restrict2_bad_args()
