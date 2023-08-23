@@ -1770,15 +1770,15 @@ let interp = Core.Compiler.NativeInterpreter()
     ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
         @noinline a*b
     end |> only
-    i = findfirst(isinvoke(:*), ir.stmts.inst)
+    i = findfirst(isinvoke(:*), ir.stmts.stmt)
     @test i !== nothing
 
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test count(isinvoke(:*), ir.stmts.inst) == 0
-    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+    @test count(isinvoke(:*), ir.stmts.stmt) == 0
+    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) == 1
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -2081,4 +2081,18 @@ end
 @test fully_eliminated((Float64,); retval=(5,5)) do y
     z = erase_before_inlining(true, y)
     return length(z), length(z)
+end
+
+# continue const-prop' when concrete-eval result is too big
+const THE_BIG_TUPLE_2 = ntuple(identity, 1024)
+return_the_big_tuple2(a) = (a, THE_BIG_TUPLE_2)
+let src = code_typed1() do
+        return return_the_big_tuple2(42)[2]
+    end
+    @test count(isinvoke(:return_the_big_tuple2), src.code) == 0
+end
+let src = code_typed1() do
+        return iterate(("1", '2'), 1)
+    end
+    @test count(isinvoke(:iterate), src.code) == 0
 end
