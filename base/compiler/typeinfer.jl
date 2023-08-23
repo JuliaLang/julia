@@ -550,10 +550,10 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
-        type_annotate!(interp, me)
+        unreachable = type_annotate!(interp, me)
         doopt = (me.cached || me.parent !== nothing)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, interp)
+            me.result.src = OptimizationState(me, interp, unreachable)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -656,61 +656,41 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     record_bestguess!(sv)
 
     # annotate variables load types
-    # remove dead code optimization
-    # and compute which variables may be used undef
     src = sv.src
     stmts = src.code
     nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    slotflags = src.slotflags
-    nslots = length(slotflags)
-    any_unreachable = false
+    nslots = length(src.slotflags)
 
-    # this statement traversal does five things:
-    # 1. mark used-undef slots (required by the `slot2reg` conversion)
-    # 2. mark unreached statements for a bulk code deletion (see issue #7836)
-    # 3. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
-    #    NOTE because of this, `was_reached` will no longer be available after this point
-    # 4. eliminate GotoIfNot if either or both branches are statically unreachable
-    changemap = nothing # initialized if there is any dead region
+    # save `was_reached` information in `unreachable` for the optimizer
+    unreachable = BitSet()
+
+    # widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     for i = 1:nstmt
-        expr = stmts[i]
         if was_reached(sv, i)
-            if isa(expr, GotoIfNot)
-                # 5: replace this live GotoIfNot with:
-                # - no-op if :nothrow and the branch target is unreachable
-                # - cond if :nothrow and both targets are unreachable
-                # - typeassert if must-throw
-                if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
-                    block = block_for_inst(sv.cfg, i)
-                    if !was_reached(sv, i+1)
-                        cfg_delete_edge!(sv.cfg, block, block + 1)
-                        expr = GotoNode(expr.dest)
-                    elseif !was_reached(sv, expr.dest)
-                        cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                        expr = nothing
-                    end
-                elseif ssavaluetypes[i] === Bottom
-                    block = block_for_inst(sv.cfg, i)
-                    cfg_delete_edge!(sv.cfg, block, block + 1)
-                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                    expr = Expr(:call, Core.typeassert, expr.cond, Bool)
-                end
-            end
-            stmts[i] = expr
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
-            any_unreachable = true
-            if is_meta_expr(expr) # keep any lexically scoped expressions
+            push!(unreachable, i)
+            if is_meta_expr(stmts[i]) # keep any lexically scoped expressions
                 ssavaluetypes[i] = Any # 3
             else
                 ssavaluetypes[i] = Bottom # 3
-                stmts[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
     end
 
-    return any_unreachable
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
+    for varstate in sv.bb_vartables
+        if varstate !== nothing
+            for slot in 1:nslots
+                vt = varstate[slot]
+                widened_type = widenslotwrapper(ignorelimited(vt.typ))
+                varstate[slot] = VarState(widened_type, vt.undef)
+            end
+        end
+    end
+
+    return unreachable
 end
 
 # at the end, all items in b's cycle

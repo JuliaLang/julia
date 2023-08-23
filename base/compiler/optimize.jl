@@ -130,14 +130,15 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::CFG
+    unreachable::BitSet
     bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter, unreachable::BitSet)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             sv.bb_vartables, sv.insert_coverage)
+                             unreachable, sv.bb_vartables, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -161,6 +162,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
     cfg = compute_basic_blocks(src.code)
+    unreachable = BitSet()
     bb_vartables = Union{VarTable,Nothing}[]
     for block = 1:length(cfg.blocks)
         push!(bb_vartables, VarState[
@@ -168,7 +170,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
             for slot = 1:nslots
         ])
     end
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, bb_vartables, false)
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     world = get_world_counter(interp)
@@ -530,12 +532,41 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
     end
 
+    # Update control-flow to reflect any unreachable branches.
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    code = copy_exprargs(ci.code)
+    for i = 1:length(code)
+        expr = code[i]
+        if i in sv.unreachable
+            is_meta_expr(expr) || (code[i] = Const(expr))
+        elseif isa(code[i], GotoIfNot)
+            # Replace this live GotoIfNot with:
+            # - no-op if :nothrow and the branch target is unreachable
+            # - cond if :nothrow and both targets are unreachable
+            # - typeassert if must-throw
+            if widenconst(argextype(expr.cond, ci, sv.sptypes)) === Bool
+                block = block_for_inst(sv.cfg, i)
+                if i + 1 in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    expr = GotoNode(expr.dest)
+                elseif expr.dest in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = nothing
+                end
+            elseif ssavaluetypes[i] === Bottom
+                block = block_for_inst(sv.cfg, i)
+                cfg_delete_edge!(sv.cfg, block, block + 1)
+                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+            end
+            code[i] = expr
+        end
+    end
+
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
-    code = copy_exprargs(ci.code)
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
     meta = Expr[]
     idx = 1
@@ -569,8 +600,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             idx += 1
             prevloc = codeloc
         end
-        if ssavaluetypes[idx] === Union{} && !(code[idx] isa Core.Const)
-            # Type inference should have converted any must-throw terminators to an equivalent w/o control-flow edges
+        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable)
+            # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
             @assert !isterminator(code[idx])
 
             block = block_for_inst(sv.cfg, oldidx)
@@ -596,8 +627,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
 
                     # Verify that type-inference did its job
                     if JLOptions().debug_level == 2
-                        for i = (idx + 1):(block_end - 1)
-                            @assert (code[i] isa Core.Const) || is_meta_expr(code[i])
+                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
+                            @assert i in sv.unreachable
                         end
                     end
 

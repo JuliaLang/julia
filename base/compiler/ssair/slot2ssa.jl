@@ -633,12 +633,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # an upsilon node in the corresponding enter block
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                @assert sv.bb_vartables[li] !== nothing
-                vt = sv.bb_vartables[li][idx]
-                typ = widenslotwrapper(ignorelimited(vt.typ))
+                varstate = sv.bb_vartables[li]
+                @assert varstate !== nothing
+                vt = varstate[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
-                        NewInstruction(node, typ)).id - length(ir.stmts))
+                        NewInstruction(node, vt.typ)).id - length(ir.stmts))
                 undef_node = undef_ssaval = nothing
                 if vt.typ === Union{}
                     undef_ssaval = false
@@ -661,11 +661,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            @assert sv.bb_vartables[block] !== nothing
-            vt = sv.bb_vartables[block][idx]
-            typ = widenslotwrapper(ignorelimited(vt.typ))
+            varstate = sv.bb_vartables[block]
+            @assert varstate !== nothing
+            vt = varstate[idx]
             ssaval = NewSSAValue(insert_node!(ir,
-                first_insert_for_bb(code, cfg, block), NewInstruction(node, typ)).id - length(ir.stmts))
+                first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
             undef_node = undef_ssaval = nothing
             if vt.typ === Union{}
                 undef_ssaval = false
@@ -748,9 +748,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             (ival === SSAValue(-2)) && continue
             (ival === UNDEF_TOKEN) && continue
 
-            @assert sv.bb_vartables[item] !== nothing
-            varstate = sv.bb_vartables[item][slot]
-            typ = widenslotwrapper(ignorelimited(varstate.typ))
+            varstate = sv.bb_vartables[item]
+            @assert varstate !== nothing
+            typ = varstate[slot].typ
             if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
                 node = PiNode(ival, typ)
                 ival = NewSSAValue(insert_node!(ir,

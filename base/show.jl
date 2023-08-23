@@ -1424,8 +1424,6 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 #   eval(Meta.parse("Set{Int64}([2,3,1])")) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-using Core.Compiler: SlotNumber
-
 const ExprNode = Union{Expr, QuoteNode, SlotNumber, LineNumberNode, SSAValue,
                        GotoNode, GotoIfNot, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
                        ReturnNode}
