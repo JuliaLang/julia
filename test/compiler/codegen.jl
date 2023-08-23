@@ -853,3 +853,9 @@ let res = @timed a50317[:b]
     @test res.bytes == 0
     return res
 end
+
+# https://github.com/JuliaLang/julia/issues/50964
+@noinline bar50964(x::Core.Const) = Base.inferencebarrier(1)
+@noinline bar50964(x::DataType) = Base.inferencebarrier(2)
+foo50964(x) = bar50964(Base.inferencebarrier(Core.Const(x)))
+foo50964(1) # Shouldn't assert!
