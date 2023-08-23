@@ -511,7 +511,7 @@ function run_passes(
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+        @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end
     @label __done__  # used by @pass
     return ir
