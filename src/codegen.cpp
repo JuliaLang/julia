@@ -7159,7 +7159,14 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         if (f == NULL) {
             f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
             jl_init_function(f, ctx.emission_context.TargetTriple);
-            f->setAttributes(AttributeList::get(f->getContext(), {attributes, f->getAttributes()}));
+            if (ctx.emission_context.debug_level >= 2) {
+                ios_t sigbuf;
+                ios_mem(&sigbuf, 0);
+                jl_static_show_func_sig((JL_STREAM*) &sigbuf, sig);
+                f->setAttributes(AttributeList::get(f->getContext(), {attributes.addFnAttribute(ctx.builder.getContext(),"julia.fsig", StringRef(sigbuf.buf, sigbuf.size)), f->getAttributes()}));
+                ios_close(&sigbuf);
+            } else
+                f->setAttributes(AttributeList::get(f->getContext(), {attributes, f->getAttributes()}));
         }
         else {
             assert(f->getFunctionType() == ftype);
