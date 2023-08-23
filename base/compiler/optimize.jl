@@ -537,9 +537,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         expr = code[i]
-        if i in sv.unreachable
-            is_meta_expr(expr) || (code[i] = Const(expr))
-        elseif isa(code[i], GotoIfNot)
+        if !(i in sv.unreachable) && isa(code[i], GotoIfNot)
             # Replace this live GotoIfNot with:
             # - no-op if :nothrow and the branch target is unreachable
             # - cond if :nothrow and both targets are unreachable

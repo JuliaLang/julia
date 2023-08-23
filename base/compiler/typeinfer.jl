@@ -666,6 +666,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     unreachable = BitSet()
 
     # widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
+    # and mark any unreachable statements by wrapping them in Const(...), to distinguish them from
+    # must-throw statements which also have type Bottom
     for i = 1:nstmt
         if was_reached(sv, i)
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
@@ -675,6 +677,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
                 ssavaluetypes[i] = Any # 3
             else
                 ssavaluetypes[i] = Bottom # 3
+                # annotate that this statement actually is dead
+                stmts[i] = Const(stmts[i])
             end
         end
     end
