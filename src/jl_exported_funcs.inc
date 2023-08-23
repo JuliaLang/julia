@@ -184,7 +184,8 @@
     XX(jl_gc_max_internal_obj_size) \
     XX(jl_gc_new_weakref) \
     XX(jl_gc_new_weakref_th) \
-    XX(jl_gc_num) \
+    XX(jl_gc_alloc_stats) \
+    XX(jl_gc_timing_stats) \
     XX(jl_gc_pool_alloc) \
     XX(jl_gc_pool_alloc_instrumented) \
     XX(jl_gc_queue_multiroot) \

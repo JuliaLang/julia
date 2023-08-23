@@ -1,35 +1,43 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This type must be kept in sync with the C struct in src/gc.h
-struct GC_Num
-    allocd          ::Int64 # GC internal
-    deferred_alloc  ::Int64 # GC internal
-    freed           ::Int64 # GC internal
-    malloc          ::Int64
-    realloc         ::Int64
-    poolalloc       ::Int64
-    bigalloc        ::Int64
-    freecall        ::Int64
-    total_time      ::Int64
-    total_allocd    ::Int64 # GC internal
-    collect         ::Csize_t # GC internal
-    pause           ::Cint
-    full_sweep      ::Cint
-    max_pause       ::Int64
-    max_memory      ::Int64
-    time_to_safepoint           ::Int64
-    max_time_to_safepoint       ::Int64
-    total_time_to_safepoint     ::Int64
-    sweep_time      ::Int64
-    mark_time       ::Int64
-    total_sweep_time  ::Int64
-    total_mark_time   ::Int64
-    last_full_sweep ::Int64
-    last_incremental_sweep ::Int64
+#Keep in sync with jl_gc_alloc_stats_t in src/gc.h
+struct GCAllocStats
+    allocd       ::UInt64
+    malloc       ::UInt64
+    realloc      ::UInt64
+    poolalloc    ::UInt64
+    bigalloc     ::UInt64
+    total_allocd ::UInt64
+    freed        ::UInt64
 end
 
-gc_num() = ccall(:jl_gc_num, GC_Num, ())
-reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
+#Keep in sync with jl_gc_timing_stats_t in src/gc.h
+struct GCTimingStats
+    total_time              ::UInt64
+    n_gcs                   ::UInt64
+    n_full_gcs              ::UInt64
+    max_pause               ::UInt64
+    time_to_safepoint       ::UInt64
+    max_time_to_safepoint   ::UInt64
+    total_time_to_safepoint ::UInt64
+    sweep_time              ::UInt64
+    mark_time               ::UInt64
+    total_sweep_time        ::UInt64
+    total_mark_time         ::UInt64
+    last_full_sweep         ::UInt64
+    last_incremental_sweep  ::UInt64
+end
+
+struct GCStats
+    allocs  ::GCAllocStats
+    timings ::GCTimingStats
+end
+
+gc_alloc_stats() = ccall(:jl_gc_alloc_stats, GCAllocStats, ())
+gc_timing_stats() = ccall(:jl_gc_timing_stats, GCTimingStats, ())
+gc_stats() = GCStats(gc_alloc_stats(), gc_timing_stats())
+reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ()) #Noop for now, not sure what the behaviour should be
+
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
@@ -38,28 +46,22 @@ struct GC_Diff
     realloc     ::Int64 # Number of GC aware realloc()
     poolalloc   ::Int64 # Number of pool allocation
     bigalloc    ::Int64 # Number of big (non-pool) allocation
-    freecall    ::Int64 # Number of GC aware free()
     total_time  ::Int64 # Time spent in garbage collection
-    pause       ::Int64 # Number of GC pauses
-    full_sweep  ::Int64 # Number of GC full collection
+    n_gcs       ::Int64 # Number of GC pauses
+    n_full_gcs  ::Int64 # Number of GC full collection
 end
 
-gc_total_bytes(gc_num::GC_Num) =
-    gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
+gc_total_bytes(gc_stats::GCStats) = gc_stats.allocs.total_allocd
 
-function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from `src/gc.c:jl_gc_total_bytes`
-    old_allocd = gc_total_bytes(old)
-    new_allocd = gc_total_bytes(new)
-    return GC_Diff(new_allocd       - old_allocd,
-                   new.malloc       - old.malloc,
-                   new.realloc      - old.realloc,
-                   new.poolalloc    - old.poolalloc,
-                   new.bigalloc     - old.bigalloc,
-                   new.freecall     - old.freecall,
-                   new.total_time   - old.total_time,
-                   new.pause        - old.pause,
-                   new.full_sweep   - old.full_sweep)
+function GC_Diff(new::GCStats, old::GCStats)
+    return GC_Diff( Int64(new.allocs.total_allocd) - Int64(old.allocs.total_allocd),
+                    Int64(new.allocs.malloc)      - Int64(old.allocs.malloc),
+                    Int64(new.allocs.realloc)     - Int64(old.allocs.realloc),
+                    Int64(new.allocs.poolalloc)   - Int64(old.allocs.poolalloc),
+                    Int64(new.allocs.bigalloc)    - Int64(old.allocs.bigalloc),
+                    Int64(new.timings.total_time) - Int64(old.timings.total_time),
+                    Int64(new.timings.n_gcs)      - Int64(old.timings.n_gcs),
+                    Int64(new.timings.n_full_gcs) - old.timings.n_full_gcs)
 end
 
 function gc_alloc_count(diff::GC_Diff)
@@ -94,8 +96,8 @@ the last garbage collection, plus the number of bytes allocated
 since then.
 """
 function gc_live_bytes()
-    num = gc_num()
-    Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+    num = gc_stats()
+    Int(ccall(:jl_gc_live_bytes, Int64, ()))
 end
 
 """
@@ -196,10 +198,9 @@ function timev_print(elapsedtime, diff::GC_Diff, compile_times; msg::Union{Strin
     padded_nonzero_print(diff.malloc,       "malloc() calls", false)
     padded_nonzero_print(diff.realloc,      "realloc() calls", false)
     # always print number of frees if there are mallocs
-    padded_nonzero_print(diff.freecall,     "free() calls", diff.malloc > 0)
-    minor_collects = diff.pause - diff.full_sweep
+    minor_collects = diff.n_gcs - diff.n_full_gcs
     padded_nonzero_print(minor_collects,    "minor collections")
-    padded_nonzero_print(diff.full_sweep,   "full collections")
+    padded_nonzero_print(diff.n_full_gcs,   "full collections")
 end
 
 # Like a try-finally block, except without introducing the try scope
@@ -275,7 +276,7 @@ end
 macro time(msg, ex)
     quote
         Experimental.@force_compile
-        local stats = gc_num()
+        local stats = gc_stats()
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
@@ -284,7 +285,7 @@ macro time(msg, ex)
             cumulative_compile_timing(false);
             compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
-        local diff = GC_Diff(gc_num(), stats)
+        local diff = GC_Diff(gc_stats(), stats)
         local _msg = $(esc(msg))
         time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true; msg=_msg)
         val
@@ -357,7 +358,7 @@ end
 macro timev(msg, ex)
     quote
         Experimental.@force_compile
-        local stats = gc_num()
+        local stats = gc_stats()
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
@@ -366,7 +367,7 @@ macro timev(msg, ex)
             cumulative_compile_timing(false);
             compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
-        local diff = GC_Diff(gc_num(), stats)
+        local diff = GC_Diff(gc_stats(), stats)
         local _msg = $(esc(msg))
         timev_print(elapsedtime, diff, compile_elapsedtimes; msg=_msg)
         val
@@ -455,9 +456,9 @@ julia> @allocations rand(10^6)
 macro allocations(ex)
     quote
         Experimental.@force_compile
-        local stats = Base.gc_num()
+        local stats = Base.gc_stats()
         $(esc(ex))
-        local diff = Base.GC_Diff(Base.gc_num(), stats)
+        local diff = Base.GC_Diff(Base.gc_stats(), stats)
         Base.gc_alloc_count(diff)
     end
 end
@@ -501,11 +502,11 @@ julia> stats.gcstats.total_time
 macro timed(ex)
     quote
         Experimental.@force_compile
-        local stats = gc_num()
+        local stats = gc_stats()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
+        local diff = GC_Diff(gc_stats(), stats)
         (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
     end
 end

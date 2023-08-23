@@ -129,14 +129,15 @@ typedef struct {
 } jl_gc_pool_t;
 
 typedef struct {
-    _Atomic(int64_t) allocd;
-    _Atomic(uint64_t) malloc;
-    _Atomic(uint64_t) realloc;
-    _Atomic(uint64_t) poolalloc;
-    _Atomic(uint64_t) bigalloc;
-    _Atomic(int64_t) free_acc;
-    _Atomic(uint64_t) alloc_acc;
-} jl_thread_gc_num_t;
+    _Atomic(uint64_t)  allocd;
+    _Atomic(uint64_t)  malloc;
+    _Atomic(uint64_t)  realloc;
+    _Atomic(uint64_t)  poolalloc;
+    _Atomic(uint64_t)  bigalloc;
+    _Atomic(uint64_t)  freed;
+    _Atomic(uint64_t)  free_acc;
+    _Atomic(uint64_t)  alloc_acc;
+} jl_thread_gc_stats_t; // Keep in sync with jl_gc_alloc_stats_t
 
 typedef struct {
     // variable for tracking weak references
@@ -227,7 +228,7 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_thread_heap_t heap; // this is very large, and the offset is baked into codegen
-    jl_thread_gc_num_t gc_num;
+    jl_thread_gc_stats_t gc_thread_stats;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
