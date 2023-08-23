@@ -6,7 +6,7 @@ import Core:
     CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
     QuoteNode, ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 # domsort
 # =======
@@ -1439,3 +1439,15 @@ function foo(b, x)
     getfield(f, :x) + 1
 end
 @test foo(true, 1) == 2
+
+# ifelse folding
+@test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return Core.ifelse(true, x, exp(x))
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(isa(x, Float64), x, exp(x))
+end
