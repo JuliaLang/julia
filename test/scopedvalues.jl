@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+import Base: ScopedValues
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -65,7 +66,7 @@ end
     scoped(svar => 2.0) do
         @test sprint(show, svar) == "ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(svar))
-        @test sprint(show, ScopedValues.current_scope()) == "ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+        @test sprint(show, ScopedValues.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
     end
 end
 
