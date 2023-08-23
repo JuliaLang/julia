@@ -982,7 +982,11 @@ end
 A simple fallback test set that throws immediately on a failure.
 """
 struct FallbackTestSet <: AbstractTestSet end
-fallback_testset = FallbackTestSet()
+
+const CURRENT_TESTSET = ScopedValue{AbstractTestSet}(FallbackTestSet())
+const CURRENT_DEPTH = ScopedValue(0)
+get_testset() = CURRENT_TESTSET[]
+get_testset_depth() = CURRENT_DEPTH[]
 
 struct FallbackTestSetException <: Exception
     msg::String
@@ -1520,14 +1524,13 @@ function testset_context(args, ex, source)
     test_ex = ex.args[2]
 
     ex.args[2] = quote
+        testset = $(CURRENT_TESTSET)[]
         $(map(contexts) do context
-            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
+            :(testset = $(ContextTestSet)(testset, $(QuoteNode(context)), $context; $options...))
         end...)
-        try
-            $(test_ex)
-        finally
-            $(map(_->:($pop_testset()), contexts)...)
-        end
+        @scoped($(CURRENT_TESTSET) => testset,
+                $(CURRENT_DEPTH) => $CURRENT_DEPTH[]+1,
+                $(test_ex))
     end
 
     return esc(ex)
@@ -1563,34 +1566,34 @@ function testset_beginend_call(args, tests, source)
         else
             $(testsettype)($desc; $options...)
         end
-        push_testset(ts)
-        # we reproduce the logic of guardseed, but this function
-        # cannot be used as it changes slightly the semantic of @testset,
-        # by wrapping the body in a function
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
-        try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(Random.GLOBAL_SEED)
-            let
-                $(esc(tests))
+        @scoped $(CURRENT_TESTSET) => ts $(CURRENT_DEPTH) => $(CURRENT_DEPTH)[] + 1 begin
+            # we reproduce the logic of guardseed, but this function
+            # cannot be used as it changes slightly the semantic of @testset,
+            # by wrapping the body in a function
+            local RNG = default_rng()
+            local oldrng = copy(RNG)
+            local oldseed = Random.GLOBAL_SEED
+            try
+                # RNG is re-seeded with its own seed to ease reproduce a failed test
+                Random.seed!(Random.GLOBAL_SEED)
+                let
+                    $(esc(tests))
+                end
+            catch err
+                err isa InterruptException && rethrow()
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                trigger_test_failure_break(err)
+                if err isa FailFastError
+                    get_testset_depth() > 1 ? rethrow() : failfast_print()
+                else
+                    record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+                end
+            finally
+                copy!(RNG, oldrng)
+                Random.set_global_seed!(oldseed)
+                ret = finish(ts)
             end
-        catch err
-            err isa InterruptException && rethrow()
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            trigger_test_failure_break(err)
-            if err isa FailFastError
-                get_testset_depth() > 1 ? rethrow() : failfast_print()
-            else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
-            end
-        finally
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
-            pop_testset()
-            ret = finish(ts)
         end
         ret
     end
@@ -1649,7 +1652,6 @@ function testset_forloop(args, testloop, source)
         # Trick to handle `break` and `continue` in the test code before
         # they can be handled properly by `finally` lowering.
         if !first_iteration
-            pop_testset()
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
@@ -1663,17 +1665,18 @@ function testset_forloop(args, testloop, source)
         else
             $(testsettype)($desc; $options...)
         end
-        push_testset(ts)
-        first_iteration = false
-        try
-            $(esc(tests))
-        catch err
-            err isa InterruptException && rethrow()
-            # Something in the test block threw an error. Count that as an
-            # error in this test set
-            trigger_test_failure_break(err)
-            if !isa(err, FailFastError)
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+        @scoped $(CURRENT_TESTSET) => ts $(CURRENT_DEPTH) => $(CURRENT_DEPTH)[] + 1 begin
+            first_iteration = false
+            try
+                $(esc(tests))
+            catch err
+                err isa InterruptException && rethrow()
+                # Something in the test block threw an error. Count that as an
+                # error in this test set
+                trigger_test_failure_break(err)
+                if !isa(err, FailFastError)
+                    record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+                end
             end
         end
     end
@@ -1694,7 +1697,6 @@ function testset_forloop(args, testloop, source)
         finally
             # Handle `return` in test body
             if !first_iteration && !finish_errored
-                pop_testset()
                 push!(arr, finish(ts))
             end
             copy!(RNG, oldrng)
@@ -1735,51 +1737,6 @@ end
 
 #-----------------------------------------------------------------------
 # Various helper methods for test sets
-
-"""
-    get_testset()
-
-Retrieve the active test set from the task's local storage. If no
-test set is active, use the fallback default test set.
-"""
-function get_testset()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return isempty(testsets) ? fallback_testset : testsets[end]
-end
-
-"""
-    push_testset(ts::AbstractTestSet)
-
-Adds the test set to the `task_local_storage`.
-"""
-function push_testset(ts::AbstractTestSet)
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    push!(testsets, ts)
-    setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
-end
-
-"""
-    pop_testset()
-
-Pops the last test set added to the `task_local_storage`. If there are no
-active test sets, returns the fallback default test set.
-"""
-function pop_testset()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    ret = isempty(testsets) ? fallback_testset : pop!(testsets)
-    setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
-    return ret
-end
-
-"""
-    get_testset_depth()
-
-Return the number of active test sets, not including the default test set
-"""
-function get_testset_depth()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return length(testsets)
-end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))

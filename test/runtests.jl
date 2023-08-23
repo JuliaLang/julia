@@ -373,15 +373,14 @@ cd(@__DIR__) do
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
-    Test.push_testset(o_ts)
     completed_tests = Set{String}()
-    for (testname, (resp,), duration) in results
+    @scoped Test.CURRENT_TESTSET => o_ts for (testname, (resp,), duration) in results
         push!(completed_tests, testname)
         if isa(resp, Test.DefaultTestSet)
             resp.time_end = resp.time_start + duration
-            Test.push_testset(resp)
-            Test.record(o_ts, resp)
-            Test.pop_testset()
+            @scoped Test.CURRENT_TESTSET => resp begin
+                Test.record(o_ts, resp)
+            end
         elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
@@ -394,9 +393,9 @@ cd(@__DIR__) do
             for t in resp.errors_and_fails
                 Test.record(fake, t)
             end
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
+            @scoped Test.CURRENT_TESTSET => fake begin
+                Test.record(o_ts, fake)
+            end
         else
             if !isa(resp, Exception)
                 resp = ErrorException(string("Unknown result type : ", typeof(resp)))
@@ -408,18 +407,18 @@ cd(@__DIR__) do
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
             Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
+            @scoped Test.CURRENT_TESTSET => fake begin
+                Test.record(o_ts, fake)
+            end
         end
     end
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
         Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
-        Test.push_testset(fake)
-        Test.record(o_ts, fake)
-        Test.pop_testset()
+        @scoped Test.CURRENT_TESTSET => fake begin
+            Test.record(o_ts, fake)
+        end
     end
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
