@@ -1189,12 +1189,6 @@ static void combine_thread_gc_counts(void) JL_NOTSAFEPOINT
     }
 }
 
-static int64_t inc_live_bytes(int64_t inc) JL_NOTSAFEPOINT
-{
-    jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, inc);
-    return live_bytes += inc;
-}
-
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
 {
     size_t sz = 0;
@@ -3709,19 +3703,20 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 
         int64_t diff = sz - old;
         if (diff < 0) {
+            diff = -diff; // The diff is negative, but we want to add it
             jl_atomic_store_relaxed(&ptls->gc_thread_stats.freed,
                 jl_atomic_load_relaxed(&ptls->gc_thread_stats.freed) + diff);
             uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_thread_stats.free_acc);
             if (free_acc + diff < 16*1024)
-                jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, free_acc + (-diff));
+                jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, free_acc + diff);
             else {
-                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
+                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + diff));
                 jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, 0);
             }
         }
         else {
             jl_atomic_store_relaxed(&ptls->gc_thread_stats.allocd,
-                jl_atomic_load_relaxed(&ptls->gc_thread_stats.allocd) + (diff));
+                jl_atomic_load_relaxed(&ptls->gc_thread_stats.allocd) + diff);
             uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_thread_stats.alloc_acc);
             if (alloc_acc + diff < 16*1024)
                 jl_atomic_store_relaxed(&ptls->gc_thread_stats.alloc_acc, alloc_acc + diff);
@@ -3841,20 +3836,20 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 
     if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
-        inc_live_bytes(allocsz - oldsz);
     }
     jl_atomic_store_relaxed(&ptls->gc_thread_stats.realloc,
         jl_atomic_load_relaxed(&ptls->gc_thread_stats.realloc) + 1);
 
     int64_t diff = allocsz - oldsz;
     if (diff < 0) {
+        diff = - diff;
         jl_atomic_store_relaxed(&ptls->gc_thread_stats.freed,
-            jl_atomic_load_relaxed(&ptls->gc_thread_stats.freed) + (-diff));
+            jl_atomic_load_relaxed(&ptls->gc_thread_stats.freed) + diff);
         uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_thread_stats.free_acc);
         if (free_acc + diff < 16*1024)
-            jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, free_acc + (-diff));
+            jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, free_acc + diff);
         else {
-            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + diff));
             jl_atomic_store_relaxed(&ptls->gc_thread_stats.free_acc, 0);
         }
     }
