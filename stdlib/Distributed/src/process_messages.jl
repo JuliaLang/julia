@@ -210,7 +210,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             handle_msg(msg, header, r_stream, w_stream, version)
         end
     catch e
-        werr = worker_from_id(iderr)
+        werr = worker_from_id(wpid)
         oldstate = werr.state
 
         # Check again as it may have been set in a message handler but not propagated to the calling block above
