@@ -2186,6 +2186,12 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
                         T = UnionAll(v, T)
                     end
                 end
+                if has_free_typevars(T)
+                    fv = ccall(:jl_find_free_typevars, Vector{Any}, (Any,), T)
+                    for v in fv
+                        T = UnionAll(v, T)
+                    end
+                end
             else
                 T = rewrap_unionall(T, spsig)
             end
