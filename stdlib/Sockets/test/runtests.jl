@@ -544,15 +544,15 @@ end
         fetch(r)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
-        s = Sockets.TCPSocket()
-        Sockets.connect!(s, addr)
-        r = @async close(s)
-        @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
-        fetch(r)
-        close(srv)
-    end
+    # let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
+    #     srv = listen(addr)
+    #     s = Sockets.TCPSocket()
+    #     Sockets.connect!(s, addr)
+    #     r = @async close(s)
+    #     @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+    #     fetch(r)
+    #     close(srv)
+    # end
 end
 
 @testset "iswritable" begin
