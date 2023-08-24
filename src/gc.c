@@ -2452,7 +2452,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 else if (foreign_alloc)
                     objprofile_count(jl_module_type, bits == GC_OLD_MARKED, sizeof(jl_module_t));
                 jl_module_t *mb_parent = (jl_module_t *)new_obj;
-                jl_svec_t *bindings = jl_atomic_load_relaxed(&mb_parent->bindings);
                 uintptr_t nptr = ((mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
                 gc_mark_module_binding(ptls, mb_parent, nptr, bits);
             }
