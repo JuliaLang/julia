@@ -2323,14 +2323,6 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
                             uint8_t bits) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
-    for (; mb_begin < mb_end; mb_begin++) {
-        jl_binding_t *b = *mb_begin;
-        if (b == (jl_binding_t *)jl_nothing)
-            continue;
-        verify_parent1("module", mb_parent, mb_begin, "binding_buff");
-        gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)b);
-        gc_try_claim_and_push(mq, b, &nptr);
-    }
     jl_value_t *bindings = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindings);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindings);
     gc_try_claim_and_push(mq, bindings, &nptr);
