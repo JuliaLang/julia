@@ -155,14 +155,16 @@ struct Fail <: Result
     context::Union{Nothing, String}
     source::LineNumberNode
     message_only::Bool
-    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool)
+    backtrace::Union{Nothing, String}
+    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool, backtrace=nothing)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
             context,
             source,
-            message_only)
+            message_only,
+            backtrace)
     end
 end
 
@@ -184,6 +186,11 @@ function Base.show(io::IO, t::Fail)
         else
             print(io, "\n    Expected: ", data)
             print(io, "\n      Thrown: ", value)
+            print(io, "\n")
+            if t.backtrace !== nothing
+                # Capture error message and indent to match
+                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+            end
         end
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
@@ -768,7 +775,7 @@ macro test_throws(extype, ex)
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e, nothing, $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
     return :(do_test_throws($result, $orig_ex, $(esc(extype))))
@@ -825,7 +832,22 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if success
             testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only)
+            if result.backtrace !== nothing
+                bt = scrub_exc_stack(result.backtrace, nothing, extract_file(result.source))
+                bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
+            else
+                bt_str = nothing
+            end
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
         end
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
