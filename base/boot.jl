@@ -639,9 +639,12 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
+#TODO delete this function (but see #48097):
+throw_inexacterror(args...) = throw(InexactError(args...))
+
 function check_top_bit(::Type{To}, x) where {To}
     @inline
-    is_top_bit_set(x) && throw(InexactError(:check_top_bit, To, x))
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
     x
 end
 
@@ -649,7 +652,7 @@ function checked_trunc_sint(::Type{To}, x::From) where {To,From}
     @inline
     y = trunc_int(To, x)
     back = sext_int(From, y)
-    eq_int(x, back) || throw(InexactError(:trunc, To, x))
+    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
     y
 end
 
@@ -657,7 +660,7 @@ function checked_trunc_uint(::Type{To}, x::From) where {To,From}
     @inline
     y = trunc_int(To, x)
     back = zext_int(From, y)
-    eq_int(x, back) || throw(InexactError(:trunc, To, x))
+    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
     y
 end
 
