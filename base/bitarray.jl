@@ -1713,6 +1713,7 @@ end
 
 # For performance
 findall(::typeof(!iszero), B::BitArray) = findall(B)
+findall(::typeof(identity), B::BitArray) = findall(B)
 
 ## Reductions ##
 
