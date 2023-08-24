@@ -48,10 +48,10 @@ parts of a Julia program.
 ### ``\LaTeX``
 
 Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks,
-``` `` ``` .
+``` `` ```  or a single `$`.
 
 ```
-A paragraph containing some ``\LaTeX`` markup.
+A paragraph containing some ``\LaTeX`` markup. More $\LaTeX$ markup.
 ```
 
 See the [Display equations](@ref) section for non-inline LaTeX.
@@ -279,13 +279,17 @@ elements.
 ### Display equations
 
 Large ``\LaTeX`` equations that do not fit inline within a paragraph may be written as display
-equations using a fenced code block with the "language" `math` as in the example below.
+equations using a fenced code block with the "language" `math`, or a double `$$`, as in the examples below.
 
 ````julia
 ```math
 f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
 ```
 ````
+
+```julia
+md"$$H = - \sum p(x) \log p(x)$$"
+```
 
 See the [Inline elements](@ref) for inline ``\LaTeX``.
 
