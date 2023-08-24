@@ -952,15 +952,36 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
 end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    inst = compact[SSAValue(idx)]
+    if !(iszero(inst[:flag] & IR_FLAG_NOTHROW) && iszero(inst[:flag] & IR_FLAG_EFFECT_FREE))
+        return # already accurate
+    end
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
+        inst[:flag] |= IR_FLAG_CONSISTENT
     end
     if effect_free_and_nothrow
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     elseif nothrow
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
+        inst[:flag] |= IR_FLAG_NOTHROW
     end
+    return nothing
+end
+
+function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    length(stmt.args) == 4 || return false
+    condarg = stmt.args[2]
+    condtyp = argextype(condarg, compact)
+    if isa(condtyp, Const)
+        if condtyp.val === true
+            compact[idx] = stmt.args[3]
+            return true
+        elseif condtyp.val === false
+            compact[idx] = stmt.args[4]
+            return true
+        end
+    end
+    return false
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -1092,7 +1113,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
-            elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
+            elseif is_known_call(stmt, Core.ifelse, compact)
+                fold_ifelse!(compact, idx, stmt)
+            elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
