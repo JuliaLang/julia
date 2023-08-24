@@ -5152,7 +5152,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
         }
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
     } else if (jl_is_expr(r) && ((jl_expr_t*)r)->head == jl_boundscheck_sym) {
-        uint8_t flag = jl_array_uint8_ref(ctx.source->ssaflags, ssaidx_0based);
+        uint32_t flag = jl_array_uint32_ref(ctx.source->ssaflags, ssaidx_0based);
         slot = mark_julia_const(ctx, bounds_check_enabled(ctx, (flag & IR_FLAG_INBOUNDS) ? jl_false : jl_true) ? jl_true : jl_false);
     } else {
         slot = emit_expr(ctx, r, ssaidx_0based); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)

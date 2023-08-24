@@ -206,7 +206,7 @@ struct InstructionStream
     type::Vector{Any}
     info::Vector{CallInfo}
     line::Vector{Int32}
-    flag::Vector{UInt8}
+    flag::Vector{UInt32}
 end
 function InstructionStream(len::Int)
     stmts = Vector{Any}(undef, len)
@@ -307,9 +307,9 @@ struct NewInstruction
     type::Any
     info::CallInfo
     line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
-    flag::Union{UInt8,Nothing} # if nothing, IR flags will be recomputed on insertion
+    flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-                            line::Union{Int32,Nothing}, flag::Union{UInt8,Nothing})
+                            line::Union{Int32,Nothing}, flag::Union{UInt32,Nothing})
         return new(stmt, type, info, line, flag)
     end
 end
@@ -322,7 +322,7 @@ function NewInstruction(newinst::NewInstruction;
     type::Any=newinst.type,
     info::CallInfo=newinst.info,
     line::Union{Int32,Nothing}=newinst.line,
-    flag::Union{UInt8,Nothing}=newinst.flag)
+    flag::Union{UInt32,Nothing}=newinst.flag)
     return NewInstruction(stmt, type, info, line, flag)
 end
 function NewInstruction(inst::Instruction;
@@ -330,19 +330,19 @@ function NewInstruction(inst::Instruction;
     type::Any=inst[:type],
     info::CallInfo=inst[:info],
     line::Union{Int32,Nothing}=inst[:line],
-    flag::Union{UInt8,Nothing}=inst[:flag])
+    flag::Union{UInt32,Nothing}=inst[:flag])
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
 effect_free_and_nothrow(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-with_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=add_flag(newinst, flags))
-without_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
-function add_flag(newinst::NewInstruction, newflag::UInt8)
+with_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=add_flag(newinst, flags))
+without_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
+function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     flag === nothing && return newflag
     return flag | newflag
 end
-function sub_flag(newinst::NewInstruction, newflag::UInt8)
+function sub_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     flag === nothing && return IR_FLAG_NULL
     return flag & ~newflag
@@ -827,7 +827,7 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
 end
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
-    newline::Int32=newinst.line::Int32, newflag::UInt8=newinst.flag::UInt8)
+    newline::Int32=newinst.line::Int32, newflag::UInt32=newinst.flag::UInt32)
     node[:stmt] = newinst.stmt
     node[:type] = newinst.type
     node[:info] = newinst.info
@@ -849,6 +849,10 @@ function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,Incremen
         flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     elseif nothrow
         flag |= IR_FLAG_NOTHROW
+    end
+    if !isexpr(newinst.stmt, :call) && !isexpr(newinst.stmt, :invoke)
+        # See comment in check_effect_free!
+        flag |= IR_FLAG_NOUB
     end
     return flag
 end
@@ -1100,7 +1104,7 @@ end
 
 # N.B.: Don't make this <: Function to avoid ::Function deopt
 struct Refiner
-    result_flags::Vector{UInt8}
+    result_flags::Vector{UInt32}
     result_idx::Int
 end
 (this::Refiner)() = (this.result_flags[this.result_idx] |= IR_FLAG_REFINED; nothing)

@@ -15,27 +15,29 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
-const IR_FLAG_NULL        = 0x00
+const IR_FLAG_NULL        = UInt32(1)
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = 0x01 << 0
+const IR_FLAG_INBOUNDS    = UInt32(1) << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE      = 0x01 << 1
+const IR_FLAG_INLINE      = UInt32(1) << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = 0x01 << 2
-const IR_FLAG_THROW_BLOCK = 0x01 << 3
+const IR_FLAG_NOINLINE    = UInt32(1) << 2
+const IR_FLAG_THROW_BLOCK = UInt32(1) << 3
 # This statement may be removed if its result is unused. In particular,
 # it must be both :effect_free and :nothrow.
 # TODO: Separate these out.
-const IR_FLAG_EFFECT_FREE = 0x01 << 4
+const IR_FLAG_EFFECT_FREE = UInt32(1) << 4
 # This statement was proven not to throw
-const IR_FLAG_NOTHROW     = 0x01 << 5
+const IR_FLAG_NOTHROW     = UInt32(1) << 5
 # This is :consistent
-const IR_FLAG_CONSISTENT  = 0x01 << 6
+const IR_FLAG_CONSISTENT  = UInt32(1) << 6
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = 0x01 << 7
+const IR_FLAG_REFINED     = UInt32(1) << 7
+# This is :noub == ALWAYS_TRUE
+const IR_FLAG_NOUB        = UInt32(1) << 8
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -70,7 +72,7 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
     argtypes::Vector{Any})
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
@@ -221,9 +223,9 @@ end
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
-is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
-is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+is_stmt_inline(stmt_flag::UInt32)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
+is_stmt_noinline(stmt_flag::UInt32)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
+is_stmt_throw_block(stmt_flag::UInt32) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
@@ -504,6 +506,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     all_effect_free = true # TODO refine using EscapeAnalysis
     all_nothrow = true
     all_retpaths_consistent = true
+    all_noub = true
+    any_conditional_ub = false
     had_trycatch = false
 
     scanner = BBScanner(ir)
@@ -531,20 +535,58 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         return (cfg, domtree)
     end
 
-    function scan_non_dataflow_flags!(flag)
-        all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
-        all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
+    function is_getfield_boundscheck(inst::Instruction)
+        stmt = inst[:stmt]
+        is_known_call(stmt, getfield, ir) || return false
+        length(stmt.args) < 4 && return false
+        boundscheck = stmt.args[end]
+        argextype(boundscheck, ir) === Bool || return false
+        isa(boundscheck, SSAValue) || return false
+        return true
     end
 
-    function scan_inconsistency!(flag, idx, @nospecialize(stmt))
+    function is_conditional_noub(inst::Instruction)
+        # Special case: `:boundscheck` into `getfield`
+        is_getfield_boundscheck(inst) || return false
+        barg = inst[:stmt].args[end]
+        isexpr(ir[barg][:stmt], :boundscheck) || return false
+        # If IR_FLAG_INBOUNDS is already set, no more conditional ub
+        (ir[barg][:flag] & IR_FLAG_INBOUNDS) != 0 && return false
+        any_conditional_ub = true
+        return true
+    end
+
+    function scan_non_dataflow_flags!(inst::Instruction)
+        flag = inst[:flag]
+        all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
+        all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
+        if (flag & IR_FLAG_NOUB) == 0
+            if !is_conditional_noub(inst)
+                all_noub = false
+            end
+        end
+    end
+
+    function scan_inconsistency!(inst::Instruction, idx)
+        flag = inst[:flag]
         stmt_inconsistent = (flag & IR_FLAG_CONSISTENT) == 0
-        for ur in userefs(stmt)
-            val = ur[]
-            if isa(val, SSAValue)
-                stmt_inconsistent |= val.id in inconsistent
-                count!(tpdum, val)
-            elseif isexpr(val, :boundscheck)
-                stmt_inconsistent = true
+        stmt = inst[:stmt]
+        # Special case: For getfield, we allow inconsistency of the :boundscheck argument
+        if is_getfield_boundscheck(inst)
+            for i = 1:(length(stmt.args)-1)
+                val = stmt.args[i]
+                if isa(val, SSAValue)
+                    stmt_inconsistent |= val.id in inconsistent
+                    count!(tpdum, val)
+                end
+            end
+        else
+            for ur in userefs(stmt)
+                val = ur[]
+                if isa(val, SSAValue)
+                    stmt_inconsistent |= val.id in inconsistent
+                    count!(tpdum, val)
+                end
             end
         end
         stmt_inconsistent && push!(inconsistent, idx)
@@ -561,8 +603,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             return true
         end
 
-        scan_non_dataflow_flags!(flag)
-        stmt_inconsistent = scan_inconsistency!(flag, idx, stmt)
+        scan_non_dataflow_flags!(inst)
+        stmt_inconsistent = scan_inconsistency!(inst, idx)
 
         if idx == lstmt
             if isa(stmt, ReturnNode) && isdefined(stmt, :val) && stmt_inconsistent
@@ -601,8 +643,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         if !all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst, idx, lstmt, bb
-                flag = inst[:flag]
-                scan_non_dataflow_flags!(flag)
+                scan_non_dataflow_flags!(inst)
+                return true
             end
         else
             scan!(scan_stmt!, scanner, true)
@@ -622,7 +664,17 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 idx = popfirst!(stmt_ip)
                 inst = ir[SSAValue(idx)]
                 stmt = inst[:inst]
-                if isa(stmt, ReturnNode)
+                if is_getfield_boundscheck(inst)
+                    any_non_boundscheck_inconsistent = false
+                    for i = 1:(length(stmt.args)-1)
+                        val = stmt.args[i]
+                        if isa(val, SSAValue)
+                            any_non_boundscheck_inconsistent |= val.id in inconsistent
+                            any_non_boundscheck_inconsistent && break
+                        end
+                    end
+                    any_non_boundscheck_inconsistent || continue
+                elseif isa(stmt, ReturnNode)
                     all_retpaths_consistent = false
                 else isa(stmt, GotoIfNot)
                     bb = block_for_inst(ir, idx)
@@ -650,6 +702,9 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     end
     if all_retpaths_consistent
         effects = Effects(effects; consistent = ALWAYS_TRUE)
+    end
+    if all_noub
+        effects = Effects(effects; noub = any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE)
     end
     result.ipo_effects = effects
 end

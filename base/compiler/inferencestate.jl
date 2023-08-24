@@ -811,11 +811,11 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
-add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
-add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] |= flag
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
 
 merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects) =
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)

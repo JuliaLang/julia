@@ -944,7 +944,6 @@ end
 
 function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
     (;argtypes) = arginfo
-    boundscheck === :unknown && return false
     ordering = Const(:not_atomic)
     if length(argtypes) == 4
         isvarargtype(argtypes[4]) && return false
@@ -2310,7 +2309,7 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
             consistent=CONSISTENT_IF_INACCESSIBLEMEMONLY,
             nothrow=false,
             inaccessiblememonly=ALWAYS_FALSE,
-            noub=false)
+            noub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
@@ -2325,11 +2324,11 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
     if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
-    noub = true
+    noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(arginfo)
     nothrow = getfield_nothrow(𝕃, arginfo, bcheck)
     if !nothrow
-        if !(bcheck === :on || bcheck === :boundscheck)
+        if bcheck !== :on
             # If we cannot independently prove inboundsness, taint `:noub`.
             # The inbounds-ness assertion requires dynamic reachability,
             # while `:noub` needs to be true for all input values.
@@ -2338,7 +2337,7 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
             # based on the `:noinbounds` effect.
             # N.B. We do not taint for `--check-bounds=no` here.
             # That is handled in concrete evaluation.
-            noub = false
+            noub = ALWAYS_FALSE
         end
     end
     if hasintersect(widenconst(obj), Module)

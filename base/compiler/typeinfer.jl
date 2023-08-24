@@ -440,7 +440,7 @@ function adjust_effects(sv::InferenceState)
     # that is currently modeled in a flow-insensitive way: ideally we want to model it
     # with a proper dataflow analysis instead
     rt = sv.bestguess
-    if ipo_effects.noinbounds && rt === Bottom
+    if rt === Bottom
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
@@ -498,7 +498,7 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :noub)
-            ipo_effects = Effects(ipo_effects; noub=true)
+            ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
         end
     end
 
@@ -952,11 +952,11 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
             nargs = Int(method.nargs)
             tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
-            tree.slotflags = fill(IR_FLAG_NULL, nargs)
+            tree.slotflags = fill(0x00, nargs)
             tree.ssavaluetypes = 1
             tree.codelocs = Int32[1]
             tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
-            tree.ssaflags = UInt8[0]
+            tree.ssaflags = UInt32[0]
             set_inlineable!(tree, true)
             tree.parent = mi
             tree.rettype = Core.Typeof(rettype_const)

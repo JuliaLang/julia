@@ -464,13 +464,6 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
         if !isoverlayed(method_table(interp))
             all_effects = Effects(all_effects; nonoverlayed=false)
         end
-        if (# ignore the `:noinbounds` property if `:consistent`-cy is tainted already
-            (sv isa InferenceState && sv.ipo_effects.consistent === ALWAYS_FALSE) ||
-            all_effects.consistent === ALWAYS_FALSE ||
-            # or this `:noinbounds` doesn't taint it
-            !stmt_taints_inbounds_consistency(sv))
-            all_effects = Effects(all_effects; noinbounds=false)
-        end
         all_effects === Effects() && return nothing
     end
     for edge in edges
@@ -854,14 +847,8 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             return :none
         end
     end
-    if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
-        # If the current statement is @inbounds or we propagate inbounds,
-        # the call's :consistent-cy is tainted and not consteval eligible.
-        add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
-        return :none
-    end
     mi = result.edge
-    if mi !== nothing && is_foldable(effects)
+    if mi !== nothing && is_foldable(effects, !stmt_taints_inbounds_consistency(sv))
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             if is_nonoverlayed(mi.def::Method) && (!isoverlayed(method_table(interp)) || is_nonoverlayed(effects))
                 return :concrete_eval
@@ -2000,17 +1987,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
-        if (isa(sv, InferenceState) && f === getfield && fargs !== nothing &&
-            isexpr(fargs[end], :boundscheck) && !is_nothrow(effects))
-            # As a special case, we delayed tainting `noinbounds` for `getfield` calls
-            # in case we can prove in-boundedness indepedently.
-            # Here we need to put that back in other cases.
-            # N.B. This isn't about the effects of the call itself,
-            # but a delayed contribution of the :boundscheck statement,
-            # so we need to merge this directly into sv, rather than modifying the effects.
-            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
-        end
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -2227,24 +2203,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
         return rt
     elseif head === :boundscheck
-        if isa(sv, InferenceState)
-            stmt = sv.src.code[sv.currpc]
-            if isexpr(stmt, :call)
-                f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
-                if f isa Const && f.val === getfield
-                    # boundscheck of `getfield` call is analyzed by tfunc potentially without
-                    # tainting :noinbounds or :noub when it's known to be nothrow
-                    return Bool
-                end
-            end
-            # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
-            # which will subsequently taint `:consistent` if this function is called from another
-            # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
-            # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
-            # `:consistent`-cy here also.
-            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
-        end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent = ALWAYS_FALSE))
         return Bool
     elseif head === :inbounds
         @assert false "Expected `:inbounds` expression to have been moved into SSA flags"
@@ -2329,6 +2288,11 @@ function mark_curr_effect_flags!(sv::AbsIntState, effects::Effects)
         else
             sub_curr_ssaflag!(sv, IR_FLAG_CONSISTENT)
         end
+        if is_noub(effects, false)
+            add_curr_ssaflag!(sv, IR_FLAG_NOUB)
+        else
+            sub_curr_ssaflag!(sv, IR_FLAG_NOUB)
+        end
     end
 end
 
@@ -2365,8 +2329,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         ut = unwrap_unionall(t)
-        consistent = ALWAYS_FALSE
-        nothrow = noub = false
+        consistent = noub = ALWAYS_FALSE
+        nothrow = false
         if isa(ut, DataType) && !isabstracttype(ut)
             ismutable = ismutabletype(ut)
             fcount = datatype_fieldcount(ut)
@@ -2379,10 +2343,10 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 # mutable object isn't `:consistent`, but we still have a chance that
                 # return type information later refines the `:consistent`-cy of the method
                 consistent = CONSISTENT_IF_NOTRETURNED
-                noub = true
+                noub = ALWAYS_TRUE
             else
                 consistent = ALWAYS_TRUE
-                noub = true
+                noub = ALWAYS_TRUE
             end
             if isconcretedispatch(t)
                 nothrow = true
@@ -2530,6 +2494,20 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end
             end
         end
+    elseif ehead === :throw_undef_if_not
+        condt = argextype(stmt.args[2], ir)
+        condval = maybe_extract_const_bool(condt)
+        t = Nothing
+        effects = EFFECTS_THROWS
+        if condval isa Bool
+            if condval
+                effects = EFFECTS_TOTAL
+            else
+                t = Union{}
+            end
+        elseif !hasintersect(condt, Bool)
+            t = Union{}
+        end
     elseif false
         @label always_throw
         t = Bottom
@@ -2576,7 +2554,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
             terminates          = override.terminates_globally ? true : effects.terminates,
             notaskstate         = override.notaskstate ? true : effects.notaskstate,
             inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            noub                = override.noub ? true : effects.noub)
+            noub                = override.noub ? ALWAYS_TRUE : effects.noub)
     end
     return RTEffects(t, effects)
 end
@@ -2605,14 +2583,13 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     (; rt, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv)
-    if !effects.noinbounds
-        if !propagate_inbounds(sv)
+    if effects.noub === NOUB_IF_NOINBOUNDS
+        if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
+            effects = Effects(effects; noub=ALWAYS_FALSE)
+        elseif !propagate_inbounds(sv)
             # The callee read our inbounds flag, but unless we propagate inbounds,
             # we ourselves don't read our parent's inbounds.
-            effects = Effects(effects; noinbounds=true)
-        end
-        if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
-            effects = Effects(effects; consistent=ALWAYS_FALSE, noub=false)
+            effects = Effects(effects; noub=ALWAYS_TRUE)
         end
     end
     merge_effects!(interp, sv, effects)

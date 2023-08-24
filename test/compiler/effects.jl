@@ -833,6 +833,11 @@ for op = Any[
     end
 end
 
+# tuple indexing
+# --------------
+
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{Tuple{Int, Int}, Int}))
+
 # end to end
 # ----------
 
