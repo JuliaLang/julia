@@ -159,7 +159,7 @@ release-candidate: release testall
 	@echo 7. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 8. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
 	@echo 9. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 10. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
+	@echo 10. Follow packaging instructions in doc/src/devdocs/build/distributing.md to create binary packages for all platforms
 	@echo 11. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 12. Update checksums on AWS for tarball and packaged binaries
 	@echo 13. Update versions.json. Wait at least 60 minutes before proceeding to step 14.
