@@ -1442,6 +1442,7 @@ end
 
 # ifelse folding
 @test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+@test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
 end
