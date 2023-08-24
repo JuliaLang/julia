@@ -54,6 +54,8 @@ Surround text that should be displayed as mathematics using ``\LaTeX`` syntax wi
 A paragraph containing some ``\LaTeX`` markup.
 ```
 
+See the [Display equations](@ref) section for non-inline LaTeX.
+
 !!! tip
     As with literals in the previous section, if literal backticks need to be written within double
     backticks use an even number greater than two. Note that if a single literal backtick needs to
@@ -284,6 +286,8 @@ equations using a fenced code block with the "language" `math` as in the example
 f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
 ```
 ````
+
+See the [Inline elements](@ref) for inline ``\LaTeX``.
 
 ### Footnotes
 
