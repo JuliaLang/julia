@@ -2318,8 +2318,7 @@ STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, siz
 }
 
 // Mark module binding
-STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t **mb_begin,
-                            jl_binding_t **mb_end, uintptr_t nptr,
+STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, uintptr_t nptr,
                             uint8_t bits) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
@@ -2457,9 +2456,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 jl_binding_t **table = (jl_binding_t**)jl_svec_data(bindings);
                 size_t bsize = jl_svec_len(bindings);
                 uintptr_t nptr = ((bsize + mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
-                jl_binding_t **mb_begin = table + 1;
-                jl_binding_t **mb_end = table + bsize;
-                gc_mark_module_binding(ptls, mb_parent, mb_begin, mb_end, nptr, bits);
+                gc_mark_module_binding(ptls, mb_parent, nptr, bits);
             }
             else if (vtag == jl_task_tag << 4) {
                 if (update_meta)
