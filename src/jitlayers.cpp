@@ -165,10 +165,10 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
 
 // used for image_codegen, where we keep all the gvs external
 // so we can't jit them directly into each module
-static orc::ThreadSafeModule jl_get_globals_module(orc::ThreadSafeContext &ctx, bool imaging_mode, const DataLayout &DL, const Triple &T, std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
+static orc::ThreadSafeModule jl_get_globals_module(orc::ThreadSafeContext &ctx, const DataLayout &DL, const Triple &T, std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
 {
     auto lock = ctx.getLock();
-    auto GTSM = jl_create_ts_module("globals", ctx, imaging_mode, DL, T);
+    auto GTSM = jl_create_ts_module("globals", ctx, DL, T);
     auto GM = GTSM.getModuleUnlocked();
     for (auto &global : globals) {
         auto GV = global.second;
@@ -217,7 +217,7 @@ static jl_callptr_t _jl_compile_codeinst(
     params.debug_level = jl_options.debug_level;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging_mode, params.DL, params.TargetTriple);
+            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.DL, params.TargetTriple);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
@@ -234,7 +234,7 @@ static jl_callptr_t _jl_compile_codeinst(
         // to ensure that the globals are defined when they are compiled.
         if (params.imaging_mode) {
             // Won't contain any PLT/dlsym calls, so no need to optimize those
-            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.imaging_mode, params.DL, params.TargetTriple, params.global_targets));
+            jl_ExecutionEngine->addModule(jl_get_globals_module(params.tsctx, params.DL, params.TargetTriple, params.global_targets));
         } else {
             StringMap<void*> NewGlobals;
             for (auto &global : params.global_targets) {
@@ -377,7 +377,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (!pparams) {
             ctx = jl_ExecutionEngine->acquireContext();
         }
-        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging_mode : imaging_default(), pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
+        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx,  pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
@@ -1588,9 +1588,15 @@ struct JuliaOJIT::DLSymOptimizer {
                     assert(++++CI->use_begin() == CI->use_end());
                     void *addr;
                     if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
+                        // Can happen if the library is the empty string, just give up when that happens
+                        if (isa<ConstantAggregateZero>(GV->getInitializer()))
+                            continue;
                         auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
                         addr = lookup(libname.data(), fname.data());
                     } else {
+                        // Can happen if we fail the compile time dlfind i.e when we try a symbol that doesn't exist in libc
+                        if (dyn_cast<ConstantPointerNull>(libarg))
+                            continue;
                         assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
                         libarg = cast<ConstantExpr>(libarg)->getOperand(0);
                         auto libidx = cast<ConstantInt>(libarg)->getZExtValue();

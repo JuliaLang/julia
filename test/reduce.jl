@@ -705,3 +705,32 @@ let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
     b = (a...,)
     @test fold_alloc(a) == fold_alloc(b) == 0
 end
+
+@testset "concrete eval `[any|all](f, itr::Tuple)`" begin
+    intf = in((1,2,3)); Intf = typeof(intf)
+    symf = in((:one,:two,:three)); Symf = typeof(symf)
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3,4)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,6)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(all(in((:one,:two,:three)),(:three,:four)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((:one,:two,:three)),(:four,:three)))
+    end |> only == Val{true}
+end
