@@ -134,11 +134,11 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter, unreachable::BitSet)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             unreachable, sv.bb_vartables, sv.insert_coverage)
+                             sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -537,7 +537,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         expr = code[i]
-        if !(i in sv.unreachable) && isa(code[i], GotoIfNot)
+        if !(i in sv.unreachable) && isa(expr, GotoIfNot)
             # Replace this live GotoIfNot with:
             # - no-op if :nothrow and the branch target is unreachable
             # - cond if :nothrow and both targets are unreachable

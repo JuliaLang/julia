@@ -550,10 +550,10 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
-        unreachable = type_annotate!(interp, me)
+        type_annotate!(interp, me)
         doopt = (me.cached || me.parent !== nothing)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, interp, unreachable)
+            me.result.src = OptimizationState(me, interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -672,7 +672,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
         if was_reached(sv, i)
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
-            push!(unreachable, i)
+            push!(sv.unreachable, i)
             if is_meta_expr(stmts[i]) # keep any lexically scoped expressions
                 ssavaluetypes[i] = Any # 3
             else
