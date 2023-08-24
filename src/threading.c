@@ -713,6 +713,7 @@ void jl_utility_io_threadfun(void *arg) {
         jl_gc_safepoint();
         for (int i = 0; i < 5000; i++)
             jl_cpu_pause(); // suspend here and wake on IO_UNLOCK
+        jl_wakeup_thread(-1);
     }
     return;
 }

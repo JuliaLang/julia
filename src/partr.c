@@ -266,8 +266,18 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
+    if (tid != self)
+        jl_fence(); // [^store_buffering_1]
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
-    if (!(tid == self || tid == -1)) {
+
+    if (tid == self || tid == -1) {
+        // we're already awake, but make sure we'll exit uv_run
+        jl_ptls_t ptls = ct->ptls;
+        if (jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping) {
+            jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping);
+            JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
+        }
+    } else {
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
     }
@@ -429,7 +439,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         }
         else {
             // maybe check the kernel for new messages too
-            jl_process_events();
+            // jl_process_events();
         }
     }
 }

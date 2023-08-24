@@ -997,7 +997,7 @@ function wait()
     W = workqueue_for(Threads.threadid())
     poptask(W)
     result = try_yieldto(ensure_rescheduled)
-    process_events()
+    # process_events()
     # return when we come out of the queue
     return result
 end
