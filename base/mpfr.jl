@@ -17,11 +17,15 @@ import
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax,
-        sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand
+        sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
+        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
+        RawBigIntRoundingIncrementHelper, truncated, RawBigInt
 
 
 using .Base.Libc
-import ..Rounding: rounding_raw, setrounding_raw
+import ..Rounding:
+    rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
+    tie_breaker_is_to_even, correct_rounding_requires_increment
 
 import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
 
@@ -89,6 +93,21 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
     end
 end
 
+rounds_to_nearest(m::MPFRRoundingMode) = m == MPFRRoundNearest
+function rounds_away_from_zero(m::MPFRRoundingMode, sign_bit::Bool)
+    if m == MPFRRoundToZero
+        false
+    elseif m == MPFRRoundUp
+        !sign_bit
+    elseif m == MPFRRoundDown
+        sign_bit
+    else
+        # Assuming `m == MPFRRoundFromZero`
+        true
+    end
+end
+tie_breaker_is_to_even(::MPFRRoundingMode) = true
+
 const ROUNDING_MODE = Ref{MPFRRoundingMode}(MPFRRoundNearest)
 const DEFAULT_PRECISION = Ref{Clong}(256)
 
@@ -135,6 +154,9 @@ mutable struct BigFloat <: AbstractFloat
         return _BigFloat(Clong(precision), one(Cint), EXP_NAN, d) # +NAN
     end
 end
+
+# The rounding mode here shouldn't matter.
+significand_limb_count(x::BigFloat) = div(sizeof(x._d), sizeof(Limb), RoundToZero)
 
 rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[]
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
@@ -386,34 +408,68 @@ function (::Type{T})(x::BigFloat) where T<:Integer
     trunc(T,x)
 end
 
-## BigFloat -> AbstractFloat
-_cpynansgn(x::AbstractFloat, y::BigFloat) = isnan(x) && signbit(x) != signbit(y) ? -x : x
-
-Float64(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
-    _cpynansgn(ccall((:mpfr_get_d,libmpfr), Float64, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
-Float64(x::BigFloat, r::RoundingMode) = Float64(x, convert(MPFRRoundingMode, r))
-
-Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
-    _cpynansgn(ccall((:mpfr_get_flt,libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
-Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
-
-function Float16(x::BigFloat) :: Float16
-    res = Float32(x)
-    resi = reinterpret(UInt32, res)
-    if (resi&0x7fffffff) < 0x38800000 # if Float16(res) is subnormal
-        #shift so that the mantissa lines up where it would for normal Float16
-        shift = 113-((resi & 0x7f800000)>>23)
-        if shift<23
-            resi |= 0x0080_0000 # set implicit bit
-            resi >>= shift
+function to_ieee754(::Type{T}, x::BigFloat, rm) where {T<:AbstractFloat}
+    sb = signbit(x)
+    is_zero = iszero(x)
+    is_inf = isinf(x)
+    is_nan = isnan(x)
+    is_regular = !is_zero & !is_inf & !is_nan
+    ieee_exp = Int(x.exp) - 1
+    ieee_precision = precision(T)
+    ieee_exp_max = exponent_max(T)
+    ieee_exp_min = exponent_min(T)
+    exp_diff = ieee_exp - ieee_exp_min
+    is_normal = 0 ≤ exp_diff
+    (rm_is_to_zero, rm_is_from_zero) = if rounds_to_nearest(rm)
+        (false, false)
+    else
+        let from = rounds_away_from_zero(rm, sb)
+            (!from, from)
         end
-    end
-    if (resi & 0x1fff == 0x1000) # if we are halfway between 2 Float16 values
-        # adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
-        res = nextfloat(res, cmp(x, res))
-    end
-    return res
+    end::NTuple{2,Bool}
+    exp_is_huge_p = ieee_exp_max < ieee_exp
+    exp_is_huge_n = signbit(exp_diff + ieee_precision)
+    rounds_to_inf = is_regular & exp_is_huge_p & !rm_is_to_zero
+    rounds_to_zero = is_regular & exp_is_huge_n & !rm_is_from_zero
+    U = uinttype(T)
+
+    ret_u = if is_regular & !rounds_to_inf & !rounds_to_zero
+        if !exp_is_huge_p
+            # significand
+            v = RawBigInt(x.d, significand_limb_count(x))
+            len = max(ieee_precision + min(exp_diff, 0), 0)::Int
+            signif = truncated(U, v, len) & significand_mask(T)
+
+            # round up if necessary
+            rh = RawBigIntRoundingIncrementHelper(v, len)
+            incr = correct_rounding_requires_increment(rh, rm, sb)
+
+            # exponent
+            exp_field = max(exp_diff, 0) + is_normal
+
+            ieee754_representation(T, sb, exp_field, signif) + incr
+        else
+            ieee754_representation(T, sb, Val(:omega))
+        end
+    else
+        if is_zero | rounds_to_zero
+            ieee754_representation(T, sb, Val(:zero))
+        elseif is_inf | rounds_to_inf
+            ieee754_representation(T, sb, Val(:inf))
+        else
+            ieee754_representation(T, sb, Val(:nan))
+        end
+    end::U
+
+    reinterpret(T, ret_u)
 end
+
+Float16(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) = to_ieee754(Float16, x, r)
+Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) = to_ieee754(Float32, x, r)
+Float64(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) = to_ieee754(Float64, x, r)
+Float16(x::BigFloat, r::RoundingMode) = to_ieee754(Float16, x, r)
+Float32(x::BigFloat, r::RoundingMode) = to_ieee754(Float32, x, r)
+Float64(x::BigFloat, r::RoundingMode) = to_ieee754(Float64, x, r)
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat

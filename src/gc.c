@@ -2423,7 +2423,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!meta_updated && !gc_verifying);
         int foreign_alloc = 0;
-        // directly point at eyt_obj_in_img to encourage inlining
         if (update_meta && o->bits.in_image) {
             foreign_alloc = 1;
             update_meta = 0;
@@ -3729,11 +3728,12 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 
         int64_t diff = sz - old;
         if (diff < 0) {
+            diff = -diff;
             uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
             if (free_acc + diff < 16*1024)
-                jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + (-diff));
+                jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + diff);
             else {
-                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
+                jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + diff));
                 jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
             }
         }
@@ -3865,11 +3865,12 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 
     int64_t diff = allocsz - oldsz;
     if (diff < 0) {
+        diff = -diff;
         uint64_t free_acc = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
         if (free_acc + diff < 16*1024)
-            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + (-diff));
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, free_acc + diff);
         else {
-            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + (-diff)));
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(free_acc + diff));
             jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
         }
     }

@@ -64,6 +64,7 @@ Base.LinRange
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
 Base.checked_length

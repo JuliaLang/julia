@@ -3465,8 +3465,12 @@ end
 @test Base.return_types(h33768, ()) == Any[Union{}]
 
 # constant prop of `Symbol("")`
-f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
-@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+@test Base.return_types() do
+    Val(Symbol("julia"))
+end |> only == Val{:julia}
+@test Base.return_types() do p::Pair{Int8,String}
+    getfield(p, Symbol("first"))
+end |> only == Int8
 
 # issue #33954
 struct X33954
@@ -4580,6 +4584,19 @@ end
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}, Val{Union{Val{Union{}}, Val{Val{Union{}}}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Val
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Val{<:a}, a)
+    @test_broken a != Val{<:Val{Union{}}}
+    @test_broken a == Val{<:Val} || a == Val
 end
 
 # Test that a function-wise `@max_methods` works as expected
