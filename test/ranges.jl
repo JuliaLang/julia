@@ -1802,6 +1802,7 @@ Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 # required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
+Base.Int(x::Displacement) = x.val
 
 # Unsigned complement, for testing checked_length
 struct UPosition <: Unsigned
@@ -2499,6 +2500,25 @@ end
     @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
 end
 
+@testset "collect with specialized vcat" begin
+    struct OneToThree <: AbstractUnitRange{Int} end
+    Base.size(r::OneToThree) = (3,)
+    Base.first(r::OneToThree) = 1
+    Base.length(r::OneToThree) = 3
+    Base.last(r::OneToThree) = 3
+    function Base.getindex(r::OneToThree, i::Int)
+        checkbounds(r, i)
+        i
+    end
+    Base.vcat(r::OneToThree) = r
+    r = OneToThree()
+    a = Array(r)
+    @test a isa Vector{Int}
+    @test a == r
+    @test collect(r) isa Vector{Int}
+    @test collect(r) == r
+end
+
 @testset "isassigned" begin
     for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
         @test isassigned(r, lastindex(r))
@@ -2506,4 +2526,12 @@ end
         @test r[end] == val
         @test_throws ArgumentError isassigned(r, true)
     end
+
+end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
 end

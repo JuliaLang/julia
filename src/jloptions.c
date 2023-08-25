@@ -110,7 +110,7 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no}\n"
+    " --compiled-modules={yes*|no|existing}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
@@ -140,7 +140,8 @@ static const char opts[]  =
     // interactive options
     " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|auto*}    Enable or disable startup banner\n"
+    " --banner={yes|no|short|auto*}\n"
+    "                            Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
     " --history-file={yes*|no}   Load or save history\n\n"
 
@@ -444,8 +445,10 @@ restart_switch:
                 jl_options.banner = 0;
             else if (!strcmp(optarg, "auto"))
                 jl_options.banner = -1;
+            else if (!strcmp(optarg, "short"))
+                jl_options.banner = 2;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
             break;
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
@@ -460,8 +463,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
+            else if (!strcmp(optarg,"existing"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
             break;
         case opt_pkgimages:
             pkgimage_explicit = 1;

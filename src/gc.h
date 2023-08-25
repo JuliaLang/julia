@@ -10,6 +10,7 @@
 #define JL_GC_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -145,6 +146,8 @@ typedef struct _mallocarray_t {
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
+    // next metadata structre in per-thread list
+    // or in one of the `jl_gc_global_page_pool_t`
     struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
@@ -202,6 +205,11 @@ STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
 
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
+// XXX: this is not a general-purpose lock-free stack. We can
+// get away with just using a CAS and not implementing some ABA
+// prevention mechanism since once a node is popped from the
+// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// in the sweeping phase, which is serial
 
 STATIC_INLINE void push_lf_page_metadata_back(jl_gc_global_page_pool_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {
@@ -257,6 +265,13 @@ typedef struct {
 typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
 } pagetable_t;
+
+typedef struct {
+    _Atomic(size_t) bytes_mapped;
+    _Atomic(size_t) bytes_resident;
+    _Atomic(size_t) heap_size;
+    _Atomic(size_t) heap_target;
+} gc_heapstatus_t;
 
 #define GC_PAGE_UNMAPPED        0
 #define GC_PAGE_ALLOCATED       1
@@ -375,6 +390,7 @@ extern int64_t lazy_freed_pages;
 extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
+extern gc_heapstatus_t gc_heap_stats;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -638,7 +654,7 @@ void gc_count_pool(void);
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable);
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

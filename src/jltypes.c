@@ -1597,19 +1597,20 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
     int failed = nofail;
     for (j = 0; j < n; j++) {
         jl_value_t *p = key[j];
+        size_t repeats = 1;
         if (jl_is_vararg(p)) {
             jl_vararg_t *vm = (jl_vararg_t*)p;
-            if (!nofail && vm->N)
-                return 0;
-            // 0x064eeaab is just a randomly chosen constant
-            hash = bitmix(vm->N ? type_hash(vm->N, &failed) : 0x064eeaab, hash);
-            if (failed && !nofail)
-                return 0;
+            if (vm->N && jl_is_long(vm->N))
+                repeats = jl_unbox_long(vm->N);
+            else
+                hash = bitmix(0x064eeaab, hash); // 0x064eeaab is just a randomly chosen constant
             p = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         }
-        hash = bitmix(type_hash(p, &failed), hash);
+        unsigned hashp = type_hash(p, &failed);
         if (failed && !nofail)
             return 0;
+        while (repeats--)
+            hash = bitmix(hashp, hash);
     }
     hash = bitmix(~tn->hash, hash);
     return hash ? hash : 1;
@@ -3442,6 +3443,20 @@ void post_boot_hooks(void)
         }
     }
     export_small_typeof();
+}
+
+void post_image_load_hooks(void) {
+    // Ensure that `Base` has been loaded.
+    assert(jl_base_module != NULL);
+
+    jl_libdl_module = (jl_module_t *)jl_get_global(
+        ((jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"))),
+        jl_symbol("Libdl")
+    );
+    jl_libdl_dlopen_func = jl_get_global(
+        jl_libdl_module,
+        jl_symbol("dlopen")
+    );
 }
 #undef XX
 

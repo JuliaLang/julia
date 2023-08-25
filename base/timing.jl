@@ -128,19 +128,25 @@ function padded_nonzero_print(value, str, always_print = true)
     end
 end
 
-function format_bytes(bytes) # also used by InteractiveUtils
-    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+function format_bytes(bytes; binary=true) # also used by InteractiveUtils
+    units = binary ? _mem_units : _cnt_units
+    factor = binary ? 1024 : 1000
+    bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", units[mb], bytes==1 ? "" : "s")
     else
-        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
-        _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        if msg isa String
+            print(io, msg, ": ")
+        else
+            print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        end
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
@@ -177,11 +183,11 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
+function timev_print(elapsedtime, diff::GC_Diff, compile_times; msg::Union{String,Nothing}=nothing)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -280,9 +286,7 @@ macro time(msg, ex)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true; msg=_msg)
         val
     end
 end
@@ -364,9 +368,7 @@ macro timev(msg, ex)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        timev_print(elapsedtime, diff, compile_elapsedtimes, !has_msg)
+        timev_print(elapsedtime, diff, compile_elapsedtimes; msg=_msg)
         val
     end
 end

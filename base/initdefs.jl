@@ -252,6 +252,19 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
+        if startswith(env, "@scriptdir")
+            if @isdefined(PROGRAM_FILE)
+                dir = dirname(PROGRAM_FILE)
+            else
+                cmds = unsafe_load_commands(opts.commands)
+                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                    # Usage error. The user did not pass a script.
+                    return nothing
+                end
+                dir = dirname(ARGS[1])
+            end
+            return abspath(replace(env, "@scriptdir" => dir))
+        end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)

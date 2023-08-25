@@ -2059,8 +2059,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
@@ -2096,7 +2096,7 @@ end
 # with as unnamed "!" BB.
 let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    push!(ir.stmts.inst, Core.Compiler.ReturnNode())
+    push!(ir.stmts.stmt, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test all(isspace, pop!(lines))
     @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
@@ -2458,9 +2458,9 @@ end
 
     # replace an instruction
     add_stmt = ir.stmts[1]
-    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
     node = Core.Compiler.insert_node!(ir, 1, inst)
-    Core.Compiler.setindex!(add_stmt, node, :inst)
+    Core.Compiler.setindex!(add_stmt, node, :stmt)
 
     # the new node should be colored green (as it's uncompacted IR),
     # and its uses shouldn't be colored at all (since they're just plain valid references)
@@ -2471,7 +2471,7 @@ end
     @test contains(str, "%1 = %6")
 
     # if we insert an invalid node, it should be colored appropriately
-    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :stmt)
     str = sprint(; context=:color=>true) do io
         show(io, ir)
     end

@@ -5,7 +5,7 @@ using Core.IR
 const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -454,7 +454,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
     @test length(ir.cfg.blocks) == 4
     for i = 1:4
         @test any(ir.cfg.blocks[i].stmts) do j
-            inst = ir.stmts[j][:inst]
+            inst = ir.stmts[j][:stmt]
             iscall((ir, println), inst) &&
             inst.args[3] == i
         end
@@ -494,12 +494,12 @@ end
 
     # get the addition instruction
     add_stmt = ir.stmts[1]
-    @test Meta.isexpr(add_stmt[:inst], :call) && add_stmt[:inst].args[3] == 42
+    @test Meta.isexpr(add_stmt[:stmt], :call) && add_stmt[:stmt].args[3] == 42
 
     # replace the addition with a slightly different one
-    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
     node = Core.Compiler.insert_node!(ir, 1, inst)
-    Core.Compiler.setindex!(add_stmt, node, :inst)
+    Core.Compiler.setindex!(add_stmt, node, :stmt)
 
     # perform compaction (not by calling compact! because with DCE the bug doesn't trigger)
     compact = Core.Compiler.IncrementalCompact(ir)
@@ -550,18 +550,18 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
     @test length(ir.stmts) == 2
-    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
 
     newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
     newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
 
     ir = Core.Compiler.compact!(ir)
     @test length(ir.stmts) == 4
-    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
-    call1 = ir.stmts[2][:inst]
+    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
+    call1 = ir.stmts[2][:stmt]
     @test iscall((ir,println), call1)
     @test call1.args[2] === SSAValue(1)
-    call2 = ir.stmts[3][:inst]
+    call2 = ir.stmts[3][:stmt]
     @test iscall((ir,println), call2)
     @test call2.args[2] === SSAValue(2)
 end
@@ -593,15 +593,25 @@ let ci = make_ci([
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+# compact constant PiNode
+let ci = make_ci(Any[
+        PiNode(0.0, Const(0.0))
+        ReturnNode(SSAValue(1))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir)
+    @test fully_eliminated(ir)
+end
+
 # insert_node! with new instruction with flag computed
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
-    invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+    invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
         Meta.isexpr(x, :invoke)
     end
     @test invoke_idx !== nothing
-    invoke_expr = ir.stmts.inst[invoke_idx]
+    invoke_expr = ir.stmts.stmt[invoke_idx]
 
     # effect-ful node
     let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
@@ -611,11 +621,11 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
             state = Core.Compiler.iterate(compact, state[2])
         end
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
             x == invoke_expr
         end
         @test new_invoke_idx !== nothing
-        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
             iscall((ir,println), x) && x.args[2] === SSAValue(invoke_idx)
         end
         @test new_call_idx !== nothing
@@ -632,11 +642,11 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         ir = Core.Compiler.finish(compact)
 
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
             x == invoke_expr
         end
         @test new_invoke_idx !== nothing
-        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
             iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
         end
         @test new_call_idx === nothing # should be deleted during the compaction

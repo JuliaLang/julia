@@ -33,6 +33,9 @@ macro gensym(names...)
     return blk
 end
 
+## line numbers ##
+convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
+
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
@@ -475,6 +478,7 @@ The following `setting`s are supported.
 - `:terminates_locally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -511,13 +515,6 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     because the optimizer may rewrite them causing the output to not be `:consistent`,
     even for the same world age (e.g. because one ran in the interpreter, while
     the other was optimized).
-
-!!! note
-    The `:consistent`-cy assertion currently includes the assertion that the function
-    will not execute any undefined behavior (for any input). Note that undefined behavior
-    may technically cause the function to violate other effect assertions (such as
-    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
-    except `:consistent` assume the absence of undefined behavior.
 
 !!! note
     If `:consistent` functions terminate by throwing an exception, that exception
@@ -578,7 +575,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
 
 !!! note
     The compiler will consider this a strong indication that the method will
-    terminate relatively *quickly* and may (if otherwise legal), call this
+    terminate relatively *quickly* and may (if otherwise legal) call this
     method at compile time. I.e. it is a bad idea to annotate this setting
     on a method that *technically*, but not *practically*, terminates.
 
@@ -639,6 +636,14 @@ global state or mutable memory pointed to by its arguments.
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
 
 ---
+## `:noub`
+
+The `:noub` setting asserts that the method will not execute any undefined behavior
+(for any input). Note that undefined behavior may technically cause the method to violate
+any other effect assertions (such as `:consistent` or `:effect_free`) as well, but we do
+not model this, and they assume the absence of undefined behavior.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -647,6 +652,7 @@ currently equivalent to the following `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
+- `:noub`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -679,6 +685,7 @@ the following other `setting`s:
 - `:terminates_globally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -709,8 +716,8 @@ macro assume_effects(args...)
         ex = nothing
         idx = length(args)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
-        (false, false, false, false, false, false, false, false)
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub) =
+        (false, false, false, false, false, false, false, false, false)
     for org_setting in args[1:idx]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
@@ -727,28 +734,29 @@ macro assume_effects(args...)
             notaskstate = val
         elseif setting === :inaccessiblememonly
             inaccessiblememonly = val
+        elseif setting === :noub
+            noub = val
         elseif setting === :foldable
-            consistent = effect_free = terminates_globally = val
+            consistent = effect_free = terminates_globally = noub = val
         elseif setting === :removable
             effect_free = nothrow = terminates_globally = val
         elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
+            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = noub = val
         else
             throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
     end
     if is_function_def(inner)
         return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
-        )))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub)))
         return esc(ex)
     else # anonymous function case
         return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
     end
 end
 

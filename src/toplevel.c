@@ -698,7 +698,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
             if (*n == 0 && n > n0)
-                jl_eval_errorf(m, "all-underscore identifier used as rvalue");
+                jl_eval_errorf(m, "all-underscore identifiers are write-only and their values cannot be used in expressions");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }

@@ -2303,33 +2303,42 @@ end
 
 function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize(rt))
     (;argtypes) = arginfo
-    # consistent if the argtype is immutable
     length(argtypes) < 3 && return EFFECTS_THROWS
     obj = argtypes[2]
-    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+    if isvarargtype(obj)
+        return Effects(EFFECTS_TOTAL;
+            consistent=CONSISTENT_IF_INACCESSIBLEMEMONLY,
+            nothrow=false,
+            inaccessiblememonly=ALWAYS_FALSE,
+            noub=false)
+    end
+    # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
-    # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
-    # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
-    # throws `UndefRefError` so doesn't need to taint it
+    # taint `:consistent` if accessing `isbitstype`-type object field that may be initialized
+    # with undefined value: note that we don't need to taint `:consistent` if accessing
+    # uninitialized non-`isbitstype` field since it will simply throw `UndefRefError`
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
-    # with undefined value so that we don't taint `:consistent`-cy too aggressively here
+    # with undefined value to avoid tainting `:consistent` too aggressively
+    # TODO this should probably taint `:noub`, however, it would hinder concrete eval for
+    # `REPLInterpreter` that can ignore `:consistent-cy`, causing worse completions
     if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
+    noub = true
     bcheck = getfield_boundscheck(arginfo)
     nothrow = getfield_nothrow(𝕃, arginfo, bcheck)
     if !nothrow
         if !(bcheck === :on || bcheck === :boundscheck)
-            # If we cannot independently prove inboundsness, taint consistency.
-            # The inbounds-ness assertion requires dynamic reachability, while
-            # :consistent needs to be true for all input values.
+            # If we cannot independently prove inboundsness, taint `:noub`.
+            # The inbounds-ness assertion requires dynamic reachability,
+            # while `:noub` needs to be true for all input values.
             # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:consistent`-cy will be tainted in any caller using `@inbounds` based
-            # on the `:noinbounds` effect.
-            # N.B. We do not taint for `--check-bounds=no` here. That is handled
-            # in concrete evaluation.
-            consistent = ALWAYS_FALSE
+            # `:noub` will be tainted in any caller using `@inbounds`
+            # based on the `:noinbounds` effect.
+            # N.B. We do not taint for `--check-bounds=no` here.
+            # That is handled in concrete evaluation.
+            noub = false
         end
     end
     if hasintersect(widenconst(obj), Module)
@@ -2339,23 +2348,22 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
     else
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
-    if length(argtypes) ≥ 2
-        M, s = argtypes[1], argtypes[2]
-        if getglobal_nothrow(M, s)
-            nothrow = true
-            # typeasserts below are already checked in `getglobal_nothrow`
-            Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
-            if isconst(Mval, sval)
-                consistent = ALWAYS_TRUE
-                if is_mutation_free_argtype(rt)
-                    inaccessiblememonly = ALWAYS_TRUE
-                end
+    M, s = argtypes[1], argtypes[2]
+    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
+        nothrow = true
+        # typeasserts below are already checked in `getglobal_nothrow`
+        Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
+        if isconst(Mval, sval)
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
             end
         end
     end
@@ -2372,8 +2380,15 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     if f === getfield
         return getfield_effects(𝕃, arginfo, rt)
     end
-    argtypes = arginfo.argtypes[2:end]
 
+    # TODO taint `:noub` for `arrayref` and `arrayset` here
+
+    # if this builtin call deterministically throws,
+    # don't bother to taint the other effects other than :nothrow:
+    # note this is safe only if we accounted for :noub already
+    rt === Bottom && return EFFECTS_THROWS
+
+    argtypes = arginfo.argtypes[2:end]
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
     elseif f === getglobal
@@ -2382,6 +2397,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         length(argtypes) == 2 || return EFFECTS_THROWS
         effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
         return Effects(EFFECTS_TOTAL; effect_free)
+    elseif f === compilerbarrier
+        length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+        setting = argtypes[1]
+        return Effects(EFFECTS_TOTAL;
+            consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            nothrow = compilerbarrier_nothrow(setting, nothing))
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2753,7 +2774,6 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     end
     return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
 end
-
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))

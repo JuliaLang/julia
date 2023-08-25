@@ -963,13 +963,13 @@ end
 # This is separate to make it useful even when running with --check-bounds=yes
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     T(r.ref + u*r.step)
 end
 
 function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     r.ref + u*r.step
 end
 
@@ -1380,8 +1380,21 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
-collect(r::AbstractRange) = vcat(r)
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
+function Array{T,1}(r::AbstractRange{T}) where {T}
+    a = Vector{T}(undef, length(r))
+    i = 1
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    return a
+end
+collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)
