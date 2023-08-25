@@ -521,6 +521,7 @@ ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
@@ -529,14 +530,17 @@ function ismutabletype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.flags & 0x2 == 0x2
+    return isa(t, DataType) && ismutabletypename(t.name)
 end
+
+ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 """
     isstructtype(T) -> Bool
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 """
 function isstructtype(@nospecialize t)
     @_total_meta
@@ -551,6 +555,7 @@ end
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
+If `T` is not a type, then return `false`.
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -571,6 +576,7 @@ Typical examples are numeric types such as [`UInt8`](@ref),
 This category of types is significant since they are valid as type parameters,
 may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
 and have a defined layout that is compatible with C.
+If `T` is not a type, then return `false`.
 
 See also [`isbits`](@ref), [`isprimitivetype`](@ref), [`ismutable`](@ref).
 
@@ -620,18 +626,20 @@ _objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
+If `T` is not a type, then return `false`.
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
 datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
 
 """
-    ismutationfree(T)
+    Base.ismutationfree(T)
 
 Determine whether type `T` is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
+If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -647,10 +655,11 @@ end
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
 
 """
-    isidentityfree(T)
+    Base.isidentityfree(T)
 
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
+If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -682,6 +691,8 @@ isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
+Note that this is not the negation of `isabstracttype(T)`.
+If `T` is not a type, then return `false`.
 
 See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
@@ -713,6 +724,8 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
+Note that this is not the negation of `isconcretetype(T)`.
+If `T` is not a type, then return `false`.
 
 # Examples
 ```jldoctest
@@ -735,6 +748,7 @@ end
 
 Determine whether type `T` has exactly one possible instance; for example, a
 struct type with no fields.
+If `T` is not a type, then return `false`.
 """
 issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance))
 
@@ -820,9 +834,19 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
+end
+
+function _fieldindex_maythrow(T::DataType, name::Symbol)
     @_foldable_meta
     @noinline
-    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, true)+1)
+end
+
+function _fieldindex_nothrow(T::DataType, name::Symbol)
+    @_total_meta
+    @noinline
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, false)+1)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
@@ -1194,6 +1218,7 @@ struct CodegenParams
     gnu_pubnames::Cint
     debug_info_kind::Cint
     safepoint_on_entry::Cint
+    gcstack_arg::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1203,6 +1228,7 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
+                   gcstack_arg::Bool=true,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
                    generic_context = nothing)
         return new(
@@ -1210,6 +1236,7 @@ struct CodegenParams
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             Cint(safepoint_on_entry),
+            Cint(gcstack_arg),
             lookup, generic_context)
     end
 end
@@ -1656,7 +1683,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
             empty!(cst)
             resize!(cst, length(code.code))
             sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
-            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -2144,15 +2171,15 @@ end
 """
     @invokelatest f(args...; kwargs...)
 
-Provides a convenient way to call [`Base.invokelatest`](@ref).
+Provides a convenient way to call [`invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
 
 It also supports the following syntax:
 - `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
 - `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
-- `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
-- `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
+- `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
 ```jldoctest
 julia> @macroexpand @invokelatest f(x; kw=kwv)
@@ -2174,8 +2201,11 @@ julia> @macroexpand @invokelatest xs[i] = v
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
 
+!!! compat "Julia 1.9"
+    Prior to Julia 1.9, this macro was not exported, and was called as `Base.@invokelatest`.
+
 !!! compat "Julia 1.10"
-    The additional syntax is supported as of Julia 1.10.
+    The additional `x.f` and `xs[i]` syntax requires Julia 1.10.
 """
 macro invokelatest(ex)
     topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally

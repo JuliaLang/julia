@@ -236,11 +236,11 @@ static bool lowerExcHandlers(Function &F) {
 
 } // anonymous namespace
 
-PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     bool modified = lowerExcHandlers(F);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -256,7 +256,7 @@ struct LowerExcHandlersLegacy : public FunctionPass {
     bool runOnFunction(Function &F) {
         bool modified = lowerExcHandlers(F);
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
+        assert(!verifyLLVMIR(F));
 #endif
         return modified;
     }

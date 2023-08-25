@@ -224,7 +224,6 @@ read(stream, ::Type{Union{}}, slurp...; kwargs...) = error("cannot read a value 
 
 """
     write(io::IO, x)
-    write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
 Return the number of bytes written into the stream. See also [`print`](@ref) to
@@ -441,10 +440,10 @@ for f in (
 end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
-readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+copyuntil(out::IO, io::AbstractPipe, arg::UInt8; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
+copyuntil(out::IO, io::AbstractPipe, arg::AbstractChar; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
+copyuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
+copyuntil(out::IO, io::AbstractPipe, arg::AbstractVector; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
@@ -458,17 +457,29 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
+
+"""
+    write(filename::AbstractString, content)
+
+Write the canonical binary representation of `content` to a file, which will be created if it does not exist yet or overwritten if it does exist.
+
+Return the number of bytes written into the file.
+"""
 write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), convert(String, filename)::String, "w")
 
 """
-    read(filename::AbstractString, args...)
+    read(filename::AbstractString)
 
-Open a file and read its contents. `args` is passed to `read`: this is equivalent to
-`open(io->read(io, args...), filename)`.
+Read the entire contents of a file as a `Vector{UInt8}`.
 
     read(filename::AbstractString, String)
 
 Read the entire contents of a file as a string.
+
+    read(filename::AbstractString, args...)
+
+Open a file and read its contents. `args` is passed to `read`: this is equivalent to
+`open(io->read(io, args...), filename)`.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 
@@ -488,10 +499,14 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, file
     readuntil(stream::IO, delim; keep::Bool = false)
     readuntil(filename::AbstractString, delim; keep::Bool = false)
 
-Read a string from an I/O stream or a file, up to the given delimiter.
+Read a string from an I/O `stream` or a file, up to the given delimiter.
 The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
+
+Return a `String` if `delim` is an `AbstractChar` or a string
+or otherwise return a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
+to instead write in-place to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
 # Examples
 ```jldoctest
@@ -506,7 +521,40 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
+readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
+readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
+readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
+
+
+"""
+    copyuntil(out::IO, stream::IO, delim; keep::Bool = false)
+    copyuntil(out::IO, filename::AbstractString, delim; keep::Bool = false)
+
+Copy a string from an I/O `stream` or a file, up to the given delimiter, to
+the `out` stream, returning `out`.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
+Keyword argument `keep` controls whether the delimiter is included in the result.
+The text is assumed to be encoded in UTF-8.
+
+Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
+`copyuntil` writes directly to `out`, without allocating a string.
+(This can be used, for example, to read data into a pre-allocated [`IOBuffer`](@ref).)
+
+# Examples
+```jldoctest
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+
+julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", 'L')))
+"Julia"
+
+julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
+"JuliaLang is a GitHub organization."
+
+julia> rm("my_file.txt")
+```
+"""
+copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
 """
     readline(io::IO=stdin; keep::Bool=false)
@@ -518,6 +566,11 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` 
 false (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
+
+Return a `String`.   See also [`copyline`](@ref) to instead write in-place
+to another stream (which can be a preallocated [`IOBuffer`](@ref)).
+
+See also [`readuntil`](@ref) for reading until more general delimiters.
 
 # Examples
 ```jldoctest
@@ -540,21 +593,63 @@ Logan
 "Logan"
 ```
 """
-function readline(filename::AbstractString; keep::Bool=false)
-    open(filename) do f
-        readline(f, keep=keep)
-    end
-end
+readline(filename::AbstractString; keep::Bool=false) =
+    open(io -> readline(io; keep), filename)
+readline(s::IO=stdin; keep::Bool=false) =
+    String(_unsafe_take!(copyline(IOBuffer(sizehint=70), s; keep)))
 
-function readline(s::IO=stdin; keep::Bool=false)
-    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
-    i = length(line)
-    if keep || i == 0 || line[i] != 0x0a
-        return String(line)
-    elseif i < 2 || line[i-1] != 0x0d
-        return String(resize!(line,i-1))
+"""
+    copyline(out::IO, io::IO=stdin; keep::Bool=false)
+    copyline(out::IO, filename::AbstractString; keep::Bool=false)
+
+Copy a single line of text from an I/O `stream` or a file to the `out` stream,
+returning `out`.
+
+When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
+input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` is
+false (as it is by default), these trailing newline characters are removed from the
+line before it is returned. When `keep` is true, they are returned as part of the
+line.
+
+Similar to [`readline`](@ref), which returns a `String`; in contrast,
+`copyline` writes directly to `out`, without allocating a string.
+(This can be used, for example, to read data into a pre-allocated [`IOBuffer`](@ref).)
+
+See also [`copyuntil`](@ref) for reading until more general delimiters.
+
+# Examples
+```jldoctest
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+
+julia> String(take!(copyline(IOBuffer(), "my_file.txt")))
+"JuliaLang is a GitHub organization."
+
+julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
+"JuliaLang is a GitHub organization.\\n"
+
+julia> rm("my_file.txt")
+```
+"""
+copyline(out::IO, filename::AbstractString; keep::Bool=false) =
+    open(io -> copyline(out, io; keep), filename)
+
+# fallback to optimized methods for IOBuffer in iobuffer.jl
+function copyline(out::IO, s::IO; keep::Bool=false)
+    if keep
+        return copyuntil(out, s, 0x0a, keep=true)
     else
-        return String(resize!(line,i-2))
+        # more complicated to deal with CRLF logic
+        while !eof(s)
+            b = read(s, UInt8)
+            b == 0x0a && break
+            if b == 0x0d && !eof(s)
+                b = read(s, UInt8)
+                b == 0x0a && break
+                write(out, 0x0d)
+            end
+            write(out, b)
+        end
+        return out
     end
 end
 
@@ -789,9 +884,9 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 8(4-leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
@@ -805,15 +900,10 @@ end
 # read(io, T) is not defined for other AbstractChar: implementations
 # must provide their own encoding-specific method.
 
-# readuntil_string is useful below since it has
-# an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))::String
-
-function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
+function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
-        return readuntil_string(s, delim % UInt8, keep)
+        return copyuntil(out, s, delim % UInt8; keep)
     end
-    out = IOBuffer()
     for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
@@ -821,17 +911,22 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         end
         write(out, c)
     end
-    return String(take!(out))
+    return out
 end
 
-function readuntil(s::IO, delim::T; keep::Bool=false) where T
-    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+# note: optimized methods of copyuntil for IOStreams and delim::UInt8 in iostream.jl
+#       and for IOBuffer with delim::UInt8 in iobuffer.jl
+copyuntil(out::IO, s::IO, delim; keep::Bool=false) = _copyuntil(out, s, delim, keep)
+
+# supports out::Union{IO, AbstractVector} for use with both copyuntil & readuntil
+function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
+    output! = isa(out, IO) ? write : push!
     for c in readeach(s, T)
         if c == delim
-            keep && push!(out, c)
+            keep && output!(out, c)
             break
         end
-        push!(out, c)
+        output!(out, c)
     end
     return out
 end
@@ -922,27 +1017,29 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     return false
 end
 
-function readuntil(io::IO, target::AbstractString; keep::Bool=false)
+function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
     x = Iterators.peel(target)
-    isnothing(x) && return ""
+    isnothing(x) && return out
     c, rest = x
     if isempty(rest) && c <= '\x7f'
-        return readuntil_string(io, c % UInt8, keep)
+        return copyuntil(out, io, c % UInt8; keep)
     end
     # convert String to a utf8-byte-iterator
     if !(target isa String) && !(target isa SubString{String})
         target = String(target)
     end
     target = codeunits(target)::AbstractVector
-    return String(readuntil(io, target, keep=keep))
+    return copyuntil(out, io, target, keep=keep)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+    out = (T === UInt8 ? resize!(StringVector(70), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
+copyuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false) =
+    (readuntil_vector!(io, target, keep, out); out)
 
 """
     readchomp(x)
@@ -1117,7 +1214,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(take!(buf))
+        s = String(_unsafe_take!(buf))
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1134,7 +1231,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(take!(buf))
+            s = String(_unsafe_take!(buf))
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk

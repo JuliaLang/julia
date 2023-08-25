@@ -154,4 +154,6 @@ namespace jl_well_known {
     extern const WellKnownFunctionDescription GCAllocTyped;
 }
 
+void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);
+
 #endif

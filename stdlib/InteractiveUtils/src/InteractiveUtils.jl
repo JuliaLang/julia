@@ -12,7 +12,7 @@ import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     signature_type, format_bytes
-
+using Base.Libc
 using Markdown
 
 include("editless.jl")
@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
+    varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -37,7 +37,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
 a module, which is suitable for more general manipulations.
 """
-function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
@@ -99,8 +99,25 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    if Base.isdebugbuild()
-        println(io, "DEBUG build")
+    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+    if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
+        println(io, "Build Info:")
+        if Base.isdebugbuild()
+            println(io, "  DEBUG build")
+        end
+        if !isempty(Base.TAGGED_RELEASE_BANNER)
+            println(io, "  ", Base.TAGGED_RELEASE_BANNER)
+        end
+        if Base.GIT_VERSION_INFO.tagged_commit && !official_release
+            println(io,
+                """
+
+                    Note: This is an unofficial build, please report bugs to the project
+                    responsible for this build and not to the Julia project unless you can
+                    reproduce the issue using official builds available at https://julialang.org/downloads
+                """
+            )
+        end
     end
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
@@ -142,7 +159,6 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
     println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
 

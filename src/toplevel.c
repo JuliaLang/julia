@@ -185,17 +185,28 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t last_age = ct->world_age;
 
     // add standard imports unless baremodule
+    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
+    int lineno = 0;
+    const char *filename = "none";
+    if (jl_array_len(exprs) > 0) {
+        jl_value_t *lineex = jl_array_ptr_ref(exprs, 0);
+        if (jl_is_linenode(lineex)) {
+            lineno = jl_linenode_line(lineex);
+            jl_value_t *file = jl_linenode_file(lineex);
+            if (jl_is_symbol(file))
+                filename = jl_symbol_name((jl_sym_t*)file);
+        }
+    }
     if (std_imports) {
         if (jl_base_module != NULL) {
             jl_add_standard_imports(newm);
         }
         // add `eval` function
-        form = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex, newm);
+        form = jl_call_scm_on_ast_and_loc("module-default-defs", (jl_value_t*)name, newm, filename, lineno);
         jl_toplevel_eval_flex(newm, form, 0, 1);
         form = NULL;
     }
 
-    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
@@ -450,6 +461,9 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
 
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Require);
+    jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
+
     static jl_value_t *require_func = NULL;
     int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
@@ -642,19 +656,28 @@ static void check_macro_rename(jl_sym_t *from, jl_sym_t *to, const char *keyword
         jl_errorf("cannot rename non-macro \"%s\" to macro \"%s\" in \"%s\"", n1, n2, keyword);
 }
 
-// Format msg and eval `throw(ErrorException(msg)))` in module `m`.
-// Used in `jl_toplevel_eval_flex` instead of `jl_errorf` so that the error
+// Eval `throw(ErrorException(msg)))` in module `m`.
+// Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
-static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
+static void jl_eval_throw(jl_module_t *m, jl_value_t *exc)
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
     jl_exprargset(throw_ex, 0, jl_builtin_throw);
+    jl_exprargset(throw_ex, 1, exc);
+    jl_toplevel_eval_flex(m, throw_ex, 0, 0);
+    JL_GC_POP();
+}
+
+// Format error message and call jl_eval
+static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
+{
     va_list args;
     va_start(args, fmt);
-    jl_exprargset(throw_ex, 1, jl_vexceptionf(jl_errorexception_type, fmt, args));
+    jl_value_t *exc = jl_vexceptionf(jl_errorexception_type, fmt, args);
     va_end(args);
-    jl_toplevel_eval_flex(m, throw_ex, 0, 0);
+    JL_GC_PUSH1(&exc);
+    jl_eval_throw(m, exc);
     JL_GC_POP();
 }
 
@@ -675,7 +698,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
             if (*n == 0 && n > n0)
-                jl_eval_errorf(m, "all-underscore identifier used as rvalue");
+                jl_eval_errorf(m, "all-underscore identifiers are write-only and their values cannot be used in expressions");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
@@ -861,7 +884,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             jl_eval_errorf(m, "malformed \"%s\" expression", jl_symbol_name(head));
         if (jl_is_string(jl_exprarg(ex, 0)))
             jl_eval_errorf(m, "syntax: %s", jl_string_data(jl_exprarg(ex, 0)));
-        jl_throw(jl_exprarg(ex, 0));
+        jl_eval_throw(m, jl_exprarg(ex, 0));
     }
     else if (jl_is_symbol(ex)) {
         JL_GC_POP();
@@ -921,8 +944,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-static void jl_check_open_for(jl_module_t *m, const char* funcname)
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
 {
+    if (jl_current_task->ptls->in_pure_callback)
+        jl_errorf("%s cannot be used in a generated function", fname);
     if (jl_options.incremental && jl_generating_output()) {
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
@@ -942,25 +967,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
                           "This is likely due to some other module mutating `%s` with `%s` during "
-                          "precompilation - don't do this.", name, name, funcname);
+                          "precompilation - don't do this.", name, name, fname);
             }
         }
     }
 }
 
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
-{
-    if (jl_current_task->ptls->in_pure_callback)
-        jl_errorf("%s cannot be used in a generated function", fname);
-    jl_check_open_for(m, fname);
-}
-
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("eval cannot be used in a generated function");
-    jl_check_open_for(m, "eval");
+    jl_check_top_level_effect(m, "eval");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
@@ -1006,10 +1021,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("cannot use include inside a generated function");
-    jl_check_open_for(module, "include");
+    jl_check_top_level_effect(module, "include");
 
     jl_value_t *result = jl_nothing;
     jl_value_t *ast = NULL;
@@ -1022,6 +1034,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
         jl_errorf("jl_parse_all() must generate a top level expression");
     }
 
+    jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = ct->world_age;

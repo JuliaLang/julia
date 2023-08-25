@@ -321,12 +321,14 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->inlining = 2;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
+                else if (ma == (jl_value_t*)jl_nospecializeinfer_sym)
+                    li->nospecializeinfer = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 7) {
+                    if (jl_expr_nargs(ma) == 8) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
@@ -334,6 +336,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
                         li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
+                        li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
                     }
                 }
                 else
@@ -477,6 +480,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->inferred = 0;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
+    src->nospecializeinfer = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->inlining = 0;
@@ -662,7 +666,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     return new_linfo;
 }
 
-static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;
@@ -682,6 +686,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
     }
     m->called = called;
+    m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
     jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
@@ -811,6 +816,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
+    m->nospecializeinfer = 0;
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;

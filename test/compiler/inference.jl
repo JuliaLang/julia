@@ -60,7 +60,8 @@ end
 # issue #42835
 @test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1) # maybe should be fixed?
+@test  Core.Compiler.limit_type_size(Type{Int}, Any, Union{}, 0, 0) == Type{Int}
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
@@ -71,22 +72,23 @@ end
 @test  Core.Compiler.type_more_complex(ComplexF32, Type{ComplexF32}, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(Type{Type{ComplexF32}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{ComplexF32}, Type{Type{ComplexF32}}, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.limit_type_size(Type{ComplexF32}, ComplexF32, Union{}, 1, 1) == Type{<:Complex}
 @test  Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, Type{ComplexF32}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, ComplexF32, Core.svec(ComplexF32), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 
 # n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
-@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
 
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
-@test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
@@ -100,6 +102,44 @@ let # 40336
     r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
     @test t !== r && t <: r
 end
+
+@test Core.Compiler.limit_type_size(Type{Type{Type{Int}}}, Type, Union{}, 0, 0) == Type{<:Type}
+@test Core.Compiler.limit_type_size(Type{Type{Int}}, Type, Union{}, 0, 0) == Type{<:Type}
+@test Core.Compiler.limit_type_size(Type{Int}, Type, Union{}, 0, 0) == Type{Int}
+@test Core.Compiler.limit_type_size(Type{<:Int}, Type, Union{}, 0, 0) == Type{<:Int}
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, ComplexF32, Union{}, 0, 0) == Type{<:Complex} # added nesting
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, Type{ComplexF64}, Union{}, 0, 0) == Type{ComplexF32} # base matches
+@test Core.Compiler.limit_type_size(Type{ComplexF32}, Type, Union{}, 0, 0) == Type{<:Complex}
+@test_broken  Core.Compiler.limit_type_size(Type{<:ComplexF64}, Type, Union{}, 0, 0) == Type{<:Complex}
+@test Core.Compiler.limit_type_size(Type{<:ComplexF64}, Type, Union{}, 0, 0) == Type #50692
+@test Core.Compiler.limit_type_size(Type{Union{ComplexF32,ComplexF64}}, Type, Union{}, 0, 0) == Type
+@test_broken Core.Compiler.limit_type_size(Type{Union{ComplexF32,ComplexF64}}, Type, Union{}, 0, 0) == Type{<:Complex} #50692
+@test Core.Compiler.limit_type_size(Type{Union{Float32,Float64}}, Type, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Union{Type{Int},Type{Type{Int}}}, Union{}, 0, 0) == Type
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
+@test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
+
+
+# issue #43296 #43296
+struct C43296{t,I} end
+r43296(b) = r43296(typeof(b))
+r43296(::Type) = nothing
+r43296(::Nothing) = nonexistent
+r43296(::Type{C43296{c,d}}) where {c,d} = f43296(r43296(c), e)
+f43296(::Nothing, :) = nothing
+f43296(g, :) = h
+k43296(b, j, :) = l
+k43296(b, j, ::Nothing) = b
+i43296(b, j) = k43296(b, j, r43296(j))
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}, Tuple}}))) == Int
+
+abstract type e43296{a, j} <: AbstractArray{a, j} end
+abstract type b43296{a, j, c, d} <: e43296{a, j} end
+struct h43296{a, j, f, d, i} <: b43296{a, j, f, d} end
+Base.ndims(::Type{f}) where {f<:e43296} = ndims(supertype(f))
+Base.ndims(g::e43296) = ndims(typeof(g))
+@test only(Base.return_types(ndims, (h43296{Any, 0, Any, Int, Any},))) == Int
 
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
@@ -173,6 +213,21 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+# test issue behind https://github.com/JuliaLang/julia/issues/50458
+@test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+
+# test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
+# Specificially test with base types of a trivial type, a simple union, a complicated union, and a tuple.
+for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
+    Ta, Tb = T, T
+    for i in 1:10
+        Ta = Union{Tuple{Ta}, Nothing}
+        Tb = Core.Compiler.tmerge(Tuple{Tb}, Nothing)
+        @test Ta <: Tb <: Union{Nothing, Tuple}
+    end
+end
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -644,7 +699,6 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
         @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
     test_inferred_static(codetype, all_ssa)
@@ -699,7 +753,7 @@ f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 let fieldtype_tfunc(@nospecialize args...) =
         Core.Compiler.fieldtype_tfunc(Core.Compiler.fallback_lattice, args...),
     fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(
-        Core.Compiler.OptimizerLattice(), s0, name)
+        Core.Compiler.SimpleInferenceLattice.instance, s0, name)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
@@ -727,19 +781,6 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
-end
-
-import Core.Compiler: MaybeUndef, builtin_nothrow
-let 𝕃ₒ = Core.Compiler.OptimizerLattice()
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
-    @test !builtin_nothrow(𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
-    @test !builtin_nothrow(𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
-    @test !builtin_nothrow(𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
-    @test !builtin_nothrow(𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
-    @test !builtin_nothrow(𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
 end
 
 # issue #11480
@@ -1167,25 +1208,18 @@ let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}
     @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
 end
 
-function count_specializations(method::Method)
-    specs = method.specializations
-    specs isa Core.MethodInstance && return 1
-    n = count(!isnothing, specs::Core.SimpleVector)
-    return n
-end
-
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
 copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 4 < count_specializations(m) < 15, methods(copy_dims_out)) # currently about 5
+@test all(m -> 4 < length(Base.specializations(m)) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 3 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 5
+@test all(m -> 3 < length(Base.specializations(m)) < 15, methods(copy_dims_pair)) # currently about 5
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
@@ -1740,7 +1774,7 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
 end
 let setfield!_nothrow(@nospecialize xs...) =
-        Core.Compiler.setfield!_nothrow(Core.Compiler.OptimizerLattice(), xs...)
+        Core.Compiler.setfield!_nothrow(Core.Compiler.SimpleInferenceLattice.instance, xs...)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
     @test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
     @test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
@@ -1936,7 +1970,7 @@ function foo25261()
         next = f25261(Core.getfield(next, 2))
     end
 end
-let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
+let opt25261 = code_typed(foo25261, Tuple{}, optimize=true)[1].first.code
     i = 1
     # Skip to after the branch
     while !isa(opt25261[i], GotoIfNot)
@@ -1944,7 +1978,7 @@ let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
     end
     foundslot = false
     for expr25261 in opt25261[i:end]
-        if expr25261 isa Core.Compiler.TypedSlot && expr25261.typ === Tuple{Int, Int}
+        if expr25261 isa Core.PiNode && expr25261.typ === Tuple{Int, Int}
             # This should be the assignment to the SSAValue into the getfield
             # call - make sure it's a TypedSlot
             foundslot = true
@@ -2172,15 +2206,15 @@ mutable struct AliasableConstField{S,T}
 end
 
 import Core.Compiler:
-    InferenceLattice, OptimizerLattice, MustAliasesLattice, InterMustAliasesLattice,
-    BaseInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
+    InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
+    BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
 include("newinterp.jl")
 @newinterp MustAliasInterpreter
 let CC = Core.Compiler
     CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-    CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+    CC.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.instance
 end
 
 # lattice
@@ -3404,7 +3438,7 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    𝕃 = Core.Compiler.OptimizerLattice()
+    𝕃 = Core.Compiler.SimpleInferenceLattice.instance
     argtypes = Any[Core.Compiler.Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)]
@@ -3431,8 +3465,12 @@ end
 @test Base.return_types(h33768, ()) == Any[Union{}]
 
 # constant prop of `Symbol("")`
-f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
-@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+@test Base.return_types() do
+    Val(Symbol("julia"))
+end |> only == Val{:julia}
+@test Base.return_types() do p::Pair{Int8,String}
+    getfield(p, Symbol("first"))
+end |> only == Int8
 
 # issue #33954
 struct X33954
@@ -3520,8 +3558,15 @@ end
               Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
 # Test that these don't throw
 @test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Char}}, 0) == Tuple{Vararg{Int}}
+@test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Int}, Tuple{String,Vararg{Int}}, 0) == Union{}
+@test Core.Compiler.typesubtract(Tuple{String,Vararg{Int}}, Tuple{String,Int}, 0) == Tuple{String,Vararg{Int}}
 @test Core.Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
 @test Core.Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
+
+@test Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Int}, Tuple{String,Vararg{Int}})
+@test !Core.Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Int})
 
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
@@ -3811,7 +3856,7 @@ end
             end
         end
     end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 6)", string(timingmod.children))
     # END LINE NUMBER SENSITIVITY
 
     # Recursive function
@@ -4174,6 +4219,102 @@ Base.getproperty(x::Interface41024Extended, sym::Symbol) =
     x.x
 end |> only === Int
 
+function call_func_itr(func, itr)
+    local r = 0
+    r += func(itr[1])
+    r += func(itr[2])
+    r += func(itr[3])
+    r += func(itr[4])
+    r += func(itr[5])
+    r
+end
+
+global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
+# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+function is_inline_checker(@nospecialize stmt)
+    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+end
+
+function func_nospecialized(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+@inline function func_nospecialized_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer function func_nospecializeinfer(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+Base.@nospecializeinfer @inline function func_nospecializeinfer_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer Base.@constprop :aggressive function func_nospecializeinfer_constprop(c::Bool, @nospecialize a)
+    if c
+        return inline_checker(a) # dynamic dispatch, preventing inlining/constprop (but forced by the annotation)
+    end
+    return false
+end
+Base.@nospecializeinfer func_nospecializeinfer_constprop(@nospecialize a) = func_nospecializeinfer_constprop(false, a)
+
+itr_dispatchonly = Any[sin, muladd, "foo", nothing, missing]   # untyped container can cause excessive runtime dispatch
+itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container can cause excessive inference
+
+@testset "compilation annotations" begin
+    @testset "@nospecialize" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecialized, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 1
+        # `@nospecialize` should allow inference to happen
+        @test call_func_itr(func_nospecialized, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized, itr_dispatchonly)) == 0
+
+        # `@nospecialize` should allow inlinining
+        @test call_func_itr(func_nospecialized_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 1
+        @test call_func_itr(func_nospecialized_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized_inline, itr_dispatchonly)) == 5
+    end
+
+    @testset "@nospecializeinfer" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecializeinfer, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        # `@nospecializeinfer` suppresses inference also
+        @test call_func_itr(func_nospecializeinfer, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        @test !any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow inlinining
+        @test call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test call_func_itr(func_nospecializeinfer_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow constprop
+        @test Base.return_types((Any,)) do x
+            Val(func_nospecializeinfer_constprop(x))
+        end |> only == Val{false}
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_dispatchonly) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_withinfernce) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+    end
+end
+
 @testset "fieldtype for unions" begin # e.g. issue #40177
     f40177(::Type{T}) where {T} = fieldtype(T, 1)
     for T in [
@@ -4443,6 +4584,19 @@ end
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Union{Val{Union{}}, Val{Val{Union{}}}, Val{Union{Val{Union{}}, Val{Val{Union{}}}}}}
+    a = Core.Compiler.tmerge(Union{a, Val{a}}, a)
+    @test a == Val
+
+    a = Val{Union{}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Val{<:a}, a)
+    @test_broken a != Val{<:Val{Union{}}}
+    @test_broken a == Val{<:Val} || a == Val
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -4917,4 +5071,104 @@ let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do 
         kill_error_edge(true, b2, xs, ys, x)
     end
     @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+struct Issue49785{S, T<:S} end
+let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
+    argtypes = Any[Core.Compiler.Const(Issue49785),
+        Union{Type{String},Type{Int}},
+        Union{Type{String},Type{Int}}]
+    rt = Type{Issue49785{<:Any, Int}}
+    # the following should not throw
+    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test code_typed() do
+        S = Union{Type{String},Type{Int}}[Int][1]
+        map(T -> Issue49785{S,T}, (a = S,))
+    end isa Vector
+end
+
+# `getindex(::SimpleVector, ::Int)` shuold be concrete-evaluated
+@eval Base.return_types() do
+    $(Core.svec(1,Int,nothing))[2]
+end |> only == Type{Int}
+# https://github.com/JuliaLang/julia/issues/50544
+struct Issue50544{T<:Tuple}
+    t::T
+end
+Base.@propagate_inbounds f_issue50544(x, i, ii...) = f_issue50544(f_issue50544(x, i), ii...)
+Base.@propagate_inbounds f_issue50544(::Type{Issue50544{T}}, i) where T = T.parameters[i]
+g_issue50544(T...) = Issue50544{Tuple{T...}}
+h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2, 1))
+let x = Issue50544((1, Issue50544((2.0, 'x'))))
+    @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
+end
+
+# refine const-prop'ed `PartialStruct` with declared method signature type
+Base.@constprop :aggressive function refine_partial_struct1((a, b)::Tuple{String,Int})
+    if iszero(b)
+        println("b=0") # to prevent semi-concrete eval
+        return nothing
+    else
+        return a
+    end
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct1((s, 42))
+end |> only === String
+
+function refine_partial_struct2(xs::Union{Int,String,Symbol}...)
+    first(xs) isa Int && iszero(first(xs)) && return nothing
+    for x in xs[2:end]
+        if x isa String
+            continue
+        else
+            return nothing
+        end
+    end
+    return string(length(xs))
+end
+@test Base.return_types() do s::AbstractString
+    refine_partial_struct2(42, s)
+end |> only === String
+# JET.test_call(s::AbstractString->Base._string(s, 'c'))
+
+# issue #45759 #46557
+g45759(x::Tuple{Any,Vararg}) = x[1] + _g45759(x[2:end])
+g45759(x::Tuple{}) = 0
+_g45759(x) = g45759(x)
+@test only(Base.return_types(g45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+h45759(x::Tuple{Any,Vararg}; kwargs...) = x[1] + h45759(x[2:end]; kwargs...)
+h45759(x::Tuple{}; kwargs...) = 0
+@test only(Base.return_types(h45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
+
+@test only(Base.return_types((typeof([[[1]]]),)) do x
+    sum(x) do v
+        sum(length, v)
+    end
+end) == Int
+
+struct FunctionSum{Tf}
+    functions::Tf
+end
+(F::FunctionSum)(x) = sum(f -> f(x), F.functions)
+F = FunctionSum((x -> sqrt(x), FunctionSum((x -> x^2, x -> x^3))))
+@test @inferred(F(1.)) === 3.0
+
+f31485(arr::AbstractArray{T, 0}) where {T} = arr
+indirect31485(arr) = f31485(arr)
+f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
+@test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
+
+# override const-prop' return type with the concrete-eval result
+# if concrete-eval returns non-inlineable constant
+Base.@assume_effects :foldable function continue_const_prop(i, j)
+    chars = map(Char, i:j)
+    String(chars)
+end
+@test Base.return_types() do
+    Val(length(continue_const_prop(1, 5)))
+end |> only === Val{5}
+@test fully_eliminated() do
+    length(continue_const_prop(1, 5))
 end

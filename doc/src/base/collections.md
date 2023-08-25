@@ -64,6 +64,7 @@ Base.LinRange
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
 Base.checked_length
@@ -89,6 +90,7 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique

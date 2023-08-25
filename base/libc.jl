@@ -6,10 +6,13 @@ Interface to libc, the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
+# these need to be defined seperately for bootstrapping but belong to Libc
+import Base: memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
+    memmove, memset, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
+    transcode
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
@@ -72,6 +75,34 @@ end
 
 ## FILE (not auto-finalized) ##
 
+"""
+    FILE(::Ptr)
+    FILE(::IO)
+
+A libc `FILE*`, representing an opened file.
+
+It can be passed as a `Ptr{FILE}` argument to [`ccall`](@ref) and also supports
+[`seek`](@ref), [`position`](@ref) and [`close`](@ref).
+
+A `FILE` can be constructed from an ordinary `IO` object, provided it is an open file. It
+must be closed afterward.
+
+# Examples
+```jldoctest
+julia> using Base.Libc
+
+julia> mktemp() do _, io
+           # write to the temporary file using `puts(char*, FILE*)` from libc
+           file = FILE(io)
+           ccall(:fputs, Cint, (Cstring, Ptr{FILE}), "hello world", file)
+           close(file)
+           # read the file again
+           seek(io, 0)
+           read(io, String)
+       end
+"hello world"
+```
+"""
 struct FILE
     ptr::Ptr{Cvoid}
 end
@@ -336,7 +367,6 @@ if Sys.iswindows()
 end
 
 ## Memory related ##
-
 """
     free(addr::Ptr)
 
@@ -346,6 +376,8 @@ be freed by the free functions defined in that library, to avoid assertion failu
 multiple `libc` libraries exist on the system.
 """
 free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
+free(p::Cstring) = free(convert(Ptr{UInt8}, p))
+free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 """
     malloc(size::Integer) -> Ptr{Cvoid}
@@ -371,8 +403,7 @@ Call `calloc` from the C standard library.
 """
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
-free(p::Cstring) = free(convert(Ptr{UInt8}, p))
-free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
 
 ## Random numbers ##
 
@@ -484,6 +515,5 @@ geteuid() = ccall(:jl_geteuid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")
-using .Libdl
 
 end # module

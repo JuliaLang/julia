@@ -337,7 +337,7 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
-# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
+# `@inbounds`/`@boundscheck` expression should taint :consistent correctly
 # https://github.com/JuliaLang/julia/issues/48099
 function A1_inbounds()
     r = 0
@@ -356,7 +356,7 @@ function f_boundscheck_elim(n)
     # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
     ntuple(x->(@inbounds ()[x]), n)
 end
-@test_broken !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test !Core.Compiler.is_noub(Base.infer_effects(f_boundscheck_elim, (Int,)))
 @test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
@@ -445,10 +445,8 @@ mutable struct SetfieldNothrow
 end
 f_setfield_nothrow() = SetfieldNothrow(0).x = 1
 let effects = Base.infer_effects(f_setfield_nothrow, ())
-    # Technically effect free even though we use the heap, since the
-    # object doesn't escape, but the compiler doesn't know that.
-    #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_effect_free(effects) # see EFFECT_FREE_IF_INACCESSIBLEMEMONLY
 end
 
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
@@ -460,7 +458,7 @@ end
     Core.svec(nothing, 1, "foo")
 end |> Core.Compiler.is_consistent
 
-# fastmath operations are inconsistent
+# fastmath operations are in-`:consistent`
 @test !Core.Compiler.is_consistent(Base.infer_effects((a,b)->@fastmath(a+b), (Float64,Float64)))
 
 # issue 46122: @assume_effects for @ccall
@@ -760,21 +758,27 @@ end
 # arrayref
 # --------
 
-let effects = Base.infer_effects(Base.arrayref, (Vector{Any},Int))
-    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
-    @test Core.Compiler.is_effect_free(effects)
-    @test !Core.Compiler.is_nothrow(effects)
-    @test Core.Compiler.is_terminates(effects)
+for tt = Any[(Bool,Vector{Any},Int),
+             (Bool,Matrix{Any},Int,Int)]
+    @testset let effects = Base.infer_effects(Base.arrayref, tt)
+        @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test Core.Compiler.is_terminates(effects)
+    end
 end
 
 # arrayset
 # --------
 
-let effects = Base.infer_effects(Base.arrayset, (Vector{Any},Any,Int))
-    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
-    @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
-    @test !Core.Compiler.is_nothrow(effects)
-    @test Core.Compiler.is_terminates(effects)
+for tt = Any[(Bool,Vector{Any},Any,Int),
+             (Bool,Matrix{Any},Any,Int,Int)]
+    @testset let effects = Base.infer_effects(Base.arrayset, tt)
+        @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test Core.Compiler.is_terminates(effects)
+    end
 end
 # nothrow for arrayset
 @test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
@@ -888,7 +892,7 @@ end |> Core.Compiler.is_foldable_nothrow
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
-end |> !Core.Compiler.is_consistent
+end |> !Core.Compiler.is_noub
 
 @test Base.infer_effects(Tuple{Tuple{Int64}}) do x
     @inbounds x[1]
@@ -982,3 +986,45 @@ isassigned_effects(s) = isassigned(Ref(s))
 @test fully_eliminated(; retval=true) do
     isassigned_effects(:foo)
 end
+
+# Effects of Base.hasfield (#50198)
+hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
+f50198() = (hf50198(Ref(:x)[]); nothing)
+@test fully_eliminated(f50198)
+
+# Effects properly applied to flags by irinterp (#50311)
+f50311(x, s) = Symbol(s)
+g50311(x) = Val{f50311((1.0, x), "foo")}()
+@test fully_eliminated(g50311, Tuple{Float64})
+
+# getglobal effects
+const my_defined_var = 42
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end |> Core.Compiler.is_foldable_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :my_defined_var, :foo, nothing)
+end |> !Core.Compiler.is_nothrow
+
+# irinterp should refine `:nothrow` information only if profitable
+Base.@assume_effects :nothrow function irinterp_nothrow_override(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test Base.infer_effects((Float64,)) do y
+    isinf(y) && return zero(y)
+    irinterp_nothrow_override(true, y)
+end |> Core.Compiler.is_nothrow
+
+# Effects for :compilerbarrier
+f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
+f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
+@test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))

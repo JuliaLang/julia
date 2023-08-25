@@ -165,6 +165,8 @@ julia> begin
                unlock(lk)
            end
        end
+
+julia> @lock lk use(a)
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
@@ -238,6 +240,68 @@ julia> a
 ```
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
+
+### Using `@threads` without data races
+
+Taking the example of a naive sum
+
+```julia-repl
+julia> function sum_single(a)
+           s = 0
+           for i in a
+               s += i
+           end
+           s
+       end
+sum_single (generic function with 1 method)
+
+julia> sum_single(1:1_000_000)
+500000500000
+```
+
+Simply adding `@threads` exposes a data race with multiple threads reading and writing `s` at the same time.
+```julia-repl
+julia> function sum_multi_bad(a)
+           s = 0
+           Threads.@threads for i in a
+               s += i
+           end
+           s
+       end
+sum_multi_bad (generic function with 1 method)
+
+julia> sum_multi_bad(1:1_000_000)
+70140554652
+```
+
+Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
+
+To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
+Here `sum_single` is reused, with its own internal buffer `s`, and vector `a` is split into `nthreads()`
+chunks for parallel work via `nthreads()` `@spawn`-ed tasks.
+
+```julia-repl
+julia> function sum_multi_good(a)
+           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           tasks = map(chunks) do chunk
+               Threads.@spawn sum_single(chunk)
+           end
+           chunk_sums = fetch.(tasks)
+           return sum_single(chunk_sums)
+       end
+sum_multi_good (generic function with 1 method)
+
+julia> sum_multi_good(1:1_000_000)
+500000500000
+```
+!!! note
+    Buffers should not be managed based on `threadid()` i.e. `buffers = zeros(Threads.nthreads())` because concurrent tasks
+    can yield, meaning multiple concurrent tasks may use the same buffer on a given thread, introducing risk of data races.
+    Further, when more than one thread is available tasks may change thread at yield points, which is known as
+    [task migration](@ref man-task-migration).
+
+Another option is the use of atomic operations on variables shared across tasks/threads, which may be more performant
+depending on the characteristics of the operations.
 
 ## Atomic Operations
 
@@ -377,7 +441,7 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * The schedule used by `@spawn` is nondeterministic and should not be relied on.
+  * The schedule used by [`@spawn`](@ref Threads.@spawn) is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may
     be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.
@@ -387,6 +451,20 @@ threads in Julia:
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
     can be widely adopted with confidence. See the next section for further details.
+
+## [Task Migration](@id man-task-migration)
+
+After a task starts running on a certain thread it may move to a different thread if the task yields.
+
+Such tasks may have been started with [`@spawn`](@ref Threads.@spawn) or [`@threads`](@ref Threads.@threads),
+although the `:static` schedule option for `@threads` does freeze the threadid.
+
+This means that in most cases [`threadid()`](@ref Threads.threadid) should not be treated as constant within a task,
+and therefore should not be used to index into a vector of buffers or stateful objects.
+
+!!! compat "Julia 1.7"
+    Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
+    started on.
 
 ## Safe use of Finalizers
 

@@ -57,9 +57,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -1337,6 +1337,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 [`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
+
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
 
 ## Operations on Types
 

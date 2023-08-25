@@ -237,7 +237,7 @@ function show(
     if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
         skip = skip_text(n)
         show(io, SubString(str, 1:prevind(str, head)))
-        print(io, skip) # TODO: bold styled
+        printstyled(io, skip; color=:light_yellow, bold=true)
         show(io, SubString(str, tail))
     else
         show(io, str)

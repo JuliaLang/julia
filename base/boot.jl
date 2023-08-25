@@ -463,7 +463,8 @@ macro _foldable_meta()
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
         #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
+        #=:inaccessiblememonly=#false,
+        #=:noub=#true))
 end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
@@ -510,9 +511,11 @@ end)
 
 function Symbol(s::String)
     @_foldable_meta
+    @noinline
     return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
 end
 function Symbol(a::Array{UInt8,1})
+    @noinline
     return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
@@ -533,11 +536,10 @@ import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, Return
 end # module IR
 
 # docsystem basics
-const unescape = Symbol("hygienic-scope")
 macro doc(x...)
     docex = atdoc(__source__, __module__, x...)
     isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
+    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
 end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -826,8 +828,10 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
 #
-# The internal jl_parse which will call into Core._parse if not `nothing`.
+# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
+
+_setparser!(parser) = setglobal!(Core, :_parse, parser)
 
 # support for deprecated uses of internal _apply function
 _apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)

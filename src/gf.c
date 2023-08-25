@@ -735,7 +735,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N); // this cannot throw for these inputs
+                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1); // this cannot throw for these inputs
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -984,7 +984,7 @@ static void jl_compilation_sig(
             // avoid Vararg{Type{Type{...}}}
             if (jl_is_type_type(type_i) && jl_is_type_type(jl_tparam0(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
-            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL); // this cannot throw for these inputs
+            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1); // this cannot throw for these inputs
         }
         else {
             type_i = inst_varargp_in_env(decl, sparams);
@@ -1483,7 +1483,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
     assert(oldentry != closure->newentry && "entry already added");
     assert(oldentry->min_world <= closure->newentry->min_world && "old method cannot be newer than new method");
-    assert(oldentry->max_world == ~(size_t)0 && "method cannot be added at the same time as method deleted");
+    assert(oldentry->max_world != closure->newentry->min_world && "method cannot be added at the same time as method deleted");
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
     typemap_slurp_search(oldentry, &closure->match);
     jl_method_t *oldmethod = oldentry->func.method;
@@ -1568,8 +1568,8 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "  ** incremental compilation may be fatally broken for this module **\n\n");
+    if (jl_generating_output())
+        jl_error("Method overwriting is not permitted during Module precompile.");
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
@@ -1860,6 +1860,8 @@ static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_RO
 
 static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world)
 {
+    if (jl_options.incremental && jl_generating_output())
+        jl_error("Method deletion is not possible during Module precompile.");
     jl_method_t *method = methodentry->func.method;
     assert(!method->is_for_opaque_closure);
     method->deleted_world = methodentry->max_world = max_world;
@@ -1911,9 +1913,6 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
 
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
-    if (jl_options.incremental && jl_generating_output())
-        jl_printf(JL_STDERR, "WARNING: method deletion during Module precompile may lead to undefined behavior"
-                             "\n  ** incremental compilation may be fatally broken for this module **\n\n");
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
@@ -2392,7 +2391,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 if (jl_atomic_cmpswap_acqrel(&codeinst->specptr.fptr, &prev_fptr, fptr)) {
                     jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & 0b1);
                     jl_atomic_store_release(&codeinst->invoke, invoke);
-                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags);
+                    // unspec is probably not specsig, but might be using specptr
+                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
                 } else {
                     // someone else already compiled it
                     while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
@@ -2565,7 +2565,8 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
     return -1;
 }
 
-JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_tupletype_t *ti, jl_svec_t *env, jl_method_t *m)
+JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_tupletype_t *ti, jl_svec_t *env, jl_method_t *m,
+                                                        int return_if_compileable)
 {
     jl_tupletype_t *tt = NULL;
     jl_svec_t *newparams = NULL;
@@ -2589,7 +2590,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     if (!is_compileable)
         is_compileable = jl_isa_compileable_sig(tt, env, m);
     JL_GC_POP();
-    return is_compileable ? (jl_value_t*)tt : jl_nothing;
+    return (!return_if_compileable || is_compileable) ? (jl_value_t*)tt : jl_nothing;
 }
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT)
@@ -2600,7 +2601,7 @@ jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_
     jl_methtable_t *mt = jl_method_get_table(def);
     if ((jl_value_t*)mt == jl_nothing)
         return mi;
-    jl_value_t *compilationsig = jl_normalize_to_compilable_sig(mt, (jl_datatype_t*)mi->specTypes, mi->sparam_vals, def);
+    jl_value_t *compilationsig = jl_normalize_to_compilable_sig(mt, (jl_datatype_t*)mi->specTypes, mi->sparam_vals, def, 1);
     if (compilationsig == jl_nothing || jl_egal(compilationsig, mi->specTypes))
         return mi;
     jl_svec_t *env = NULL;
@@ -2633,7 +2634,7 @@ jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t wor
                 JL_UNLOCK(&mt->writelock);
             }
             else {
-                jl_value_t *tt = jl_normalize_to_compilable_sig(mt, ti, env, m);
+                jl_value_t *tt = jl_normalize_to_compilable_sig(mt, ti, env, m, 1);
                 if (tt != jl_nothing) {
                     JL_GC_PUSH2(&tt, &env);
                     if (!jl_egal(tt, (jl_value_t*)ti)) {
@@ -3369,7 +3370,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             continue; // already part of this cycle
         jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
         jl_method_t *m2 = matc2->method;
-        int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+        int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
         // TODO: we could change this to jl_has_empty_intersection(ti, (jl_value_t*)matc2->spec_types);
         // since we only care about sorting of the intersections the user asked us about
         if (!subt2 && jl_has_empty_intersection(m2->sig, m->sig))
@@ -3424,7 +3425,9 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
             }
             if ((size_t)visited->items[idx] == 1) {
-                assert(cycle == depth);
+                // n.b. cycle might be < depth, if we had a cycle with a child
+                // idx, but since we are on the top of the stack, nobody
+                // observed that and so we are content to ignore this
                 size_t childidx = (size_t)arraylist_pop(stack);
                 assert(childidx == idx); (void)childidx;
                 assert(!subt || *found_minmax == 2);
@@ -3512,7 +3515,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                     size_t idx2 = (size_t)stack->items[j];
                     jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
                     jl_method_t *m2 = matc2->method;
-                    int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+                    int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
                     // if their intersection contributes to the ambiguity cycle
                     // and the contribution of m is fully ambiguous with the portion of the cycle from m2
                     if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
@@ -3575,9 +3578,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                               int intersections, size_t world, int cache_result,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
-    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     if (world > jl_atomic_load_acquire(&jl_world_counter))
         return jl_nothing; // the future is not enumerable
+    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     int has_ambiguity = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
     assert(jl_is_datatype(unw));

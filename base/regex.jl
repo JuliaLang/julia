@@ -99,8 +99,8 @@ listed after the ending quote, to change its behaviour:
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
   opposed to the whole string.
 - `s` allows the `.` modifier to match newlines.
-- `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
-  is treated as starting a comment.
+- `x` enables "free-spacing mode": whitespace between regex tokens is ignored except when escaped with `\\`,
+   and `#` in the regex is treated as starting a comment (which is ignored to the line ending).
 - `a` enables ASCII mode (disables `UTF` and `UCP` modes). By default `\\B`, `\\b`, `\\D`,
   `\\d`, `\\S`, `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With
   this option, these sequences only match ASCII characters. This includes `\\u` also, which
@@ -167,7 +167,7 @@ abstract type AbstractMatch end
 """
     RegexMatch <: AbstractMatch
 
-A type representing a single match to a `Regex` found in a string.
+A type representing a single match to a [`Regex`](@ref) found in a string.
 Typically created from the [`match`](@ref) function.
 
 The `match` field stores the substring of the entire matched string.
@@ -431,7 +431,8 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
 
 # TODO: return only start index and update deprecation
-function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, match_data::Ptr{Cvoid})
+# duck-type str so that external UTF-8 string packages like StringViews can hook in
+function _findnext_re(re::Regex, str, idx::Integer, match_data::Ptr{Cvoid})
     if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end

@@ -5,7 +5,16 @@ include $(JULIAHOME)/Make.inc
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
+# set some influential environment variables
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_LOAD_PATH := @stdlib
+unexport JULIA_PROJECT :=
+unexport JULIA_BINDIR :=
+
+default: release
+release: all-release
+debug: all-debug
+all: release debug
 
 $(JULIA_DEPOT_PATH):
 	mkdir -p $@
@@ -28,11 +37,13 @@ $1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -
     $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
 $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
 .SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image

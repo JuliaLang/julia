@@ -148,8 +148,9 @@ function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
             ndata = tpdum.data[idx+1]
             ndata == 0 && break
             tpdum.data[idx] = ndata
+            idx += 1
         end
-        tpdum.data[idx + 1] = 0
+        tpdum.data[idx] = 0
     end
 end
 kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
@@ -228,6 +229,7 @@ mutable struct InferenceState
 
     #= results =#
     result::InferenceResult # remember where to put the result
+    unreachable::BitSet # statements that were found to be statically unreachable
     valid_worlds::WorldRange
     bestguess #::Type
     ipo_effects::Effects
@@ -277,6 +279,7 @@ mutable struct InferenceState
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
 
+        unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
@@ -305,7 +308,7 @@ mutable struct InferenceState
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
-            result, valid_worlds, bestguess, ipo_effects,
+            result, unreachable, valid_worlds, bestguess, ipo_effects,
             restrict_abstract_call_sites, cached, insert_coverage,
             interp)
     end
@@ -767,9 +770,10 @@ end
 iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
 function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
     # iterate through the cycle before walking to the parent
-    if cyclei < length(callers_in_cycle(sv))
+    callers = callers_in_cycle(sv)
+    if callers !== () && cyclei < length(callers)
         cyclei += 1
-        parent = callers_in_cycle(sv)[cyclei]
+        parent = callers[cyclei]
     else
         cyclei = 0
         parent = frame_parent(sv)

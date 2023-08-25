@@ -268,6 +268,7 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_terminates_locally  : 1;
         uint8_t ipo_notaskstate         : 1;
         uint8_t ipo_inaccessiblememonly : 1;
+        uint8_t ipo_noub                : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -302,6 +303,7 @@ typedef struct _jl_code_info_t {
     uint8_t inferred;
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
+    uint8_t nospecializeinfer;
     // uint8 settings
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
@@ -359,6 +361,7 @@ typedef struct _jl_method_t {
     // various boolean properties
     uint8_t isva;
     uint8_t is_for_opaque_closure;
+    uint8_t nospecializeinfer;
     // uint8 settings
     uint8_t constprop;      // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
     uint8_t max_varargs;    // 0xFF = use heuristic; otherwise, max # of args to expand
@@ -880,6 +883,8 @@ extern JL_DLLIMPORT jl_value_t *jl_true JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_nothing JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_kwcall_func JL_GLOBALLY_ROOTED;
+
+extern JL_DLLIMPORT jl_value_t    *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
 // gc -------------------------------------------------------------------------
 
@@ -1698,6 +1703,7 @@ extern JL_DLLIMPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_libdl_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
@@ -1764,6 +1770,8 @@ JL_DLLIMPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
 extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT _Atomic(int) jl_n_threads;
 extern JL_DLLIMPORT int jl_n_gcthreads;
+extern int jl_n_markthreads;
+extern int jl_n_sweepthreads;
 extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
@@ -1786,6 +1794,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
+JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var);
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,
                                               jl_value_t *t JL_MAYBE_UNROOTED);
@@ -1980,6 +1989,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 // tasks and exceptions -------------------------------------------------------
 
 typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
 
 // info describing an exception handler
@@ -2289,6 +2299,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES 1
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO 0
 
+#define JL_OPTIONS_USE_COMPILED_MODULES_EXISTING 2
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
@@ -2341,6 +2352,7 @@ typedef struct {
                             // limited, standalone
 
     int safepoint_on_entry; // Emit a safepoint on entry to each function
+    int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;

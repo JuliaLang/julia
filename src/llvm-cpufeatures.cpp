@@ -110,7 +110,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
             I->eraseFromParent();
         }
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyModule(M, &errs()));
+        assert(!verifyLLVMIR(M));
 #endif
         return true;
     } else {
@@ -118,7 +118,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
     }
 }
 
-PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (lowerCPUFeatures(M)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

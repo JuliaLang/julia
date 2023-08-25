@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
+    IteratorSize, HasShape, IsInfinite, tail
 
 import Base:
     sort,
@@ -43,6 +44,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -63,8 +65,8 @@ end
 """
     issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](@ref).
+Test whether a collection is in sorted order. The keywords modify what
+order is considered sorted, as described in the [`sort!`](@ref) documentation.
 
 # Examples
 ```jldoctest
@@ -78,6 +80,9 @@ julia> issorted([(1, "b"), (2, "a")], by = x -> x[2])
 false
 
 julia> issorted([(1, "b"), (2, "a")], by = x -> x[2], rev=true)
+true
+
+julia> issorted([1, 2, -2, 3], by=abs)
 true
 ```
 """
@@ -94,13 +99,16 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev=false)
 
-Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
-`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+Partially sort the vector `v` in place so that the value at index `k` (or
+range of adjacent values if `k` is a range) occurs
 at the position where it would appear if the array were fully sorted. If `k` is a single
 index, that value is returned; if `k` is a range, an array of values at those indices is
 returned. Note that `partialsort!` may not fully sort the input array.
+
+For the keyword arguments, see the documentation of [`sort!`](@ref).
+
 
 # Examples
 ```jldoctest
@@ -148,9 +156,9 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
-    partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev=false)
 
-Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
+Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
 """
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
@@ -159,7 +167,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
-# index of the first value of vector a that is greater than or equal to x;
+# index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
@@ -178,7 +186,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
     return lo
 end
 
-# index of the last value of vector a that is less than or equal to x;
+# index of the last value of vector a that is less than or equivalent to x;
 # returns firstindex(v)-1 if x is less than all values of v.
 function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
@@ -195,7 +203,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     return lo
 end
 
-# returns the range of indices of v equal to x
+# returns the range of indices of v equivalent to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
 function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
@@ -288,16 +296,19 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
 end
 
 """
-    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsorted(v, x; by=identity, lt=isless, rev=false)
 
-Return the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Return an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
+Return the range of indices in `v` where values are equivalent to `x`, or an
+empty range located at the insertion point if `v` does not contain values
+equivalent to `x`. The vector `v` must be sorted according to the order defined
+by the keywords. Refer to [`sort!`](@ref) for the meaning of the keywords and
+the definition of equivalence. Note that the `by` function is applied to the
+searched value `x` as well as the values in `v`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The range is generally found using binary search, but there are optimized
+implementations for some inputs.
 
-See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
+See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -322,15 +333,19 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """ searchsorted
 
 """
-    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
-`a` is assumed to be sorted.
+Return the index of the first value in `v` greater than or equivalent to `x`.
+If `x` is greater than all values in `v`, return `lastindex(v) + 1`.
 
-`insert!`ing `x` at this index will maintain sorted order.
+The vector `v` must be sorted according to the order defined by the keywords.
+`insert!`ing `x` at the returned index will maintain the sorted order. Refer to
+[`sort!`](@ref) for the meaning of the keywords and the definition of
+"greater than" and equivalence. Note that the `by` function is applied to the
+searched value `x` as well as the values in `v`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The index is generally found using binary search, but there are optimized
+implementations for some inputs.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -351,19 +366,24 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
 
-julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
 3
 ```
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedlast(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
-assumed to be sorted.
+Return the index of the last value in `v` less than or equivalent to `x`.
+If `x` is less than all values in `v` the function returns `firstindex(v) - 1`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The vector `v` must be sorted according to the order defined by the keywords.
+Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
+"less than" and equivalence. Note that the `by` function is applied to the
+searched value `x` as well as the values in `v`.
+
+The index is generally found using binary search, but there are optimized
+implementations for some inputs
 
 # Examples
 ```jldoctest
@@ -388,12 +408,16 @@ julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) #
 """ searchsortedlast
 
 """
-    insorted(x, a; by=<transform>, lt=<comparison>, rev=false) -> Bool
+    insorted(x, v; by=identity, lt=isless, rev=false) -> Bool
 
-Determine whether an item `x` is in the sorted collection `a`, in the sense that
-it is [`==`](@ref) to one of the values of the collection according to the order
-specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords.
+Determine whether a vector `v` contains any value equivalent to `x`.
+The vector `v` must be sorted according to the order defined by the keywords.
+Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
+equivalence. Note that the `by` function is applied to the searched value `x`
+as well as the values in `v`.
+
+The check is generally done using binary search, but there are optimized
+implementations for some inputs.
 
 See also [`in`](@ref).
 
@@ -413,6 +437,9 @@ false
 
 julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
 false
+
+julia> insorted(2=>"TWO", [1=>"one", 2=>"two", 4=>"four"], by=first) # compare the keys of the pairs
+true
 ```
 
 !!! compat "Julia 1.6"
@@ -435,7 +462,7 @@ for (sym, exp, type) in [
         (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, true, Bool)]
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
@@ -498,8 +525,6 @@ internal or recursive calls.
 """
 function _sort! end
 
-abstract type Algorithm end
-
 
 """
     MissingOptimization(next) <: Algorithm
@@ -523,12 +548,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
     v.data[i] = x
     v
 end
@@ -589,8 +614,9 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for i in eachindex(o.data) # equal to copy(v)
-            x = o.data[i]
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
             if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
@@ -740,8 +766,8 @@ Insertion sort traverses the collection one element at a time, inserting
 each element into its correct, sorted position in the output vector.
 
 Characteristics:
-* *stable*: preserves the ordering of elements which compare equal
-(e.g. "a" and "A" in a sort of letters which ignores case).
+* *stable*: preserves the ordering of elements that compare equal
+(e.g. "a" and "A" in a sort of letters that ignores case).
 * *in-place* in memory.
 * *quadratic performance* in the number of elements to be sorted:
 it is well-suited to small collections but should not be used for large ones.
@@ -980,8 +1006,8 @@ is treated as the first or last index of the input, respectively.
 `lo` and `hi` may be specified together as an `AbstractUnitRange`.
 
 Characteristics:
-  * *stable*: preserves the ordering of elements which compare equal
-    (e.g. "a" and "A" in a sort of letters which ignores case).
+  * *stable*: preserves the ordering of elements that compare equal
+    (e.g. "a" and "A" in a sort of letters that ignores case).
   * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`QuickSort`](@ref).
   * *linear runtime* if `length(lo:hi)` is constant
@@ -1329,16 +1355,54 @@ defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default. You can select a
-specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
-available algorithms). The `by` keyword lets you provide a function that will be applied to
-each element before comparison; the `lt` keyword allows providing a custom "less than"
-function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
-Elements that compare equal are not reversed. These options are independent and can
-be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
-function is applied to the result of the `by` function; `rev=true` reverses whatever
-ordering specified via the `by` and `lt` keywords.
+Sort the vector `v` in place. A stable algorithm is used by default: the
+ordering of elements that compare equal is preserved. A specific algorithm can
+be selected via the `alg` keyword (see [Sorting Algorithms](@ref) for available
+algorithms).
+
+Elements are first transformed with the function `by` and then compared
+according to either the function `lt` or the ordering `order`. Finally, the
+resulting order is reversed if `rev=true` (this preserves forward stability:
+elements that compare equal are not reversed). The current implemention applies
+the `by` transformation before each comparison rather than once per element.
+
+Passing an `lt` other than `isless` along with an `order` other than
+[`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,
+otherwise all options are independent and can be used together in all possible
+combinations. Note that `order` can also include a "by" transformation, in
+which case it is applied after that defined with the `by` keyword. For more
+information on `order` values see the documentation on [Alternate
+Orderings](@ref).
+
+Relations between two elements are defined as follows (with "less" and
+"greater" exchanged when `rev=true`):
+
+* `x` is less than `y` if `lt(by(x), by(y))` (or `Base.Order.lt(order, by(x), by(y))`) yields true.
+* `x` is greater than `y` if `y` is less than `x`.
+* `x` and `y` are equivalent if neither is less than the other ("incomparable"
+  is sometimes used as a synonym for "equivalent").
+
+The result of `sort!` is sorted in the sense that every element is greater than
+or equivalent to the previous one.
+
+The `lt` function must define a strict weak order, that is, it must be
+
+* irreflexive: `lt(x, x)` always yields `false`,
+* asymmetric: if `lt(x, y)` yields `true` then `lt(y, x)` yields `false`,
+* transitive: `lt(x, y) && lt(y, z)` implies `lt(x, z)`,
+* transitive in equivalence: `!lt(x, y) && !lt(y, x)` and `!lt(y, z) && !lt(z,
+  y)` together imply `!lt(x, z) && !lt(z, x)`. In words: if `x` and `y` are
+  equivalent and `y` and `z` are equivalent then `x` and `z` must be
+  equivalent.
+
+For example `<` is a valid `lt` function for `Int` values but `≤` is not: it
+violates irreflexivity. For `Float64` values even `<` is invalid as it violates
+the fourth condition: `1.0` and `NaN` are equivalent and so are `NaN` and `2.0`
+but `1.0` and `2.0` are not equivalent.
+
+See also [`sort`](@ref), [`sortperm`](@ref), [`sortslices`](@ref),
+[`partialsort!`](@ref), [`partialsortperm`](@ref), [`issorted`](@ref),
+[`searchsorted`](@ref), [`insorted`](@ref), [`Base.Order.ord`](@ref).
 
 # Examples
 ```jldoctest
@@ -1365,6 +1429,29 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (3, "a")
  (2, "b")
  (1, "c")
+
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) # same as sort(0:3, by=abs(x->x-2))
+4-element Vector{Int64}:
+ 2
+ 1
+ 3
+ 0
+
+julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
+5-element Vector{Float64}:
+   1.0
+   2.0
+   3.0
+ NaN
+ NaN
+
+julia> sort([2, NaN, 1, NaN, 3], lt=<) # wrong sort due to invalid lt. This behavior is undefined.
+5-element Vector{Float64}:
+   2.0
+ NaN
+   1.0
+ NaN
+   3.0
 ```
 """
 function sort!(v::AbstractVector{T};
@@ -1383,6 +1470,11 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+Uses `Base.copymutable` to support immutable collections and iterables.
+
+!!! compat "Julia 1.10"
+    `sort` of arbitrary iterables requires at least Julia 1.10.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1400,20 +1492,52 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+function sort(v; kws...)
+    size = IteratorSize(v)
+    size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
+    size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
+    sort!(copymutable(v); kws...)
+end
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
+sort(::AbstractString; kws...) =
+    throw(ArgumentError("sort(::AbstractString) is not supported"))
+sort(::Tuple; kws...) =
+    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
+
+function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
+              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
+    o = ord(lt,by,rev,order)
+    if N > 9
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        tuple((v[i] for i in 1:N)...)
+    else
+        _sort(x, o)
+    end
+end
+_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _sort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_sort(a, o), _sort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
+
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=ientity, lt=isless, rev=false)
 
 Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
 sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
 `k` is an integer, a single index is returned. The order is specified using the same
-keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
-appear in ascending order.
+keywords as `sort!`. The permutation is stable: the indices of equal elements
+will appear in ascending order.
 
-Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+This function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
 
 # Examples
 ```jldoctest
@@ -1439,7 +1563,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
 
 """
-    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
 `v`, which is used to store (a permutation of) the indices of `v`.
@@ -1505,7 +1629,7 @@ end
 Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
 If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
-if the sorting algorithm is unstable, meaning that indices of equal elements appear in
+if the sorting algorithm is unstable: the indices of equal elements will appear in
 ascending order.
 
 See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
@@ -1739,7 +1863,8 @@ end
     sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
-See [`sort!`](@ref) for a description of possible keyword arguments.
+See the one-dimensional version of [`sort!`](@ref) for a description of
+possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
 
@@ -1771,7 +1896,7 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
+               scratch::Union{Vector{T}, Nothing}=Vector{T}(undef, size(A, dims))) where T
     __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
@@ -1888,18 +2013,18 @@ struct MergeSortAlg     <: Algorithm end
 """
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Indicate that a sorting function should use the partial quick sort algorithm.
+`PartialQuickSort(k)` is like `QuickSort`, but is only required to find and
+sort the elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
+  * *not stable*: does not preserve the ordering of elements that
+    compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 
-  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 
 ```jldoctest
 julia> x = rand(100);
@@ -1931,8 +2056,8 @@ Indicate that a sorting function should use the quick sort
 algorithm, which is *not* stable.
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
+  * *not stable*: does not preserve the ordering of elements that
+    compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
@@ -1950,8 +2075,8 @@ subcollection at each step, until the entire
 collection has been recombined in sorted form.
 
 Characteristics:
-  * *stable*: preserves the ordering of elements which compare
-    equal (e.g. "a" and "A" in a sort of letters which ignores
+  * *stable*: preserves the ordering of elements that compare
+    equal (e.g. "a" and "A" in a sort of letters that ignores
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
@@ -2111,25 +2236,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
         sort!(v, lo, hi, a, o)
         scratch
-    else
-        # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
     end
 end
 
