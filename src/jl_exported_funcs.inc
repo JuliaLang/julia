@@ -610,5 +610,9 @@
 
 #define JL_INSTRUMENTATION_EXPORTED_FUNCS(YY) \
     YY(jl_timing_available) \
+    YY(jl_timing_counter_inc) \
+    YY(jl_timing_counter_dec) \
+    YY(jl_timing_init) \
+    YY(jl_timing_print) \
 
 // end of file

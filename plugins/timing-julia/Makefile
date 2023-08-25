@@ -10,8 +10,7 @@ include $(JULIAHOME)/deps/llvm-ver.make
 HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_fasttls.h support/platform.h support/dirpath.h)
 
 PLUGIN_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
-PLUGIN_LDFLAGS = $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir)
-
+PLUGIN_LDFLAGS = $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) -ljulia-internal -ljulia
 LIB_OBJS := $(BUILDDIR)/timing-julia.o
 LIB_DOBJS := $(BUILDDIR)/timing-julia.dbg.obj
 

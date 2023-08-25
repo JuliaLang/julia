@@ -735,7 +735,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
     // configuration features
-    jl_init_timing();
+    if(jl_timing_available())
+        jl_timing_init();
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
 

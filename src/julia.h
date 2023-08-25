@@ -2365,6 +2365,10 @@ extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 // Timing libjulia definitions
 JL_DLLEXPORT int jl_timing_available(void);
+JL_DLLEXPORT void jl_timing_counter_inc(int counter, uint64_t val);
+JL_DLLEXPORT void jl_timing_counter_dec(int counter, uint64_t val);
+JL_DLLEXPORT void jl_timing_init(void);
+JL_DLLEXPORT void jl_timing_print(void);
 
 #ifdef __cplusplus
 }

@@ -22,7 +22,6 @@ extern "C" {
 #error Timings are not supported on your compiler
 #endif
 
-static uint64_t t0;
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_SUBSYSTEM_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 
@@ -39,70 +38,19 @@ const char *jl_timing_subsystems[(int)JL_TIMING_SUBSYSTEM_LAST] =
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
-#ifdef USE_TIMING_COUNTS
-static arraylist_t jl_timing_counts_events;
-static jl_mutex_t jl_timing_counts_events_lock;
-#endif //USE_TIMING_COUNTS
-
 #ifdef USE_ITTAPI
 static arraylist_t jl_timing_ittapi_events;
 static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
 
 #ifdef USE_TIMING_COUNTS
-static int cmp_counts_events(const void *a, const void *b) {
-    jl_timing_counts_event_t *event_a = *(jl_timing_counts_event_t **)a;
-    jl_timing_counts_event_t *event_b = *(jl_timing_counts_event_t **)b;
-    return strcmp(event_a->name, event_b->name);
-}
+
 #endif
 
 void jl_print_timings(void)
 {
 #ifdef USE_TIMING_COUNTS
-    qsort(jl_timing_counts_events.items, jl_timing_counts_events.len,
-          sizeof(jl_timing_counts_event_t *), cmp_counts_events);
-
-    JL_LOCK_NOGC(&jl_timing_counts_events_lock);
-    uint64_t total_time = cycleclock() - t0;
-    uint64_t root_time = total_time;
-    jl_timing_counts_event_t *root_event;
-    for (int i = 0; i < jl_timing_counts_events.len; i++) {
-        jl_timing_counts_event_t *other_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
-        if (strcmp(other_event->name, "ROOT") == 0) {
-            root_event = other_event;
-        } else {
-            root_time -= jl_atomic_load_relaxed(&other_event->self);
-        }
-    }
-    jl_atomic_store_relaxed(&root_event->self, root_time);
-    jl_atomic_store_relaxed(&root_event->total, total_time);
-
-    fprintf(stderr, "\nJULIA TIMINGS\n");
-    fprintf(stderr, "%-25s, %-30s, %-30s\n", "Event", "Self Cycles (% of Total)", "Total Cycles (% of Total)");
-    for (int i = 0; i < jl_timing_counts_events.len; i++) {
-        jl_timing_counts_event_t *event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
-        uint64_t self = jl_atomic_load_relaxed(&event->self);
-        uint64_t total = jl_atomic_load_relaxed(&event->total);
-        if (total != 0)
-            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n",
-                    event->name,
-                    self, 100 * (((double)self) / total_time),
-                    total, 100 * (((double)total) / total_time));
-    }
-    JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
-
-    fprintf(stderr, "\nJULIA COUNTERS\n");
-    fprintf(stderr, "%-25s, %-20s\n", "Counter", "Value");
-#define X(name) do { \
-        int64_t val = (int64_t) jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
-        if (val != 0) \
-            fprintf(stderr, "%-25s, %20" PRIi64 "\n", #name, val); \
-    } while (0);
-
-    JL_TIMING_COUNTERS
-#undef X
-#endif
+    
 }
 
 static int indirect_strcmp(const void *a, const void *b) {
@@ -111,23 +59,7 @@ static int indirect_strcmp(const void *a, const void *b) {
 
 void jl_init_timing(void)
 {
-    t0 = cycleclock();
 
-    _Static_assert(JL_TIMING_SUBSYSTEM_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing subsystems!");
-
-#ifdef USE_TIMING_COUNTS
-    JL_MUTEX_INIT(&jl_timing_counts_events_lock, "jl_timing_counts_events_lock");
-
-    // Create events list for counts backend
-    arraylist_new(&jl_timing_counts_events, 1);
-
-    jl_timing_counts_event_t *root_event = (jl_timing_counts_event_t *)malloc(sizeof(jl_timing_counts_event_t));
-    arraylist_push(&jl_timing_counts_events, (void *)root_event);
-
-    root_event->name = "ROOT";
-    jl_atomic_store_relaxed(&root_event->self, 0);
-    jl_atomic_store_relaxed(&root_event->total, 0);
-#endif
 
 #ifdef USE_ITTAPI
     // Create events list for ITTAPI backend
@@ -683,6 +615,11 @@ JL_DLLEXPORT uint32_t jl_timing_print_limit = 0;
 JL_DLLEXPORT int jl_timing_available_fallback(void) {
     return 0;
 }
+
+JL_DLLEXPORT void jl_timing_counter_inc_fallback(int, uint64_t) UNAVAILABLE
+JL_DLLEXPORT void jl_timing_counter_dec_fallback(int, uint64_t) UNAVAILABLE
+JL_DLLEXPORT void jl_timing_init_fallback(void) UNAVAILABLE
+JL_DLLEXPORT void jl_timing_print_fallback(void) UNAVAILABLE
 
 #ifdef __cplusplus
 }
