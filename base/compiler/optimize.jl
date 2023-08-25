@@ -130,12 +130,15 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::CFG
+    unreachable::BitSet
+    bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
-                             sv.sptypes, sv.slottypes, inlining, sv.cfg, sv.insert_coverage)
+                             sv.sptypes, sv.slottypes, inlining, sv.cfg,
+                             sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -159,7 +162,15 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(interp)
     cfg = compute_basic_blocks(src.code)
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, false)
+    unreachable = BitSet()
+    bb_vartables = Union{VarTable,Nothing}[]
+    for block = 1:length(cfg.blocks)
+        push!(bb_vartables, VarState[
+            VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            for slot = 1:nslots
+        ])
+    end
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     world = get_world_counter(interp)
@@ -167,7 +178,6 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
 end
-
 
 include("compiler/ssair/driver.jl")
 
@@ -328,7 +338,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             return (false, false, false)
         end
     end
-    isa(stmt, UnoptSlot) && error("unexpected IR elements")
+    isa(stmt, SlotNumber) && error("unexpected IR elements")
     return (true, true, true)
 end
 
@@ -363,8 +373,6 @@ function argextype(
         @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
-    elseif isa(x, TypedSlot)
-        return x.typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x, src)
     elseif isa(x, Argument)
@@ -523,12 +531,39 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
     end
 
+    # Update control-flow to reflect any unreachable branches.
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    code = copy_exprargs(ci.code)
+    for i = 1:length(code)
+        expr = code[i]
+        if !(i in sv.unreachable) && isa(expr, GotoIfNot)
+            # Replace this live GotoIfNot with:
+            # - no-op if :nothrow and the branch target is unreachable
+            # - cond if :nothrow and both targets are unreachable
+            # - typeassert if must-throw
+            if widenconst(argextype(expr.cond, ci, sv.sptypes)) === Bool
+                block = block_for_inst(sv.cfg, i)
+                if i + 1 in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    expr = GotoNode(expr.dest)
+                elseif expr.dest in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = nothing
+                end
+            elseif ssavaluetypes[i] === Bottom
+                block = block_for_inst(sv.cfg, i)
+                cfg_delete_edge!(sv.cfg, block, block + 1)
+                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+            end
+            code[i] = expr
+        end
+    end
+
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
-    code = copy_exprargs(ci.code)
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
     meta = Expr[]
     idx = 1
@@ -562,8 +597,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             idx += 1
             prevloc = codeloc
         end
-        if ssavaluetypes[idx] === Union{} && !(code[idx] isa Core.Const)
-            # Type inference should have converted any must-throw terminators to an equivalent w/o control-flow edges
+        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable)
+            # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
             @assert !isterminator(code[idx])
 
             block = block_for_inst(sv.cfg, oldidx)
@@ -589,8 +624,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
 
                     # Verify that type-inference did its job
                     if JLOptions().debug_level == 2
-                        for i = (idx + 1):(block_end - 1)
-                            @assert (code[i] isa Core.Const) || is_meta_expr(code[i])
+                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
+                            @assert i in sv.unreachable
                         end
                     end
 
@@ -659,7 +694,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, nargs)
@@ -888,10 +923,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
 end
 
 function renumber_cfg_stmts!(cfg::CFG, blockchangemap::Vector{Int})
-    any_change = cumsum_ssamap!(blockchangemap)
-    any_change || return
-
-    last_end = 0
+    cumsum_ssamap!(blockchangemap) || return
     for i = 1:length(cfg.blocks)
         old_range = cfg.blocks[i].stmts
         new_range = StmtRange(first(old_range) + ((i > 1) ? blockchangemap[i - 1] : 0),
