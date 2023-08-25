@@ -640,6 +640,7 @@ void jl_print_native_codeloc(int sig, uintptr_t ip) JL_NOTSAFEPOINT
         if (sig != -1) {
             jl_safe_printf("signal (%d) ", sig);
         }
+        jl_safe_printf("thread (%d) ", jl_threadid());
         jl_frame_t frame = frames[i];
         if (!frame.func_name) {
             jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
