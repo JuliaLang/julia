@@ -1035,6 +1035,20 @@ some judgment may be required. However, for "vectorized" (element-wise) function
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
 (see the [dot syntax for vectorizing functions](@ref man-vectorized)).
 
+## [Use `MutableArithmetics` for more control over allocation for mutable arithmetic types](@id man-perftips-mutablearithmetics)
+
+Some [`Number`](@ref) subtypes, such as [`BigInt`](@ref) or [`BigFloat`](@ref), may
+be implemented as [`mutable struct`](@ref) types, or they may have mutable
+components. The arithmetic interfaces in Julia `Base` usually opt for convenience
+over efficiency in such cases, so using them in a naive manner may result in
+suboptimal performance. The abstractions of the
+[`MutableArithmetics`](https://juliahub.com/ui/Packages/General/MutableArithmetics)
+package, on the other hand, make it possible to exploit the mutability of such types
+for writing fast code that allocates only as much as necessary. `MutableArithmetics`
+also makes it possible to copy values of mutable arithmetic types explicitly when
+necessary. `MutableArithmetics` is a user package and is not affiliated with the
+Julia project.
+
 ## More dots: Fuse vectorized operations
 
 Julia has a special [dot syntax](@ref man-vectorized) that converts
