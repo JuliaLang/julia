@@ -1970,7 +1970,7 @@ function foo25261()
         next = f25261(Core.getfield(next, 2))
     end
 end
-let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
+let opt25261 = code_typed(foo25261, Tuple{}, optimize=true)[1].first.code
     i = 1
     # Skip to after the branch
     while !isa(opt25261[i], GotoIfNot)
@@ -1978,7 +1978,7 @@ let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
     end
     foundslot = false
     for expr25261 in opt25261[i:end]
-        if expr25261 isa Core.Compiler.TypedSlot && expr25261.typ === Tuple{Int, Int}
+        if expr25261 isa Core.PiNode && expr25261.typ === Tuple{Int, Int}
             # This should be the assignment to the SSAValue into the getfield
             # call - make sure it's a TypedSlot
             foundslot = true
