@@ -1503,7 +1503,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     try
         iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
-        _, _, depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io)
+        _, _, depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
@@ -2594,42 +2594,40 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-# replace leading dirname of `path` with a `@depot` tag if the file is located inside of a DEPOT_PATH
-function replace_depot_path(path::AbstractString, cachefile::AbstractString)
+function replace_depot_path(path::AbstractString)
     for depot in DEPOT_PATH
-        if startswith(path, depot) && startswith(cachefile, depot)
-            depot_w_sep = joinpath(depot, "") # append the path separator
-            alias = joinpath("@depot", path[1+length(depot_w_sep):end])
-            return alias
+        if startswith(path, depot)
+            path = replace(path, depot => "@depot")
+            break
         end
     end
-    # TODO Emit debug message when cachefile is not in a depot; can this even happen?
-    # TODO Emit debug message when path is not in the same depot as cachefile the cache file.
-    # TODO To be consistent with resolve_depot_paths!, this function should only
-    # insert a @depot alias when all files are located in one depot
     return path
 end
 
 # Attempt to resolve all leading `@depot` tags from the included files if they
-# can all be located in one and the same depot (first depot in DEPOT_PATH with match wins).
+# can all be located in one and the same depot.
 # Returns true if tags could be resolved.
 function resolve_depot_paths!(includes::Vector{CacheHeaderIncludes})
+    if any(includes) do inc
+            !startswith(inc.filename, "@depot")
+        end
+        return
+    end
     for depot in DEPOT_PATH
         all_in_depot = all(includes) do inc
-            isfile(replace(inc.filename, "@depot" => depot))
+            isfile(replace(inc.filename, r"^@depot" => depot))
         end
         if all_in_depot
             for inc in includes
-                inc.filename = replace(inc.filename, "@depot" => depot)
+                inc.filename = replace(inc.filename, r"^@depot" => depot)
             end
             return true
         end
     end
-    # error("Failed to resolve `$depotalias` to a valid path, because the cachefile `$cachefile` is not on located on any `DEPOT_PATH`")
     return false
 end
 
-function parse_cache_header(f::IO)
+function parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
@@ -2640,7 +2638,6 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    # write_dependency_list writes UInt64 here
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
@@ -2703,7 +2700,6 @@ function parse_cache_header(f::IO)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        # why not build_id = UInt128(read(f, UInt64), read(f, UInt64))
         build_id = UInt128(read(f, UInt64)) << 64
         build_id |= read(f, UInt64)
         push!(required_modules, PkgId(uuid, sym) => build_id)
@@ -2711,8 +2707,10 @@ function parse_cache_header(f::IO)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
-    # TODO @debug for when we failed resolving @depot
-    resolve_depot_paths!(includes)
+    resolved = resolve_depot_paths!(includes)
+    if !isnothing(resolved) && !resolved
+        @debug "Failed to resolve @depot tags for includes listed in cache file $cachefile."
+    end
 
     return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
 end
@@ -2721,9 +2719,9 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        ret = parse_cache_header(io)
-        srcfiles_only || return ret
+        ret = parse_cache_header(io, cachefile)
         _, (includes, _), _, srctextpos, _... = ret
+        srcfiles_only || return ret
         srcfiles = srctext_files(io, srctextpos, includes)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
@@ -2736,21 +2734,21 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     end
 end
 
-preferences_hash(io::IO) = parse_cache_header(io)[6]
+preferences_hash(f::IO, cachefile::AbstractString) = parse_cache_header(f, cachefile)[6]
 function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
     try
         if iszero(isvalid_cache_header(io))
             throw(ArgumentError("Invalid header in cache file $cachefile."))
         end
-        return preferences_hash(io)
+        return preferences_hash(io, cachefile)
     finally
         close(io)
     end
 end
 
-function cache_dependencies(io::IO)
-    _, (includes, _), modules, _... = parse_cache_header(io)
+function cache_dependencies(f::IO, cachefile::AbstractString)
+    _, (includes, _), modules, _... = parse_cache_header(f, cachefile)
     return modules, map(chi -> chi.filename, includes)  # return just filename
 end
 
@@ -2758,31 +2756,34 @@ function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        return cache_dependencies(io)
+        return cache_dependencies(io, cachefile)
     finally
         close(io)
     end
 end
 
-function read_dependency_src(io::IO, filename::AbstractString)
-    _, (includes, _), _, srctextpos, _, _, _, _ = parse_cache_header(io)[4]
+function read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
+    _, (includes, _), _, srctextpos, _, _, _, _ = parse_cache_header(io, cachefile)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
-    return _read_dependency_src(io, includes, filename)
+    return _read_dependency_src(io, filename, includes)
 end
 
-function _read_dependency_src(io::IO, includes::Vector{CacheHeaderIncludes}, filename::AbstractString)
-    msg = ""
+function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector{CacheHeaderIncludes}=CacheHeaderIncludes[])
     while !eof(io)
         filenamelen = read(io, Int32)
         filenamelen == 0 && break
         depotfn = String(read(io, filenamelen))
         len = read(io, UInt64)
-        basefn = replace(depotfn, "@depot" => "")
-        idx = findfirst(includes) do inc
-            endswith(inc.filename, basefn)
+        fn = if !startswith(depotfn, "@depot")
+            depotfn
+        else
+            basefn = replace(depotfn, r"^@depot" => "")
+            idx = findfirst(includes) do inc
+                endswith(inc.filename, basefn)
+            end
+            isnothing(idx) ? depotfn : includes[idx].filename
         end
-        fn = isnothing(idx) ? depotfn : includes[idx].filename
         if fn == filename
             return String(read(io, len))
         end
@@ -2795,7 +2796,7 @@ function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        return read_dependency_src(io, filename)
+        return read_dependency_src(io, cachefile, filename)
     finally
         close(io)
     end
@@ -2810,11 +2811,15 @@ function srctext_files(f::IO, srctextpos::Int64, includes::Vector{CacheHeaderInc
         filenamelen == 0 && break
         depotfn = String(read(f, filenamelen))
         len = read(f, UInt64)
-        basefn = replace(depotfn, "@depot" => "")
-        idx = findfirst(includes) do inc
-            endswith(inc.filename, basefn)
+        fn = if !startswith(depotfn, "@depot")
+            depotfn
+        else
+            basefn = replace(depotfn, r"^@depot" => "")
+            idx = findfirst(includes) do inc
+                endswith(inc.filename, basefn)
+            end
+            isnothing(idx) ? depotfn : includes[idx].filename
         end
-        fn = isnothing(idx) ? depotfn : includes[idx].filename
         push!(files, fn)
         seek(f, position(f) + len)
     end
@@ -3158,7 +3163,7 @@ end
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end

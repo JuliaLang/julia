@@ -60,14 +60,13 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 }
 
                 jl_value_t **replace_depot_args;
-                JL_GC_PUSHARGS(replace_depot_args, 3);
+                JL_GC_PUSHARGS(replace_depot_args, 2);
                 replace_depot_args[0] = replace_depot_func;
                 replace_depot_args[1] = abspath;
-                replace_depot_args[2] = jl_cstr_to_string(jl_options.outputji);
                 jl_task_t *ct = jl_current_task;
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
+                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
                 ct->world_age = last_age;
                 JL_GC_POP();
 

@@ -115,7 +115,6 @@ function init_depot_path()
     nothing
 end
 
-
 ## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
