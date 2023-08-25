@@ -1687,8 +1687,7 @@ end
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if the modification time of `path` changes.
-TODO: Update docs because we now use file size and content hash
+to be recompiled if its file contents change.
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
@@ -2588,15 +2587,14 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
 end
 
 mutable struct CacheHeaderIncludes
-    id::PkgId
+    const id::PkgId
     filename::String
-    fsize::UInt64
-    hash::UInt32
-    modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
+    const fsize::UInt64
+    const hash::UInt32
+    const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-# replace leading dirname of `path` with `@depot` if `path` and `cachefile` are located
-# on the same depot path; otherwise just return `path`
+# replace leading dirname of `path` with a `@depot` tag if the file is located inside of a DEPOT_PATH
 function replace_depot_path(path::AbstractString, cachefile::AbstractString)
     for depot in DEPOT_PATH
         if startswith(path, depot) && startswith(cachefile, depot)
