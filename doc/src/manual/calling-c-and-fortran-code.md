@@ -1116,7 +1116,7 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-For tools to create C++ bindings, see e.g. the following packages [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl); [CxxInterface](https://github.com/eschnett/CxxInterface.jl) which supports not only C++, but also C, Fortran, and Rust as external languages, and [CxxCall](https://github.com/jw3126/CxxCall.jl) a wrapper for the former package.
+For tools to create C++ bindings, see: [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl), [CxxInterface](https://github.com/eschnett/CxxInterface.jl) which supports not only C++, but also C, Fortran, and Rust as external languages, and [CxxCall](https://github.com/jw3126/CxxCall.jl) a wrapper for the former package.
 
 
 [^1]: Non-library function calls in both C and Julia can be inlined and thus may have
