@@ -665,9 +665,6 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     ssavaluetypes = sv.ssavaluetypes
     nslots = length(src.slotflags)
 
-    # save `was_reached` information in `unreachable` for the optimizer
-    unreachable = BitSet()
-
     # widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     # and mark any unreachable statements by wrapping them in Const(...), to distinguish them from
     # must-throw statements which also have type Bottom
@@ -697,7 +694,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
         end
     end
 
-    return unreachable
+    return nothing
 end
 
 # at the end, all items in b's cycle

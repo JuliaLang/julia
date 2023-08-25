@@ -179,7 +179,6 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     return OptimizationState(linfo, src, interp)
 end
 
-
 include("compiler/ssair/driver.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
@@ -924,10 +923,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
 end
 
 function renumber_cfg_stmts!(cfg::CFG, blockchangemap::Vector{Int})
-    any_change = cumsum_ssamap!(blockchangemap)
-    any_change || return
-
-    last_end = 0
+    cumsum_ssamap!(blockchangemap) || return
     for i = 1:length(cfg.blocks)
         old_range = cfg.blocks[i].stmts
         new_range = StmtRange(first(old_range) + ((i > 1) ? blockchangemap[i - 1] : 0),
