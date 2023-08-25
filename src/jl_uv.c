@@ -270,7 +270,6 @@ JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = da
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern _Atomic(unsigned) _threadedregion;
 
 int jl_process_events_locked(void) {
     uv_loop_t *loop = jl_io_loop;

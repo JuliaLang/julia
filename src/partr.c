@@ -345,7 +345,6 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
-extern _Atomic(unsigned) _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty)
 {
@@ -366,7 +365,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == 0 && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+        if (sleep_check_after_threshold(&start_cycles) || (wait_empty)) {
             // acquire sleep-check lock
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]

@@ -784,31 +784,6 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
-
-JL_DLLEXPORT int jl_in_threaded_region(void)
-{
-    return jl_atomic_load_relaxed(&_threadedregion) != 0;
-}
-
-JL_DLLEXPORT void jl_enter_threaded_region(void)
-{
-    jl_atomic_fetch_add(&_threadedregion, 1);
-}
-
-JL_DLLEXPORT void jl_exit_threaded_region(void)
-{
-    if (jl_atomic_fetch_add(&_threadedregion, -1) == 1) {
-        // make sure no more callbacks will run while user code continues
-        // outside thread region and might touch an I/O object.
-        JL_UV_LOCK();
-        JL_UV_UNLOCK();
-        // make sure thread 0 is not using the sleep_lock
-        // so that it may enter the libuv event loop instead
-        jl_wakeup_thread(0);
-    }
-}
-
 // Profiling stubs
 
 void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
