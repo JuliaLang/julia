@@ -1424,9 +1424,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 #   eval(Meta.parse("Set{Int64}([2,3,1])")) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-using Core.Compiler: TypedSlot, UnoptSlot
-
-const ExprNode = Union{Expr, QuoteNode, UnoptSlot, LineNumberNode, SSAValue,
+const ExprNode = Union{Expr, QuoteNode, SlotNumber, LineNumberNode, SSAValue,
                        GotoNode, GotoIfNot, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
                        ReturnNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
@@ -1777,8 +1775,7 @@ function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     nothing
 end
 
-function show_unquoted(io::IO, ex::UnoptSlot, ::Int, ::Int)
-    typ = isa(ex, TypedSlot) ? ex.typ : Any
+function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
@@ -1786,9 +1783,6 @@ function show_unquoted(io::IO, ex::UnoptSlot, ::Int, ::Int)
         print(io, (slotnames::Vector{String})[slotid])
     else
         print(io, "_", slotid)
-    end
-    if typ !== Any && isa(ex, TypedSlot)
-        print(io, "::", typ)
     end
 end
 
@@ -2559,17 +2553,22 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     str = String(take!(unwrapcontext(io)[1]))
+    str = type_limited_string_from_context(out, str)
+    print(out, str)
+    nothing
+end
+
+function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
+        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
         end
         str = str_lim
     end
-    print(out, str)
-    nothing
+    return str
 end
 
 # limit nesting depth of `{ }` until string textwidth is less than `n`
@@ -2764,7 +2763,7 @@ module IRShow
     const Compiler = Core.Compiler
     using Core.IR
     import ..Base
-    import .Compiler: IRCode, TypedSlot, CFG, scan_ssa_use!,
+    import .Compiler: IRCode, CFG, scan_ssa_use!,
         isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
         Effects, ALWAYS_TRUE, ALWAYS_FALSE
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)

@@ -146,6 +146,8 @@ typedef struct _mallocarray_t {
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
+    // next metadata structure in per-thread list
+    // or in one of the `jl_gc_global_page_pool_t`
     struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
@@ -203,6 +205,11 @@ STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
 
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
+// XXX: this is not a general-purpose lock-free stack. We can
+// get away with just using a CAS and not implementing some ABA
+// prevention mechanism since once a node is popped from the
+// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// in the sweeping phase, which is serial
 
 STATIC_INLINE void push_lf_page_metadata_back(jl_gc_global_page_pool_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {

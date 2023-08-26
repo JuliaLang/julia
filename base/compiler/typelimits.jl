@@ -676,7 +676,7 @@ end
     return tmerge(wl, typea, typeb)
 end
 
-@nospecializeinfer function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
+@nospecializeinfer function tmerge(lattice::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
     # it's always ok to form a Union of two concrete types
     act = isconcretetype(typea)
     bct = isconcretetype(typeb)
@@ -687,8 +687,8 @@ end
     if (act || isType(typea)) && (bct || isType(typeb))
         return Union{typea, typeb}
     end
-    typea <: typeb && return typeb
-    typeb <: typea && return typea
+    u = tmerge_fast_path(lattice, typea, typeb)
+    u === nothing || return u
     return tmerge_types_slow(typea, typeb)
 end
 
@@ -764,23 +764,24 @@ end
         return u
     end
     # don't let the slow widening of Tuple cause the whole type to grow too fast
+    # Specifically widen Tuple{..., Union{lots of stuff}...} to Tuple{..., Any, ...}
     for i in 1:length(types)
         if typenames[i] === Tuple.name
-            widen = unwrap_unionall(types[i])
-            if isa(widen, DataType) && !isvatuple(widen)
-                widen = NTuple{length(widen.parameters), Any}
-            else
-                widen = Tuple
+            ti = types[i]
+            tip = (unwrap_unionall(types[i])::DataType).parameters
+            lt = length(tip)
+            p = Vector{Any}(undef, lt)
+            for j = 1:lt
+                ui = tip[j]
+                p[j] = (unioncomplexity(ui)==0) ? ui : isvarargtype(ui) ? Vararg : Any
             end
-            types[i] = widen
-            u = Union{types...}
-            if issimpleenoughtype(u)
-                return u
-            end
-            break
+            types[i] = rewrap_unionall(Tuple{p...}, ti)
         end
     end
-    # finally, just return the widest possible type
+    u = Union{types...}
+    if issimpleenoughtype(u)
+        return u
+    end
     return Any
 end
 
