@@ -216,6 +216,8 @@ typedef struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
+    // gc_state = 2 means the thread is running parallel GC code.
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain

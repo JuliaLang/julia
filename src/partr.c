@@ -107,12 +107,6 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-
-static inline int may_mark(void) JL_NOTSAFEPOINT
-{
-    return (jl_atomic_load(&gc_n_threads_marking) > 0);
-}
-
 // gc thread mark function
 void jl_gc_mark_threadfun(void *arg)
 {
@@ -128,14 +122,7 @@ void jl_gc_mark_threadfun(void *arg)
     // free the thread argument here
     free(targ);
 
-    while (1) {
-        uv_mutex_lock(&gc_threads_lock);
-        while (!may_mark()) {
-            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
-        }
-        uv_mutex_unlock(&gc_threads_lock);
-        gc_mark_loop_parallel(ptls, 0);
-    }
+    gc_mark_loop_worker(ptls);
 }
 
 // gc thread sweep function

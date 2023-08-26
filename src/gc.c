@@ -16,15 +16,12 @@ extern "C" {
 int jl_n_markthreads;
 // Number of GC threads that may run concurrent sweeping (0 or 1)
 int jl_n_sweepthreads;
-// Number of threads currently running the GC mark-loop
-_Atomic(int) gc_n_threads_marking;
 // `tid` of mutator thread that triggered GC
-_Atomic(int) gc_master_tid;
+_Atomic(int) gc_mutator_aux_tid;
 // `tid` of first GC thread
 int gc_first_tid;
-// Mutex/cond used to synchronize wakeup of GC threads on parallel marking
-uv_mutex_t gc_threads_lock;
-uv_cond_t gc_threads_cond;
+// Number of threads running the GC mark-loop
+_Atomic(int) gc_n_threads_marking;
 // To indicate whether concurrent sweeping should run
 uv_sem_t gc_sweep_assists_needed;
 
@@ -2745,10 +2742,10 @@ JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls)
 void gc_mark_and_steal(jl_ptls_t ptls)
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
-    jl_gc_markqueue_t *mq_master = NULL;
-    int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid != -1)
-        mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    jl_gc_markqueue_t *mq_mutator_aux = NULL;
+    int mutator_aux_tid = jl_atomic_load(&gc_mutator_aux_tid);
+    if (mutator_aux_tid != -1)
+        mq_mutator_aux = &gc_all_tls_states[mutator_aux_tid]->mark_queue;
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
@@ -2791,9 +2788,9 @@ void gc_mark_and_steal(jl_ptls_t ptls)
                 goto pop;
             }
         }
-        // Try to steal chunk from master thread
-        if (mq_master != NULL) {
-            c = gc_chunkqueue_steal_from(mq_master);
+        // Try to steal chunk from mutator thread that triggered GC
+        if (mq_mutator_aux != NULL) {
+            c = gc_chunkqueue_steal_from(mq_mutator_aux);
             if (c.cid != GC_empty_chunk) {
                 gc_mark_chunk(ptls, mq, &c);
                 goto pop;
@@ -2814,37 +2811,192 @@ void gc_mark_and_steal(jl_ptls_t ptls)
             if (new_obj != NULL)
                 goto mark;
         }
-        // Try to steal pointer from master thread
-        if (mq_master != NULL) {
-            new_obj = gc_ptr_queue_steal_from(mq_master);
+        // Try to steal pointer from mutator thread that triggered GC
+        if (mq_mutator_aux != NULL) {
+            new_obj = gc_ptr_queue_steal_from(mq_mutator_aux);
             if (new_obj != NULL)
                 goto mark;
         }
     }
 }
 
-void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
+#define GC_PTR_MARK_WORK            (1)
+#define GC_CHUNK_MARK_WORK          (1 << 10)
+#define GC_MARK_WORK_TO_N_THREADS   (1 << 3)
+
+int64_t gc_estimate_mark_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    int64_t work = 0;
+    work += (jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.top)) * GC_PTR_MARK_WORK;
+    work += (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.top)) * GC_CHUNK_MARK_WORK;
+    return work;
+}
+
+int64_t gc_estimate_mark_work(void) JL_NOTSAFEPOINT
+{
+    int64_t work = 0;
+    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        work += gc_estimate_mark_work_in_queue(ptls2);
+    }
+    int mutator_aux_tid = jl_atomic_load(&gc_mutator_aux_tid);
+    if (mutator_aux_tid != -1) {
+        jl_ptls_t ptls2 = gc_all_tls_states[mutator_aux_tid];
+        work += gc_estimate_mark_work_in_queue(ptls2);
+    }
+    return work;
+}
+
+int64_t gc_n_threads_marking_ub(void)
+{
+    int64_t n_threads_marking_ub = 0;
+    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (jl_atomic_load(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+            n_threads_marking_ub++;
+        }
+    }
+    return n_threads_marking_ub;
+}
+
+void gc_wake_mark_thread(jl_ptls_t ptls2)
+{
+    uv_mutex_lock(&ptls2->sleep_lock);
+    jl_atomic_store(&ptls2->gc_state, JL_GC_STATE_PARALLEL);
+    uv_cond_signal(&ptls2->wake_signal);
+    uv_mutex_unlock(&ptls2->sleep_lock);
+}
+
+// Spin master scheduler: based on Hassanein's
+// `Understanding and Improving JVM GC Work Stealing at the Data Center Scale`
+void gc_spin_master_sched(void)
+{
+    while (1) {
+        int64_t n_threads_marking_ub = gc_n_threads_marking_ub();
+        // all threads are already marking... can't recruit anyone else
+        if (n_threads_marking_ub == jl_n_markthreads) {
+            jl_cpu_pause();
+            continue;
+        }
+        int64_t work = gc_estimate_mark_work();
+        // parallel marking should terminate
+        if (work == 0 && n_threads_marking_ub == 0) {
+            return;
+        }
+        // too much work for too few threads
+        if (work >= n_threads_marking_ub * GC_MARK_WORK_TO_N_THREADS) {
+            int64_t n_threads_marking_ideal = work / GC_MARK_WORK_TO_N_THREADS;
+            // try to convert GC threads to workers
+            for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+                jl_ptls_t ptls2 = gc_all_tls_states[i];
+                if (jl_atomic_load(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+                    gc_wake_mark_thread(ptls2);
+                    n_threads_marking_ub++;
+                    if (n_threads_marking_ub >= n_threads_marking_ideal) {
+                        break;
+                    }
+                }
+            }
+        }
+        jl_cpu_pause();
+    }
+}
+
+#define GC_BACKOFF_MIN 4
+#define GC_BACKOFF_MAX 12
+
+STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
+{
+    if (*i < GC_BACKOFF_MAX) {
+        (*i)++;
+    }
+    for (int j = 0; j < (1 << *i); j++) {
+        jl_cpu_pause();
+    }
+}
+
+void gc_exp_backoff_sched(jl_ptls_t ptls)
+{
+    // Wake threads up and try to do some work
+    jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        gc_wake_mark_thread(ptls2);
+    }
+    gc_mark_and_steal(ptls);
+    jl_atomic_fetch_add(&gc_n_threads_marking, -1);
+}
+
+STATIC_INLINE int gc_use_spin_master_sched(void) JL_NOTSAFEPOINT
+{
+    // Use the spin master scheduler if there are at least 8 (7 GC + 1 mutator)
+    // threads that are able to run the GC mark-loop
+    return (jl_n_markthreads >= 7);
+}
+
+STATIC_INLINE int gc_may_mark(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    if (gc_use_spin_master_sched()) {
+        return (jl_atomic_load(&ptls->gc_state) == JL_GC_STATE_PARALLEL);
+    }
+    return (jl_atomic_load(&gc_n_threads_marking) > 0);
+}
+
+void gc_mark_loop_worker_spin_master(jl_ptls_t ptls)
+{
+    gc_mark_and_steal(ptls);
+    jl_atomic_store(&ptls->gc_state, JL_GC_STATE_WAITING);
+}
+
+void gc_mark_loop_worker_exp_backoff(jl_ptls_t ptls)
 {
     int backoff = GC_BACKOFF_MIN;
-    if (master) {
-        jl_atomic_store(&gc_master_tid, ptls->tid);
-        // Wake threads up and try to do some work
-        uv_mutex_lock(&gc_threads_lock);
-        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        uv_cond_broadcast(&gc_threads_cond);
-        uv_mutex_unlock(&gc_threads_lock);
-        gc_mark_and_steal(ptls);
-        jl_atomic_fetch_add(&gc_n_threads_marking, -1);
-    }
     while (jl_atomic_load(&gc_n_threads_marking) > 0) {
         // Try to become a thief while other threads are marking
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        if (jl_atomic_load(&gc_master_tid) != -1) {
+        if (jl_atomic_load(&gc_mutator_aux_tid) != -1) {
             gc_mark_and_steal(ptls);
         }
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
         // Failed to steal
         gc_backoff(&backoff);
+    }
+}
+
+void gc_mark_loop_worker(jl_ptls_t ptls)
+{
+    while (1) {
+        uv_mutex_lock(&ptls->sleep_lock);
+        while (!gc_may_mark(ptls)) {
+            uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+        }
+        uv_mutex_unlock(&ptls->sleep_lock);
+        if (gc_use_spin_master_sched()) {
+            gc_mark_loop_worker_spin_master(ptls);
+        }
+        else {
+            gc_mark_loop_worker_exp_backoff(ptls);
+        }
+    }
+}
+
+void gc_mark_loop_parallel(jl_ptls_t ptls)
+{
+    jl_atomic_store(&gc_mutator_aux_tid, ptls->tid);
+    if (gc_use_spin_master_sched()) {
+        gc_spin_master_sched();
+        jl_atomic_store(&gc_mutator_aux_tid, -1);
+    }
+    else {
+        gc_exp_backoff_sched(ptls);
+        gc_mark_loop_worker_exp_backoff(ptls);
+        // Wait for all threads to finish
+        jl_atomic_store(&gc_mutator_aux_tid, -1);
+        while (jl_atomic_load(&gc_n_threads_marking) > 0) {
+            jl_cpu_pause();
+        }
     }
 }
 
@@ -2854,15 +3006,7 @@ void gc_mark_loop(jl_ptls_t ptls)
         gc_mark_loop_serial(ptls);
     }
     else {
-        gc_mark_loop_parallel(ptls, 1);
-    }
-}
-
-void gc_mark_loop_barrier(void)
-{
-    jl_atomic_store(&gc_master_tid, -1);
-    while (jl_atomic_load(&gc_n_threads_marking) != 0) {
-        jl_cpu_pause();
+        gc_mark_loop_parallel(ptls);
     }
 }
 
@@ -3183,7 +3327,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                 gc_cblist_root_scanner, (collection));
         }
         gc_mark_loop(ptls);
-        gc_mark_loop_barrier();
         gc_mark_clean_reclaim_sets();
 
         // 4. check for objects to finalize
@@ -3593,9 +3736,8 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
-    uv_mutex_init(&gc_threads_lock);
-    uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
+    jl_atomic_store(&gc_mutator_aux_tid, -1);
 
     jl_gc_init_page();
     jl_gc_debug_init();
