@@ -23,6 +23,7 @@ _Atomic(int) gc_master_tid;
 // `tid` of first GC thread
 int gc_first_tid;
 // Mutex/cond used to synchronize wakeup of GC threads on parallel marking
+uv_mutex_t gc_mark_loop_gate_lock;
 uv_mutex_t gc_threads_lock;
 uv_cond_t gc_threads_cond;
 // To indicate whether concurrent sweeping should run
@@ -2821,6 +2822,35 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     }
 }
 
+#define GC_PTR_MARK_WORK            (1)
+#define GC_CHUNK_MARK_WORK          (1 << 10)
+#define GC_MARK_WORK_TO_N_THREADS   (1 << 6)
+
+int64_t gc_estimate_mark_work_in_queue(jl_ptls_t ptls)
+{
+    int64_t work = 0;
+    work += (jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.top)) * GC_PTR_MARK_WORK;
+    work += (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.top)) * GC_CHUNK_MARK_WORK;
+    return work;
+}
+
+int64_t gc_estimate_mark_work(void)
+{
+    int64_t work = 0;
+    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        work += gc_estimate_mark_work_in_queue(ptls2);
+    }
+    int master_tid = jl_atomic_load(&gc_master_tid);
+    if (master_tid != -1) {
+        jl_ptls_t ptls2 = gc_all_tls_states[master_tid];
+        work += gc_estimate_mark_work_in_queue(ptls2);
+    }
+    return work;
+}
+
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
     int backoff = GC_BACKOFF_MIN;
@@ -2834,7 +2864,20 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
-    while (jl_atomic_load(&gc_n_threads_marking) > 0) {
+    while (1) {
+        uv_mutex_lock(&gc_mark_loop_gate_lock);
+        loop : {
+            int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
+            if (n_threads_marking == 0) {
+                uv_mutex_unlock(&gc_mark_loop_gate_lock);
+                break;
+            }
+            int64_t work = gc_estimate_mark_work();
+            if (work <= n_threads_marking * GC_MARK_WORK_TO_N_THREADS) {
+                goto loop;
+            }
+        }
+        uv_mutex_unlock(&gc_mark_loop_gate_lock);
         // Try to become a thief while other threads are marking
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         if (jl_atomic_load(&gc_master_tid) != -1) {
@@ -3585,6 +3628,7 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
+    uv_mutex_init(&gc_mark_loop_gate_lock);
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
