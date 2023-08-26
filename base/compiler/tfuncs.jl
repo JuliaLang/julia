@@ -2645,7 +2645,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         aft = argtypes_vec[1]
     end
     if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-            (isconcretetype(aft) && !(Builtin <: aft) && !iskindtype(aft)))
+            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
         return UNKNOWN
     end
 
