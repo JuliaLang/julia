@@ -2824,7 +2824,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
 
 #define GC_PTR_MARK_WORK            (1)
 #define GC_CHUNK_MARK_WORK          (1 << 10)
-#define GC_MARK_WORK_TO_N_THREADS   (1 << 6)
+#define GC_MARK_WORK_TO_N_THREADS   (1 << 3)
 
 int64_t gc_estimate_mark_work_in_queue(jl_ptls_t ptls)
 {
