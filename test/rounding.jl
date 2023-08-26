@@ -375,6 +375,15 @@ end
     @test ceil(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 3)
 end
 
+@testset "rounding to custom integers" begin
+    struct Int50812 <: Integer
+        x::Int
+    end
+    @test round(Int50812, 1.2) === Int50812(1)
+    @test round(Int50812, π) === Int50812(3)
+    @test ceil(Int50812, π) === Int50812(4)
+end
+
 const MPFRRM = Base.MPFR.MPFRRoundingMode
 
 function mpfr_to_ieee(::Type{Float32}, x::BigFloat, r::MPFRRM)
