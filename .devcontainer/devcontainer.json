@@ -1,8 +1,15 @@
 {
-    "extensions": [
-      "julialang.language-julia",
-      "ms-vscode.cpptools"
-    ],
-  
-    "dockerFile": "Dockerfile"
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+	"features": {
+		"ghcr.io/julialang/devcontainer-features/julia:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"julialang.language-julia",
+      			"ms-vscode.cpptools"
+			]
+		}
+	},
+	"postCreateCommand": "juliaup link dev /workspaces/julia/julia"
 }
