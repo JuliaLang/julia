@@ -1,7 +1,10 @@
 {
 	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
 	"features": {
-		"ghcr.io/julialang/devcontainer-features/julia:1": {}
+		"ghcr.io/julialang/devcontainer-features/julia:1": {},
+		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+			"packages": ["gdb", "lldb"]
+		}
 	},
 	"customizations": {
 		"vscode": {
@@ -10,7 +13,10 @@
 				"ms-vscode.cpptools",
 				"tamasfe.even-better-toml",
 				"github.vscode-github-actions",
-				"GitHub.vscode-pull-request-github"
+				"GitHub.vscode-pull-request-github",
+				"ms-vscode.makefile-tools",
+				"webfreak.debug",
+				"vadimcn.vscode-lldb"
 			]
 		}
 	},
