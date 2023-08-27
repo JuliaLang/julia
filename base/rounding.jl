@@ -457,15 +457,15 @@ To support `ceil` for a new type, define `Base.round(x::NewType, ::RoundingMode{
 """
 function ceil end
 
-trunc(x; kwargs...) = round(x, RoundToZero; kwargs...)
-floor(x; kwargs...) = round(x, RoundDown; kwargs...)
- ceil(x; kwargs...) = round(x, RoundUp; kwargs...)
-round(x; kwargs...) = round(x, RoundNearest; kwargs...)
+trunc(x; kws...) = round(x, RoundToZero; kws...)
+floor(x; kws...) = round(x, RoundDown; kws...)
+ ceil(x; kws...) = round(x, RoundUp; kws...)
+round(x; kws...) = round(x, RoundNearest; kws...)
 
-trunc(::Type{T}, x; kwargs...) where T = round(T, x, RoundToZero; kwargs...)
-floor(::Type{T}, x; kwargs...) where T = round(T, x, RoundDown; kwargs...)
- ceil(::Type{T}, x; kwargs...) where T = round(T, x, RoundUp; kwargs...)
-round(::Type{T}, x; kwargs...) where T = round(T, x, RoundNearest; kwargs...)
+trunc(::Type{T}, x) where T = round(T, x, RoundToZero)
+floor(::Type{T}, x) where T = round(T, x, RoundDown)
+ ceil(::Type{T}, x) where T = round(T, x, RoundUp)
+round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
 round(::Type{T}, x, r::RoundingMode) where T = convert(T, round(x, r))
 
