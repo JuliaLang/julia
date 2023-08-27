@@ -1594,6 +1594,9 @@ struct JuliaOJIT::DLSymOptimizer {
                         auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
                         addr = lookup(libname.data(), fname.data());
                     } else {
+                        // Can happen if we fail the compile time dlfind i.e when we try a symbol that doesn't exist in libc
+                        if (dyn_cast<ConstantPointerNull>(libarg))
+                            continue;
                         assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
                         libarg = cast<ConstantExpr>(libarg)->getOperand(0);
                         auto libidx = cast<ConstantInt>(libarg)->getZExtValue();

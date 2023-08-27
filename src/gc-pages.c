@@ -127,7 +127,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     meta = pop_lf_page_metadata_back(&global_page_pool_clean);
     if (meta != NULL) {
         uv_mutex_unlock(&gc_perm_lock);
-        gc_alloc_map_set(meta->data, 1);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
     // must map a new set of pages

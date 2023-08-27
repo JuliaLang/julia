@@ -43,16 +43,22 @@ fully_eliminated(src::CodeInfo; retval=(@__FILE__)) = fully_eliminated(src.code;
 fully_eliminated(ir::IRCode; retval=(@__FILE__)) = fully_eliminated(ir.stmts.stmt; retval)
 function fully_eliminated(code::Vector{Any}; retval=(@__FILE__), kwargs...)
     if retval !== (@__FILE__)
-        length(code) == 1 || return false
-        code1 = code[1]
-        isreturn(code1) || return false
-        val = code1.val
+        (length(code) <= 2) || return false
+        for i = 1:(length(code) - 1)
+            code[i] === nothing || return false
+        end
+        isreturn(code[end]) || return false
+        val = code[end].val
         if val isa QuoteNode
             val = val.value
         end
         return val == retval
     else
-        return length(code) == 1 && isreturn(code[1])
+        (length(code) <= 2) || return false
+        for i = 1:(length(code) - 1)
+            code[i] === nothing || return false
+        end
+        return isreturn(code[end])
     end
 end
 macro fully_eliminated(ex0...)

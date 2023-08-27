@@ -6,10 +6,18 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+
 # OverlayMethodTable
 # ==================
 
 using Base.Experimental: @MethodTable, @overlay
+
+# @overlay method with return type annotation
+@MethodTable RT_METHOD_DEF
+@overlay RT_METHOD_DEF Base.sin(x::Float64)::Float64 = cos(x)
+@overlay RT_METHOD_DEF function Base.sin(x::T)::T where T<:AbstractFloat
+    cos(x)
+end
 
 @newinterp MTOverlayInterp
 @MethodTable OverlayedMT

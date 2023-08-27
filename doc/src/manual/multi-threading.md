@@ -165,6 +165,8 @@ julia> begin
                unlock(lk)
            end
        end
+
+julia> @lock lk use(a)
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 

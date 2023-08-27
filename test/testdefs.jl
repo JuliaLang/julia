@@ -51,15 +51,15 @@ function runtests(name, path, isolate=true; seed=nothing)
                 error(msg)
             end
             if copy(ENV) != original_env
-                msg = "The `$(name)` test set mutated ENV and did not restore the original values"
-                @error(
-                    msg,
-                    testset_name = name,
-                    testset_path = path,
-                )
                 throw_error_str = get(ENV, "JULIA_TEST_CHECK_MUTATED_ENV", "true")
                 throw_error_b = parse(Bool, throw_error_str)
                 if throw_error_b
+                    msg = "The `$(name)` test set mutated ENV and did not restore the original values"
+                    @error(
+                        msg,
+                        testset_name = name,
+                        testset_path = path,
+                    )
                     error(msg)
                 end
             end
