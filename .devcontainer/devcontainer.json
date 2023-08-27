@@ -7,7 +7,10 @@
 		"vscode": {
 			"extensions": [
 				"julialang.language-julia",
-      			"ms-vscode.cpptools"
+				"ms-vscode.cpptools",
+				"tamasfe.even-better-toml",
+				"github.vscode-github-actions",
+				"GitHub.vscode-pull-request-github"
 			]
 		}
 	},
