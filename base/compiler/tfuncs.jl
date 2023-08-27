@@ -2638,13 +2638,15 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 
     if length(argtypes) == 3
         aft = widenslotwrapper(argtypes[2])
-        if !isa(aft, Const) && !(isType(aft) && !has_free_typevars(aft)) &&
-                !(isconcretetype(aft) && !(aft <: Builtin))
-            return UNKNOWN
-        end
         argtypes_vec = Any[aft, af_argtype.parameters...]
     else
         argtypes_vec = Any[af_argtype.parameters...]
+        isempty(argtypes_vec) && push!(argtypes_vec, Union{})
+        aft = argtypes_vec[1]
+    end
+    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
+        return UNKNOWN
     end
 
     if contains_is(argtypes_vec, Union{})
@@ -2677,8 +2679,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
         return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-    elseif (isa(tt, Const) || isconstType(tt)) &&
-        (isa(aft, Const) || isconstType(aft))
+    elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
         return CallMeta(Const(rt), EFFECTS_TOTAL, info)
