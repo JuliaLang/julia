@@ -959,6 +959,41 @@ end
     @test length(methods(g, ())) == 1
 end
 
+module TestInstanceMethods
+struct A{T}
+    x::T
+end
+(a::A)(y) = a.x + y
+(a::A)(x::String) = "$x: $a.x"
+(a::A{Float64})(x::Float64) = a.x + x
+
+struct B
+    x::Int
+end
+
+(b::B)(y) = b.x + y
+(b::B)(x::String) = string(b.x) * x
+(b::B)(y::Float64) = b.x + y
+end
+
+@testset "instancemethods" begin
+    using .TestInstanceMethods: A, B
+
+    @test methods(A(1)) == instancemethods(A{Int})
+    @test methods(B(1)) == instancemethods(B)
+
+    @test length(methods(A{<:Any})) == 1
+    @test length(instancemethods(A{<:Any})) == 3
+
+    @test methods(A("s")) == instancemethods(A{String})
+
+    @test length(methods(A{String})) == 1
+    @test length(instancemethods(A{String})) == 2
+
+    @test length(methods(B)) == 2
+    @test length(instancemethods(B)) == 3
+end
+
 module BodyFunctionLookup
 f1(x, y; a=1) = error("oops")
 f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)

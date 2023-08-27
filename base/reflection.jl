@@ -1079,6 +1079,12 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end
 
+function instance_signature_type(t::Type, @nospecialize(argtypes))
+    argtypes = to_tuple_type(argtypes)
+    u = unwrap_unionall(argtypes)::DataType
+    return rewrap_unionall(Tuple{t,u.parameters...}, argtypes)
+end
+
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -1170,7 +1176,7 @@ end
 """
     methods(f, [types], [module])
 
-Return the method table for `f`.
+Return the method list for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
@@ -1209,6 +1215,69 @@ function methods(@nospecialize(f),
                  mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
+end
+
+function _instancemethods(t::Type, @nospecialize(mt), lim::Int, world::UInt)
+    tt = instance_signature_type(t, mt)
+    return _methods_by_ftype(tt, lim, world)
+end
+
+"""
+    instancemethods(t::Type, [types], [module])
+
+Return the method list for instances of type `t`.
+
+If `types` is specified, return the methods whose types match.
+If `module` is specified, return the methods defined in that module.
+Multiple modules can also be specified as an array.
+
+# Example
+
+The `instancemethods` function enables the return of methods defined for a callable
+object of a given type, eliminating the need to instantiate the object first.
+
+```julia
+julia> struct A{T}
+    x::T
+end
+
+# making the object callable
+julia> (a::A{Float64})(x::Float64) = a.x + x
+julia> (a::A{String})(x::String) = a.x * x
+
+julia> a = A(1.0)
+A{Float64}(1.0)
+
+julia> methods(a) == instancemethods(A{Float64})
+true
+
+julia> length(instancemethods(A{<:Any})) == 2
+true
+```
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
+
+See also: [`methods`](@ref).
+"""
+function instancemethods(t::Type,
+    @nospecialize(tmatch),
+    mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+    world = get_world_counter()
+    ms = Method[]
+    for m in _instancemethods(t, tmatch, -1, world)::Vector
+        m = m::Core.MethodMatch
+        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
+    end
+    t === Function && return MethodList(ms, typeof(t).name.mt)
+    mt = t isa UnionAll ? unwrap_unionall(t).name.mt : t.name.mt
+    return MethodList(ms, mt)
+end
+instancemethods(t::Type, @nospecialize(tmatch), mod::Module) = instancemethods(t, tmatch, (mod,))
+
+function instancemethods(t::Type,
+    mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+    return instancemethods(t, Tuple{Vararg{Any}}, mod)
 end
 
 function visit(f, mt::Core.MethodTable)

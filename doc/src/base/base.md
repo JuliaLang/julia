@@ -36,6 +36,7 @@ Base.include_dependency
 __init__
 Base.which(::Any, ::Any)
 Base.methods
+Base.instancemethods
 Base.@show
 ans
 err
