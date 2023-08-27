@@ -386,7 +386,9 @@ unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_trunc(T, _unche
 unsafe_trunc(::Type{BigInt}, x::BigFloat) = _unchecked_cast(BigInt, x, RoundToZero)
 
 round(::Type{T}, x::BigFloat) where T<:Integer = round(T, x, ROUNDING_MODE[])
-round(::Type{Integer}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) = round(BigInt, x, r)
+# these two methods are split to increase their precedence in disambiguation:
+round(::Type{Integer}, x::BigFloat, r::RoundingMode) = round(BigInt, x, r)
+round(::Type{Integer}, x::BigFloat, r::MPFRRoundingMode) = round(BigInt, x, r)
 
 function Bool(x::BigFloat)
     iszero(x) && return false
