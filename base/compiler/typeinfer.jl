@@ -500,8 +500,8 @@ function adjust_effects(sv::InferenceState)
         if is_effect_overridden(override, :noub)
             ipo_effects = Effects(ipo_effects; noub=true)
         end
-        if is_effect_overridden(override, :nonoverlayed)
-            ipo_effects = Effects(ipo_effects; nonoverlayed=true)
+        if is_effect_overridden(override, :native_executable)
+            ipo_effects = Effects(ipo_effects; native_executable=true)
         end
     end
 

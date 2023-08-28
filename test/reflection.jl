@@ -1021,7 +1021,7 @@ ambig_effects_test(a, b) = 1
         @test !Core.Compiler.is_effect_free(effects)
         @test !Core.Compiler.is_nothrow(effects)
         @test !Core.Compiler.is_terminates(effects)
-        @test !Core.Compiler.is_nonoverlayed(effects)
+        @test !Core.Compiler.is_native_executable(effects)
     end
     # should account for MethodError
     @test Base.infer_effects(issue41694, (Float64,)) |> !Core.Compiler.is_nothrow # definitive dispatch error

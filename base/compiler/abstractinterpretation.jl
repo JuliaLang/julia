@@ -451,10 +451,10 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
     # don't bother to add backedges when both type and effects information are already
     # maximized to the top since a new method couldn't refine or widen them anyway
     if rettype === Any
-        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
+        # ignore the `:native_executable` property if `interp` doesn't use overlayed method table
         # since it will never be tainted anyway
         if !isoverlayed(method_table(interp))
-            all_effects = Effects(all_effects; nonoverlayed=false)
+            all_effects = Effects(all_effects; native_executable=false)
         end
         if (# ignore the `:noinbounds` property if `:consistent`-cy is tainted already
             (sv isa InferenceState && sv.ipo_effects.consistent === ALWAYS_FALSE) ||
@@ -854,7 +854,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     mi = result.edge
     if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
-            if is_nonoverlayed(interp) || is_nonoverlayed(effects)
+            if is_native_executable(interp) || is_native_executable(effects)
                 return :concrete_eval
             end
             # disable concrete-evaluation if this function call is tainted by some overlayed

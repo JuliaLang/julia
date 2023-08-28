@@ -210,7 +210,7 @@ macro _total_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:nonoverlayed=#false))
+        #=:native_executable=#false))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -223,7 +223,7 @@ macro _foldable_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:nonoverlayed=#false))
+        #=:native_executable=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -236,7 +236,7 @@ macro _nothrow_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:nonoverlayed=#false))
+        #=:native_executable=#false))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -249,7 +249,7 @@ macro _terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:nonoverlayed=#false))
+        #=:native_executable=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -262,7 +262,7 @@ macro _effect_free_terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:nonoverlayed=#false))
+        #=:native_executable=#false))
 end
 
 # another version of inlining that propagates an inbounds context

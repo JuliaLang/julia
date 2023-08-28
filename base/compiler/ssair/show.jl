@@ -1020,7 +1020,7 @@ function Base.show(io::IO, e::Effects)
     print(io, ',')
     printstyled(io, effectbits_letter(e, :noinbounds, 'i'); color=effectbits_color(e, :noinbounds))
     print(io, ')')
-    e.nonoverlayed || printstyled(io, '′'; color=:red)
+    e.native_executable || printstyled(io, '′'; color=:red)
 end
 
 @specialize

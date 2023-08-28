@@ -297,7 +297,7 @@ mutable struct InferenceState
         end
 
         if def isa Method
-            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+            ipo_effects = Effects(ipo_effects; native_executable=is_native_executable(def))
         end
 
         restrict_abstract_call_sites = isa(def, Module)
@@ -318,8 +318,9 @@ mutable struct InferenceState
     end
 end
 
-is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
-is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+is_native_executable(m::Method) = !isdefined(m, :external_mt)
+is_native_executable(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+
 isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
 isoverlayed(::InternalMethodTable) = false
 isoverlayed(::OverlayMethodTable) = true

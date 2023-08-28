@@ -269,7 +269,7 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_notaskstate         : 1;
         uint8_t ipo_inaccessiblememonly : 1;
         uint8_t ipo_noub                : 1;
-        uint8_t ipo_nonoverlayed        : 1;
+        uint8_t ipo_native_executable   : 1;
     } overrides;
     uint32_t bits;
 } _jl_purity_overrides_t;
@@ -435,7 +435,7 @@ typedef struct _jl_code_instance_t {
     //     uint8_t ipo_terminates          : 1;
     //     uint8_t ipo_notaskstate         : 2;
     //     uint8_t ipo_inaccessiblememonly : 2;
-    //     uint8_t ipo_nonoverlayed        : 1;
+    //     uint8_t ipo_native_executable   : 1;
     //     uint8_t ipo_noinbounds          : 1;
     _Atomic(uint32_t) purity_bits;
     // purity_flags:
@@ -445,7 +445,7 @@ typedef struct _jl_code_instance_t {
     //     uint8_t ipo_terminates          : 1;
     //     uint8_t ipo_notaskstate         : 2;
     //     uint8_t ipo_inaccessiblememonly : 2;
-    //     uint8_t ipo_nonoverlayed        : 1;
+    //     uint8_t ipo_native_executable   : 1;
     //     uint8_t ipo_noinbounds          : 1;
     jl_value_t *argescapes; // escape information of call arguments
 

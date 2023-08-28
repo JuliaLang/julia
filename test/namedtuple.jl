@@ -383,7 +383,7 @@ end
 # Test effect/inference for merge/diff of unknown NamedTuples
 for f in (Base.merge, Base.structdiff)
     let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
-        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+        @test Core.Compiler.is_foldable(eff) && eff.native_executable
     end
     @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
 end

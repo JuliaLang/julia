@@ -477,6 +477,7 @@ The following `setting`s are supported.
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:noub`
+- `:native_executable`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -642,6 +643,17 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
+## `:native_executable`
+
+The `:native_executable` setting asserts that this method can be executed using Julia's
+native compiler and runtime. Currently this particularly implies that any methods defined
+in an [`OverlayMethodTable`](@ref Core.Compiler.OverlayMethodTable) (including this method
+in question) are never be called during executing the method. However, it is worth noting
+that it is safe to annotate [`@overlay`](@ref Base.Experimental.@overlay) method as
+`:native_executable` when the overlay-ed method has the same semantics as the original
+method and its result can safely be replaced with the result of the original method.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -715,7 +727,7 @@ macro assume_effects(args...)
         idx = length(args)
     end
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-        notaskstate, inaccessiblememonly, noub, nonoverlayed) =
+        notaskstate, inaccessiblememonly, noub, native_executable) =
         (false, false, false, false, false, false, false, false, false, false)
     for org_setting in args[1:idx]
         (setting, val) = compute_assumed_setting(org_setting)
@@ -735,8 +747,8 @@ macro assume_effects(args...)
             inaccessiblememonly = val
         elseif setting === :noub
             noub = val
-        elseif setting === :nonoverlayed
-            nonoverlayed = val
+        elseif setting === :native_executable
+            native_executable = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = noub = val
         elseif setting === :removable
@@ -750,17 +762,17 @@ macro assume_effects(args...)
     if is_function_def(inner)
         return esc(pushmeta!(ex, :purity,
             consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, nonoverlayed))
+            notaskstate, inaccessiblememonly, noub, native_executable))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
             consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, nonoverlayed)))
+            notaskstate, inaccessiblememonly, noub, native_executable)))
         return esc(ex)
     else # anonymous function case
         return Expr(:meta, Expr(:purity,
             consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, nonoverlayed))
+            notaskstate, inaccessiblememonly, noub, native_executable))
     end
 end
 

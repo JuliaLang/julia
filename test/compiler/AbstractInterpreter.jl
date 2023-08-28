@@ -45,10 +45,10 @@ end |> only === Union{Float64,Nothing}
 # effect analysis should figure out that the overlayed method is used
 @test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
     strangesin(x)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Core.Compiler.is_native_executable
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Core.Compiler.is_native_executable
 
 # account for overlay possibility in unanalyzed matching method
 callstrange(::Float64) = strangesin(x)
@@ -59,20 +59,20 @@ let interp = MTOverlayInterp(Set{Any}())
     @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
-        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_native_executable
         @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
     else
-        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
+        @warn "`native_executable` test for inference bailing out is skipped since the method match sort order is changed."
     end
 end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x
     strangesin(x)
-end |> Core.Compiler.is_nonoverlayed
+end |> Core.Compiler.is_native_executable
 @test Base.infer_effects((Any,)) do x
     @invoke strangesin(x::Float64)
-end |> Core.Compiler.is_nonoverlayed
+end |> Core.Compiler.is_native_executable
 
 # fallback to the internal method table
 @test Base.return_types((Int,); interp=MTOverlayInterp()) do x
@@ -116,12 +116,12 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
     end
 end |> only === Nothing
 
-# override `:nonoverlayed` to allow concrete-eval for overlay-ed methods
+# override `:native_executable` to allow concrete-eval for overlay-ed methods
 Base.@assume_effects :foldable function gpucompiler384(x::Int)
     1 < x < 20 || error("x is too big")
     return factorial(x)
 end
-@overlay OVERLAY_MT Base.@assume_effects :foldable :nonoverlayed function gpucompiler384(x::Int)
+@overlay OVERLAY_MT Base.@assume_effects :foldable :native_executable function gpucompiler384(x::Int)
     1 < x < 20 || raise_on_gpu("x is too big")
     return factorial(x)
 end
@@ -129,8 +129,8 @@ raise_on_gpu(x) = #=do something with GPU=# error(x)
 
 call_gpucompiler384(x) = gpucompiler384(x)
 
-@test Base.infer_effects(gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
-@test Base.infer_effects(call_gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_native_executable
+@test Base.infer_effects(call_gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_native_executable
 
 @test Base.return_types(; interp=MTOverlayInterp()) do
     Val(gpucompiler384(3) == 6)
