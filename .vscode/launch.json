@@ -9,7 +9,10 @@
             "request": "launch",
             "name": "Debug",
             "program": "${workspaceFolder}/julia",
-            "args": [],
+            "args": ["--debug-info=2", "--optimize=0"],
+            "environment": [
+                {"name": "ENABLE_GDBLISTENER", "value": "1"}
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]
