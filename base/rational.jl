@@ -17,12 +17,10 @@ end
 unsafe_rational(num::T, den::T) where {T<:Integer} = unsafe_rational(T, num, den)
 unsafe_rational(num::Integer, den::Integer) = unsafe_rational(promote(num, den)...)
 
-@noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 function checked_den(::Type{T}, num::T, den::T) where T<:Integer
     if signbit(den)
-        den = -den
-        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
-        num = -num
+        den = checked_neg(den)
+        num = checked_neg(num)
     end
     return unsafe_rational(T, num, den)
 end
