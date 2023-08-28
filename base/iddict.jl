@@ -25,6 +25,7 @@ IdDict{Any, String} with 3 entries:
 ```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
+    # NOTE make sure to sync the struct definition with `jl_id_dict_t` in julia.h
     ht::Memory{Any}
     count::Int
     ndel::Int
@@ -73,18 +74,31 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
-    if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)::V
-    end
+    keyindex = ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
+    # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
+
+    return abs(keyindex), keyindex < 0
+end
+
+function _setindex!(d::IdDict{K, V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
+    d.ht[keyindex+1] = val
+    d.count += inserted
+
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max((length(d.ht)%UInt)>>1, 32))
         d.ndel = 0
     end
-    inserted = RefValue{Cint}(0)
-    d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
-    d.count += inserted[]
+    return nothing
+end
+
+function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+    keyindex, inserted = ht_keyindex!(d, key)
+    if !(val isa V) # avoid a dynamic call
+        val = convert(V, val)::V
+    end
+    _setindex!(d, val, key, keyindex, inserted)
     return d
 end
 
@@ -143,16 +157,19 @@ end
 
 length(d::IdDict) = d.count
 
+isempty(d::IdDict) = length(d) == 0
+
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    if val === secret_table_token
+    keyindex, inserted = ht_keyindex!(d, key)
+
+    if inserted
         val = isa(default, V) ? default : convert(V, default)::V
-        setindex!(d, val, key)
-        return val
-    else
+        _setindex!(d, val, key, keyindex, inserted)
         return val::V
+    else
+        return d.ht[keyindex+1]::V
     end
 end
 
@@ -166,16 +183,17 @@ function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
 end
 
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    if val === secret_table_token
+    keyindex, inserted = ht_keyindex!(d, key)
+
+    if inserted
         val = default()
-        if !isa(val, V)
+        if !(val isa V) # avoid a dynamic call
             val = convert(V, val)::V
         end
-        setindex!(d, val, key)
-        return val
-    else
+        _setindex!(d, val, key, keyindex, inserted)
         return val::V
+    else
+        return d.ht[keyindex+1]::V
     end
 end
 
