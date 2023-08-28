@@ -432,6 +432,34 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
+function adjust_effects(ipo_effects::Effects, def::Method)
+    # override the analyzed effects using manually annotated effect settings
+    override = decode_effects_override(def.purity)
+    if is_effect_overridden(override, :consistent)
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :effect_free)
+        ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :nothrow)
+        ipo_effects = Effects(ipo_effects; nothrow=true)
+    end
+    if is_effect_overridden(override, :terminates_globally)
+        ipo_effects = Effects(ipo_effects; terminates=true)
+    end
+    if is_effect_overridden(override, :notaskstate)
+        ipo_effects = Effects(ipo_effects; notaskstate=true)
+    end
+    if is_effect_overridden(override, :inaccessiblememonly)
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :noub)
+        ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
+    end
+    return ipo_effects
+end
+
+
 function adjust_effects(sv::InferenceState)
     ipo_effects = sv.ipo_effects
 
@@ -478,28 +506,7 @@ function adjust_effects(sv::InferenceState)
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
     if isa(def, Method)
-        override = decode_effects_override(def.purity)
-        if is_effect_overridden(override, :consistent)
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=true)
-        end
-        if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=true)
-        end
-        if is_effect_overridden(override, :notaskstate)
-            ipo_effects = Effects(ipo_effects; notaskstate=true)
-        end
-        if is_effect_overridden(override, :inaccessiblememonly)
-            ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :noub)
-            ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
-        end
+        ipo_effects = adjust_effects(ipo_effects, def)
     end
 
     return ipo_effects
@@ -850,8 +857,10 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         typeinf(interp, frame)
         update_valid_age!(caller, frame.valid_worlds)
-        edge = is_inferred(frame) ? mi : nothing
-        return EdgeCallResult(frame.bestguess, edge, frame.ipo_effects) # effects are adjusted already within `finish`
+        isinferred = is_inferred(frame)
+        edge = isinferred ? mi : nothing
+        effects = isinferred ? frame.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        return EdgeCallResult(frame.bestguess, edge, effects)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
@@ -859,7 +868,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
+    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(Effects(), method))
 end
 
 function cached_return_type(code::CodeInstance)

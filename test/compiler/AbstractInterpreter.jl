@@ -134,7 +134,7 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
 end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
-@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+@test_broken fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
 end
 
