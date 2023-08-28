@@ -547,18 +547,13 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
     end
     # post domination analysis
     post_domtree = Core.Compiler.construct_postdomtree(ir)
-    post_dfsnumbers = Core.Compiler.construct_dfsnumbers(post_domtree)
     @test Core.Compiler.postdominates(post_domtree, 4, 1)
     @test Core.Compiler.postdominates(post_domtree, 4, 2)
     @test Core.Compiler.postdominates(post_domtree, 4, 3)
-    @test Core.Compiler.postdominates(post_dfsnumbers, 4, 1)
-    @test Core.Compiler.postdominates(post_dfsnumbers, 4, 2)
-    @test Core.Compiler.postdominates(post_dfsnumbers, 4, 3)
     for i = 1:3
         for j = 1:4
             i == j && continue
             @test !Core.Compiler.postdominates(post_domtree, i, j)
-            @test !Core.Compiler.postdominates(post_dfsnumbers, i, j)
         end
     end
 end
@@ -569,11 +564,6 @@ let ir = Base.code_ircode(exp, (Float64,)) |> only |> first
     dfsnumbers = Core.Compiler.construct_dfsnumbers(domtree)
     for bb1 in eachindex(ir.cfg.blocks), bb2 in eachindex(ir.cfg.blocks)
         @test Core.Compiler.dominates(domtree, bb1, bb2) == Core.Compiler.dominates(dfsnumbers, bb1, bb2)
-    end
-    post_domtree = Core.Compiler.construct_postdomtree(ir)
-    post_dfsnumbers = Core.Compiler.construct_dfsnumbers(post_domtree)
-    for bb1 in eachindex(ir.cfg.blocks), bb2 in eachindex(ir.cfg.blocks)
-        @test Core.Compiler.dominates(post_dfsnumbers, bb1, bb2) == Core.Compiler.dominates(post_dfsnumbers, bb1, bb2)
     end
 end
 

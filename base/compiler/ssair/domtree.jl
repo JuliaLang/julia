@@ -734,7 +734,7 @@ struct DFSNumber
 end
 
 # Based on updateDFSNumbers() in LLVM
-function construct_dfsnumbers(domtree::GenericDomTree)
+function construct_dfsnumbers(domtree::DomTree)
     dfsnumbers = fill(DFSNumber(1, 0), length(domtree.nodes))
 
     workstack = [(1, 1)] # index into domtree, index into children of node
@@ -765,12 +765,5 @@ end
     dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::Int, bb2::Int) -> Bool
 """
 function dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::BBNumber, bb2::BBNumber)
-    dfsnumbers[bb1].in <= dfsnumbers[bb2].in && dfsnumbers[bb2].out <= dfsnumbers[bb1].out
-end
-
-"""
-    postdominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::Int, bb2::Int) -> Bool
-"""
-function postdominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::BBNumber, bb2::BBNumber)
     dfsnumbers[bb1].in <= dfsnumbers[bb2].in && dfsnumbers[bb2].out <= dfsnumbers[bb1].out
 end

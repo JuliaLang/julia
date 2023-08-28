@@ -2224,9 +2224,6 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
             end
         end
     end
-    # if length(el.values) == 0
-    #     error()
-    # end
     return svec(key...), false
 end
 
@@ -2237,7 +2234,6 @@ function gvn!(ir::IRCode)
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
     sizehint!(val_to_ssa, length(ir.stmts.stmt))
 
-    # @assert eachindex(ir.stmts.stmt) isa OneTo
     while changed
         changed = false
         
@@ -2250,9 +2246,9 @@ function gvn!(ir::IRCode)
 
             stmt::Union{Expr, PhiNode} = ir.stmts.stmt[i]
     
-            # need to check terminate?
-            total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE # we only replace dominated instructions so throwing is fine?
-            # if a try catch exists still fine?
+            # IR_FLAG_NOTHROW is necessary, can't exclude it otherwise inference tests start to fail for some reason
+            # tmerge_types_slow starts to return Any instead of the desired result.
+            total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
             if !(ir.stmts.flag[i] & total_flags == total_flags) 
                 ssa_to_ssa[i] = i
                 continue
@@ -2316,7 +2312,7 @@ function gvn!(ir::IRCode)
             end
             if isempty(elimination_stack) 
                 push!(elimination_stack, CongruenceClass(ssa, blockidx))
-            elseif last(elimination_stack).ssa < ssa
+            elseif last(elimination_stack).ssa < ssa 
                 ir.stmts.stmt[ssa] = SSAValue(last(elimination_stack).ssa)
             end
         end
