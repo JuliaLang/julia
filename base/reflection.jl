@@ -1634,8 +1634,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if result === missing
-        # unanalyzable call, return the unknown effects
+    if result === nothing
+        # unanalyzable call, i.e. the interpreter world might be newer than the world where
+        # the `f` is defined, return the unknown effects
         return Core.Compiler.Effects()
     end
     (; matches) = result
