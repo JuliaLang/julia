@@ -726,3 +726,51 @@ function naive_idoms(blocks::Vector{BasicBlock}, is_post_dominator::Bool=false)
     end
     idoms
 end
+
+# On what step do we first see a node and last see a node in a DFS traversal of the dominator tree
+struct DFSNumber
+    in::Int
+    out::Int
+end
+
+# Based on updateDFSNumbers() in LLVM
+function construct_dfsnumbers(domtree::GenericDomTree)
+    dfsnumbers = fill(DFSNumber(1, 0), length(domtree.nodes))
+
+    workstack = [(1, 1)] # index into domtree, index into children of node
+
+    DFSNum = 1
+    while !isempty(workstack)
+        DFSNum += 1
+        nodeidx, relchildidx = workstack[end]
+
+        # If we have visited all children of this node then this is the last time we will
+        # visit this node
+        if relchildidx > length(domtree.nodes[nodeidx].children)
+            dfsnumbers[nodeidx] = DFSNumber(dfsnumbers[nodeidx].in, DFSNum)
+            pop!(workstack)
+        else
+            # Otherwise visit its next child
+            workstack[end] = (nodeidx, relchildidx + 1)
+            childidx = domtree.nodes[nodeidx].children[relchildidx]
+            push!(workstack, (childidx, 1))
+            dfsnumbers[childidx] = DFSNumber(DFSNum, dfsnumbers[childidx].out)
+        end
+    end
+
+    return dfsnumbers
+end
+
+"""
+    dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::Int, bb2::Int) -> Bool
+"""
+function dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::BBNumber, bb2::BBNumber)
+    dfsnumbers[bb1].in <= dfsnumbers[bb2].in && dfsnumbers[bb2].out <= dfsnumbers[bb1].out
+end
+
+"""
+    postdominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::Int, bb2::Int) -> Bool
+"""
+function postdominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::BBNumber, bb2::BBNumber)
+    dfsnumbers[bb1].in <= dfsnumbers[bb2].in && dfsnumbers[bb2].out <= dfsnumbers[bb1].out
+end
