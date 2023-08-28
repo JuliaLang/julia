@@ -285,7 +285,7 @@ end
 
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
 flisp parser for all parsing work. That is, JuliaSyntax will be used for
-`include()` `Meta.parse()`, the REPL, etc. To reset to the reference parser,
+`include()`, `Meta.parse()`, the REPL, etc. To reset to the reference parser,
 use `enable_in_core!(false)`.
 
 Keyword arguments:
