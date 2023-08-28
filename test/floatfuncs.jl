@@ -253,3 +253,12 @@ end
         @test isapprox(typemin(T), 0.0, rtol=1)
     end
 end
+
+@testset "Conversion to UInt near extremes (#51063)" begin
+    @test UInt64(4.2949673f9) === typemax(UInt32) + UInt64(1)
+    @test_throws InexactError UInt32(4.2949673f9)
+    @test UInt32(prevfloat(4.2949673f9)) === 0xffffff00
+    @test UInt128(1.8446744073709552e19) === typemax(UInt64) + UInt128(1)
+    @test_throws InexactError UInt64(1.8446744073709552e19)
+    @test UInt64(prevfloat(1.8446744073709552e19)) === 0xfffffffffffff800
+end
