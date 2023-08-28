@@ -18,5 +18,8 @@
 			]
 		}
 	},
-	"postCreateCommand": "juliaup link dev /workspaces/julia/julia"
+	"postCreateCommand": "juliaup link dev /workspaces/julia/julia",
+	"hostRequirements": {
+		"memory": "8gb"
+	 }
 }
