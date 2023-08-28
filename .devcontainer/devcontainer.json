@@ -3,7 +3,7 @@
 	"features": {
 		"ghcr.io/julialang/devcontainer-features/julia:1": {},
 		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-			"packages": ["lldb"]
+			"packages": ["gdb"]
 		}
 	},
 	"customizations": {
@@ -14,8 +14,7 @@
 				"tamasfe.even-better-toml",
 				"github.vscode-github-actions",
 				"GitHub.vscode-pull-request-github",
-				"ms-vscode.makefile-tools",
-				"vadimcn.vscode-lldb"
+				"ms-vscode.makefile-tools"
 			]
 		}
 	},
