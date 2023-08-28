@@ -413,9 +413,9 @@ It can also be applied immediately before a `@ccall` expression.
 # Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function fact(x)
-           # this :terminates_locally allows `pow` to be constant-folded
+           # this :terminates_locally allows `fact` to be constant-folded
            res = 1
-           1 < x < 20 || error("bad pow")
+           0 ≤ x < 20 || error("bad fact")
            while x > 1
                res *= x
                x -= 1
@@ -436,7 +436,7 @@ julia> code_typed() do
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
-               1 < x < 20 || error("bad pow")
+               0 ≤ x < 20 || error("bad fact")
                while x > 1
                    res *= x
                    x -= 1
