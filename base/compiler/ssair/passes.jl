@@ -2161,7 +2161,7 @@ struct CongruenceClass
     blockidx::Int
 end
 
-function perform_symbolic_evaluation(stmt::Expr, VN)
+function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
     # rename all SSAValues 
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
@@ -2171,7 +2171,7 @@ function perform_symbolic_evaluation(stmt::Expr, VN)
         # key[end] = stmt.head
         # for (i, arg) in enumerate(stmt.args)
         #     if isa(arg, SSAValue)
-        #         key[i] = SSAValue(VN[arg.id])
+        #         key[i] = SSAValue(ssa_to_ssa[arg.id])
         #     end
         # end
         # svec(key...)
@@ -2180,7 +2180,7 @@ function perform_symbolic_evaluation(stmt::Expr, VN)
         ptr = convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(key)) + sizeof(Ptr{Cvoid})
         for (i, arg) in enumerate(stmt.args)
             if isa(arg, SSAValue)
-                unsafe_store!(ptr, ccall(:jl_box_ssavalue, Ptr{Any}, (Int,), VN[arg.id]), i)
+                unsafe_store!(ptr, ccall(:jl_box_ssavalue, Ptr{Any}, (Int,), ssa_to_ssa[arg.id]), i)
             else
                 unsafe_store!(ptr, arrayptr(Ptr{Nothing}, stmt.args, i), i)
             end
@@ -2191,7 +2191,7 @@ function perform_symbolic_evaluation(stmt::Expr, VN)
         return stmt
     end
 end
-function perform_symbolic_evaluation(stmt::PhiNode, VN, blockidx)
+function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     length(stmt.values) == 0 && return stmt, true
 
     no_of_edges = length(stmt.edges)
@@ -2208,14 +2208,14 @@ function perform_symbolic_evaluation(stmt::PhiNode, VN, blockidx)
         !isassigned(stmt.values, j) && return stmt, true
 
         val = stmt.values[j]
-        if val isa SSAValue && VN[val.id] == 0
+        if val isa SSAValue && ssa_to_ssa[val.id] == 0
             deleteat!(key, j-deletions)
             deletions += 1
             deleteat!(key, no_of_edges+2-deletions+j)
             deletions += 1
         else
             if val isa SSAValue
-                key[no_of_edges+2-deletions+j] = VN[val.id]
+                key[no_of_edges+2-deletions+j] = ssa_to_ssa[val.id]
             end
             if firstval === nothing
                 firstval = val
@@ -2232,9 +2232,9 @@ end
 
 function gvn!(ir::IRCode)
     changed = true
-    VN = fill(0, length(ir.stmts.stmt))
+    ssa_to_ssa = fill(0, length(ir.stmts.stmt)) # Map from ssa to ssa of equivalent value
     # Value type is SSAValue in order to reuse cache from it being boxed in svec
-    val_to_ssa = IdDict{SimpleVector, SSAValue}()
+    val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
     sizehint!(val_to_ssa, length(ir.stmts.stmt))
 
     # @assert eachindex(ir.stmts.stmt) isa OneTo
@@ -2244,7 +2244,7 @@ function gvn!(ir::IRCode)
         # RPO Traversal
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
             if !(ir.stmts.stmt[i] isa Expr) & !(ir.stmts.stmt[i] isa PhiNode) 
-                VN[i] = i
+                ssa_to_ssa[i] = i
                 continue
             end
 
@@ -2254,16 +2254,20 @@ function gvn!(ir::IRCode)
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE # we only replace dominated instructions so throwing is fine?
             # if a try catch exists still fine?
             if !(ir.stmts.flag[i] & total_flags == total_flags) 
-                VN[i] = i
+                ssa_to_ssa[i] = i
                 continue
             end
 
             value = if stmt isa Expr
-                perform_symbolic_evaluation(stmt, VN)
+                if stmt.head === :the_exception # Do not eliminate exceptions
+                    ssa_to_ssa[i] = i
+                    continue
+                end
+                perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
-                value, skip = perform_symbolic_evaluation(stmt, VN, blockidx)
+                value, skip = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
                 if skip
-                    VN[i] = i
+                    ssa_to_ssa[i] = i
                     continue
                 end
                 value
@@ -2271,8 +2275,8 @@ function gvn!(ir::IRCode)
 
             temp = get!(val_to_ssa, value, SSAValue(i)).id
 
-            if VN[i] != temp
-                VN[i] = temp
+            if ssa_to_ssa[i] != temp
+                ssa_to_ssa[i] = temp
                 changed = true
             end
         end
@@ -2283,14 +2287,14 @@ function gvn!(ir::IRCode)
     # Find Congruence Classes
     congruence_classes = nothing # could steal ht from val_to_ssa instead of delaying allocation
     for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-        if VN[i] != 0 && VN[i] != i
+        if ssa_to_ssa[i] != 0 && ssa_to_ssa[i] != i
             if congruence_classes === nothing
                 congruence_classes = IdDict{Int, Vector{CongruenceClass}}() 
             end
-            if !haskey(congruence_classes, VN[i])
-                congruence_classes[VN[i]] = [CongruenceClass(VN[i], block_for_inst(ir, VN[i]))]
+            if !haskey(congruence_classes, ssa_to_ssa[i])
+                congruence_classes[ssa_to_ssa[i]] = [CongruenceClass(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
             end
-            push!(congruence_classes[VN[i]], CongruenceClass(i, blockidx)) 
+            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClass(i, blockidx)) 
         end
     end
 
