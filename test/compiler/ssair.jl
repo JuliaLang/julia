@@ -652,3 +652,35 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         @test new_call_idx === nothing # should be deleted during the compaction
     end
 end
+
+@testset "GotoIfNot folding" begin
+    # After IRCode conversion, following the targets of a GotoIfNot should never lead to
+    # statically unreachable code.
+    function f_with_maybe_nonbool_cond(a::Int, r::Bool)
+        a = r ? true : a
+        if a
+            # The following conditional can be resolved statically, since `a === true`
+            # This test checks that it becomes a static `goto` despite its wide slottype.
+            x = a ? 1 : 2.
+        else
+            x = a ? 1 : 2.
+        end
+        return x
+    end
+    let
+        # At least some statements should have been found to be statically unreachable and wrapped in Const(...)::Union{}
+        unopt = code_typed1(f_with_maybe_nonbool_cond, (Int, Bool); optimize=false)
+        @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
+
+        # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
+        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="convert")))
+        for i = 1:length(ircode.stmts)
+            expr = ircode.stmts[i][:stmt]
+            if isa(expr, GotoIfNot)
+                # If this statement is Core.Const(...)::Union{}, that means this code was not reached
+                @test !(isa(ircode.stmts[i+1][:stmt], Core.Const) && (unopt.ssavaluetypes[i+1] === Union{}))
+                @test !(isa(ircode.stmts[expr.dest][:stmt], Core.Const) && (unopt.ssavaluetypes[expr.dest] === Union{}))
+            end
+        end
+    end
+end

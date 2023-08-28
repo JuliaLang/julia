@@ -541,20 +541,19 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             # - no-op if :nothrow and the branch target is unreachable
             # - cond if :nothrow and both targets are unreachable
             # - typeassert if must-throw
-            if widenconst(argextype(expr.cond, ci, sv.sptypes)) === Bool
-                block = block_for_inst(sv.cfg, i)
-                if i + 1 in sv.unreachable
-                    cfg_delete_edge!(sv.cfg, block, block + 1)
-                    expr = GotoNode(expr.dest)
-                elseif expr.dest in sv.unreachable
-                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                    expr = nothing
-                end
-            elseif ssavaluetypes[i] === Bottom
-                block = block_for_inst(sv.cfg, i)
+            block = block_for_inst(sv.cfg, i)
+            if ssavaluetypes[i] === Bottom
                 cfg_delete_edge!(sv.cfg, block, block + 1)
                 cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
                 expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+            elseif i + 1 in sv.unreachable
+                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                cfg_delete_edge!(sv.cfg, block, block + 1)
+                expr = GotoNode(expr.dest)
+            elseif expr.dest in sv.unreachable
+                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                expr = nothing
             end
             code[i] = expr
         end

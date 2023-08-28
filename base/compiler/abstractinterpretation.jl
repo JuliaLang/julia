@@ -2986,6 +2986,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     nextbb = succs[1]
                     ssavaluetypes[currpc] = Any
                     handle_control_backedge!(interp, frame, currpc, stmt.label)
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
@@ -3002,6 +3003,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         condt = Conditional(condx, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
+                    nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
+                    nothrow && add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if !isempty(frame.pclimitations)
                         # we can't model the possible effect of control
                         # dependencies on the return
@@ -3027,7 +3030,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
-                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                            if !nothrow
                                 merge_effects!(interp, frame, EFFECTS_THROWS)
                                 if !hasintersect(widenconst(orig_condt), Bool)
                                     ssavaluetypes[currpc] = Bottom
