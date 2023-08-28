@@ -2763,7 +2763,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if !isa(mt, MethodTable)
         return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
     end
-    match, valid_worlds, overlayed = findsup(types, method_table(interp))
+    match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
