@@ -364,7 +364,7 @@ Two `setting`s are supported:
 ```julia
 # annotate long-form definition
 Base.@constprop :aggressive function longdef(x)
-  ...
+    ...
 end
 
 # annotate short-form definition
