@@ -612,22 +612,25 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
+static void jl_safe_print_codeloc(const char *pre_str,
+                                  const char* func_name, const char* file_name,
                                   int line, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
-        jl_safe_printf("%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+        jl_safe_printf("%s%s at %s:%d%s\n",
+                       pre_str, func_name, file_name, line, inlined_str);
     }
     else {
-        jl_safe_printf("%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
+        jl_safe_printf("%s%s at %s (unknown line)%s\n",
+                       pre_str, func_name, file_name, inlined_str);
     }
 }
 
 // Print function, file and line containing native instruction pointer `ip` by
 // looking up debug info. Prints multiple such frames when `ip` points to
 // inlined code.
-void jl_print_native_codeloc(int sig, uintptr_t ip) JL_NOTSAFEPOINT
+void jl_print_native_codeloc(char *pre_str, uintptr_t ip) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -637,16 +640,13 @@ void jl_print_native_codeloc(int sig, uintptr_t ip) JL_NOTSAFEPOINT
     int i;
 
     for (i = 0; i < n; i++) {
-        if (sig != -1) {
-            jl_safe_printf("signal (%d) ", sig);
-        }
-        jl_safe_printf("thread (%d) ", jl_threadid());
         jl_frame_t frame = frames[i];
         if (!frame.func_name) {
-            jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
+            jl_safe_printf("%sunknown function (ip: %p)\n", pre_str, (void*)ip);
         }
         else {
-            jl_safe_print_codeloc(frame.func_name, frame.file_name, frame.line, frame.inlined);
+            jl_safe_print_codeloc(pre_str, frame.func_name,
+                                  frame.file_name, frame.line, frame.inlined);
             free(frame.func_name);
             free(frame.file_name);
         }
@@ -657,8 +657,15 @@ void jl_print_native_codeloc(int sig, uintptr_t ip) JL_NOTSAFEPOINT
 // Print code location for backtrace buffer entry at *bt_entry
 void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
+    char sig_str[32], pre_str[64];
+    sig_str[0] = '\0';
+    if (sig != -1) {
+        snprintf(sig_str, 32, "signal (%d) ", sig);
+    }
+    snprintf(pre_str, 64, "%sthread (%d) ", sig_str, jl_threadid());
+
     if (jl_bt_is_native(bt_entry)) {
-        jl_print_native_codeloc(sig, bt_entry[0].uintptr);
+        jl_print_native_codeloc(pre_str, bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
         size_t ip = jl_bt_entry_header(bt_entry);
@@ -684,7 +691,7 @@ void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_entry) JL_NOTSAFEPOI
                     method = (jl_value_t*)((jl_method_t*)method)->name;
                 if (jl_is_symbol(method))
                     func_name = jl_symbol_name((jl_sym_t*)method);
-                jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
+                jl_safe_print_codeloc(pre_str, func_name, jl_symbol_name(locinfo->file),
                                       locinfo->line, locinfo->inlined_at);
                 debuginfoloc = locinfo->inlined_at;
             }
@@ -1090,7 +1097,9 @@ void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
-    jl_print_native_codeloc(-1, (uintptr_t)ip);
+    char pre_str[64];
+    snprintf(pre_str, 64, "thread (%d) ", jl_threadid());
+    jl_print_native_codeloc(pre_str, (uintptr_t)ip);
 }
 
 // Print backtrace for current exception in catch block
