@@ -150,6 +150,8 @@ end
     r
 end
 
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
+
 @inline function Base.isstored(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j

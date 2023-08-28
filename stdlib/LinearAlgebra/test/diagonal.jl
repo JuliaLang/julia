@@ -460,6 +460,12 @@ Random.seed!(1)
     end
 end
 
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
+end
+
 @testset "rdiv! (#40887)" begin
     @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
     @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
