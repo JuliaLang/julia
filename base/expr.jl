@@ -714,8 +714,9 @@ macro assume_effects(args...)
         ex = nothing
         idx = length(args)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub) =
-        (false, false, false, false, false, false, false, false, false)
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+        notaskstate, inaccessiblememonly, noub, nonoverlayed) =
+        (false, false, false, false, false, false, false, false, false, false)
     for org_setting in args[1:idx]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
@@ -734,6 +735,8 @@ macro assume_effects(args...)
             inaccessiblememonly = val
         elseif setting === :noub
             noub = val
+        elseif setting === :nonoverlayed
+            nonoverlayed = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = noub = val
         elseif setting === :removable
@@ -746,15 +749,18 @@ macro assume_effects(args...)
     end
     if is_function_def(inner)
         return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, nonoverlayed))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub)))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, nonoverlayed)))
         return esc(ex)
     else # anonymous function case
         return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, nonoverlayed))
     end
 end
 

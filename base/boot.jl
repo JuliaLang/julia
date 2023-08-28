@@ -464,7 +464,8 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
-        #=:noub=#true))
+        #=:noub=#true,
+        #=:nonoverlayed=#false))
 end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}

@@ -20,8 +20,8 @@ using Base.Experimental: @MethodTable, @overlay
 end
 
 @newinterp MTOverlayInterp
-@MethodTable OverlayedMT
-CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+@MethodTable OVERLAY_MT
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OVERLAY_MT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     if interp.meta !== nothing
@@ -32,7 +32,7 @@ function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
 end
 
 strangesin(x) = sin(x)
-@overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
+@overlay OVERLAY_MT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
 
 # inference should use the overlayed method table
 @test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
@@ -84,7 +84,7 @@ end |> only === Float64
 
 # not fully covered overlay method match
 overlay_match(::Any) = nothing
-@overlay OverlayedMT overlay_match(::Int) = missing
+@overlay OVERLAY_MT overlay_match(::Int) = missing
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
@@ -116,11 +116,34 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
     end
 end |> only === Nothing
 
+# override `:nonoverlayed` to allow concrete-eval for overlay-ed methods
+Base.@assume_effects :foldable function gpucompiler384(x::Int)
+    1 < x < 20 || error("x is too big")
+    return factorial(x)
+end
+@overlay OVERLAY_MT Base.@assume_effects :foldable :nonoverlayed function gpucompiler384(x::Int)
+    1 < x < 20 || raise_on_gpu("x is too big")
+    return factorial(x)
+end
+raise_on_gpu(x) = #=do something with GPU=# error(x)
+
+call_gpucompiler384(x) = gpucompiler384(x)
+
+@test Base.infer_effects(gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(call_gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
+
+@test Base.return_types(; interp=MTOverlayInterp()) do
+    Val(gpucompiler384(3) == 6)
+end |> only == Val{true}
+@test Base.return_types(; interp=MTOverlayInterp()) do
+    Val(call_gpucompiler384(3) == 6)
+end |> only == Val{true}
+
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
-@MethodTable Issue48097MT
-CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+@MethodTable ISSUE48097_MT
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), ISSUE48097_MT)
 CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
@@ -132,7 +155,7 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
     end
     return ret
 end
-@overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
+@overlay ISSUE48097_MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
 @test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
@@ -140,26 +163,26 @@ end
 
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
-@MethodTable OverlaySinMT
-CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlaySinMT)
+@MethodTable OVERLAY_SIN_MT
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OVERLAY_SIN_MT)
 overlay_sin1(x) = error("Not supposed to be called.")
-@overlay OverlaySinMT overlay_sin1(x) = cos(x)
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
+@overlay OVERLAY_SIN_MT overlay_sin1(x) = cos(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
 let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first |> Core.OpaqueClosure
     @test oc() == cos(0.)
 end
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
 let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first |> Core.OpaqueClosure
     @test oc() == cos(0.)
 end
 _overlay_sin2(x) = error("Not supposed to be called.")
-@overlay OverlaySinMT _overlay_sin2(x) = cos(x)
+@overlay OVERLAY_SIN_MT _overlay_sin2(x) = cos(x)
 overlay_sin2(x) = _overlay_sin2(x)
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
 let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first |> Core.OpaqueClosure

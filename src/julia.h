@@ -269,8 +269,9 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_notaskstate         : 1;
         uint8_t ipo_inaccessiblememonly : 1;
         uint8_t ipo_noub                : 1;
+        uint8_t ipo_nonoverlayed        : 1;
     } overrides;
-    uint8_t bits;
+    uint32_t bits;
 } _jl_purity_overrides_t;
 
 // This type describes a single function body
@@ -428,22 +429,24 @@ typedef struct _jl_code_instance_t {
     // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
     uint32_t ipo_purity_bits;
     // ipo_purity_flags:
-    //     uint8_t ipo_consistent          : 2;
+    //     uint8_t ipo_consistent          : 3;
     //     uint8_t ipo_effect_free         : 2;
-    //     uint8_t ipo_nothrow             : 2;
-    //     uint8_t ipo_terminates          : 2;
-    //     uint8_t ipo_nonoverlayed        : 1;
+    //     uint8_t ipo_nothrow             : 1;
+    //     uint8_t ipo_terminates          : 1;
     //     uint8_t ipo_notaskstate         : 2;
     //     uint8_t ipo_inaccessiblememonly : 2;
+    //     uint8_t ipo_nonoverlayed        : 1;
+    //     uint8_t ipo_noinbounds          : 1;
     _Atomic(uint32_t) purity_bits;
     // purity_flags:
-    //     uint8_t consistent          : 2;
-    //     uint8_t effect_free         : 2;
-    //     uint8_t nothrow             : 2;
-    //     uint8_t terminates          : 2;
-    //     uint8_t nonoverlayed        : 1;
-    //     uint8_t notaskstate         : 2;
-    //     uint8_t inaccessiblememonly : 2;
+    //     uint8_t ipo_consistent          : 3;
+    //     uint8_t ipo_effect_free         : 2;
+    //     uint8_t ipo_nothrow             : 1;
+    //     uint8_t ipo_terminates          : 1;
+    //     uint8_t ipo_notaskstate         : 2;
+    //     uint8_t ipo_inaccessiblememonly : 2;
+    //     uint8_t ipo_nonoverlayed        : 1;
+    //     uint8_t ipo_noinbounds          : 1;
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
