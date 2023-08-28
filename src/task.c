@@ -721,7 +721,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
            GC. This exists only for the purpose of preserving bt_data until we \
            set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(&ct->excstack, exception,                             \
+        jl_push_excstack(ct, &ct->excstack, exception,                             \
                           ptls->bt_data, ptls->bt_size);                       \
         ptls->bt_size = 0;                                                     \
     }                                                                          \
@@ -1224,7 +1224,7 @@ CFI_NORETURN
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&ct->excstack, ct->result,
+        jl_push_excstack(ct, &ct->excstack, ct->result,
                          ptls->bt_data, ptls->bt_size);
         res = ct->result;
     }
