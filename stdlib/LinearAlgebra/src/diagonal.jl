@@ -151,7 +151,7 @@ end
 end
 
 function axes(D::Diagonal)
-    ax = axes(D.diag,1)
+    ax = axes(D.diag, 1)
     (ax, ax)
 end
 
