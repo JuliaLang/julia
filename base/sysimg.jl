@@ -29,49 +29,9 @@ let
 
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
-    stdlibs = [
-        # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
-
-        # 1-depth packages
-        :LinearAlgebra,
-        :Markdown,
-        :Printf,
-        :Random,
-        :Tar,
-
-        # 2-depth packages
-        :Dates,
-        :Future,
-        :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
-
-        # 3-depth packages
-        :REPL,
-        :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
-
-        # 6-depth packages
-        :Pkg,
-    ]
+    stdlibs = [:LinearAlgebra, :REPL, :p7zip_jll]  # TODO: REPL *should* be excisable too (and it still working despite)
+￼   # LinearAlgebra is also excisable but it's a minor breaking change (which can be fixed), likely all can be dropped from list
+    
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
