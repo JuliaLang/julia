@@ -92,9 +92,9 @@ end |> only === Union{Nothing,Missing}
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
-Base.@assume_effects :terminates_globally function issue41694(x)
+Base.@assume_effects :terminates_locally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
