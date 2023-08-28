@@ -3,7 +3,7 @@
 	"features": {
 		"ghcr.io/julialang/devcontainer-features/julia:1": {},
 		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-			"packages": ["gdb", "lldb"]
+			"packages": ["lldb"]
 		}
 	},
 	"customizations": {
@@ -15,7 +15,6 @@
 				"github.vscode-github-actions",
 				"GitHub.vscode-pull-request-github",
 				"ms-vscode.makefile-tools",
-				"webfreak.debug",
 				"vadimcn.vscode-lldb"
 			]
 		}
