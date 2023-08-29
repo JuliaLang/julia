@@ -2227,6 +2227,18 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     return svec(key...)
 end
 
+"""
+    gnv!(ir::IRCode) -> newir::IRCode
+
+Global Value Numbering (GVN) pass.
+
+This is based on the NewGVN pass in LLVM.
+
+GVN partitions all the statements in the IR into congruence classes. All elements in a congruence class are guaranteed to be the same.
+
+It implements the RPO value numbering algorithm based on the paper "SCC based value numbering" by L. Taylor Simpson.
+The elimination step is based on the implemenation in LLVM's NewGVN pass.
+"""
 function gvn!(ir::IRCode)
     changed = true
     ssa_to_ssa = fill(0, length(ir.stmts.stmt)) # Map from ssa to ssa of equivalent value
@@ -2237,7 +2249,7 @@ function gvn!(ir::IRCode)
     while changed
         changed = false
         
-        # RPO Traversal
+        # Reverse Post Order traversal of dominator tree
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
             if !(ir.stmts.stmt[i] isa Expr) & !(ir.stmts.stmt[i] isa PhiNode) 
                 ssa_to_ssa[i] = i

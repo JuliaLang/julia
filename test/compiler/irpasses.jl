@@ -1468,6 +1468,28 @@ end
 
 @test isnothing(f_with_early_try_catch_exit())
 
+# Test that gvn! works on example from the paper "SCC based value numbering" by L. Taylor Simpson.
+let src = @eval Module() begin
+        function g()
+            x = 1
+            y = 1
+            while true
+                x += 1
+                y += 1
+            end
+        end
+        code_typed(g, Tuple{})[1][1]
+    end
+    nphi = 0
+    for stmt in src.code
+        if stmt isa Core.PhiNode
+            nphi += 1
+        end
+    end
+    @test nphi == 1
+    @test count(iscall((src, Base.add_int)), src.code) == 1
+end
+
 # Issue #51144 - UndefRefError during compaction
 let code = Any[
         # block 1  → 2, 3
