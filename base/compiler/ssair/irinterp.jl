@@ -10,9 +10,9 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     world = frame_world(irsv)
     mi_cache = WorldView(code_cache(interp), world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any,Bool}(nothing, false)
+    code === nothing && return Pair{Any,Tuple{Bool, Bool}}(nothing, (false, false))
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv)
-    argtypes === nothing && return Pair{Any,Bool}(Bottom, false)
+    argtypes === nothing && return Pair{Any,Tuple{Bool, Bool}}(Bottom, (false, false))
     effects = decode_effects(code.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         is_nonoverlayed(effects) && is_nonoverlayed(mi.def::Method))
@@ -21,20 +21,20 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
             try
                 Core._call_in_world_total(world, args...)
             catch
-                return Pair{Any,Bool}(Bottom, false)
+                return Pair{Any,Tuple{Bool, Bool}}(Bottom, (false, is_noub(effects, false)))
             end
         end
-        return Pair{Any,Bool}(Const(value), true)
+        return Pair{Any,Tuple{Bool, Bool}}(Const(value), (true, true))
     else
         if is_constprop_edge_recursed(mi, irsv)
-            return Pair{Any,Bool}(nothing, is_nothrow(effects))
+            return Pair{Any,Tuple{Bool, Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
         end
         newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = irsv
             return ir_abstract_constant_propagation(interp, newirsv)
         end
-        return Pair{Any,Bool}(nothing, is_nothrow(effects))
+        return Pair{Any,Tuple{Bool, Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
     end
 end
 
@@ -129,9 +129,12 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             inst[:flag] |= flags_for_effects(effects)
         elseif head === :invoke
-            rt, nothrow = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
+            rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
             if nothrow
                 inst[:flag] |= IR_FLAG_NOTHROW
+            end
+            if noub
+                inst[:flag] |= IR_FLAG_NOUB
             end
         elseif head === :throw_undef_if_not
             condval = maybe_extract_const_bool(argextype(stmt.args[2], ir))
@@ -375,11 +378,13 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         end
     end
 
-    nothrow = true
+    nothrow = noub = true
     for idx = 1:length(ir.stmts)
         if (ir[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0
             nothrow = false
-            break
+        end
+        if (ir[SSAValue(idx)][:flag] & IR_FLAG_NOUB) == 0
+            noub = false
         end
     end
 
@@ -389,7 +394,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         store_backedges(frame_instance(irsv), irsv.edges)
     end
 
-    return Pair{Any,Bool}(maybe_singleton_const(ultimate_rt), nothrow)
+    return Pair{Any,Tuple{Bool, Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
 end
 
 function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)

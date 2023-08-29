@@ -1150,7 +1150,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
         irsv = IRInterpretationState(interp, code, mi, arginfo.argtypes, world)
         if irsv !== nothing
             irsv.parent = sv
-            rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
+            rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
             @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from irinterp"
             if !(isa(rt, Type) && hasintersect(rt, Bool))
                 ir = irsv.ir
@@ -1161,6 +1161,9 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                 effects = result.effects
                 if !is_nothrow(effects)
                     effects = Effects(effects; nothrow)
+                end
+                if noub
+                    effects = Effects(effects; noub = ALWAYS_TRUE)
                 end
                 return ConstCallResults(rt, SemiConcreteResult(mi, ir, effects), effects, mi)
             end

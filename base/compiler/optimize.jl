@@ -554,9 +554,10 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         # Special case: `:boundscheck` into `getfield`
         is_getfield_with_boundscheck_arg(inst) || return false
         barg = inst[:stmt].args[end]
-        isexpr(ir[barg][:stmt], :boundscheck) || return false
+        bstmt = ir[barg][:stmt]
+        isexpr(bstmt, :boundscheck) || return false
         # If IR_FLAG_INBOUNDS is already set, no more conditional ub
-        (ir[barg][:flag] & IR_FLAG_INBOUNDS) != 0 && return false
+        (length(bstmt.args) != 0 && bstmt.args[1] === false) && return false
         any_conditional_ub = true
         return true
     end
