@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
-# Modules
+    # Modules
     Meta,
     StackTraces,
     Sys,
@@ -12,7 +12,7 @@ export
     Broadcast,
     MathConstants,
 
-# Types
+    # Types
     AbstractChannel,
     AbstractIrrational,
     AbstractMatrix,
@@ -103,7 +103,7 @@ export
     VersionNumber,
     WeakKeyDict,
 
-# Ccall types
+    # Ccall types
     Cchar,
     Cdouble,
     Cfloat,
@@ -125,7 +125,7 @@ export
     Cstring,
     Cwstring,
 
-# Exceptions
+    # Exceptions
     CanonicalIndexError,
     CapturedException,
     CompositeException,
@@ -139,7 +139,7 @@ export
     SystemError,
     StringIndexError,
 
-# Global constants and variables
+    # Global constants and variables
     ARGS,
     C_NULL,
     DEPOT_PATH,
@@ -153,7 +153,7 @@ export
     VERSION,
     devnull,
 
-# Mathematical constants
+    # Mathematical constants
     Inf,
     Inf16,
     Inf32,
@@ -166,7 +166,7 @@ export
     π, pi,
     ℯ,
 
-# Operators
+    # Operators
     !,
     !=,
     ≠,
@@ -204,11 +204,11 @@ export
     |,
     |>,
     ~,
-    :,
+    : ,
     =>,
     ∘,
 
-# scalar math
+    # scalar math
     @evalpoly,
     evalpoly,
     abs,
@@ -369,7 +369,7 @@ export
     ≈,
     ≉,
 
-# arrays
+    # arrays
     axes,
     broadcast!,
     broadcast,
@@ -460,7 +460,7 @@ export
     view,
     zeros,
 
-# search, find, match and related functions
+    # search, find, match and related functions
     contains,
     eachmatch,
     endswith,
@@ -481,18 +481,18 @@ export
     insorted,
     startswith,
 
-# linear algebra
+    # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
     kron!,
 
-# bitarrays
+    # bitarrays
     falses,
     trues,
 
-# dequeues
+    # dequeues
     append!,
     insert!,
     pop!,
@@ -503,7 +503,7 @@ export
     popfirst!,
     pushfirst!,
 
-# collections
+    # collections
     all!,
     all,
     allequal,
@@ -514,6 +514,7 @@ export
     collect,
     count!,
     count,
+    delete,
     delete!,
     deleteat!,
     keepat!,
@@ -579,7 +580,7 @@ export
     ∩,
     ∪,
 
-# strings
+    # strings
     ascii,
     bitstring,
     bytes2hex,
@@ -636,7 +637,7 @@ export
     uppercase,
     uppercasefirst,
 
-# text output
+    # text output
     IOContext,
     displaysize,
     dump,
@@ -648,13 +649,13 @@ export
     sprint,
     summary,
 
-# logging
+    # logging
     @debug,
     @info,
     @warn,
     @error,
 
-# bigfloat & precision
+    # bigfloat & precision
     precision,
     rounding,
     setprecision,
@@ -662,13 +663,13 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# iteration
+    # iteration
     iterate,
     enumerate,  # re-exported from Iterators
     zip,
     only,
 
-# object identity and equality
+    # object identity and equality
     copy,
     deepcopy,
     hash,
@@ -683,7 +684,7 @@ export
     objectid,
     sizeof,
 
-# tasks and conditions
+    # tasks and conditions
     Condition,
     current_task,
     islocked,
@@ -706,14 +707,14 @@ export
     asyncmap!,
     errormonitor,
 
-# channels
+    # channels
     take!,
     put!,
     isready,
     fetch,
     bind,
 
-# missing values
+    # missing values
     coalesce,
     @coalesce,
     ismissing,
@@ -724,12 +725,12 @@ export
     isnothing,
     nonmissingtype,
 
-# time
+    # time
     sleep,
     time,
     time_ns,
 
-# errors
+    # errors
     backtrace,
     catch_backtrace,
     current_exceptions,
@@ -738,10 +739,10 @@ export
     retry,
     systemerror,
 
-# stack traces
+    # stack traces
     stacktrace,
 
-# types
+    # types
     convert,
     getproperty,
     setproperty!,
@@ -772,7 +773,7 @@ export
     typejoin,
     widen,
 
-# syntax
+    # syntax
     esc,
     gensym,
     @kwdef,
@@ -781,7 +782,7 @@ export
     @macroexpand,
     parse,
 
-# help and reflection
+    # help and reflection
     code_typed,
     code_lowered,
     fullname,
@@ -802,26 +803,26 @@ export
     invokelatest,
     @invokelatest,
 
-# loading source files
+    # loading source files
     __precompile__,
     evalfile,
     include_string,
     include_dependency,
 
-# RTS internals
+    # RTS internals
     GC,
     finalizer,
     finalize,
     precompile,
 
-# misc
+    # misc
     atexit,
     atreplinit,
     exit,
     ntuple,
     splat,
 
-# I/O and events
+    # I/O and events
     close,
     closewrite,
     countlines,
@@ -876,7 +877,7 @@ export
     unsafe_write,
     write,
 
-# multimedia I/O
+    # multimedia I/O
     AbstractDisplay,
     display,
     displayable,
@@ -891,7 +892,7 @@ export
     HTML,
     Text,
 
-# paths and file names
+    # paths and file names
     abspath,
     basename,
     dirname,
@@ -909,7 +910,7 @@ export
     splitext,
     splitpath,
 
-# filesystem operations
+    # filesystem operations
     cd,
     chmod,
     chown,
@@ -955,7 +956,7 @@ export
     uperm,
     walkdir,
 
-# external processes
+    # external processes
     detach,
     getpid,
     ignorestatus,
@@ -969,7 +970,7 @@ export
     success,
     withenv,
 
-# C interface
+    # C interface
     @cfunction,
     @ccall,
     cglobal,
@@ -987,11 +988,11 @@ export
     unsafe_store!,
     unsafe_swap!,
 
-# implemented in Random module
+    # implemented in Random module
     rand,
     randn,
 
-# Macros
+    # Macros
     # parser internal
     @__FILE__,
     @__DIR__,
@@ -1050,9 +1051,7 @@ export
     @noinline,
     @nospecialize,
     @specialize,
-    @polly,
-
-    @assert,
+    @polly, @assert,
     @atomic,
     @atomicswap,
     @atomicreplace,
