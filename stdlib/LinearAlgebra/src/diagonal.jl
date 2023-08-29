@@ -53,8 +53,9 @@ julia> I(2)
  ⋅  1
 ```
 
-Note that a one-column matrix is not treated like a vector, but instead calls the
-method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+!!! note
+    A one-column matrix is not treated like a vector, but instead calls the
+    method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
 
 ```jldoctest
 julia> A = transpose([7.0 13.0])
@@ -72,27 +73,31 @@ Diagonal(V::AbstractVector)
 """
     Diagonal(A::AbstractMatrix)
 
-Construct a matrix from the diagonal of `A`.
+Construct a matrix from the principal diagonal of `A`.
+The input matrix `A` may be rectangular, but the output will
+be square.
 
 # Examples
 ```jldoctest
-julia> A = permutedims(reshape(1:15, 5, 3))
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> D = Diagonal(A)
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  4
+
+julia> A = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
 julia> Diagonal(A)
-3×3 Diagonal{$Int, Vector{$Int}}:
- 1  ⋅   ⋅
- ⋅  7   ⋅
- ⋅  ⋅  13
-
-julia> diag(A, 2)
-3-element Vector{$Int}:
-  3
-  9
- 15
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  5
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
