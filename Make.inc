@@ -492,10 +492,10 @@ JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
-# AArch64 needs this flag to generate the .eh_frame used by libunwind
+# These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON)
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
+JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
 JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
