@@ -388,14 +388,9 @@ end
 
 function adjust_boundscheck!(inline_compact, idx′, stmt, boundscheck)
     if boundscheck === :off
-        if length(stmt.args) == 0
-            inline_compact[SSAValue(idx′)][:flag] |= IR_FLAG_INBOUNDS
-        end
+        length(stmt.args) == 0 && push!(stmt.args, false)
     elseif boundscheck !== :propagate
-        if (inline_compact[SSAValue(idx′)][:flag] & IR_FLAG_INBOUNDS) == 0
-            # Prevent future inlining passes from setting IR_FLAG_INBOUNDS
-            length(stmt.args) == 0 && push!(stmt.args, true)
-        end
+        length(stmt.args) == 0 && push!(stmt.args, true)
     end
 end
 

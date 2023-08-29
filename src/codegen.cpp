@@ -5157,9 +5157,6 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
             it = ctx.phic_slots.emplace(ssaidx_0based, jl_varinfo_t(ctx.builder.getContext())).first;
         }
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
-    } else if (jl_is_expr(r) && ((jl_expr_t*)r)->head == jl_boundscheck_sym) {
-        uint32_t flag = jl_array_uint32_ref(ctx.source->ssaflags, ssaidx_0based);
-        slot = mark_julia_const(ctx, bounds_check_enabled(ctx, (flag & IR_FLAG_INBOUNDS) ? jl_false : jl_true) ? jl_true : jl_false);
     } else {
         slot = emit_expr(ctx, r, ssaidx_0based); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
     }
@@ -5836,7 +5833,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
     else if (head == jl_boundscheck_sym) {
-        return mark_julia_const(ctx, bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
+        jl_value_t *def = nargs == 0 ? jl_true : args[0];
+        return mark_julia_const(ctx, bounds_check_enabled(ctx, def) ? jl_true : jl_false);
     }
     else if (head == jl_gc_preserve_begin_sym) {
         SmallVector<jl_cgval_t> argv(nargs);
