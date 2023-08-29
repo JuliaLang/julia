@@ -141,7 +141,7 @@ const NOUB_IF_NOINBOUNDS = 0x01 << 1
 
 const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
 const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, true) # unknown mostly, but it's not overlayed and noinbounds at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, true) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
 const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, false) # unknown really
 
 function Effects(effects::Effects = _EFFECTS_UNKNOWN;
@@ -190,17 +190,17 @@ is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
-is_noub(effects::Effects, noinbounds=true) = effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
+is_noub(effects::Effects, noinbounds::Bool=true) = effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
 is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
 
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
-is_foldable(effects::Effects, noinbounds=true) =
+is_foldable(effects::Effects, noinbounds::Bool=true) =
     is_consistent(effects) &&
     is_noub(effects, noinbounds) &&
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_foldable_nothrow(effects::Effects, noinbounds=true) =
+is_foldable_nothrow(effects::Effects, noinbounds::Bool=true) =
     is_foldable(effects, noinbounds) &&
     is_nothrow(effects)
 

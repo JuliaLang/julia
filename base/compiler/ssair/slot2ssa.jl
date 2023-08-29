@@ -216,9 +216,9 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
     return Const(x)
 end
 
-struct BlockLiveness{D, L <: Union{Vector{Int}, Nothing}}
-    def_bbs::D
-    live_in_bbs::L
+struct BlockLiveness
+    def_bbs::Vector{Int}
+    live_in_bbs::Union{Vector{Int}, Nothing}
 end
 
 """

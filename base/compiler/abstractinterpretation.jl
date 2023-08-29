@@ -848,7 +848,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         end
     end
     mi = result.edge
-    if mi !== nothing && is_foldable(effects, !stmt_taints_inbounds_consistency(sv))
+    if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             if is_nonoverlayed(mi.def::Method) && (!isoverlayed(method_table(interp)) || is_nonoverlayed(effects))
                 return :concrete_eval
@@ -2505,7 +2505,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 t = Union{}
             end
-        elseif !hasintersect(condt, Bool)
+        elseif !hasintersect(windenconst(condt), Bool)
             t = Union{}
         end
     elseif false
@@ -3003,11 +3003,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if condval === true
                         @goto fallthrough
                     else
-                        if condval !== false && !nothrow
-                            if !hasintersect(widenconst(orig_condt), Bool)
-                                ssavaluetypes[currpc] = Bottom
-                                @goto find_next_bb
-                            end
+                        if !nothrow && !hasintersect(widenconst(orig_condt), Bool)
+                            ssavaluetypes[currpc] = Bottom
+                            @goto find_next_bb
                         end
 
                         succs = bbs[currbb].succs
@@ -3023,14 +3021,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             nextbb = falsebb
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
-                        else
-                            if !nothrow
-                                merge_effects!(interp, frame, EFFECTS_THROWS)
-                                if !hasintersect(widenconst(orig_condt), Bool)
-                                    ssavaluetypes[currpc] = Bottom
-                                    @goto find_next_bb
-                                end
-                            end
+                        end
 
                         # We continue with the true branch, but process the false
                         # branch here.

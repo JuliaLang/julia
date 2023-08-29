@@ -15,7 +15,7 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
-const IR_FLAG_NULL        = UInt32(1)
+const IR_FLAG_NULL        = UInt32(0)
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
 const IR_FLAG_INBOUNDS    = UInt32(1) << 0
@@ -466,12 +466,12 @@ function visit_bb_phis!(callback, ir::IRCode, bb::Int)
                 return
             end
         else
-            callback(idx, stmt)
+            callback(idx)
         end
     end
 end
 
-function any_stmt_may_throw(ir::IRCode, bb)
+function any_stmt_may_throw(ir::IRCode, bb::Int)
     for stmt in ir.cfg.blocks[bb].stmts
         if (ir[SSAValue(stmt)][:flag] & IR_FLAG_NOTHROW) != 0
             return true
@@ -497,6 +497,11 @@ function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::
     return false
 end
 
+struct AugmentedDomtree
+    cfg::CFG
+    domtree::DomTree
+end
+
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
     inconsistent = BitSet()
     inconsistent_bbs = BitSet()
@@ -514,11 +519,10 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     effects = result.ipo_effects
 
-    cfg = nothing
-    domtree = nothing
+    agdomtree = nothing
     function get_augmented_domtree()
-        if cfg !== nothing
-            return (cfg, domtree)
+        if agdomtree !== nothing
+            return agdomtree
         end
         cfg = copy(ir.cfg)
         # Add a virtual basic block to represent the exit
@@ -532,10 +536,11 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
 
         domtree = construct_domtree(cfg.blocks)
-        return (cfg, domtree)
+        agdomtree = AugmentedDomtree(cfg, domtree)
+        return agdomtree
     end
 
-    function is_getfield_boundscheck(inst::Instruction)
+    function is_getfield_with_boundscheck_arg(inst::Instruction)
         stmt = inst[:stmt]
         is_known_call(stmt, getfield, ir) || return false
         length(stmt.args) < 4 && return false
@@ -547,7 +552,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     function is_conditional_noub(inst::Instruction)
         # Special case: `:boundscheck` into `getfield`
-        is_getfield_boundscheck(inst) || return false
+        is_getfield_with_boundscheck_arg(inst) || return false
         barg = inst[:stmt].args[end]
         isexpr(ir[barg][:stmt], :boundscheck) || return false
         # If IR_FLAG_INBOUNDS is already set, no more conditional ub
@@ -567,12 +572,12 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    function scan_inconsistency!(inst::Instruction, idx)
+    function scan_inconsistency!(inst::Instruction, idx::Int)
         flag = inst[:flag]
         stmt_inconsistent = (flag & IR_FLAG_CONSISTENT) == 0
         stmt = inst[:stmt]
         # Special case: For getfield, we allow inconsistency of the :boundscheck argument
-        if is_getfield_boundscheck(inst)
+        if is_getfield_with_boundscheck_arg(inst)
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
                 if isa(val, SSAValue)
@@ -600,7 +605,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         if isexpr(stmt, :enter)
             # try/catch not yet modeled
             had_trycatch = true
-            return true
+            return false
         end
 
         scan_non_dataflow_flags!(inst)
@@ -611,7 +616,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 all_retpaths_consistent = false
             elseif isa(stmt, GotoIfNot) && stmt_inconsistent
                 # Conditional Branch with inconsistent condition.
-                sa, sb = ir.cfg.blocks[bb].succs
                 # If we do not know this function terminates, taint consistency, now,
                 # :consistent requires consistent termination. TODO: Just look at the
                 # inconsistent region.
@@ -621,14 +625,14 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
                     all_retpaths_consistent = false
                 else
-                    (cfg, domtree) = get_augmented_domtree()
-                    for succ in iterated_dominance_frontier(cfg, BlockLiveness((sa, sb), nothing), domtree)
+                    (; cfg, domtree) = get_augmented_domtree()
+                    for succ in iterated_dominance_frontier(cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), domtree)
                         if succ == length(cfg.blocks)
                             # Phi node in the virtual exit -> We have a conditional
                             # return. TODO: Check if all the retvals are egal.
                             all_retpaths_consistent = false
                         else
-                            visit_bb_phis!(ir, succ) do phiidx::Int, phi::PhiNode
+                            visit_bb_phis!(ir, succ) do phiidx::Int
                                 push!(inconsistent, phiidx)
                             end
                         end
@@ -642,7 +646,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     if !scan!(scan_stmt!, scanner, true)
         if !all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst, idx, lstmt, bb
+            scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst)
                 return true
             end
@@ -664,7 +668,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 idx = popfirst!(stmt_ip)
                 inst = ir[SSAValue(idx)]
                 stmt = inst[:inst]
-                if is_getfield_boundscheck(inst)
+                if is_getfield_with_boundscheck_arg(inst)
                     any_non_boundscheck_inconsistent = false
                     for i = 1:(length(stmt.args)-1)
                         val = stmt.args[i]
@@ -678,9 +682,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                     all_retpaths_consistent = false
                 else isa(stmt, GotoIfNot)
                     bb = block_for_inst(ir, idx)
-                    sa, sb = ir.cfg.blocks[bb].succs
-                    for succ in iterated_dominance_frontier(ir.cfg, BlockLiveness((sa, sb), nothing), get!(lazydomtree))
-                        visit_bb_phis!(ir, succ) do (phiidx, phi)
+                    for succ in iterated_dominance_frontier(ir.cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), get!(lazydomtree))
+                        visit_bb_phis!(ir, succ) do phiidx
                             push!(inconsistent, phiidx)
                             push!(stmt_ip, phiidx)
                         end
@@ -800,8 +803,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             # - typeassert if must-throw
             block = block_for_inst(sv.cfg, i)
             if ssavaluetypes[i] === Bottom
+                destblock = block_for_inst(sv.cfg, expr.dest)
                 cfg_delete_edge!(sv.cfg, block, block + 1)
-                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
                 expr = Expr(:call, Core.typeassert, expr.cond, Bool)
             elseif i + 1 in sv.unreachable
                 @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0

@@ -8901,9 +8901,9 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
 
 static int effects_foldable(uint32_t effects)
 {
-    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
     return ((effects & 0x7) == 0) && // is_consistent(effects)
-           ((effects >> 10) & 0x01) && // is_noub(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
            (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
            ((effects >> 6) & 0x01); // is_terminates(effects)
 }
