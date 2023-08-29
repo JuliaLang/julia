@@ -150,7 +150,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
     queue->last = item;
 }
 
-static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
+static void jl_uv_cb_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
@@ -302,7 +302,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     if (loop != NULL) {
         struct uv_shutdown_queue queue = {NULL, NULL};
         JL_UV_LOCK();
-        uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+        uv_walk(loop, jl_uv_cb_exitcleanup_walk, &queue);
         struct uv_shutdown_queue_item *item = queue.first;
         if (ct) {
             while (item) {

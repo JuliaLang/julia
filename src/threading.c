@@ -7,8 +7,10 @@
 #include <inttypes.h>
 
 #include "julia.h"
+#include "julia_atomics.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "julia_threads.h"
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -702,17 +704,18 @@ void jl_init_threading(void)
 
 int jl_process_events_locked(void);
 void jl_utility_io_threadfun(void *arg) {
+
     jl_adopt_thread();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_gc_safe_enter(ptls);
     while (1) {
         // Only reader of the rwlock, according to libuv lock is writer-biased
-        if (JL_UV_TRYLOCK())
-        {
-            jl_process_events_locked();
-            JL_UV_UNLOCK();
-        }
-        jl_gc_safepoint();
-        for (int i = 0; i < 5000; i++)
-            jl_cpu_pause(); // suspend here and wake on IO_UNLOCK
+        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0)
+            if (JL_UV_TRYLOCK())
+            {
+                jl_process_events_locked();
+                JL_UV_UNLOCK();
+            }
     }
     return;
 }

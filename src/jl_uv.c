@@ -32,7 +32,7 @@ extern "C" {
 static uv_async_t signal_async;
 static uv_timer_t wait_empty_worker;
 
-static void walk_print_cb(uv_handle_t *h, void *arg)
+static void jl_uv_cb_walk_print(uv_handle_t *h, void *arg)
 {
     if (!uv_is_active(h) || !uv_has_ref(h))
         return;
@@ -56,7 +56,7 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
         jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
 }
 
-static void wait_empty_func(uv_timer_t *t)
+static void jl_uv_cb_wait_empty(uv_timer_t *t)
 {
     // make sure this is hidden now, since we would auto-unref it later
     uv_unref((uv_handle_t*)&signal_async);
@@ -65,8 +65,11 @@ static void wait_empty_func(uv_timer_t *t)
     jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
                    " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
                    (size_t)uv_os_getpid());
-    uv_walk(jl_io_loop, walk_print_cb, NULL);
+    uv_walk(jl_io_loop, jl_uv_cb_walk_print, NULL);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int old_state = jl_gc_unsafe_enter(ptls);
     jl_gc_collect(JL_GC_FULL);
+    jl_gc_unsafe_leave(ptls,old_state);
 }
 
 void jl_wait_empty_begin(void)
@@ -78,7 +81,7 @@ void jl_wait_empty_begin(void)
         uv_run(jl_io_loop, UV_RUN_NOWAIT);
         uv_timer_init(jl_io_loop, &wait_empty_worker);
         uv_update_time(jl_io_loop);
-        uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
+        uv_timer_start(&wait_empty_worker, jl_uv_cb_wait_empty, 10, 15000);
         uv_unref((uv_handle_t*)&wait_empty_worker);
     }
     JL_UV_UNLOCK();
@@ -93,7 +96,7 @@ void jl_wait_empty_end(void)
 
 
 
-static void jl_signal_async_cb(uv_async_t *hdl)
+static void jl_uv_cb_signal_async(uv_async_t *hdl)
 {
     // This should abort the current loop and the julia code it returns to
     // or the safepoint in the callers of `uv_run` should throw the exception.
@@ -110,7 +113,7 @@ jl_mutex_t jl_uv_mutex;
 
 void jl_init_uv(void)
 {
-    uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
+    uv_async_init(jl_io_loop, &signal_async, jl_uv_cb_signal_async);
     uv_unref((uv_handle_t*)&signal_async);
     JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
@@ -146,8 +149,10 @@ JL_DLLEXPORT void jl_iolock_end(void)
 }
 
 
-static void jl_uv_call_close_callback(jl_value_t *val)
+static void jl_uv_call_hook_close(jl_value_t *val)
 {
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int old_state = jl_gc_unsafe_enter(ptls);
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
     args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
@@ -156,9 +161,10 @@ static void jl_uv_call_close_callback(jl_value_t *val)
     assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
     JL_GC_POP();
+    jl_gc_unsafe_leave(ptls,old_state);
 }
 
-static void jl_uv_closeHandle(uv_handle_t *handle)
+static void jl_uv_cb_close_handle(uv_handle_t *handle)
 {
     // if the user killed a stdio handle,
     // revert back to direct stdio FILE* writes
@@ -174,7 +180,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         jl_task_t *ct = jl_current_task;
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_uv_call_close_callback((jl_value_t*)handle->data);
+        jl_uv_call_hook_close((jl_value_t*)handle->data);
         ct->world_age = last_age;
         return;
     }
@@ -183,7 +189,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     free(handle);
 }
 
-static void jl_uv_flush_close_callback(uv_write_t *req, int status)
+static void jl_uv_cb_flush_close(uv_write_t *req, int status)
 {
     uv_stream_t *stream = req->handle;
     req->handle = NULL;
@@ -207,16 +213,16 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         buf.base = (char*)(req + 1);
         buf.len = 0;
         req->data = NULL;
-        if (uv_write(req, stream, &buf, 1, (uv_write_cb)jl_uv_flush_close_callback) == 0)
+        if (uv_write(req, stream, &buf, 1, (uv_write_cb)jl_uv_cb_flush_close) == 0)
             return; // success
     }
     free(req);
     if (stream->type == UV_TTY)
         uv_tty_set_mode((uv_tty_t*)stream, UV_TTY_MODE_NORMAL);
-    uv_close((uv_handle_t*)stream, &jl_uv_closeHandle);
+    uv_close((uv_handle_t*)stream, &jl_uv_cb_close_handle);
 }
 
-static void uv_flush_callback(uv_write_t *req, int status)
+static void jl_uv_cb_flush(uv_write_t *req, int status)
 {
     *(int*)(req->data) = 1;
     uv_stop(req->handle->loop);
@@ -244,7 +250,7 @@ JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
         buf.len = 0;
         uv_write_t *write_req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         write_req->data = (void*)&fired;
-        if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0) {
+        if (uv_write(write_req, stream, &buf, 1, jl_uv_cb_flush) != 0) {
             JL_UV_UNLOCK();
             return;
         }
@@ -275,22 +281,18 @@ int jl_process_events_locked(void) {
     uv_loop_t *loop = jl_io_loop;
     loop->stop_flag = 0;
     uv_ref((uv_handle_t*)&signal_async); // force the loop alive
-    int r = uv_run(loop, UV_RUN_NOWAIT);
+    int r = uv_run(loop, UV_RUN_DEFAULT);
     uv_unref((uv_handle_t*)&signal_async);
     return r;
 }
 
 JL_DLLEXPORT int jl_process_events(void)
 {
-    if (jl_atomic_load_relaxed(&jl_n_threads) == 1)
-    {
-        jl_process_events_locked();
-    }
     // otherwise we will have a utility thread.
     return 0;
 }
 
-static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, int term_signal)
+static void jl_uv_cb_proc_exit_cleanup(uv_process_t *process, int64_t exit_status, int term_signal)
 {
     uv_close((uv_handle_t*)process, (uv_close_cb)&free);
 }
@@ -302,7 +304,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
         // take ownership of this handle,
         // so we can waitpid for the resource to exit and avoid leaving zombies
         assert(handle->data == NULL); // make sure Julia has forgotten about it already
-        ((uv_process_t*)handle)->exit_cb = jl_proc_exit_cleanup_cb;
+        ((uv_process_t*)handle)->exit_cb = jl_uv_cb_proc_exit_cleanup;
         uv_unref(handle);
     }
     else if (handle->type == UV_FILE) {
@@ -312,17 +314,17 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_fs_close(handle->loop, &req, fd->file, NULL);
             fd->file = (uv_os_fd_t)(ssize_t)-1;
         }
-        jl_uv_closeHandle(handle); // synchronous (ok since the callback is known to not interact with any global state)
+        jl_uv_cb_close_handle(handle); // synchronous (ok since the callback is known to not interact with any global state)
     }
     else if (!uv_is_closing(handle)) { // avoid double-closing the stream
         if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
             // flush the stream write-queue first
             uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
             req->handle = (uv_stream_t*)handle;
-            jl_uv_flush_close_callback(req, 0);
+            jl_uv_cb_flush_close(req, 0);
         }
         else {
-            uv_close(handle, &jl_uv_closeHandle);
+            uv_close(handle, &jl_uv_cb_close_handle);
         }
     }
     JL_UV_UNLOCK();
@@ -333,7 +335,7 @@ JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
     if (!uv_is_closing(handle)) { // avoid double-closing the stream
         JL_UV_LOCK();
         if (!uv_is_closing(handle)) { // double-check
-            uv_close(handle, &jl_uv_closeHandle);
+            uv_close(handle, &jl_uv_cb_close_handle);
         }
         JL_UV_UNLOCK();
     }
@@ -549,11 +551,11 @@ JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
     return err;
 }
 
-static void jl_uv_writecb(uv_write_t *req, int status) JL_NOTSAFEPOINT
+static void jl_uv_cb_write(uv_write_t *req, int status) JL_NOTSAFEPOINT
 {
     free(req);
     if (status < 0) {
-        jl_safe_printf("jl_uv_writecb() ERROR: %s %s\n",
+        jl_safe_printf("jl_uv_cb_write() ERROR: %s %s\n",
                        uv_strerror(status), uv_err_name(status));
     }
 }
@@ -611,11 +613,11 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         req->data = NULL;
         JL_UV_LOCK();
         JL_SIGATOMIC_BEGIN();
-        int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
+        int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_cb_write);
         JL_UV_UNLOCK();
         JL_SIGATOMIC_END();
         if (status < 0) {
-            jl_uv_writecb(req, status);
+            jl_uv_cb_write(req, status);
         }
     }
 }
@@ -1041,13 +1043,13 @@ struct work_baton {
 #include <sys/syscall.h>
 #endif
 
-void jl_work_wrapper(uv_work_t *req)
+void jl_uv_cb_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
     baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
 }
 
-void jl_work_notifier(uv_work_t *req, int status)
+void jl_uv_cb_work_notifier(uv_work_t *req, int status)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
     baton->notify_func(baton->notify_idx);
@@ -1067,7 +1069,7 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work
     baton->notify_idx = notify_idx;
 
     JL_UV_LOCK();
-    uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
+    uv_queue_work(jl_io_loop, &baton->req, jl_uv_cb_work_wrapper, jl_uv_cb_work_notifier);
     JL_UV_UNLOCK();
 
     return 0;
