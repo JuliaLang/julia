@@ -2188,11 +2188,11 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
         unsafe_store!(ptr, pointer_from_objref(stmt.head), length(stmt.args)+1)
         return key
     else
-        return stmt
+        return nothing
     end
 end
 function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
-    length(stmt.values) == 0 && return stmt, true
+    length(stmt.values) == 0 && return nothing
 
     no_of_edges = length(stmt.edges)
     key = Vector{Any}(undef, no_of_edges*2 + 2)
@@ -2205,7 +2205,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     allthesame = true
     deletions = 0
     for j in eachindex(stmt.values)
-        !isassigned(stmt.values, j) && return stmt, true
+        !isassigned(stmt.values, j) && return nothing
 
         val = stmt.values[j]
         if val isa SSAValue && ssa_to_ssa[val.id] == 0
@@ -2224,7 +2224,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
             end
         end
     end
-    return svec(key...), false
+    return svec(key...)
 end
 
 function gvn!(ir::IRCode)
@@ -2261,12 +2261,11 @@ function gvn!(ir::IRCode)
                 end
                 perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
-                value, skip = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
-                if skip
-                    ssa_to_ssa[i] = i
-                    continue
-                end
-                value
+                perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
+            end
+            if value === nothing
+                ssa_to_ssa[i] = i
+                continue
             end
 
             temp = get!(val_to_ssa, value, SSAValue(i)).id
