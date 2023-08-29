@@ -292,6 +292,37 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     return bt;
 }
 
+// get bt entries for the top julia stack frame; returns # of entries stored
+int jl_get_current_julia_loc(jl_bt_element_t *bt_entry)
+{
+    bt_context_t context;
+    bt_cursor_t cursor;
+    memset(&context, 0, sizeof(context));
+    int r = jl_unw_get(&context);
+    jl_gcframe_t *pgcstack = jl_pgcstack;
+    if (r == 0 && jl_unw_init(&cursor, &context)) {
+        int have_more_frames = 1;
+        while (have_more_frames) {
+            size_t nentries = 0;
+            have_more_frames = jl_unw_stepn(&cursor, bt_entry, &nentries, NULL, JL_BT_MAX_ENTRY_SIZE+1, 0, &pgcstack, 0);
+            if (jl_bt_is_native(bt_entry)) {
+                uintptr_t ip = bt_entry[0].uintptr;
+                jl_frame_t *frames = NULL;
+                int n = jl_getFunctionInfo(&frames, ip, 0, 0);
+                if (n > 0 && !frames[0].fromC) {
+                    free(frames);
+                    return nentries;
+                }
+                free(frames);
+            }
+            else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
+                return nentries;
+            }
+        }
+    }
+    return 0;
+}
+
 static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
                              jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
                              jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
@@ -614,7 +645,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
+static void jl_safe_print_codeloc(const char *func_name, const char *file_name,
                                   int line, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
@@ -650,6 +681,66 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
         }
     }
     free(frames);
+}
+
+// puts malloc'd strings in *func_name and *file_name, or NULL.
+// returns 0 if nothing is found, or 1 if a frame is found.
+int jl_get_bt_entry_codeloc(jl_bt_element_t *bt_entry, char **func_name, char **file_name,
+                            int *line, int *inlined)
+{
+    *func_name = NULL;
+    *file_name = NULL;
+    *line = -1;
+    *inlined = 0;
+    if (jl_bt_is_native(bt_entry)) {
+        uintptr_t ip = bt_entry[0].uintptr;
+        jl_frame_t *frames = NULL;
+        int n = jl_getFunctionInfo(&frames, ip, 0, 0);
+        if (n > 0) {
+            *func_name = frames[0].func_name;
+            *file_name = frames[0].file_name;
+            *line = frames[0].line;
+            *inlined = frames[0].inlined;
+        }
+        free(frames);
+        return n > 0;
+    }
+    else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
+        size_t ip = jl_bt_entry_header(bt_entry);
+        jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
+        if (jl_is_method_instance(code)) {
+            // When interpreting a method instance, need to unwrap to find the code info
+            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
+        }
+        if (jl_is_code_info(code)) {
+            jl_code_info_t *src = (jl_code_info_t*)code;
+            // See also the debug info handling in codegen.cpp.
+            // NB: debuginfoloc is 1-based!
+            intptr_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[ip];
+            int nframes = 0;
+            while (debuginfoloc != 0) {
+                nframes++;
+                jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
+                    jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
+                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
+                char *f_name = NULL;
+                jl_value_t *method = locinfo->method;
+                if (jl_is_method_instance(method))
+                    method = ((jl_method_instance_t*)method)->def.value;
+                if (jl_is_method(method))
+                    method = (jl_value_t*)((jl_method_t*)method)->name;
+                if (jl_is_symbol(method))
+                    f_name = jl_symbol_name((jl_sym_t*)method);
+                *func_name = f_name == NULL ? NULL : strdup(f_name);
+                *file_name = strdup(jl_symbol_name(locinfo->file));
+                *line = locinfo->line;
+                *inlined = locinfo->inlined_at != 0;
+                break;
+            }
+            return nframes;  // only 0 or 1 for now
+        }
+    }
+    return 0;
 }
 
 // Print code location for backtrace buffer entry at *bt_entry
