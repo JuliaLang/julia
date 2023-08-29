@@ -55,7 +55,8 @@ callstrange(::Float64) = strangesin(x)
 callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
-    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
+    @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
         @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed

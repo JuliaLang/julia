@@ -8,7 +8,7 @@ using Test
     sig = Tuple{typeof(*), Any, Any}
     result1 = Core.Compiler.findall(sig, table; limit=-1)
     result2 = Core.Compiler.findall(sig, table; limit=Core.Compiler.InferenceParams().max_methods)
-    @test result1 !== nothing && !Core.Compiler.isempty(result1.matches)
+    @test result1 !== nothing && !Core.Compiler.isempty(result1)
     @test result2 === nothing
 end
 

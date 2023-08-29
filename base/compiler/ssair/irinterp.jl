@@ -15,7 +15,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     argtypes === nothing && return Pair{Any,Bool}(Bottom, false)
     effects = decode_effects(code.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
-        is_nonoverlayed(effects) && is_nonoverlayed(mi.def::Method))
+        (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
         value = let world = get_world_counter(interp)
             try
