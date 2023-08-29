@@ -2276,7 +2276,9 @@ function gvn!(ir::IRCode)
                 changed = true
             end
         end
-        empty!(val_to_ssa; preserve_size=true) 
+        # empty!(val_to_ssa; preserve_size=true) 
+        empty!(val_to_ssa)
+        sizehint!(val_to_ssa, length(ir.stmts.stmt))
     end
     # val_to_ssa keys might have pointers to stuff in ir that may be overwritten, so it is emptied to prevent use
 
