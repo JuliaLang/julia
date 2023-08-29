@@ -26,6 +26,7 @@ New library functions
 ---------------------
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `delete(nt::NamedTuple, key::Symbol)` returns `nt` without the entry named by `key`.
+- `delete(nt::NamedTuple, keys::Tuple{Vararg{Symbol}})` returns `nt` without the entris named by `keys`.
 
 New library features
 --------------------

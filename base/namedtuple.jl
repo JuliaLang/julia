@@ -415,19 +415,26 @@ end
 end
 
 """
-    delete(a::NamedTuple, field::Symbol)
+    delete(a::NamedTuple, keys::Union{Symbol, Tuple{Vararg{Symbol}}})
 
-Construct a new named tuple from `a` by removing the named field.
+Construct a new named tuple from `a` by removing the named entries.
 
 ```jldoctest
 julia> delete((a=1, b=2, c=3), :a)
 (b = 2, c = 3)
 julia> delete((a=1, b=2, c=3), :b)
 (a = 1, c = 3)
+julia> delete((a=1, b=2, c=3), (:c, :b))
+(a = 1,)
 ```
 """
-function delete(a::NamedTuple{an}, field::Symbol) where {an}
-    names = diff_names(an, (field,))
+function delete(a::NamedTuple{an}, @nospecialize(key::Symbol)) where {an}
+    names = diff_names(an, (key,))
+    NamedTuple{names}(a)
+end
+
+function delete(a::NamedTuple{an}, @nospecialize(keys::Tuple{Vararg{Symbol}})) where {an}
+    names = diff_names(an, keys)
     NamedTuple{names}(a)
 end
 
