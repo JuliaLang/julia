@@ -581,7 +581,8 @@ static NOINLINE int true_main(int argc, char *argv[])
             size_t last_age = ct->world_age;
             ct->world_age = jl_get_world_counter();
             jl_value_t *r = jl_apply(&start_client, 1);
-            jl_typeassert(r, (jl_value_t *)jl_int32_type);
+            if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
+                jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
             ret = jl_unbox_int32(r);
             ct->world_age = last_age;
         }

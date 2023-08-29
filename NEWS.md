@@ -20,7 +20,7 @@ Command-line option changes
 (i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically if
 such a function has been defined. This is identended to unify script and compilation workflows, where code loading may happen
 in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a main function and executing the code directly at the end of the script. ([50974])
+difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
 
 Multi-threading changes
 -----------------------
