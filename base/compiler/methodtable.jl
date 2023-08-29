@@ -122,7 +122,7 @@ end
 
 """
     findsup(sig::Type, view::MethodTableView) ->
-        (match::MethodMatch, valid_worlds::WorldRange, overlayed::Bool) or nothing
+        (match::Union{MethodMatch,Nothing}, valid_worlds::WorldRange, overlayed::Bool)
 
 Find the (unique) method such that `sig <: match.method.sig`, while being more
 specific than any other method with the same property. In other words, find the method
