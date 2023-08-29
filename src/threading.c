@@ -711,10 +711,10 @@ void jl_utility_io_threadfun(void *arg) {
     while (1) {
         // Only reader of the rwlock, according to libuv lock is writer-biased
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0)
-            if (JL_UV_TRYLOCK())
+            if (JL_UV_TRYLOCK_NOGC())
             {
                 jl_process_events_locked();
-                JL_UV_UNLOCK();
+                JL_UV_UNLOCK_NOGC();
             }
     }
     return;

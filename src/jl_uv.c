@@ -133,9 +133,14 @@ void JL_UV_LOCK(void)
     }
 }
 
-int JL_UV_TRYLOCK(void)
+int JL_UV_TRYLOCK_NOGC(void)
 {
-    return jl_mutex_trylock(&jl_uv_mutex);
+    return jl_mutex_trylock_nogc(&jl_uv_mutex);
+}
+
+void JL_UV_UNLOCK_NOGC(void)
+{
+    jl_mutex_unlock_nogc(&jl_uv_mutex);
 }
 
 JL_DLLEXPORT void jl_iolock_begin(void)

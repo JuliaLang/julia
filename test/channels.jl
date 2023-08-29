@@ -422,7 +422,7 @@ end
         @test !isopen(t)
         @test tc[] == 0
         @test t.handle === C_NULL
-        yield() 
+        yield()
     end
 
     let tc = Ref(0)
