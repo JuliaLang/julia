@@ -428,7 +428,7 @@ julia> delete((a=1, b=2, c=3), (:c, :b))
 (a = 1,)
 ```
 """
-function delete(a::NamedTuple{an}, @nospecialize(key::Symbol)) where {an}
+function delete(a::NamedTuple{an}, key::Symbol) where {an}
     names = diff_names(an, (key,))
     NamedTuple{names}(a)
 end
