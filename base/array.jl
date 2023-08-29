@@ -322,6 +322,8 @@ source and `do` in the destination (1-indexed).
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
 that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
+
+Note that `dest` must not share memory with `src`, otherwise the result is undefined.
 """
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest

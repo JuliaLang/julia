@@ -905,6 +905,8 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
+Note that `dst` must not share memory with `src`, otherwise the result is undefined.
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
