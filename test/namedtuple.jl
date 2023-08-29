@@ -1,3 +1,4 @@
+
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test_throws TypeError NamedTuple{1,Tuple{}}
@@ -271,6 +272,11 @@ end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
 
+@test Base.delete((a=1,), :a) == NamedTuple()
+@test Base.delete((a=1, b=2), :a) == (b=2,)
+@test Base.delete((a=1, b=2, c=3), :b) == (a=1, c=3)
+@test Base.delete((a=1, b=2, c=3), :z) == (a=1, b=2, c=3)
+
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
@@ -378,7 +384,7 @@ end
     @test mapfoldl(abs, =>, (;), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
     @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
-end
+    end
 
 # Test effect/inference for merge/diff of unknown NamedTuples
 for f in (Base.merge, Base.structdiff)
