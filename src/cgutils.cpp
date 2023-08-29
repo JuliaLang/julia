@@ -371,12 +371,12 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
 static Constant *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
-    // to create a readable name of the form prefixModA.ModB.name#
+    // to create a readable name of the form prefixModA.ModB.name.
     // reverse-of-reverse algorithm
     std::string finalname;
     StringRef name_str(jl_symbol_name(name));
     finalname.resize(name_str.size() + 1);
-    finalname[0] = '#';
+    finalname[0] = '.';
     std::reverse_copy(name_str.begin(), name_str.end(), finalname.begin() + 1);
     jl_module_t *parent = mod, *prev = NULL;
     while (parent && parent != prev) {
