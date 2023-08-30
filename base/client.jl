@@ -325,7 +325,13 @@ function exec_options(opts)
     end
 
     ret = 0
-    isdefined(Main, :main) && (ret = invokelatest(Main.main, ARGS))
+    if isdefined(Main, :main)
+        if Core.Compiler.generating_sysimg()
+            precompile(Main.main, (typeof(ARGS),))
+        else
+            ret = invokelatest(Main.main, ARGS)
+        end
+    end
 
     if repl || is_interactive::Bool
         b = opts.banner
