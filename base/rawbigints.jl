@@ -22,11 +22,16 @@ reversed_index(n::Int, i::Int) = n - i - 1
 reversed_index(x, i::Int, v::Val) = reversed_index(elem_count(x, v), i)::Int
 split_bit_index(x::RawBigInt, i::Int) = divrem(i, word_length(x), RoundToZero)
 
+struct RawBigIntBoundsErrorInfo
+  word_count::Int
+end
+
 """
 `i` is the zero-based index of the wanted word in `x`, starting from
 the less significant words.
 """
 function get_elem(x::RawBigInt, i::Int, ::Val{:words}, ::Val{:ascending})
+    (0 ≤ i < x.word_count) || throw(BoundsError(RawBigIntBoundsErrorInfo(x.word_count), i))
     unsafe_load(x.d, i + 1)
 end
 
