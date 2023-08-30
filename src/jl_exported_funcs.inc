@@ -121,6 +121,7 @@
     XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
     XX(jl_enter_handler) \
+    XX(jl_enter_threaded_region) \
     XX(jl_environ) \
     XX(jl_eof_error) \
     XX(jl_eqtable_get) \
@@ -136,6 +137,7 @@
     XX(jl_excstack_state) \
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
+    XX(jl_exit_threaded_region) \
     XX(jl_expand) \
     XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
@@ -270,6 +272,7 @@
     XX(jl_intrinsic_name) \
     XX(jl_invoke) \
     XX(jl_invoke_api) \
+    XX(jl_in_threaded_region) \
     XX(jl_iolock_begin) \
     XX(jl_iolock_end) \
     XX(jl_ios_buffer_n) \

@@ -133,12 +133,12 @@ void JL_UV_LOCK(void)
     }
 }
 
-int JL_UV_TRYLOCK_NOGC(void)
+int JL_UV_TRYLOCK_NOGC(void) JL_NOTSAFEPOINT
 {
     return jl_mutex_trylock_nogc(&jl_uv_mutex);
 }
 
-void JL_UV_UNLOCK_NOGC(void)
+void JL_UV_UNLOCK_NOGC(void) JL_NOTSAFEPOINT
 {
     jl_mutex_unlock_nogc(&jl_uv_mutex);
 }

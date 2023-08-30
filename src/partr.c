@@ -396,18 +396,15 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 }
                 return task;
             }
-            {
-                jl_gc_safepoint();
-
-                // optimization: check again first if we may have work to do.
-                // Otherwise we got a spurious wakeup since some other thread
-                // that just wanted to steal libuv from us. We will just go
-                // right back to sleep on the individual wake signal to let
-                // them take it from us without conflict.
-                if (!may_sleep(ptls)) {
-                    start_cycles = 0;
-                    continue;
-                }
+            jl_gc_safepoint();
+            // optimization: check again first if we may have work to do.
+            // Otherwise we got a spurious wakeup since some other thread
+            // that just wanted to steal libuv from us. We will just go
+            // right back to sleep on the individual wake signal to let
+            // them take it from us without conflict.
+            if (!may_sleep(ptls)) {
+                start_cycles = 0;
+                continue;
             }
 
             // the other threads will just wait for an individual wake signal to resume
