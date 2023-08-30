@@ -731,8 +731,12 @@ function typeof_concrete_vararg(t::DataType)
     for i = 1:np
         p = t.parameters[i]
         if i == np && isvarargtype(p)
-            if isdefined(p, :T) && !isdefined(p, :N) && isconcretetype(p.T)
-                return Type{Tuple{t.parameters[1:np-1]..., Vararg{p.T, N}}} where N
+            if isdefined(p, :T) && isconcretetype(p.T)
+                t = Type{Tuple{t.parameters[1:np-1]..., Vararg{p.T, N}}} where N
+                if isdefined(p, :N)
+                    return t{p.N}
+                end
+                return t
             end
         elseif !isconcretetype(p)
             break
