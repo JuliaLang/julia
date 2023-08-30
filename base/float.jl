@@ -441,16 +441,6 @@ round(::Type{Signed},   x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
 round(::Type{Unsigned}, x::IEEEFloat, r::RoundingMode) = round(UInt, x, r)
 round(::Type{Integer},  x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
 
-# Bool
-round(::Type{Bool}, x::AbstractFloat, ::RoundingMode{:ToZero}) =
-    (-1 < x < 2) ? 1 <= x : throw(InexactError(:round, Bool, x, RoundToZero))
-round(::Type{Bool}, x::AbstractFloat, ::RoundingMode{:Down}) =
-    (0 <= x < 2) ? 1 <= x : throw(InexactError(:round, Bool, x, RoundDown))
-round(::Type{Bool}, x::AbstractFloat, ::RoundingMode{:Up}) =
-    (-1 < x <= 1) ? 0 < x : throw(InexactError(:round, Bool, x, RoundUp))
-round(::Type{Bool}, x::AbstractFloat, ::RoundingMode{:Nearest}) =
-    (-0.5 <= x < 1.5) ? 0.5 < x : throw(InexactError(:round, Bool, x, RoundNearest))
-
 round(x::IEEEFloat, ::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
