@@ -133,12 +133,7 @@ copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
-function size(D::Diagonal,d::Integer)
-    if d<1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    end
-    return d<=2 ? length(D.diag) : 1
-end
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
 
 @inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(Bool, D, i, j) || return false
@@ -149,8 +144,6 @@ end
     end
     r
 end
-
-axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
 
 @inline function Base.isstored(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
