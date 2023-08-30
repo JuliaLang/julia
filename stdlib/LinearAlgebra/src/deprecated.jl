@@ -7,5 +7,5 @@ nullspace(A::AbstractMatrix, tol::Real) = nullspace(A, rtol=tol)
 pinv(A::AbstractMatrix{T}, tol::Real) where T = pinv(A, rtol=tol)
 
 # To be removed in 2.0
-Base.@deprecate /(x::Number, v::AbstractVector)  x*pinv(v)
-Base.@deprecate (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
+@deprecate /(x::Number, v::AbstractVector) x*pinv(v)
+@deprecate (\)(a::AbstractVector, b::AbstractArray) pinv(a) * b
