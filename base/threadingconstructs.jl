@@ -144,8 +144,26 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
+# Atomic is not available here and soft-deprecated
+mutable struct ThreadedRegion
+    @atomic counter::UInt
+end
+const THREADED_REGION = ThreadedRegion(UInt(0))
+
+in_threaded_region() = THREADED_REGION.counter
+
+function enter_threaded_region()
+    @atomic THREADED_REGION.counter += 1
+    return nothing
+end
+
+function exit_threaded_region()
+    @atomic THREADED_REGION.counter -= 1
+    return nothing
+end
+
 function threading_run(fun, static)
-    ccall(:jl_enter_threaded_region, Cvoid, ())
+    enter_threaded_region()
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
@@ -165,7 +183,7 @@ function threading_run(fun, static)
     for i = 1:n
         Base._wait(tasks[i])
     end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
+    exit_threaded_region()
     failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
@@ -217,7 +235,7 @@ function _threadsfor(iter, lbody, schedule)
         end
         if $(schedule === :dynamic || schedule === :default)
             threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+        elseif in_threaded_region() # :static
             error("`@threads :static` cannot be used concurrently or nested")
         else # :static
             threading_run(threadsfor_fun, true)
