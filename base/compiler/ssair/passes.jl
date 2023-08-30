@@ -2176,11 +2176,11 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
         # end
         # svec(key...)
 
-        key = ccall(:jl_alloc_svec, SimpleVector, (Int,), length(stmt.args)+1);
+        key = ccall(:jl_alloc_svec, SimpleVector, (Csize_t,), length(stmt.args)+1);
         ptr = convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(key)) + sizeof(Ptr{Cvoid})
         for (i, arg) in enumerate(stmt.args)
             if isa(arg, SSAValue)
-                unsafe_store!(ptr, ccall(:jl_box_ssavalue, Ptr{Any}, (Int,), ssa_to_ssa[arg.id]), i)
+                unsafe_store!(ptr, ccall(:jl_box_ssavalue, Ptr{Any}, (Csize_t,), ssa_to_ssa[arg.id]), i)
             else
                 unsafe_store!(ptr, arrayptr(Ptr{Nothing}, stmt.args, i), i)
             end
