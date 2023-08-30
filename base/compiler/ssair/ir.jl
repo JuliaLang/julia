@@ -1469,7 +1469,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
     elseif isa(stmt, PhiCNode)
         ssa_rename[idx] = SSAValue(result_idx)
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        values = stmt.values
+        if cfg_transforms_enabled
+            # Filter arguments that come from dead blocks
+            values = Any[]
+            for value in stmt.values
+                if isa(value, SSAValue)
+                    blk = block_for_inst(compact.ir.cfg, value.id)
+                    if bb_rename_pred[blk] < 0
+                        continue
+                    end
+                end
+                push!(values, value)
+            end
+        end
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)
