@@ -53,6 +53,8 @@ detail that may change in the future.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
+julia> using Random
+
 julia> rng = MersenneTwister(1234);
 
 julia> uuid1(rng)
@@ -99,6 +101,8 @@ detail that may change in the future.
 
 # Examples
 ```jldoctest
+julia> using Random
+
 julia> rng = MersenneTwister(1234);
 
 julia> uuid4(rng)
@@ -123,6 +127,8 @@ as specified by RFC 4122.
 
 # Examples
 ```jldoctest
+julia> using Random
+
 julia> rng = MersenneTwister(1234);
 
 julia> u4 = uuid4(rng)

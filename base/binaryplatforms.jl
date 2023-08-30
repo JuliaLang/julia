@@ -494,7 +494,7 @@ julia> wordsize(Platform("x86_64", "macos"))
 wordsize(p::AbstractPlatform) = (arch(p) ∈ ("i686", "armv6l", "armv7l")) ? 32 : 64
 
 """
-    triplet(p::AbstractPlatform; exclude_tags::Vector{String})
+    triplet(p::AbstractPlatform)
 
 Get the target triplet for the given `Platform` object as a `String`.
 

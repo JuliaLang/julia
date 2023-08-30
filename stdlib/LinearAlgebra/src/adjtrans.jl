@@ -65,21 +65,6 @@ Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 """
-    adj_or_trans(::AbstractArray) -> adjoint|transpose|identity
-    adj_or_trans(::Type{<:AbstractArray}) -> adjoint|transpose|identity
-
-Return [`adjoint`](@ref) from an `Adjoint` type or object and
-[`transpose`](@ref) from a `Transpose` type or object. Otherwise,
-return [`identity`](@ref). Note that `Adjoint` and `Transpose` have
-to be the outer-most wrapper object for a non-`identity` function to be
-returned.
-"""
-adj_or_trans(::T) where {T<:AbstractArray} = adj_or_trans(T)
-adj_or_trans(::Type{<:AbstractArray}) = identity
-adj_or_trans(::Type{<:Adjoint}) = adjoint
-adj_or_trans(::Type{<:Transpose}) = transpose
-
-"""
     inplace_adj_or_trans(::AbstractArray) -> adjoint!|transpose!|copyto!
     inplace_adj_or_trans(::Type{<:AbstractArray}) -> adjoint!|transpose!|copyto!
 
@@ -94,8 +79,14 @@ inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
 inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
 inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 
+# unwraps Adjoint, Transpose, Symmetric, Hermitian
 _unwrap(A::Adjoint)   = parent(A)
 _unwrap(A::Transpose) = parent(A)
+
+# unwraps Adjoint and Transpose only
+_unwrap_at(A) = A
+_unwrap_at(A::Adjoint)   = parent(A)
+_unwrap_at(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))

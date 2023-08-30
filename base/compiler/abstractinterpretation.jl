@@ -16,7 +16,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # At this point we are guaranteed to end up throwing on this path,
         # which is all that's required for :consistent-cy. Of course, we don't
         # know anything else about this statement.
-        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed=!isoverlayed(method_table(interp)))
+        effects = Effects(; consistent=ALWAYS_TRUE)
         return CallMeta(Any, effects, NoCallInfo())
     end
 
@@ -40,12 +40,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
-    if !matches.nonoverlayed
-        # currently we don't have a good way to execute the overlayed method definition,
-        # so we should give up concrete eval when any of the matched methods is overlayed
-        f = nothing
-        all_effects = Effects(all_effects; nonoverlayed=false)
-    end
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
@@ -211,7 +205,6 @@ struct MethodMatches
     valid_worlds::WorldRange
     mt::MethodTable
     fullmatch::Bool
-    nonoverlayed::Bool
 end
 any_ambig(info::MethodMatchInfo) = info.results.ambig
 any_ambig(m::MethodMatches) = any_ambig(m.info)
@@ -223,7 +216,6 @@ struct UnionSplitMethodMatches
     valid_worlds::WorldRange
     mts::Vector{MethodTable}
     fullmatches::Vector{Bool}
-    nonoverlayed::Bool
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
@@ -239,19 +231,16 @@ function find_matching_methods(𝕃::AbstractLattice,
         valid_worlds = WorldRange()
         mts = MethodTable[]
         fullmatches = Bool[]
-        nonoverlayed = true
         for i in 1:length(split_argtypes)
             arg_n = split_argtypes[i]::Vector{Any}
             sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
             mt = mt::MethodTable
-            result = findall(sig_n, method_table; limit = max_methods)
-            if result === nothing
+            matches = findall(sig_n, method_table; limit = max_methods)
+            if matches === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
-            (; matches, overlayed) = result
-            nonoverlayed &= !overlayed
             push!(infos, MethodMatchInfo(matches))
             for m in matches
                 push!(applicable, m)
@@ -277,28 +266,25 @@ function find_matching_methods(𝕃::AbstractLattice,
                                        UnionSplitInfo(infos),
                                        valid_worlds,
                                        mts,
-                                       fullmatches,
-                                       nonoverlayed)
+                                       fullmatches)
     else
         mt = ccall(:jl_method_table_for, Any, (Any,), atype)
         if mt === nothing
             return FailedMethodMatch("Could not identify method table for call")
         end
         mt = mt::MethodTable
-        result = findall(atype, method_table; limit = max_methods)
-        if result === nothing
+        matches = findall(atype, method_table; limit = max_methods)
+        if matches === nothing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
-        (; matches, overlayed) = result
         fullmatch = any(match::MethodMatch->match.fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
                              matches.valid_worlds,
                              mt,
-                             fullmatch,
-                             !overlayed)
+                             fullmatch)
     end
 end
 
@@ -549,8 +535,13 @@ function abstract_call_method(interp::AbstractInterpreter,
     if topmost !== nothing
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
-        ls = length(sigtuple.parameters)
         mi = frame_instance(sv)
+
+        if isdefined(method, :recursion_relation)
+            # We don't require the recursion_relation to be transitive, so
+            # apply a hard limit
+            hardlimit = true
+        end
 
         if method === mi.def
             # Under direct self-recursion, permit much greater use of reducers.
@@ -558,14 +549,14 @@ function abstract_call_method(interp::AbstractInterpreter,
             comparison = mi.specTypes
             l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
             spec_len = max(spec_len, l_comparison)
+        elseif !hardlimit && isa(topmost, InferenceState)
+            # Without a hardlimit, permit use of reducers too.
+            comparison = frame_instance(topmost).specTypes
+            # n.b. currently don't allow vararg reducers
+            #l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
+            #spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
-        end
-
-        if isdefined(method, :recursion_relation)
-            # We don't require the recursion_relation to be transitive, so
-            # apply a hard limit
-            hardlimit = true
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
@@ -594,6 +585,7 @@ function abstract_call_method(interp::AbstractInterpreter,
                     poison_callstack!(sv, parentframe === nothing ? topmost : parentframe)
                 end
             end
+            # n.b. this heuristic depends on the non-local state, so we must record the limit later
             sig = newsig
             sparams = svec()
             edgelimited = true
@@ -773,11 +765,13 @@ struct ConstCallResults
     const_result::ConstResult
     effects::Effects
     edge::MethodInstance
-    ConstCallResults(@nospecialize(rt),
-                     const_result::ConstResult,
-                     effects::Effects,
-                     edge::MethodInstance) =
-        new(rt, const_result, effects, edge)
+    function ConstCallResults(
+        @nospecialize(rt),
+        const_result::ConstResult,
+        effects::Effects,
+        edge::MethodInstance)
+        return new(rt, const_result, effects, edge)
+    end
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -791,24 +785,33 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
+    concrete_eval_result = nothing
     if eligibility === :concrete_eval
-        return concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
+        concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
+        # if we don't inline the result of this concrete evaluation,
+        # give const-prop' a chance to inline a better method body
+        if !may_optimize(interp) || (
+            may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
+            concrete_eval_result.rt === Bottom) # unless this call deterministically throws and thus is non-inlineable
+            return concrete_eval_result
+        end
+        # TODO allow semi-concrete interp for this call?
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
-    mi === nothing && return nothing
+    mi === nothing && return concrete_eval_result
     if is_constprop_recursed(result, mi, sv)
         add_remark!(interp, sv, "[constprop] Edge cycle encountered")
         return nothing
     end
     # try semi-concrete evaluation
     if eligibility === :semi_concrete_eval
-        res = semi_concrete_eval_call(interp, mi, result, arginfo, sv)
-        if res !== nothing
-            return res
+        irinterp_result = semi_concrete_eval_call(interp, mi, result, arginfo, sv)
+        if irinterp_result !== nothing
+            return irinterp_result
         end
     end
     # try constant prop'
-    return const_prop_call(interp, mi, result, arginfo, sv)
+    return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
 function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match::MethodMatch)
@@ -843,21 +846,22 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         end
     end
     if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
-        # If the current statement is @inbounds or we propagate inbounds, the call's consistency
-        # is tainted and not consteval eligible.
+        # If the current statement is @inbounds or we propagate inbounds,
+        # the call's :consistent-cy is tainted and not consteval eligible.
         add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return :none
     end
-    if isoverlayed(method_table(interp)) && !is_nonoverlayed(effects)
-        # disable concrete-evaluation if this function call is tainted by some overlayed
-        # method since currently there is no direct way to execute overlayed methods
-        add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
-        return :none
-    end
-    if result.edge !== nothing && is_foldable(effects)
+    mi = result.edge
+    if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
-            return :concrete_eval
-        elseif !any_conditional(arginfo)
+            if is_nonoverlayed(interp) || is_nonoverlayed(effects)
+                return :concrete_eval
+            end
+            # disable concrete-evaluation if this function call is tainted by some overlayed
+            # method since currently there is no easy way to execute overlayed methods
+            add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
+        end
+        if !any_conditional(arginfo)
             return :semi_concrete_eval
         end
     end
@@ -886,8 +890,8 @@ function collect_const_args(argtypes::Vector{Any}, start::Int)
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo,
-    sv::AbsIntState, invokecall::Union{InvokeCall,Nothing})
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
+    invokecall::Union{InvokeCall,Nothing}=nothing)
     args = collect_const_args(arginfo, #=start=#2)
     if invokecall !== nothing
         # this call should be `invoke`d, rewrite `args` back now
@@ -900,7 +904,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConcreteResult(edge, result.effects), result.effects, edge)
+        return ConstCallResults(Bottom, ConcreteResult(edge, result.effects), result.effects, edge)
     end
     return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
 end
@@ -1158,8 +1162,11 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                 # that are newly resovled by irinterp
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
-                new_effects = Effects(result.effects; nothrow)
-                return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
+                effects = result.effects
+                if !is_nothrow(effects)
+                    effects = Effects(effects; nothrow)
+                end
+                return ConstCallResults(rt, SemiConcreteResult(mi, ir, effects), effects, mi)
             end
         end
     end
@@ -1167,7 +1174,8 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
 end
 
 function const_prop_call(interp::AbstractInterpreter,
-    mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
+    mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
+    concrete_eval_result::Union{Nothing,ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
@@ -1190,6 +1198,11 @@ function const_prop_call(interp::AbstractInterpreter,
             return nothing
         end
         @assert inf_result.result !== nothing
+        if concrete_eval_result !== nothing
+            # override return type and effects with concrete evaluation result if available
+            inf_result.result = concrete_eval_result.rt
+            inf_result.ipo_effects = concrete_eval_result.effects
+        end
     else
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -1903,7 +1916,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds, overlayed = findsup(lookupsig, method_table(interp))
+    match, valid_worlds = findsup(lookupsig, method_table(interp))
     match === nothing && return CallMeta(Any, Effects(), NoCallInfo())
     update_valid_age!(sv, valid_worlds)
     method = match.method
@@ -1923,7 +1936,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
     𝕃ₚ = ipo_lattice(interp)
-    f = overlayed ? nothing : singleton_type(ft′)
+    f = singleton_type(ft′)
     invokecall = InvokeCall(types, lookupsig)
     const_call_result = abstract_call_method_with_const_args(interp,
         result, f, arginfo, si, match, sv, invokecall)
@@ -1934,7 +1947,6 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-    effects = Effects(effects; nonoverlayed=!overlayed)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
     return CallMeta(rt, effects, info)
@@ -1978,13 +1990,16 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
-        if f === getfield && (fargs !== nothing && isexpr(fargs[end], :boundscheck)) && !is_nothrow(effects) && isa(sv, InferenceState)
-            # As a special case, we delayed tainting `noinbounds` for getfield calls in case we can prove
-            # in-boundedness indepedently. Here we need to put that back in other cases.
-            # N.B.: This isn't about the effects of the call itself, but a delayed contribution of the :boundscheck
-            # statement, so we need to merge this directly into sv, rather than modifying thte effects.
+        if (isa(sv, InferenceState) && f === getfield && fargs !== nothing &&
+            isexpr(fargs[end], :boundscheck) && !is_nothrow(effects))
+            # As a special case, we delayed tainting `noinbounds` for `getfield` calls
+            # in case we can prove in-boundedness indepedently.
+            # Here we need to put that back in other cases.
+            # N.B. This isn't about the effects of the call itself,
+            # but a delayed contribution of the :boundscheck statement,
+            # so we need to merge this directly into sv, rather than modifying the effects.
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
         end
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
@@ -2053,7 +2068,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter,
-    closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::InferenceState, check::Bool=true)
+    closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
     (; rt, edge, effects) = result
@@ -2188,7 +2203,6 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    rt = Any
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
@@ -2197,6 +2211,8 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
             sp = sv.sptypes[n]
             rt = sp.typ
             nothrow = !sp.undef
+        else
+            rt = Any
         end
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
         return rt
@@ -2207,26 +2223,26 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
                 f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
                 if f isa Const && f.val === getfield
                     # boundscheck of `getfield` call is analyzed by tfunc potentially without
-                    # tainting :inbounds or :consistent when it's known to be nothrow
-                    @goto delay_effects_analysis
+                    # tainting :noinbounds or :noub when it's known to be nothrow
+                    return Bool
                 end
             end
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
-            # which will subsequently taint `:consistent`-cy if this function is called from another
+            # which will subsequently taint `:consistent` if this function is called from another
             # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
             # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
             # `:consistent`-cy here also.
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+                consistent = iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) ? ALWAYS_TRUE : ALWAYS_FALSE))
         end
-        @label delay_effects_analysis
-        rt = Bool
+        return Bool
     elseif head === :inbounds
-        @assert false && "Expected this to have been moved into flags"
+        @assert false "Expected `:inbounds` expression to have been moved into SSA flags"
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+        return Any
     end
-    return rt
+    return Any
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
@@ -2340,7 +2356,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         ut = unwrap_unionall(t)
         consistent = ALWAYS_FALSE
-        nothrow = false
+        nothrow = noub = false
         if isa(ut, DataType) && !isabstracttype(ut)
             ismutable = ismutabletype(ut)
             fcount = datatype_fieldcount(ut)
@@ -2348,14 +2364,15 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             if (fcount === nothing || (fcount > nargs && (let t = t
                     any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
                 end)))
-                # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
-                consistent = ALWAYS_FALSE
+                # allocation with undefined field leads to undefined behavior and should taint `:noub`
             elseif ismutable
-                # mutable object isn't `:consistent`, but we can still give the return
-                # type information a chance to refine this `:consistent`-cy later
+                # mutable object isn't `:consistent`, but we still have a chance that
+                # return type information later refines the `:consistent`-cy of the method
                 consistent = CONSISTENT_IF_NOTRETURNED
+                noub = true
             else
                 consistent = ALWAYS_TRUE
+                noub = true
             end
             if isconcretedispatch(t)
                 nothrow = true
@@ -2399,7 +2416,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = refine_partial_type(t)
             end
         end
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+        effects = Effects(EFFECTS_TOTAL; consistent, nothrow, noub)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2542,15 +2559,14 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
         override = decode_effects_override(v[2])
-        effects = Effects(
-            override.consistent          ? ALWAYS_TRUE : effects.consistent,
-            override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
-            override.nothrow             ? true        : effects.nothrow,
-            override.terminates_globally ? true        : effects.terminates,
-            override.notaskstate         ? true        : effects.notaskstate,
-            override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            effects.nonoverlayed,
-            effects.noinbounds)
+        effects = Effects(effects;
+            consistent          = override.consistent ? ALWAYS_TRUE : effects.consistent,
+            effect_free         = override.effect_free ? ALWAYS_TRUE : effects.effect_free,
+            nothrow             = override.nothrow ? true : effects.nothrow,
+            terminates          = override.terminates_globally ? true : effects.terminates,
+            notaskstate         = override.notaskstate ? true : effects.notaskstate,
+            inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
+            noub                = override.noub ? true : effects.noub)
     end
     return RTEffects(t, effects)
 end
@@ -2585,8 +2601,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             # we ourselves don't read our parent's inbounds.
             effects = Effects(effects; noinbounds=true)
         end
-        if (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
-            effects = Effects(effects; consistent=ALWAYS_FALSE)
+        if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
+            effects = Effects(effects; consistent=ALWAYS_FALSE, noub=false)
         end
     end
     merge_effects!(interp, sv, effects)
@@ -2892,17 +2908,49 @@ function init_vartable!(vartable::VarTable, frame::InferenceState)
     return vartable
 end
 
+function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
+                           currstate::VarTable, @nospecialize(rt))
+    bestguess = frame.bestguess
+    nargs = narguments(frame, #=include_va=#false)
+    slottypes = frame.slottypes
+    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
+    # narrow representation of bestguess slightly to prepare for tmerge with rt
+    if rt isa InterConditional && bestguess isa Const
+        slot_id = rt.slot
+        old_id_type = slottypes[slot_id]
+        if bestguess.val === true && rt.elsetype !== Bottom
+            bestguess = InterConditional(slot_id, old_id_type, Bottom)
+        elseif bestguess.val === false && rt.thentype !== Bottom
+            bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    end
+    # copy limitations to return value
+    if !isempty(frame.pclimitations)
+        union!(frame.limitations, frame.pclimitations)
+        empty!(frame.pclimitations)
+    end
+    if !isempty(frame.limitations)
+        rt = LimitedAccuracy(rt, copy(frame.limitations))
+    end
+    𝕃ₚ = ipo_lattice(interp)
+    if !⊑(𝕃ₚ, rt, bestguess)
+        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
+        frame.bestguess = tmerge(𝕃ₚ, bestguess, rt) # new (wider) return type for frame
+        return true
+    else
+        return false
+    end
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    nargs = narguments(frame, #=include_va=#false)
-    slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
-    𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
+    𝕃ᵢ = typeinf_lattice(interp)
 
     currbb = frame.currbb
     if currbb != 1
@@ -2929,6 +2977,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     nextbb = succs[1]
                     ssavaluetypes[currpc] = Any
                     handle_control_backedge!(interp, frame, currpc, stmt.label)
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
@@ -2945,6 +2994,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         condt = Conditional(condx, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
+                    nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
+                    nothrow && add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if !isempty(frame.pclimitations)
                         # we can't model the possible effect of control
                         # dependencies on the return
@@ -2970,7 +3021,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
-                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                            if !nothrow
                                 merge_effects!(interp, frame, EFFECTS_THROWS)
                                 if !hasintersect(widenconst(orig_condt), Bool)
                                     ssavaluetypes[currpc] = Bottom
@@ -3003,35 +3054,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         end
                     end
                 elseif isa(stmt, ReturnNode)
-                    bestguess = frame.bestguess
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
-                    rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
-                    # narrow representation of bestguess slightly to prepare for tmerge with rt
-                    if rt isa InterConditional && bestguess isa Const
-                        let slot_id = rt.slot
-                            old_id_type = slottypes[slot_id]
-                            if bestguess.val === true && rt.elsetype !== Bottom
-                                bestguess = InterConditional(slot_id, old_id_type, Bottom)
-                            elseif bestguess.val === false && rt.thentype !== Bottom
-                                bestguess = InterConditional(slot_id, Bottom, old_id_type)
-                            end
-                        end
-                    end
-                    # copy limitations to return value
-                    if !isempty(frame.pclimitations)
-                        union!(frame.limitations, frame.pclimitations)
-                        empty!(frame.pclimitations)
-                    end
-                    if !isempty(frame.limitations)
-                        rt = LimitedAccuracy(rt, copy(frame.limitations))
-                    end
-                    if !⊑(𝕃ₚ, rt, bestguess)
-                        # new (wider) return type for frame
-                        bestguess = tmerge(𝕃ₚ, bestguess, rt)
-                        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
-                        frame.bestguess = bestguess
+                    if update_bestguess!(interp, frame, currstate, rt)
                         for (caller, caller_pc) in frame.cycle_backedges
-                            if !(caller.ssavaluetypes[caller_pc] === Any)
+                            if caller.ssavaluetypes[caller_pc] !== Any
                                 # no reason to revisit if that call-site doesn't affect the final result
                                 push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
                             end

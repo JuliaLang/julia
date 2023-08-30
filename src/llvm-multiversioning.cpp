@@ -1104,7 +1104,7 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyModule(M, &errs()));
+    assert(!verifyLLVMIR(M));
 #endif
 
     return true;

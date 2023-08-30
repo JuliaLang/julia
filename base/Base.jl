@@ -224,6 +224,7 @@ include("hashing.jl")
 include("rounding.jl")
 using .Rounding
 include("div.jl")
+include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -314,6 +315,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
@@ -328,11 +335,9 @@ const liblapack_name = libblas_name
 include("logging.jl")
 using .CoreLogging
 
-# Concurrency
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
@@ -354,7 +359,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -604,7 +609,7 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_NEW_PARSER", true) === true
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
     nothing

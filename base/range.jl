@@ -905,7 +905,10 @@ end
 
 ## indexing
 
-isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+function isassigned(r::AbstractRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    firstindex(r) <= i <= lastindex(r)
+end
 
 # `_getindex` is like `getindex` but does not check if `i isa Bool`
 function _getindex(v::AbstractRange, i::Integer)
@@ -943,7 +946,7 @@ end
 unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     T(r.ref + u*r.step)
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
@@ -1356,8 +1359,21 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
-collect(r::AbstractRange) = vcat(r)
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
+function Array{T,1}(r::AbstractRange{T}) where {T}
+    a = Vector{T}(undef, length(r))
+    i = 1
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    return a
+end
+collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)

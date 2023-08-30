@@ -301,7 +301,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -390,6 +390,15 @@ end
         C = copy(A)
         B = randn(elty, 5, 5)
         @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
     end
 end
 
