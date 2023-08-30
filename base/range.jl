@@ -1058,7 +1058,7 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
 end
 
 function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     r.ref + u*r.step
 end
 
