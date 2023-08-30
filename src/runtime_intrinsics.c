@@ -524,6 +524,10 @@ JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
+JL_DLLEXPORT jl_value_t *jl_cglobal_pltarg(jl_value_t *v, jl_value_t *ty, jl_value_t *useplt) {
+    return jl_cglobal(v, ty);
+}
+
 static inline char signbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
 {
     // sign bit of an signed number of n bytes, as a byte

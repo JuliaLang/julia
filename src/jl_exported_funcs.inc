@@ -91,6 +91,7 @@
     XX(jl_ceil_llvm_withtype) \
     XX(jl_cglobal) \
     XX(jl_cglobal_auto) \
+    XX(jl_cglobal_pltarg) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
     XX(jl_close_uv) \

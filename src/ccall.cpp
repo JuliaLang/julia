@@ -671,13 +671,15 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const 
 static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
     ++EmittedCGlobals;
-    JL_NARGS(cglobal, 1, 2);
+    JL_NARGS(cglobal, 1, 3);
     jl_value_t *rt = NULL;
     Value *res;
     native_sym_arg_t sym = {};
     JL_GC_PUSH2(&rt, &sym.gcroot);
+    bool use_jlplt = true;
 
-    if (nargs == 2) {
+    rt = (jl_value_t*)jl_voidpointer_type;
+    if (nargs >= 2) {
         rt = static_eval(ctx, args[2]);
         if (rt == NULL) {
             JL_GC_POP();
@@ -690,9 +692,19 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         JL_TYPECHK(cglobal, type, rt);
         rt = (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, rt);
     }
-    else {
-        rt = (jl_value_t*)jl_voidpointer_type;
+    if (nargs == 3) {
+        jl_value_t *j_use_jlplt = static_eval(ctx, args[3]);
+        if (j_use_jlplt == NULL || !jl_is_bool(j_use_jlplt)) {
+            JL_GC_POP();
+            jl_cgval_t argv[3] = {jl_cgval_t(), jl_cgval_t(), jl_cgval_t()};
+            argv[0] = emit_expr(ctx, args[1]);
+            argv[1] = emit_expr(ctx, args[2]);
+            argv[2] = emit_expr(ctx, args[3]);
+            return emit_runtime_call(ctx, JL_I::cglobal, argv, nargs);
+        }
+        use_jlplt = jl_unbox_bool(j_use_jlplt);
     }
+
     Type *lrt = ctx.types().T_size;
     assert(lrt == julia_type_to_llvm(ctx, rt));
 
@@ -713,6 +725,17 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
         if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
+    }
+    else if (!use_jlplt) {
+        if ((sym.f_lib && !((sym.f_lib == JL_EXE_LIBNAME) ||
+              (sym.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+              (sym.f_lib == JL_LIBJULIA_DL_LIBNAME))) || sym.lib_expr) {
+            jl_printf(JL_STDERR,"WARNING: Attempted to use library expression for symbol %s while disabling jlplt. Library expression was ignored.\n", sym.f_name);
+        }
+        GlobalVariable *GV = new GlobalVariable(*jl_Module, lrt, true,
+            GlobalVariable::ExternalLinkage,
+            nullptr, sym.f_name);
+        res = ctx.builder.CreatePtrToInt(GV, lrt);
     }
     else {
         if (sym.lib_expr) {

@@ -278,7 +278,10 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
     isa(t, Const) && return isa(t.val, Type) ? Ptr{t.val} : Ptr
     return isType(t) ? Ptr{t.parameters[1]} : Ptr
 end
-add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
+@nospecs function cglobal_tfunc(𝕃::AbstractLattice, fptr, t, useplt)
+    return cglobal_tfunc(𝕃, fptr, t)
+end
+add_tfunc(Core.Intrinsics.cglobal, 1, 3, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)

@@ -2053,14 +2053,18 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
             assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
 
             for (auto &SG : make_early_inc_range(src.globals())) {
-                GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(SG.getName()));
+                GlobalValue *dG = cast_or_null<GlobalValue>(dest.getNamedValue(SG.getName()));
                 if (SG.hasLocalLinkage()) {
                     dG = nullptr;
                 }
                 // Replace a declaration with the definition:
                 if (dG && !dG->hasLocalLinkage()) {
                     if (SG.isDeclaration()) {
-                        SG.replaceAllUsesWith(dG);
+                        Constant *repl = dG;
+                        if (SG.getType() != repl->getType()) {
+                            repl = ConstantExpr::getBitCast(repl, SG.getType());
+                        }
+                        SG.replaceAllUsesWith(repl);
                         SG.eraseFromParent();
                         continue;
                     }

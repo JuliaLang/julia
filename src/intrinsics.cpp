@@ -1181,8 +1181,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 {
     auto &DL = ctx.emission_context.DL;
     assert(f < num_intrinsics);
-    if (f == cglobal && nargs == 1)
-        f = cglobal_auto;
+    if (f == cglobal) {
+        if (nargs == 1)
+            f = cglobal_auto;
+        else if (nargs == 3)
+            f = cglobal_pltarg;
+    }
+
     unsigned expected_nargs = jl_intrinsic_nargs((int)f);
     if (expected_nargs && expected_nargs != nargs) {
         jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
@@ -1190,7 +1195,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     if (f == llvmcall)
         return emit_llvmcall(ctx, args, nargs);
-    if (f == cglobal_auto || f == cglobal)
+    if (f == cglobal_auto || f == cglobal || f == cglobal_pltarg)
         return emit_cglobal(ctx, args, nargs);
 
     SmallVector<jl_cgval_t> argv(nargs);

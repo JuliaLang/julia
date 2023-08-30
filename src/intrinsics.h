@@ -104,7 +104,8 @@
     /*  cpu feature tests */ \
     ADD_I(have_fma, 1) \
     /*  hidden intrinsics */ \
-    ADD_HIDDEN(cglobal_auto, 1)
+    ADD_HIDDEN(cglobal_auto, 1) \
+    ADD_HIDDEN(cglobal_pltarg, 3)
 
 enum intrinsic {
 #define ADD_I(func, nargs) func,
