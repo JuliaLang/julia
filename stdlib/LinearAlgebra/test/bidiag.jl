@@ -102,7 +102,7 @@ Random.seed!(1)
         @test_throws BoundsError ubd[1, n + 1] = 1
         @test ((cubd[2, 2] = 10) == 10; cubd[2, 2] == 10)
         # bidiagonal size
-        @test_throws ArgumentError size(ubd, 0)
+        @test_throws BoundsError size(ubd, 0)
         @test size(ubd, 1) == size(ubd, 2) == n
         @test size(ubd, 3) == 1
         # bidiagonal similar

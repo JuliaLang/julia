@@ -183,10 +183,10 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}\n(1.0 + 0.0im)*I"
-@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}(1.0 + 0.0im)"
-@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "$(LinearAlgebra.UniformScaling){ComplexF64}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "$(LinearAlgebra.UniformScaling){Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "$(LinearAlgebra.UniformScaling){ComplexF64}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(Float32))) == "$(LinearAlgebra.UniformScaling){Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())

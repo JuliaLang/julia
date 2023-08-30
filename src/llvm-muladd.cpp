@@ -104,7 +104,7 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
         }
     }
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }

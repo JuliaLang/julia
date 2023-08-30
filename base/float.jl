@@ -138,6 +138,68 @@ i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 function exponent_raw_max end
 
 """
+IEEE 754 definition of the minimum exponent.
+"""
+ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
+
+exponent_min(::Type{Float16}) = ieee754_exponent_min(Float16)
+exponent_min(::Type{Float32}) = ieee754_exponent_min(Float32)
+exponent_min(::Type{Float64}) = ieee754_exponent_min(Float64)
+
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, exponent_field::Integer, significand_field::Integer
+) where {F<:IEEEFloat}
+    T = uinttype(F)
+    ret::T = sign_bit
+    ret <<= exponent_bits(F)
+    ret |= exponent_field
+    ret <<= significand_bits(F)
+    ret |= significand_field
+end
+
+# ±floatmax(T)
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:omega}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, exponent_raw_max(F) - 1, significand_mask(F))
+end
+
+# NaN or an infinity
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, significand_field::Integer, ::Val{:nan}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, exponent_raw_max(F), significand_field)
+end
+
+# NaN with default payload
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:nan}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, one(uinttype(F)) << (significand_bits(F) - 1), Val(:nan))
+end
+
+# Infinity
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:inf}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, Val(:nan))
+end
+
+# Subnormal or zero
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, significand_field::Integer, ::Val{:subnormal}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, significand_field)
+end
+
+# Zero
+function ieee754_representation(
+    ::Type{F}, sign_bit::Bool, ::Val{:zero}
+) where {F<:IEEEFloat}
+    ieee754_representation(F, sign_bit, false, Val(:subnormal))
+end
+
+"""
     uabs(x::Integer)
 
 Return the absolute value of `x`, possibly returning a different type should the
@@ -378,11 +440,6 @@ unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
 trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
 trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
-
-# fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 
 # Bool
 trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
@@ -688,22 +745,24 @@ function hash(x::Real, h::UInt)
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
-
-    # handle values representable as Int64, UInt64, Float64
+    # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
+    # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1
+        # left = ceil(log2(num*2^pow))
         left = top_set_bit(abs(num)) + pow
-        right = pow + den_z
-        if -1074 <= right
-            if 0 <= right
+        # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
+        if -1074 <= pow
+            if 0 <= pow # if pow is non-negative, it is an integer
                 left <= 63 && return hash(Int64(num) << Int(pow), h)
                 left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow), h)
+            # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
+            # Float64s only have 53 mantisa bits (including implicit bit)
+            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     else
         h = hash_integer(den, h)
     end
-
     # handle generic rational values
     h = hash_integer(pow, h)
     h = hash_integer(num, h)

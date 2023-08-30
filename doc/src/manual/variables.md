@@ -111,18 +111,17 @@ variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be writt
 it from `+ ᵃx` where `ᵃx` is the variable name.
 
 
-A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values, which are immediately discarded, and cannot therefore be used to assign values to other variables (i.e., they cannot be used as [`rvalues`](https://en.wikipedia.org/wiki/Value_(computer_science)#Assignment:_l-values_and_r-values)) or use the last value
-assigned to them in any way.
+A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 
 ```julia-repl
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
 julia> y = ___
-ERROR: syntax: all-underscore identifier used as rvalue
+ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 
 julia> println(___)
-ERROR: syntax: all-underscore identifier used as rvalue
+ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 ```
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):

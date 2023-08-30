@@ -55,7 +55,6 @@ UpperHessenberg{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
 UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
 Array(H::UpperHessenberg) = Matrix(H)
-size(H::UpperHessenberg, d) = size(H.data, d)
 size(H::UpperHessenberg) = size(H.data)
 parent(H::UpperHessenberg) = H.data
 
@@ -600,7 +599,6 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
 end
 
 ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

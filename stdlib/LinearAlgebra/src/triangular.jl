@@ -34,7 +34,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
 
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
 
-        size(A::$t, d) = size(A.data, d)
         size(A::$t) = size(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
@@ -678,12 +677,6 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 ######################
 # BlasFloat routines #
 ######################
-
-# legacy stuff, to be removed
-_multrimat!(C, A, B) = _trimul!(C, A, B)
-_mulmattri!(C, A, B) = _trimul!(C, A, B)
-_uconvert_copyto!(c, b, oA) = (c .= Ref(oA) .\ b)
-_uconvert_copyto!(c::AbstractArray{T}, b::AbstractArray{T}, _) where {T} = copyto!(c, b)
 
 # which triangle to use of the underlying data
 uplo_char(::UpperOrUnitUpperTriangular) = 'U'

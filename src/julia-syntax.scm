@@ -296,7 +296,8 @@
                                   (if (eq? n '|#self#|) (gensy) n))
                                 arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
-                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 1))) (iota (length arg-names))))))))
+                                   ;; arg-names slots start at 2 (after name)
+                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
         (function (call ,name ,@arg-names) ,body)))))
@@ -662,7 +663,10 @@
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
-                       (if (any (lambda (defaultv)
+                       (if (any vararg? (butlast vals))
+                         ;; Forbid splat in all but the final default value
+                         (error "invalid \"...\" in non-final positional argument default value")
+                         (if (any (lambda (defaultv)
                                   ;; does any default val expression...
                                   (contains (lambda (e)
                                               ;; contain "e" such that...
@@ -681,7 +685,7 @@
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -3808,8 +3812,6 @@ f(x) = yt(x)
              (let ((prev  (table.clone live))
                    (decl- (table.clone decl)))
                (let ((result (eager-any visit (cdr e))))
-                 (if (eq? (car e) '_while)
-                     (kill))  ;; body might not have run
                  (leave-loop! decl-)
                  (if result
                      #t
@@ -4486,7 +4488,7 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (error (string "all-underscore identifier used as rvalue" (format-loc current-loc))))
+                (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
@@ -4976,6 +4978,7 @@ f(x) = yt(x)
   (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
+        (linetablelen 0)
         (labltable    (table))
         (ssavtable    (table))
         (current-loc  0)
@@ -4988,6 +4991,7 @@ f(x) = yt(x)
       (if (and (null? (cdr linetable))
                (not (and (pair? e) (eq? (car e) 'meta))))
           (begin (set! linetable (cons (make-lineinfo name file line) linetable))
+                 (set! linetablelen (+ linetablelen 1))
                  (set! current-loc 1)))
       (set! code (cons e code))
       (set! i (+ i 1))
@@ -5009,13 +5013,15 @@ f(x) = yt(x)
                                                    (make-lineinfo name current-file current-line)
                                                    (make-lineinfo name current-file current-line (caar locstack)))
                                                linetable))
-                         (set! current-loc (- (length linetable) 1)))))
+                         (set! linetablelen (+ linetablelen 1))
+                         (set! current-loc linetablelen))))
                   ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
                    (set! locstack (cons (list current-loc current-line current-file) locstack))
                    (set! current-file (caddr e))
                    (set! current-line 0)
                    (set! linetable (cons (make-lineinfo name current-file current-line current-loc) linetable))
-                   (set! current-loc (- (length linetable) 1)))
+                   (set! linetablelen (+ linetablelen 1))
+                   (set! current-loc linetablelen))
                   ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
                    (let ((l (car locstack)))
                      (set! locstack (cdr locstack))

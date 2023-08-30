@@ -671,7 +671,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
         local anyupdate = false
 
         for pc in nstmts:-1:1
-            stmt = getinst(ir, pc)[:inst]
+            stmt = getinst(ir, pc)[:stmt]
 
             # collect escape information
             if isa(stmt, Expr)
@@ -784,7 +784,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     end
     for idx in 1:nstmts+nnewnodes
         inst = getinst(ir, idx)
-        stmt = inst[:inst]
+        stmt = inst[:stmt]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
             check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)

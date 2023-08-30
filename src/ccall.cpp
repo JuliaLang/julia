@@ -170,8 +170,9 @@ static Value *runtime_sym_lookup(
             // f_lib is actually one of the special sentinel values
             libname = ConstantExpr::getIntToPtr(ConstantInt::get(emission_context.DL.getIntPtrType(irbuilder.getContext()), (uintptr_t)f_lib), getInt8PtrTy(irbuilder.getContext()));
         }
-        llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
+        auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
                     { libname, nameval, libptrgv });
+        llvmf = lookup;
     }
     setName(emission_context, llvmf, f_name + StringRef(".found"));
     StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, Align(sizeof(void*)));
@@ -185,17 +186,6 @@ static Value *runtime_sym_lookup(
     p->addIncoming(llvmf, llvmf->getParent());
     setName(emission_context, p, f_name);
     return irbuilder.CreateBitCast(p, funcptype);
-}
-
-static Value *runtime_sym_lookup(
-        jl_codectx_t &ctx,
-        PointerType *funcptype, const char *f_lib, jl_value_t *lib_expr,
-        const char *f_name, Function *f,
-        GlobalVariable *libptrgv,
-        GlobalVariable *llvmgv, bool runtime_lib)
-{
-    return runtime_sym_lookup(ctx.emission_context, ctx.builder, &ctx, funcptype, f_lib, lib_expr,
-                              f_name, f, libptrgv, llvmgv, runtime_lib);
 }
 
 static Value *runtime_sym_lookup(
@@ -225,7 +215,7 @@ static Value *runtime_sym_lookup(
         libptrgv = prepare_global_in(jl_Module, libptrgv);
     }
     llvmgv = prepare_global_in(jl_Module, llvmgv);
-    return runtime_sym_lookup(ctx, funcptype, f_lib, lib_expr, f_name, f, libptrgv, llvmgv, runtime_lib);
+    return runtime_sym_lookup(ctx.emission_context, ctx.builder, &ctx, funcptype, f_lib, lib_expr, f_name, f, libptrgv, llvmgv, runtime_lib);
 }
 
 // Emit a "PLT" entry that will be lazily initialized
@@ -245,17 +235,22 @@ static GlobalVariable *emit_plt_thunk(
     std::string fname;
     raw_string_ostream(fname) << "jlplt_" << f_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
     Function *plt = Function::Create(functype,
-                                     GlobalVariable::ExternalLinkage,
+                                     GlobalVariable::PrivateLinkage,
                                      fname, M);
     plt->setAttributes(attrs);
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
-    fname += "_got";
     auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
                                              ConstantExpr::getBitCast(plt, T_pvoidfunc),
-                                             fname);
+                                             fname + "_got");
+    if (runtime_lib) {
+        got->addAttribute("julia.libname", f_lib);
+    } else {
+        got->addAttribute("julia.libidx", std::to_string((uintptr_t) f_lib));
+    }
+    got->addAttribute("julia.fname", f_name);
     BasicBlock *b0 = BasicBlock::Create(M->getContext(), "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(ctx.emission_context, irbuilder, NULL, funcptype, f_lib, NULL, f_name, plt, libptrgv,
@@ -263,8 +258,8 @@ static GlobalVariable *emit_plt_thunk(
     StoreInst *store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, Align(sizeof(void*)));
     store->setAtomic(AtomicOrdering::Release);
     SmallVector<Value*, 16> args;
-    for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
-        args.push_back(&*arg);
+    for (auto &arg : plt->args())
+        args.push_back(&arg);
     assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
     CallInst *ret = irbuilder.CreateCall(
         functype,
@@ -307,7 +302,6 @@ static Value *emit_plt(
         CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
     ++PLT;
-    assert(ctx.emission_context.imaging);
     // Don't do this for vararg functions so that the `musttail` is only
     // an optimization and is not required to function correctly.
     assert(!functype->isVarArg());
@@ -663,8 +657,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 f_lib = jl_symbol_name((jl_sym_t*)t1);
             else if (jl_is_string(t1))
                 f_lib = jl_string_data(t1);
-            else
-                f_name = NULL;
+            else {
+                out.lib_expr = t1;
+            }
         }
     }
 }
@@ -716,32 +711,16 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else if (sym.fptr != NULL) {
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
-        if (ctx.emission_context.imaging)
+        if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
-        else if (ctx.emission_context.imaging) {
+        else /*if (ctx.emission_context.imaging) */{
             res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
             res = ctx.builder.CreatePtrToInt(res, lrt);
-        }
-        else {
-            void *symaddr;
-
-            void* libsym = jl_get_library_(sym.f_lib, 0);
-            int symbol_found = jl_dlsym(libsym, sym.f_name, &symaddr, 0);
-            if (!libsym || !symbol_found) {
-                // Error mode, either the library or the symbol couldn't be find during compiletime.
-                // Fallback to a runtime symbol lookup.
-                res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
-                res = ctx.builder.CreatePtrToInt(res, lrt);
-            } else {
-                // since we aren't saving this code, there's no sense in
-                // putting anything complicated here: just JIT the address of the cglobal
-                res = ConstantInt::get(lrt, (uint64_t)symaddr);
-            }
         }
     }
 
@@ -2092,9 +2071,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (symarg.fptr != NULL) {
         ++LiteralCCalls;
-        Type *funcptype = PointerType::get(functype, 0);
+        Type *funcptype = functype->getPointerTo(0);
         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
-        if (ctx.emission_context.imaging)
+        setName(ctx.emission_context, llvmf, "ccall_fptr");
+        if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
     else {
@@ -2104,7 +2084,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             ++DeferredCCallLookups;
             llvmf = runtime_sym_lookup(ctx, funcptype, NULL, symarg.lib_expr, symarg.f_name, ctx.f);
         }
-        else if (ctx.emission_context.imaging) {
+        else /*if (ctx.emission_context.imaging) */{
             ++DeferredCCallLookups;
             // vararg requires musttail,
             // but musttail is incompatible with noreturn.
@@ -2112,22 +2092,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 llvmf = runtime_sym_lookup(ctx, funcptype, symarg.f_lib, NULL, symarg.f_name, ctx.f);
             else
                 llvmf = emit_plt(ctx, functype, attributes, cc, symarg.f_lib, symarg.f_name);
-        }
-        else {
-            void *symaddr;
-            void *libsym = jl_get_library_(symarg.f_lib, 0);
-            int symbol_found = jl_dlsym(libsym, symarg.f_name, &symaddr, 0);
-            if (!libsym || !symbol_found) {
-                ++DeferredCCallLookups;
-                // either the library or the symbol could not be found, place a runtime
-                // lookup here instead.
-                llvmf = runtime_sym_lookup(ctx, funcptype, symarg.f_lib, NULL, symarg.f_name, ctx.f);
-            } else {
-                ++LiteralCCalls;
-                // since we aren't saving this code, there's no sense in
-                // putting anything complicated here: just JIT the function address
-                llvmf = literal_static_pointer_val(symaddr, funcptype);
-            }
         }
     }
 

@@ -6,7 +6,7 @@ import Core:
     CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
     QuoteNode, ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 # domsort
 # =======
@@ -42,7 +42,7 @@ let m = Meta.@lower 1 + 1
     domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    phi = ir.stmts.inst[3]
+    phi = ir.stmts.stmt[3]
     @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
@@ -838,17 +838,18 @@ end
 
 # Test cfg_simplify in complicated sequences of dropped and merged bbs
 using Core.Compiler: Argument, IRCode, GotoNode, GotoIfNot, ReturnNode, NoCallInfo, BasicBlock, StmtRange, SSAValue
-bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:inst]
+bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:stmt]
 
 function each_stmt_a_bb(stmts, preds, succs)
     ir = IRCode()
-    empty!(ir.stmts.inst)
-    append!(ir.stmts.inst, stmts)
+    empty!(ir.stmts.stmt)
+    append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
     empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
+    empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
     Core.Compiler.verify_ir(ir)
     return ir
 end
@@ -949,7 +950,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.stmt[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
@@ -1195,9 +1196,9 @@ let ci = code_typed1(optimize=false) do
         end
     end
     ir = Core.Compiler.inflate_ir(ci)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    @test any(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt)
     ir = Core.Compiler.compact!(ir, true)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+    @test !any(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt)
 end
 
 # Test that adce_pass! can drop phi node uses that can be concluded unused
@@ -1233,7 +1234,7 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) <= 2
-    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
+    @test isa(ir.stmts[length(ir.stmts)][:stmt], ReturnNode)
 end
 
 @test Core.Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
@@ -1438,3 +1439,16 @@ function foo(b, x)
     getfield(f, :x) + 1
 end
 @test foo(true, 1) == 2
+
+# ifelse folding
+@test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+@test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return Core.ifelse(true, x, exp(x))
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(isa(x, Float64), x, exp(x))
+end

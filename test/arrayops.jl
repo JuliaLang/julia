@@ -604,6 +604,15 @@ end
     @testset "issue 43078" begin
         @test_throws TypeError findall([1])
     end
+
+    @testset "issue #46425" begin
+        counter = 0
+        function pred46425(x)
+            counter += 1
+            counter < 4 && x
+        end
+        @test findall(pred46425, [false, false, true, true]) == [3]
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]

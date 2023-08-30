@@ -54,7 +54,9 @@ Random.seed!(1)
     end
 
     @testset "Basic properties" begin
-        @test_throws ArgumentError size(D,0)
+        @test_throws BoundsError size(D,0)
+        @test size(D,1) == size(D,2) == length(dd)
+        @test size(D,3) == 1
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
@@ -458,6 +460,12 @@ Random.seed!(1)
         @test vals isa AbstractVector{<:Furlong{1}}
         @test vecs isa AbstractMatrix{<:Furlong{0}}
     end
+end
+
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
 end
 
 @testset "rdiv! (#40887)" begin

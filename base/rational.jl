@@ -484,10 +484,6 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
-floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
-ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
-
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
@@ -549,9 +545,10 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
     num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
-    if isodd(den)
+    if isodd(den) # since den != 1, this rational can't be a Float64
         pow = trailing_zeros(num)
         num >>= pow
+        h = hash_integer(den, h)
     else
         pow = trailing_zeros(den)
         den >>= pow
