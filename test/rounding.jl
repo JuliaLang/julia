@@ -448,3 +448,10 @@ const native_rounding_modes = (
         end
     end
 end
+
+@testset "round(Int, -Inf16) should throw (#51113)" begin
+    @test_throws InexactError round(Int32, -Inf16)
+    @test_throws InexactError round(Int64, -Inf16)
+    @test_throws InexactError round(Int128, -Inf16)
+    # More comprehensive testing is present in test/floatfuncs.jl
+end

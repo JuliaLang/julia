@@ -271,7 +271,7 @@ end
             result = result !== error && typemin(Ti) <= result <= typemax(Ti) ? result : error
 
             if result === error
-                # @test_throws InexactError round(Ti, z) Broken because of #51113
+                @test_throws InexactError round(Ti, z)
                 @test_throws InexactError Ti(z)
             else
                 @test result == round(Ti, z)
