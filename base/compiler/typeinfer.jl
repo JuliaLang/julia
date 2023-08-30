@@ -669,16 +669,17 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     # and mark any unreachable statements by wrapping them in Const(...), to distinguish them from
     # must-throw statements which also have type Bottom
     for i = 1:nstmt
+        expr = stmts[i]
         if was_reached(sv, i)
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
             push!(sv.unreachable, i)
-            if is_meta_expr(stmts[i]) # keep any lexically scoped expressions
+            if is_meta_expr(expr) # keep any lexically scoped expressions
                 ssavaluetypes[i] = Any # 3
             else
                 ssavaluetypes[i] = Bottom # 3
                 # annotate that this statement actually is dead
-                stmts[i] = Const(stmts[i])
+                stmts[i] = Const(expr)
             end
         end
     end

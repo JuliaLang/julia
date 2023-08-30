@@ -72,7 +72,7 @@ end
 # https://github.com/JuliaLang/julia/issues/41694
 Base.@assume_effects :terminates_globally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -85,8 +85,8 @@ end
 end
 
 Base.@assume_effects :terminates_globally function recur_termination1(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
+    x == 0 && return 1
+    0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
@@ -95,8 +95,8 @@ end
 end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
+    x == 0 && return 1
+    0 ≤ x < 20 || error("bad fact")
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
@@ -112,7 +112,7 @@ end
         # this :terminates_locally allows this anonymous function to be constant-folded
         Base.@assume_effects :terminates_locally
         res = 1
-        1 < x < 20 || error("bad pow")
+        0 ≤ x < 20 || error("bad fact")
         while x > 1
             res *= x
             x -= 1
