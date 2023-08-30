@@ -2839,6 +2839,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 #endif
 
 extern void rebuild_image_blob_tree(void);
+extern void export_jl_small_typeof(void);
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
@@ -2914,9 +2915,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             *tag = jl_read_value(&s);
         }
 #define XX(name) \
-        jl_small_typeof[(jl_##name##_tag << 4) / sizeof(*jl_small_typeof)] = jl_##name##_type;
+        ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
         JL_SMALL_TYPEOF(XX)
 #undef XX
+        export_jl_small_typeof();
         jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;

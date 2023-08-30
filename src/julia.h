@@ -750,16 +750,23 @@ enum jl_small_typeof_tags {
     jl_bitstags_first = jl_char_tag, // n.b. bool is not considered a bitstype, since it can be compared by pointer
     jl_max_tags = 64
 };
-#ifndef JL_LIBRARY_EXPORTS
-JL_DLLIMPORT
-#endif
-extern jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+extern JL_DLLIMPORT jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+#ifndef JL_LIBRARY_EXPORTS_INTERNAL
 static inline jl_value_t *jl_to_typeof(uintptr_t t)
 {
     if (t < (jl_max_tags << 4))
         return (jl_value_t*)jl_small_typeof[t / sizeof(*jl_small_typeof)];
     return (jl_value_t*)t;
 }
+#else
+extern JL_HIDDEN jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+static inline jl_value_t *jl_to_typeof(uintptr_t t)
+{
+    if (t < (jl_max_tags << 4))
+        return (jl_value_t*)ijl_small_typeof[t / sizeof(*ijl_small_typeof)];
+    return (jl_value_t*)t;
+}
+#endif
 
 
 // kinds
