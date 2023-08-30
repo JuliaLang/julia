@@ -39,7 +39,13 @@ run(TracyProfiler_jll.tracy())
 !!! note
     On macOS, you may want to set the `TRACY_DPI_SCALE` environment variable to `1.0` if the UI elements in the profiler appear excessively large.
 
-To run a "headless" instance that saves the trace to disk, use `TracyProfiler_jll.capture() -o mytracefile.tracy` instead.
+To run a "headless" instance that saves the trace to disk, use
+
+```julia
+run(`$(TracyProfiler_jll.capture()) -o mytracefile.tracy`)
+```
+
+instead.
 
 For information on using the Tracy UI, refer to the Tracy manual.
 

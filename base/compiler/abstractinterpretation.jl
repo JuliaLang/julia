@@ -16,7 +16,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # At this point we are guaranteed to end up throwing on this path,
         # which is all that's required for :consistent-cy. Of course, we don't
         # know anything else about this statement.
-        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed=!isoverlayed(method_table(interp)))
+        effects = Effects(; consistent=ALWAYS_TRUE)
         return CallMeta(Any, effects, NoCallInfo())
     end
 
@@ -28,7 +28,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, Effects(), NoCallInfo())
     end
 
-    (; valid_worlds, applicable, info, nonoverlayed) = matches
+    (; valid_worlds, applicable, info) = matches
     update_valid_age!(sv, valid_worlds)
     napplicable = length(applicable)
     rettype = Bottom
@@ -39,7 +39,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     const_results = Union{Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
-    all_effects = Effects(EFFECTS_TOTAL; nonoverlayed)
+    all_effects = EFFECTS_TOTAL
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
@@ -205,7 +205,6 @@ struct MethodMatches
     valid_worlds::WorldRange
     mt::MethodTable
     fullmatch::Bool
-    nonoverlayed::Bool
 end
 any_ambig(info::MethodMatchInfo) = info.results.ambig
 any_ambig(m::MethodMatches) = any_ambig(m.info)
@@ -217,7 +216,6 @@ struct UnionSplitMethodMatches
     valid_worlds::WorldRange
     mts::Vector{MethodTable}
     fullmatches::Vector{Bool}
-    nonoverlayed::Bool
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
@@ -233,19 +231,16 @@ function find_matching_methods(𝕃::AbstractLattice,
         valid_worlds = WorldRange()
         mts = MethodTable[]
         fullmatches = Bool[]
-        nonoverlayed = true
         for i in 1:length(split_argtypes)
             arg_n = split_argtypes[i]::Vector{Any}
             sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
             mt = mt::MethodTable
-            result = findall(sig_n, method_table; limit = max_methods)
-            if result === nothing
+            matches = findall(sig_n, method_table; limit = max_methods)
+            if matches === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
-            (; matches, overlayed) = result
-            nonoverlayed &= !overlayed
             push!(infos, MethodMatchInfo(matches))
             for m in matches
                 push!(applicable, m)
@@ -271,28 +266,25 @@ function find_matching_methods(𝕃::AbstractLattice,
                                        UnionSplitInfo(infos),
                                        valid_worlds,
                                        mts,
-                                       fullmatches,
-                                       nonoverlayed)
+                                       fullmatches)
     else
         mt = ccall(:jl_method_table_for, Any, (Any,), atype)
         if mt === nothing
             return FailedMethodMatch("Could not identify method table for call")
         end
         mt = mt::MethodTable
-        result = findall(atype, method_table; limit = max_methods)
-        if result === nothing
+        matches = findall(atype, method_table; limit = max_methods)
+        if matches === nothing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
-        (; matches, overlayed) = result
         fullmatch = any(match::MethodMatch->match.fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
                              matches.valid_worlds,
                              mt,
-                             fullmatch,
-                             !overlayed)
+                             fullmatch)
     end
 end
 
@@ -862,7 +854,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     mi = result.edge
     if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
-            if is_nonoverlayed(mi.def::Method) && (!isoverlayed(method_table(interp)) || is_nonoverlayed(effects))
+            if is_nonoverlayed(interp) || is_nonoverlayed(effects)
                 return :concrete_eval
             end
             # disable concrete-evaluation if this function call is tainted by some overlayed
@@ -1924,7 +1916,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds, overlayed = findsup(lookupsig, method_table(interp))
+    match, valid_worlds = findsup(lookupsig, method_table(interp))
     match === nothing && return CallMeta(Any, Effects(), NoCallInfo())
     update_valid_age!(sv, valid_worlds)
     method = match.method
@@ -1955,7 +1947,6 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-    effects = Effects(effects; nonoverlayed = !overlayed)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
     return CallMeta(rt, effects, info)
@@ -2986,6 +2977,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     nextbb = succs[1]
                     ssavaluetypes[currpc] = Any
                     handle_control_backedge!(interp, frame, currpc, stmt.label)
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
@@ -3002,6 +2994,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         condt = Conditional(condx, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
+                    nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
+                    nothrow && add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if !isempty(frame.pclimitations)
                         # we can't model the possible effect of control
                         # dependencies on the return
@@ -3027,7 +3021,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
-                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                            if !nothrow
                                 merge_effects!(interp, frame, EFFECTS_THROWS)
                                 if !hasintersect(widenconst(orig_condt), Bool)
                                     ssavaluetypes[currpc] = Bottom

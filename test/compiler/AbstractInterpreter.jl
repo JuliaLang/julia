@@ -6,10 +6,18 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+
 # OverlayMethodTable
 # ==================
 
 using Base.Experimental: @MethodTable, @overlay
+
+# @overlay method with return type annotation
+@MethodTable RT_METHOD_DEF
+@overlay RT_METHOD_DEF Base.sin(x::Float64)::Float64 = cos(x)
+@overlay RT_METHOD_DEF function Base.sin(x::T)::T where T<:AbstractFloat
+    cos(x)
+end
 
 @newinterp MTOverlayInterp
 @MethodTable OverlayedMT
@@ -47,7 +55,8 @@ callstrange(::Float64) = strangesin(x)
 callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
-    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
+    @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
         @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
@@ -84,9 +93,9 @@ end |> only === Union{Nothing,Missing}
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
-Base.@assume_effects :terminates_globally function issue41694(x)
+Base.@assume_effects :terminates_locally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1

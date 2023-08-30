@@ -553,8 +553,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
+        type_annotate!(interp, me)
         doopt = (me.cached || me.parent !== nothing)
-        type_annotate!(interp, me, doopt)
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
         else
@@ -628,46 +628,6 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
-    if isa(x, SlotNumber)
-        id = slot_id(x)
-        pc = find_dominating_assignment(id, idx, sv)
-        if pc === nothing
-            block = block_for_inst(sv.cfg, idx)
-            state = sv.bb_vartables[block]::VarTable
-            vt = state[id]
-            undefs[id] |= vt.undef
-            typ = widenslotwrapper(ignorelimited(vt.typ))
-        else
-            typ = sv.ssavaluetypes[pc]
-            @assert typ !== NOT_FOUND "active slot in unreached region"
-        end
-        # add type annotations where needed
-        if !⊑(typeinf_lattice(interp), sv.slottypes[id], typ)
-            return TypedSlot(id, typ)
-        end
-        return x
-    elseif isa(x, Expr)
-        head = x.head
-        i0 = 1
-        if is_meta_expr_head(head) || head === :const
-            return x
-        end
-        if head === :(=) || head === :method
-            i0 = 2
-        end
-        for i = i0:length(x.args)
-            x.args[i] = annotate_slot_load!(interp, undefs, idx, sv, x.args[i])
-        end
-        return x
-    elseif isa(x, ReturnNode) && isdefined(x, :val)
-        return ReturnNode(annotate_slot_load!(interp, undefs, idx, sv, x.val))
-    elseif isa(x, GotoIfNot)
-        return GotoIfNot(annotate_slot_load!(interp, undefs, idx, sv, x.cond), x.dest)
-    end
-    return x
-end
-
 # find the dominating assignment to the slot `id` in the block containing statement `idx`,
 # returns `nothing` otherwise
 function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
@@ -685,7 +645,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST, preparing for optimization
-function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
+function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     # widen `Conditional`s from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
@@ -699,72 +659,43 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     record_bestguess!(sv)
 
     # annotate variables load types
-    # remove dead code optimization
-    # and compute which variables may be used undef
     src = sv.src
     stmts = src.code
     nstmt = length(stmts)
     ssavaluetypes = sv.ssavaluetypes
-    slotflags = src.slotflags
-    nslots = length(slotflags)
-    undefs = fill(false, nslots)
-    any_unreachable = false
+    nslots = length(src.slotflags)
 
-    # this statement traversal does five things:
-    # 1. introduce temporary `TypedSlot`s that are supposed to be replaced with π-nodes later
-    # 2. mark used-undef slots (required by the `slot2reg` conversion)
-    # 3. mark unreached statements for a bulk code deletion (see issue #7836)
-    # 4. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
-    #    NOTE because of this, `was_reached` will no longer be available after this point
-    # 5. eliminate GotoIfNot if either or both branches are statically unreachable
-    changemap = nothing # initialized if there is any dead region
+    # widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
+    # and mark any unreachable statements by wrapping them in Const(...), to distinguish them from
+    # must-throw statements which also have type Bottom
     for i = 1:nstmt
         expr = stmts[i]
         if was_reached(sv, i)
-            if run_optimizer
-                if isa(expr, GotoIfNot)
-                    # 5: replace this live GotoIfNot with:
-                    # - no-op if :nothrow and the branch target is unreachable
-                    # - cond if :nothrow and both targets are unreachable
-                    # - typeassert if must-throw
-                    if widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
-                        block = block_for_inst(sv.cfg, i)
-                        if !was_reached(sv, i+1)
-                            cfg_delete_edge!(sv.cfg, block, block + 1)
-                            expr = GotoNode(expr.dest)
-                        elseif !was_reached(sv, expr.dest)
-                            cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                            expr = nothing
-                        end
-                    elseif ssavaluetypes[i] === Bottom
-                        block = block_for_inst(sv.cfg, i)
-                        cfg_delete_edge!(sv.cfg, block, block + 1)
-                        cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                        expr = Expr(:call, Core.typeassert, expr.cond, Bool)
-                    end
-                end
-            end
-            stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
-            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
+            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
         else # i.e. any runtime execution will never reach this statement
-            any_unreachable = true
+            push!(sv.unreachable, i)
             if is_meta_expr(expr) # keep any lexically scoped expressions
-                ssavaluetypes[i] = Any # 4
+                ssavaluetypes[i] = Any # 3
             else
-                ssavaluetypes[i] = Bottom # 4
-                stmts[i] = Const(expr) # annotate that this statement actually is dead
+                ssavaluetypes[i] = Bottom # 3
+                # annotate that this statement actually is dead
+                stmts[i] = Const(expr)
             end
         end
     end
 
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
+    for varstate in sv.bb_vartables
+        if varstate !== nothing
+            for slot in 1:nslots
+                vt = varstate[slot]
+                widened_type = widenslotwrapper(ignorelimited(vt.typ))
+                varstate[slot] = VarState(widened_type, vt.undef)
+            end
         end
     end
 
-    return any_unreachable
+    return nothing
 end
 
 # at the end, all items in b's cycle
