@@ -2162,7 +2162,7 @@ struct CongruenceClass
 end
 
 function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
-    # rename all SSAValues 
+    # rename all SSAValues
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
 
@@ -2248,20 +2248,20 @@ function gvn!(ir::IRCode)
 
     while changed
         changed = false
-        
+
         # Reverse Post Order traversal of dominator tree
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-            if !(ir.stmts.stmt[i] isa Expr) & !(ir.stmts.stmt[i] isa PhiNode) 
+            if !(ir.stmts.stmt[i] isa Expr) & !(ir.stmts.stmt[i] isa PhiNode)
                 ssa_to_ssa[i] = i
                 continue
             end
 
             stmt::Union{Expr, PhiNode} = ir.stmts.stmt[i]
-    
+
             # IR_FLAG_NOTHROW is necessary, can't exclude it otherwise inference tests start to fail for some reason
             # tmerge_types_slow starts to return Any instead of the desired result.
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-            if !(ir.stmts.flag[i] & total_flags == total_flags) 
+            if !(ir.stmts.flag[i] & total_flags == total_flags)
                 ssa_to_ssa[i] = i
                 continue
             end
@@ -2287,7 +2287,7 @@ function gvn!(ir::IRCode)
                 changed = true
             end
         end
-        # empty!(val_to_ssa; preserve_size=true) 
+        # empty!(val_to_ssa; preserve_size=true)
         empty!(val_to_ssa)
         sizehint!(val_to_ssa, length(ir.stmts.stmt))
     end
@@ -2298,12 +2298,12 @@ function gvn!(ir::IRCode)
     for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
         if ssa_to_ssa[i] != 0 && ssa_to_ssa[i] != i
             if congruence_classes === nothing
-                congruence_classes = IdDict{Int, Vector{CongruenceClass}}() 
+                congruence_classes = IdDict{Int, Vector{CongruenceClass}}()
             end
             if !haskey(congruence_classes, ssa_to_ssa[i])
                 congruence_classes[ssa_to_ssa[i]] = [CongruenceClass(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
             end
-            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClass(i, blockidx)) 
+            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClass(i, blockidx))
         end
     end
 
@@ -2323,9 +2323,9 @@ function gvn!(ir::IRCode)
             while !isempty(elimination_stack) && !dominates(dfsnumbers, last(elimination_stack).blockidx, blockidx)
                 pop!(elimination_stack)
             end
-            if isempty(elimination_stack) 
+            if isempty(elimination_stack)
                 push!(elimination_stack, CongruenceClass(ssa, blockidx))
-            elseif last(elimination_stack).ssa < ssa 
+            elseif last(elimination_stack).ssa < ssa
                 ir.stmts.stmt[ssa] = SSAValue(last(elimination_stack).ssa)
             end
         end
