@@ -2859,3 +2859,12 @@ function intersect(v::AbstractVector, r::AbstractRange)
     return vectorfilter(T, _shrink_filter!(seen), common)
 end
 intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
+
+# Here instead of range.jl for bootstrapping because `@propagate_inbounds` depends on Vectors.
+@propagate_inbounds function getindex(v::AbstractRange, i::Integer)
+    if i isa Bool # Not via dispatch to avoid ambiguities
+        throw(ArgumentError("invalid index: $i of type Bool"))
+    else
+        _getindex(v, i)
+    end
+end
