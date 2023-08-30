@@ -1678,8 +1678,12 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
-
+function logabsdet(A::AbstractMatrix)
+    if istriu(A) || istril(A)
+        return logabsdet(UpperTriangular(A))
+    end
+    return logabsdet(lu(A, check=false))
+end
 logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """

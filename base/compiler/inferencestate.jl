@@ -296,7 +296,11 @@ mutable struct InferenceState
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
 
-        restrict_abstract_call_sites = isa(linfo.def, Module)
+        if def isa Method
+            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+        end
+
+        restrict_abstract_call_sites = isa(def, Module)
         @assert cache === :no || cache === :local || cache === :global
         cached = cache === :global
 
@@ -313,6 +317,13 @@ mutable struct InferenceState
             interp)
     end
 end
+
+is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
+is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable) = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
 
 is_inferred(sv::InferenceState) = is_inferred(sv.result)
 is_inferred(result::InferenceResult) = result.result !== nothing
