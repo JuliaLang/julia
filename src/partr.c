@@ -396,12 +396,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 }
                 return task;
             }
+            if (ptls->tid == 0) {
+                    // Don't let thread 0 sleep for now
+                    // TODO: Figure out safe sleeping logic for thread 0 since it no longer runs the libuv loop
+                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
+                        jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                    }
+                    start_cycles = 0;
+                    continue;
+                }
             jl_gc_safepoint();
-            // optimization: check again first if we may have work to do.
-            // Otherwise we got a spurious wakeup since some other thread
-            // that just wanted to steal libuv from us. We will just go
-            // right back to sleep on the individual wake signal to let
-            // them take it from us without conflict.
             if (!may_sleep(ptls)) {
                 start_cycles = 0;
                 continue;

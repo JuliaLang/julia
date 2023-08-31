@@ -1,3 +1,0 @@
-2.912688e-01 GCPushPop.cpp
-7.508969e-02 ImplicitAtomicsTest.c
-1.751547e-01 MissingRoots.c

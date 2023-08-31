@@ -36,6 +36,7 @@
 .vscode/*
 *.heapsnapshot
 .cache
+*.lit_test_times.txt
 # Buildkite: Ignore the entire .buildkite directory
 /.buildkite
 
