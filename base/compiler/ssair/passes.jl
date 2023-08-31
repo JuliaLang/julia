@@ -2144,19 +2144,8 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
-function arrayptr(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, x::Array{T}, i::Int)::P where T
-    # Based on unsafe_convert for RefArray
-    if allocatedinline(T)
-        p = pointer(x, i)
-    elseif isconcretetype(T) && ismutabletype(T)
-        p = pointer_from_objref(x[i])
-    else
-        p = pointerref(Ptr{Ptr{Cvoid}}(pointer(x, i)), 1, Core.sizeof(Ptr{Cvoid}))
-    end
-    return p
-end
 
-struct CongruenceClass
+struct CongruenceClassElement
     ssa::Int
     blockidx::Int
 end
@@ -2165,28 +2154,15 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
     # rename all SSAValues
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
-
-        # key = similar(stmt.args, length(stmt.args)+1)
-        # copyto!(key, stmt.args)
-        # key[end] = stmt.head
-        # for (i, arg) in enumerate(stmt.args)
-        #     if isa(arg, SSAValue)
-        #         key[i] = SSAValue(ssa_to_ssa[arg.id])
-        #     end
-        # end
-        # svec(key...)
-
-        key = ccall(:jl_alloc_svec, SimpleVector, (Csize_t,), length(stmt.args)+1);
-        ptr = convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(key)) + sizeof(Ptr{Cvoid})
+        key = similar(stmt.args, length(stmt.args)+1)
+        copyto!(key, stmt.args)
+        key[end] = stmt.head
         for (i, arg) in enumerate(stmt.args)
             if isa(arg, SSAValue)
-                unsafe_store!(ptr, ccall(:jl_box_ssavalue, Ptr{Any}, (Csize_t,), ssa_to_ssa[arg.id]), i)
-            else
-                unsafe_store!(ptr, arrayptr(Ptr{Nothing}, stmt.args, i), i)
+                key[i] = SSAValue(ssa_to_ssa[arg.id])
             end
         end
-        unsafe_store!(ptr, pointer_from_objref(stmt.head), length(stmt.args)+1)
-        return key
+        return svec(key...)
     else
         return nothing
     end
@@ -2197,7 +2173,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     no_of_edges = length(stmt.edges)
     key = Vector{Any}(undef, no_of_edges*2 + 2)
     copyto!(key, stmt.edges)
-    key[no_of_edges+1] = :phi
+    key[no_of_edges+1] = :phi # delimiter to seperate edges and rest
     key[no_of_edges+2] = blockidx
     copyto!(key, no_of_edges+3, stmt.values)
 
@@ -2244,24 +2220,22 @@ function gvn!(ir::IRCode)
     ssa_to_ssa = fill(0, length(ir.stmts.stmt)) # Map from ssa to ssa of equivalent value
     # Value type is SSAValue in order to reuse cache from it being boxed in svec
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
-    sizehint!(val_to_ssa, length(ir.stmts.stmt))
+    sizehint!(val_to_ssa, length(ir.stmts))
 
     while changed
         changed = false
 
         # Reverse Post Order traversal of dominator tree
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-            if !(ir.stmts.stmt[i] isa Expr) & !(ir.stmts.stmt[i] isa PhiNode)
+            stmt = ir[SSAValue(i)][:stmt]
+            if !(stmt isa Expr) & !(stmt isa PhiNode)
                 ssa_to_ssa[i] = i
                 continue
             end
 
-            stmt::Union{Expr, PhiNode} = ir.stmts.stmt[i]
-
-            # IR_FLAG_NOTHROW is necessary, can't exclude it otherwise inference tests start to fail for some reason
-            # tmerge_types_slow starts to return Any instead of the desired result.
+            # :nothrow is necessary to be able to move with affecting semantics
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-            if !(ir.stmts.flag[i] & total_flags == total_flags)
+            if !(ir[SSAValue(i)][:flag] & total_flags == total_flags)
                 ssa_to_ssa[i] = i
                 continue
             end
@@ -2287,23 +2261,21 @@ function gvn!(ir::IRCode)
                 changed = true
             end
         end
-        # empty!(val_to_ssa; preserve_size=true)
         empty!(val_to_ssa)
-        sizehint!(val_to_ssa, length(ir.stmts.stmt))
+        sizehint!(val_to_ssa, length(ir.stmts))
     end
-    # val_to_ssa keys might have pointers to stuff in ir that may be overwritten, so it is emptied to prevent use
 
     # Find Congruence Classes
     congruence_classes = nothing # could steal ht from val_to_ssa instead of delaying allocation
     for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
         if ssa_to_ssa[i] != 0 && ssa_to_ssa[i] != i
             if congruence_classes === nothing
-                congruence_classes = IdDict{Int, Vector{CongruenceClass}}()
+                congruence_classes = IdDict{Int, Vector{CongruenceClassElement}}()
             end
             if !haskey(congruence_classes, ssa_to_ssa[i])
-                congruence_classes[ssa_to_ssa[i]] = [CongruenceClass(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
+                congruence_classes[ssa_to_ssa[i]] = [CongruenceClassElement(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
             end
-            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClass(i, blockidx))
+            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClassElement(i, blockidx))
         end
     end
 
@@ -2318,13 +2290,13 @@ function gvn!(ir::IRCode)
     # https://github.com/llvm/llvm-project/blob/232f0c9a9aa14802139126e97fcd0b5874b2f150/llvm/lib/Transforms/Scalar/NewGVN.cpp#L3979-L4040
     for class in values(congruence_classes)
         sort!(class; by=x->(dfsnumbers[x.blockidx].in, dfsnumbers[x.blockidx].out, x.ssa))
-        elimination_stack = CongruenceClass[]
+        elimination_stack = CongruenceClassElement[]
         for (; ssa, blockidx) in class
             while !isempty(elimination_stack) && !dominates(dfsnumbers, last(elimination_stack).blockidx, blockidx)
                 pop!(elimination_stack)
             end
             if isempty(elimination_stack)
-                push!(elimination_stack, CongruenceClass(ssa, blockidx))
+                push!(elimination_stack, CongruenceClassElement(ssa, blockidx))
             elseif last(elimination_stack).ssa < ssa
                 ir.stmts.stmt[ssa] = SSAValue(last(elimination_stack).ssa)
             end
