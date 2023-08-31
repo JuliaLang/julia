@@ -569,8 +569,8 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
     return RUNNING_ON_VALGRIND;
 }
 
-extern void * __attribute__((weak)) jl_system_image_data;
-extern void * __attribute__((weak)) jl_system_image_size;
+extern void * __attribute__((weak)) JL_DLLIMPORT jl_system_image_data;
+extern void * __attribute__((weak)) JL_DLLIMPORT jl_system_image_size;
 static void jl_load_sysimg_so(void)
 {
     int imaging_mode = jl_generating_output() && !jl_options.incremental;

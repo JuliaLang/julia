@@ -619,7 +619,7 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 }
 
 extern "C" {
-extern void * __attribute__((weak)) jl_image_pointers;
+extern void * __attribute__((weak)) JL_DLLIMPORT jl_image_pointers;
 }
 
 // Load sysimg, use the `callback` for dispatch and perform all relocations
