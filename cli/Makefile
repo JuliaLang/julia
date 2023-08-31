@@ -18,7 +18,7 @@ endif
 
 ifeq ($(OS),WINNT)
 LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
-                  --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi
+                  --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi -lmsvcrt
 else ifeq ($(OS),Linux)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),FreeBSD)
