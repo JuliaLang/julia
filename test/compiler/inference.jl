@@ -5142,6 +5142,9 @@ h45759(x::Tuple{Any,Vararg}; kwargs...) = x[1] + h45759(x[2:end]; kwargs...)
 h45759(x::Tuple{}; kwargs...) = 0
 @test only(Base.return_types(h45759, Tuple{Tuple{Int,Int,Int,Int,Int,Int,Int}})) == Int
 
+# issue #50709
+@test Base.code_typed_by_type(Tuple{Type{Vector{S}} where {T, S<:AbstractVector{T}}, UndefInitializer, Int})[1][2] == Vector{<:AbstractVector{T}} where T
+
 @test only(Base.return_types((typeof([[[1]]]),)) do x
     sum(x) do v
         sum(length, v)
