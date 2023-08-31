@@ -247,7 +247,7 @@ end
     # @test qr(Int[]) == (Int[],1)
 
     B = rand(7,2)
-    @test (1:7)\B ≈ Vector(1:7)\B
+    @test (@test_deprecated ((1:7)\B)) ≈ (@test_deprecated (Vector(1:7)\B))
 end
 
 @testset "Issue 16520" begin
