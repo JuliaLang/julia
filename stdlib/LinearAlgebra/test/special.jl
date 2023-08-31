@@ -260,7 +260,7 @@ end
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
     abstractq = qr(tridiagmat).Q
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq)
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
         MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
@@ -312,7 +312,7 @@ end
     annospcmats = [annot(spcmat) for annot in annotations, spcmat in specialconcatmats]
     # Test concatenations of pairwise combinations of annotated special matrices
     for annospcmata in annospcmats, annospcmatb in annospcmats
-        AM = collect(annospcmata); BM = collect(annospcmatb)
+        AM = Array(annospcmata); BM = Array(annospcmatb)
         @test vcat(annospcmata, annospcmatb) == vcat(AM, BM)
         @test hcat(annospcmata, annospcmatb) == hcat(AM, BM)
         @test hvcat((2,), annospcmata, annospcmatb) == hvcat((2,), AM, BM)
@@ -320,16 +320,16 @@ end
     end
     # Test concatenations of pairwise combinations of annotated special matrices and other matrix/vector types
     for annospcmat in annospcmats
-        AM = collect(annospcmat)
+        AM = Array(annospcmat)
         # --> Tests applicable to pairs including only matrices
         for othermat in (densemat, annodmats..., specialconcatmats...)
-            OM = collect(othermat)
+            OM = Array(othermat)
             @test vcat(annospcmat, othermat) == vcat(AM, OM)
             @test vcat(othermat, annospcmat) == vcat(OM, AM)
         end
         # --> Tests applicable to pairs including other vectors or matrices
         for other in (densevec, densemat, annodmats..., specialconcatmats...)
-            OM = collect(other)
+            OM = Array(other)
             @test hcat(annospcmat, other) == hcat(AM, OM)
             @test hcat(other, annospcmat) == hcat(OM, AM)
             @test hvcat((2,), annospcmat, other) == hvcat((2,), AM, OM)
