@@ -244,6 +244,9 @@ precompile_test_harness(false) do dir
               const abigint_f() = big"123"
               const abigint_x = big"124"
 
+              # issue #51111
+              abigfloat_to_f32() = Float32(big"1.5")
+
               # issue #31488
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
@@ -298,6 +301,9 @@ precompile_test_harness(false) do dir
         @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
         @test Foo.abigint_f()::BigInt == big"123"
         @test Foo.abigint_x::BigInt + 1 == big"125"
+
+        # Issue #51111
+        @test Foo.abigfloat_to_f32() == 1.5f0
 
         @test Foo.x28297.result === missing
 
