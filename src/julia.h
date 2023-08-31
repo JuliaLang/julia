@@ -2354,6 +2354,8 @@ typedef struct {
     int safepoint_on_entry; // Emit a safepoint on entry to each function
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
+    int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
+
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
 

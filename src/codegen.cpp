@@ -1365,6 +1365,7 @@ extern "C" {
         /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
+        /* use_jlplt*/ 1,
         /* lookup */ jl_rettype_inferred_addr,
         /* generic_context */ NULL };
 }
