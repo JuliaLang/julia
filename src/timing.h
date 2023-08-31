@@ -4,6 +4,7 @@
 #define JL_TIMING_H
 
 #include "julia.h"
+#include <limits.h>
 
 static inline const char *gnu_basename(const char *path)
 {
@@ -213,21 +214,6 @@ enum jl_timing_counter_types {
  * Timing Backend: Aggregated timing counts (implemented in timing.c)
  **/
 
-typedef struct jl_timing_counts_event_t {
-    const char *name;
-    _Atomic(uint64_t) self;
-    _Atomic(uint64_t) total;
-} jl_timing_counts_event_t;
-
-typedef struct _jl_timing_counts_t {
-    uint64_t total;
-    uint64_t start;
-    uint64_t t0;
-#ifdef JL_DEBUG_BUILD
-    uint8_t running;
-#endif
-} jl_timing_counts_t;
-
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_EVENT_MEMBER             jl_timing_counts_event_t *counts_event;
 #define _COUNTS_BLOCK_MEMBER             jl_timing_counts_t counts_ctx;
@@ -354,61 +340,6 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
     __attribute__((cleanup(_jl_timing_suspend_destroy))) \
     jl_timing_suspend_t __timing_suspend; \
     _jl_timing_suspend_ctor(&__timing_suspend, #subsystem, ct)
-
-// Counting
-#ifdef USE_ITTAPI
-#define _ITTAPI_COUNTER_MEMBER __itt_counter ittapi_counter;
-#else
-#define _ITTAPI_COUNTER_MEMBER
-#endif
-
-#ifdef USE_TRACY
-# define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
-# else
-# define _TRACY_COUNTER_MEMBER
-#endif
-
-#ifdef USE_TIMING_COUNTS
-#define _COUNTS_MEMBER _Atomic(uint64_t) basic_counter;
-#else
-#define _COUNTS_MEMBER
-#endif
-
-typedef struct {
-    _ITTAPI_COUNTER_MEMBER
-    _TRACY_COUNTER_MEMBER
-    _COUNTS_MEMBER
-} jl_timing_counter_t;
-
-JL_DLLEXPORT extern jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
-
-static inline void jl_timing_counter_inc(int counter, uint64_t val) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    __itt_counter_inc_delta(jl_timing_counters[counter].ittapi_counter, val);
-#endif
-#ifdef USE_TRACY
-    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
-    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, val);
-    TracyCPlotI(tracy_counter->name, oldval + val);
-#endif
-#ifdef USE_TIMING_COUNTS
-    jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, val);
-#endif
-}
-
-static inline void jl_timing_counter_dec(int counter, uint64_t val) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    __itt_counter_dec_delta(jl_timing_counters[counter].ittapi_counter, val);
-#endif
-#ifdef USE_TRACY
-    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
-    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, -val);
-    TracyCPlotI(tracy_counter->name, oldval - val);
-#endif
-#ifdef USE_TIMING_COUNTS
-    jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, -(int64_t)val);
-#endif
-}
 
 // Locking profiling
 static inline void jl_profile_lock_init(jl_mutex_t *lock, const char *name) {
