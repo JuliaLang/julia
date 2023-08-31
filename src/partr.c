@@ -396,15 +396,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 }
                 return task;
             }
-            if (ptls->tid == 0) {
-                    // Don't let thread 0 sleep for now
-                    // TODO: Figure out safe sleeping logic for thread 0 since it no longer runs the libuv loop
-                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
-                        jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
-                    }
-                    start_cycles = 0;
-                    continue;
-                }
             jl_gc_safepoint();
             if (!may_sleep(ptls)) {
                 start_cycles = 0;
@@ -416,13 +407,20 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             int8_t gc_state = jl_gc_safe_enter(ptls);
             uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
-                if (ptls->tid == 0 && wait_empty) {
-                    task = wait_empty;
+                if (ptls->tid == 0 ) {
                     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                         jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    break;
+                    if (wait_empty) {
+                        task = wait_empty;
+                        break;
+                    } else {
+                        uv_mutex_unlock(&ptls->sleep_lock);
+                        jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
+                        start_cycles = 0;
+                        continue;
+                    }
                 }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
             }
