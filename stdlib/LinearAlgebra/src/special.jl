@@ -379,6 +379,7 @@ for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"
     end
 end
 
+hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling}...) = _hvcat(rows, A...)
 hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...) = _hvcat(rows, A...)
 function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...; array_type = promote_to_array_type(A))
     require_one_based_indexing(A...)
