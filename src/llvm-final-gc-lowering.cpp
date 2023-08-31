@@ -205,12 +205,13 @@ Value *FinalLowerGC::lowerQueueGCBinding(CallInst *target, Function &F)
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
     ++GCAllocBytesCount;
-    assert(target->arg_size() == 2);
+    assert(target->arg_size() == 3);
     CallInst *newI;
 
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto ptls = target->getArgOperand(0);
+    auto type = target->getArgOperand(2);
     Attribute derefAttr;
 
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
@@ -221,19 +222,19 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         if (offset < 0) {
             newI = builder.CreateCall(
                 bigAllocFunc,
-                { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
+                { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)), type });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
         }
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
+            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), getSizeTy(F.getContext()));
         size = builder.CreateAdd(size, ConstantInt::get(getSizeTy(F.getContext()), sizeof(void*)));
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
+        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());

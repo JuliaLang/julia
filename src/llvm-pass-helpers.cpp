@@ -120,6 +120,12 @@ namespace jl_intrinsics {
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
     static const char *QUEUE_GC_BINDING_NAME = "julia.queue_gc_binding";
 
+    static auto T_size_t(const JuliaPassContext &context) {
+        return sizeof(size_t) == sizeof(uint32_t) ?
+            Type::getInt32Ty(context.getLLVMContext()) :
+            Type::getInt64Ty(context.getLLVMContext());
+    }
+
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
     // The allocation size is set to the first argument.
@@ -150,9 +156,8 @@ namespace jl_intrinsics {
                 FunctionType::get(
                     context.T_prjlvalue,
                     { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()) },
+                        T_size_t(context),
+                        T_size_t(context) }, // type
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
@@ -227,11 +232,17 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
-    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc_instrumented);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc_instrumented);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_QUEUE_BINDING_NAME = XSTR(jl_gc_queue_binding);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
+
+    static auto T_size_t(const JuliaPassContext &context) {
+        return sizeof(size_t) == sizeof(uint32_t) ?
+            Type::getInt32Ty(context.getLLVMContext()) :
+            Type::getInt64Ty(context.getLLVMContext());
+    }
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -242,9 +253,8 @@ namespace jl_well_known {
                 FunctionType::get(
                     context.T_prjlvalue,
                     { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()) },
+                        T_size_t(context),
+                        T_size_t(context) },
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
@@ -258,7 +268,7 @@ namespace jl_well_known {
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
+                    { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), T_size_t(context) },
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
@@ -301,10 +311,8 @@ namespace jl_well_known {
                 FunctionType::get(
                     context.T_prjlvalue,
                     { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()),
-                        Type::getInt8PtrTy(context.getLLVMContext()) },
+                        T_size_t(context),
+                        T_size_t(context) }, // type
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_NAME);
