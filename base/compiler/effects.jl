@@ -100,9 +100,8 @@ struct Effects
     terminates::Bool
     notaskstate::Bool
     inaccessiblememonly::UInt8
-    noub::Bool
+    noub::UInt8
     nonoverlayed::Bool
-    noinbounds::Bool
     function Effects(
         consistent::UInt8,
         effect_free::UInt8,
@@ -110,9 +109,8 @@ struct Effects
         terminates::Bool,
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
-        noub::Bool,
-        nonoverlayed::Bool,
-        noinbounds::Bool)
+        noub::UInt8,
+        nonoverlayed::Bool)
         return new(
             consistent,
             effect_free,
@@ -121,8 +119,7 @@ struct Effects
             notaskstate,
             inaccessiblememonly,
             noub,
-            nonoverlayed,
-            noinbounds)
+            nonoverlayed)
     end
 end
 
@@ -139,10 +136,13 @@ const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true,  true,  true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true,  true,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, true,  true) # unknown mostly, but it's not overlayed and noinbounds at least (e.g. it's not a call)
-const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, false, false) # unknown really
+# :noub bits
+const NOUB_IF_NOINBOUNDS = 0x01 << 1
+
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, true) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, false) # unknown really
 
 function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     consistent::UInt8 = effects.consistent,
@@ -151,9 +151,8 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     terminates::Bool = effects.terminates,
     notaskstate::Bool = effects.notaskstate,
     inaccessiblememonly::UInt8 = effects.inaccessiblememonly,
-    noub::Bool = effects.noub,
-    nonoverlayed::Bool = effects.nonoverlayed,
-    noinbounds::Bool = effects.noinbounds)
+    noub::UInt8 = effects.noub,
+    nonoverlayed::Bool = effects.nonoverlayed)
     return Effects(
         consistent,
         effect_free,
@@ -162,8 +161,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
         notaskstate,
         inaccessiblememonly,
         noub,
-        nonoverlayed,
-        noinbounds)
+        nonoverlayed)
 end
 
 function merge_effects(old::Effects, new::Effects)
@@ -175,8 +173,7 @@ function merge_effects(old::Effects, new::Effects)
         merge_effectbits(old.notaskstate, new.notaskstate),
         merge_effectbits(old.inaccessiblememonly, new.inaccessiblememonly),
         merge_effectbits(old.noub, new.noub),
-        merge_effectbits(old.nonoverlayed, new.nonoverlayed),
-        merge_effectbits(old.noinbounds, new.noinbounds))
+        merge_effectbits(old.nonoverlayed, new.nonoverlayed))
 end
 
 function merge_effectbits(old::UInt8, new::UInt8)
@@ -193,18 +190,18 @@ is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
-is_noub(effects::Effects)                = effects.noub
+is_noub(effects::Effects, noinbounds::Bool=true) = effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
 is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
 
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
-is_foldable(effects::Effects) =
+is_foldable(effects::Effects, noinbounds::Bool=true) =
     is_consistent(effects) &&
-    is_noub(effects) &&
+    is_noub(effects, noinbounds) &&
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_foldable_nothrow(effects::Effects) =
-    is_foldable(effects) &&
+is_foldable_nothrow(effects::Effects, noinbounds::Bool=true) =
+    is_foldable(effects, noinbounds) &&
     is_nothrow(effects)
 
 # TODO add `is_noub` here?
@@ -232,8 +229,7 @@ function encode_effects(e::Effects)
            ((e.notaskstate         % UInt32) << 7)  |
            ((e.inaccessiblememonly % UInt32) << 8)  |
            ((e.noub                % UInt32) << 10) |
-           ((e.nonoverlayed        % UInt32) << 11) |
-           ((e.noinbounds          % UInt32) << 12)
+           ((e.nonoverlayed        % UInt32) << 12)
 end
 
 function decode_effects(e::UInt32)
@@ -244,8 +240,7 @@ function decode_effects(e::UInt32)
         _Bool((e >> 6) & 0x01),
         _Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
-        _Bool((e >> 10) & 0x01),
-        _Bool((e >> 11) & 0x01),
+        UInt8((e >> 10) & 0x03),
         _Bool((e >> 12) & 0x01))
 end
 

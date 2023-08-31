@@ -2871,6 +2871,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_any_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_any_type, jl_box_long(1));
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
+    jl_array_uint32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint32_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
     jl_array_uint64_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint64_type, jl_box_long(1));
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
@@ -2988,7 +2989,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
-                            jl_array_uint8_type,
+                            jl_array_uint32_type,
                             jl_any_type,
                             jl_any_type,
                             jl_array_symbol_type,
@@ -3356,6 +3357,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_array_any_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_symbol_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_uint8_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_uint32_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_int32_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_uint64_type)->ismutationfree = 0;
 

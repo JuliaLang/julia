@@ -833,6 +833,11 @@ for op = Any[
     end
 end
 
+# tuple indexing
+# --------------
+
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{Tuple{Int, Int}, Int}))
+
 # end to end
 # ----------
 
@@ -1028,3 +1033,39 @@ f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+
+# Optimizer-refined effects
+function f1_optrefine(b)
+    if Base.inferencebarrier(b)
+        error()
+    end
+    return b
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_optrefine, (Bool,)))
+
+function f2_optrefine()
+    if Ref(false)[]
+        error()
+    end
+    return true
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
+
+function f3_optrefine(x)
+    @fastmath sqrt(x)
+    return x
+end
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+
+# Check that :consistent is properly modeled for throwing statements
+const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
+
+check_switch(switch::Base.RefValue{Bool}) = (switch[] && error(); return nothing)
+check_switch2() = check_switch(GLOBAL_MUTABLE_SWITCH)
+
+@test (Base.return_types(check_switch2) |> only) === Nothing
+GLOBAL_MUTABLE_SWITCH[] = true
+# Check that flipping the switch doesn't accidentally change the return type
+@test (Base.return_types(check_switch2) |> only) === Nothing
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))

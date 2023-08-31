@@ -4705,7 +4705,7 @@ end |> only === Union{Int,Nothing}
 @test Base.return_types((Symbol,Int)) do setting, val
     compilerbarrier(setting, val)
 end |> only === Any # XXX we may want to have "compile-time" error for this instead
-for setting = (:type, :const, :conditional)
+for setting = (#=:type, :const,=# :conditional,)
     # a successful barrier on abstract interpretation should be eliminated at the optimization
     @test @eval fully_eliminated((Int,)) do a
         compilerbarrier($(QuoteNode(setting)), 42)

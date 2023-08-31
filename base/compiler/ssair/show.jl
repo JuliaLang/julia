@@ -1017,8 +1017,6 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :noub, 'u'); color=effectbits_color(e, :noub))
-    print(io, ',')
-    printstyled(io, effectbits_letter(e, :noinbounds, 'i'); color=effectbits_color(e, :noinbounds))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

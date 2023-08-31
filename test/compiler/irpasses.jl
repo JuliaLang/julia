@@ -688,7 +688,7 @@ let nt = (a=1, b=2)
 end
 
 # Expr(:new) annotated as PartialStruct
-struct FooPartial
+struct FooPartialNew
     x
     y
     global f_partial
@@ -1451,4 +1451,43 @@ fully_eliminated(; retval=Core.Argument(2)) do x::Float64
 end
 fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
+end
+
+# PhiC fixup of compact! with cfg modification
+@inline function big_dead_throw_catch()
+    x = 1
+    try
+        x = 2
+        if Ref{Bool}(false)[]
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            x = 3
+        end
+    catch
+        return x
+    end
+end
+
+function call_big_dead_throw_catch()
+    if Ref{Bool}(false)[]
+        return big_dead_throw_catch()
+    end
+    return 4
 end
