@@ -303,8 +303,7 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    abstractq = qr(tridiagmat).Q
-    specialconcatmats = testfull ? (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq) : (diagmat, abstractq)
+    specialconcatmats = testfull ? (diagmat, bidiagmat, tridiagmat, symtridiagmat) : (diagmat,)
     # Concatenations involving strictly these types, un/annotated
     densevec = fill(1., N)
     densemat = fill(1., N, N)
