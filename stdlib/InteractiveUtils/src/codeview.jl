@@ -185,14 +185,15 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
         world = UInt64(f.world)
+        tt = Base.to_tuple_type(t)
         if Core.Compiler.is_source_inferred(f.source.source)
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
             mi = f.source.specializations::Core.MethodInstance
-            Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
+            Core.Compiler.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
-            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
             actual = isdispatchtuple(mi.specTypes)
             isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
