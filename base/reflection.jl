@@ -1079,6 +1079,7 @@ See also: [`which`](@ref) and `@which`.
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -1092,8 +1093,7 @@ methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
-    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
@@ -1669,6 +1669,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world::UInt=get_world_counter(),
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
@@ -1960,6 +1961,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             has_bottom_parameter(ti) && return false
         end
         world = get_world_counter()
+        world == typemax(UInt) && return true # intersecting methods are always ambiguous in the generator world, which is true, albeit maybe confusing for some
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
