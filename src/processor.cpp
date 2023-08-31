@@ -619,7 +619,8 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 }
 
 extern "C" {
-extern void * __attribute__((weak)) JL_DLLIMPORT jl_image_pointers;
+void *jl_image_pointers_unavailable;
+extern void * __attribute__((weak,alias("jl_image_pointers_unavailable"))) jl_image_pointers;
 }
 
 // Load sysimg, use the `callback` for dispatch and perform all relocations
@@ -631,7 +632,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
-    if (hdl == jl_RTLD_DEFAULT_handle && &jl_image_pointers)
+    if (hdl == jl_RTLD_DEFAULT_handle && &jl_image_pointers != &jl_image_pointers_unavailable)
         pointers = (const jl_image_pointers_t *)&jl_image_pointers;
     else
         jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);

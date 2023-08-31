@@ -569,8 +569,10 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
     return RUNNING_ON_VALGRIND;
 }
 
-extern void * __attribute__((weak)) JL_DLLIMPORT jl_system_image_data;
-extern void * __attribute__((weak)) JL_DLLIMPORT jl_system_image_size;
+void *jl_system_image_unavailable;
+
+extern void * __attribute__((weak,alias("jl_system_image_unavailable"))) jl_system_image_data;
+extern void * __attribute__((weak,alias("jl_system_image_unavailable"))) jl_system_image_size;
 static void jl_load_sysimg_so(void)
 {
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
@@ -582,12 +584,12 @@ static void jl_load_sysimg_so(void)
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
     }
     const char *sysimg_data;
-    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle && &jl_system_image_data)
+    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle && &jl_system_image_data != &jl_system_image_unavailable)
         sysimg_data = (const char*)&jl_system_image_data;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
     size_t *plen;
-    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle && &jl_system_image_size)
+    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle && &jl_system_image_size != &jl_system_image_unavailable)
         plen = (size_t *)&jl_system_image_size;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
