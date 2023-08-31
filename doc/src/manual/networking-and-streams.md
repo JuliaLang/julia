@@ -120,7 +120,28 @@ of common properties.
 
 ## Working with Files
 
-Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
+You can write content to a file with the `write(filename::String, content)` method:
+
+```julia-repl
+julia> write("hello.txt", "Hello, World!")
+13
+```
+
+_(`13` is the number of bytes written.)_
+
+You can read the contents of a file with the `read(filename::String)` method, or `read(filename::String, String)`
+to the contents as a string:
+
+```julia-repl
+julia> read("hello.txt", String)
+"Hello, World!"
+```
+
+
+### Advanced: streaming files
+
+The `read` and `write` methods above allow you to read and write file contents. Like many other
+environments, Julia also has an [`open`](@ref) function, which takes a filename and
 returns an [`IOStream`](@ref) object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
@@ -368,7 +389,7 @@ UDP can use special multicast addresses to allow simultaneous communication betw
 
 To transmit data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
 
-```
+```julia
 using Sockets
 group = ip"228.5.6.7"
 socket = Sockets.UDPSocket()
@@ -384,7 +405,7 @@ close(socket)
 To transmit data over UDP multicast, simply `send` to the socket.
 Notice that it is not necessary for a sender to join the multicast group.
 
-```
+```julia
 using Sockets
 group = ip"228.5.6.7"
 socket = Sockets.UDPSocket()
@@ -397,7 +418,7 @@ close(socket)
 This example gives the same functionality as the previous program, but uses IPv6 as the network-layer protocol.
 
 Listener:
-```
+```julia
 using Sockets
 group = Sockets.IPv6("ff05::5:6:7")
 socket = Sockets.UDPSocket()
@@ -409,7 +430,7 @@ close(socket)
 ```
 
 Sender:
-```
+```julia
 using Sockets
 group = Sockets.IPv6("ff05::5:6:7")
 socket = Sockets.UDPSocket()

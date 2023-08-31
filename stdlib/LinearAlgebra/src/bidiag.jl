@@ -130,6 +130,32 @@ function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     end
 end
 
+@inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
+    if i == j
+        return @inbounds isassigned(A.dv, i)
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds isassigned(A.ev, i)
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds isassigned(A.ev, j)
+    else
+        return true
+    end
+end
+
+@inline function Base.isstored(A::Bidiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds Base.isstored(A.ev, i)
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds Base.isstored(A.ev, j)
+    else
+        return false
+    end
+end
+
 @inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -170,8 +196,9 @@ end
 #Converting from Bidiagonal to dense Matrix
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
     n == 0 && return B
+    n > 1 && fill!(B, zero(T))
     @inbounds for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -187,7 +214,7 @@ Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
-promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
+promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
 function Tridiagonal{T}(A::Bidiagonal) where T
@@ -244,16 +271,7 @@ function show(io::IO, M::Bidiagonal)
     print_matrix(io, (M.ev)')
 end
 
-size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-function size(M::Bidiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.dv)
-    else
-        return 1
-    end
-end
+size(M::Bidiagonal) = (n = length(M.dv); (n, n))
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -405,18 +423,14 @@ function ==(A::Bidiagonal, B::Bidiagonal)
     end
 end
 
+const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or BiDiTriSym
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline mul!(C::AbstractVector, A::BiTriSym, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function check_A_mul_B!_sizes(C, A, B)
     mA, nA = size(A)
@@ -743,52 +757,36 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
     end
     return c
 end
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-ldiv!(c::AbstractVecOrMat, A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
-    (_rdiv!(transpose(c), transpose(b), transpose(A)); return c)
-ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
-    (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
+ldiv!(A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
+ldiv!(c::AbstractVecOrMat, A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
+    (t = wrapperop(A); _rdiv!(t(c), t(b), t(A)); return c)
 
 ### Generic promotion methods and fallbacks
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
-\(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
+\(xA::AdjOrTrans{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(xA) \ B
 
 ### Triangular specializations
-function \(B::Bidiagonal, U::UpperTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
+for tri in (:UpperTriangular, :UnitUpperTriangular)
+    @eval function \(B::Bidiagonal, U::$tri)
+        A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
+        return B.uplo == 'U' ? UpperTriangular(A) : A
+    end
+    @eval function \(U::$tri, B::Bidiagonal)
+        A = ldiv!(_initarray(\, eltype(U), eltype(B), U), U, B)
+        return B.uplo == 'U' ? UpperTriangular(A) : A
+    end
 end
-function \(B::Bidiagonal, U::UnitUpperTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
-end
-function \(B::Bidiagonal, L::LowerTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
-function \(B::Bidiagonal, L::UnitLowerTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
+for tri in (:LowerTriangular, :UnitLowerTriangular)
+    @eval function \(B::Bidiagonal, L::$tri)
+        A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
+        return B.uplo == 'L' ? LowerTriangular(A) : A
+    end
+    @eval function \(L::$tri, B::Bidiagonal)
+        A = ldiv!(_initarray(\, eltype(L), eltype(B), L), L, B)
+        return B.uplo == 'L' ? LowerTriangular(A) : A
+    end
 end
 
-function \(U::UpperTriangular, B::Bidiagonal)
-    A = ldiv!(U, copy_similar(B, _init_eltype(\, eltype(U), eltype(B))))
-    return B.uplo == 'U' ? UpperTriangular(A) : A
-end
-function \(U::UnitUpperTriangular, B::Bidiagonal)
-    A = ldiv!(U, copy_similar(B, _init_eltype(\, eltype(U), eltype(B))))
-    return B.uplo == 'U' ? UpperTriangular(A) : A
-end
-function \(L::LowerTriangular, B::Bidiagonal)
-    A = ldiv!(L, copy_similar(B, _init_eltype(\, eltype(L), eltype(B))))
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
-function \(L::UnitLowerTriangular, B::Bidiagonal)
-    A = ldiv!(L, copy_similar(B, _init_eltype(\, eltype(L), eltype(B))))
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
     A = ldiv!(_initarray(\, eltype(B), eltype(D), D), B, D)
@@ -837,48 +835,34 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     C
 end
 rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(A, A, B)
-rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
-rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
-_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
-    (ldiv!(adjoint(C), adjoint(B), adjoint(A)); return C)
-_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
-    (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
+rdiv!(A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) =
+    (t = wrapperop(B); ldiv!(t(C), t(B), t(A)); return C)
 
 /(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
 
 ### Triangular specializations
-function /(U::UpperTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
+for tri in (:UpperTriangular, :UnitUpperTriangular)
+    @eval function /(U::$tri, B::Bidiagonal)
+        A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
+        return B.uplo == 'U' ? UpperTriangular(A) : A
+    end
+    @eval function /(B::Bidiagonal, U::$tri)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(U), U), B, U)
+        return B.uplo == 'U' ? UpperTriangular(A) : A
+    end
 end
-function /(U::UnitUpperTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
+for tri in (:LowerTriangular, :UnitLowerTriangular)
+    @eval function /(L::$tri, B::Bidiagonal)
+        A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
+        return B.uplo == 'L' ? LowerTriangular(A) : A
+    end
+    @eval function /(B::Bidiagonal, L::$tri)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(L), L), B, L)
+        return B.uplo == 'L' ? LowerTriangular(A) : A
+    end
 end
-function /(L::LowerTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
-function /(L::UnitLowerTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
-function /(B::Bidiagonal, U::UpperTriangular)
-    A = rdiv!(copy_similar(B, _init_eltype(/, eltype(B), eltype(U))), U)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
-end
-function /(B::Bidiagonal, U::UnitUpperTriangular)
-    A = rdiv!(copy_similar(B, _init_eltype(/, eltype(B), eltype(U))), U)
-    return B.uplo == 'U' ? UpperTriangular(A) : A
-end
-function /(B::Bidiagonal, L::LowerTriangular)
-    A = rdiv!(copy_similar(B, _init_eltype(/, eltype(B), eltype(L))), L)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
-function /(B::Bidiagonal, L::UnitLowerTriangular)
-    A = rdiv!(copy_similar(B, _init_eltype(/, eltype(B), eltype(L))), L)
-    return B.uplo == 'L' ? LowerTriangular(A) : A
-end
+
 ### Diagonal specialization
 function /(D::Diagonal, B::Bidiagonal)
     A = _rdiv!(_initarray(/, eltype(D), eltype(B), D), D, B)
@@ -898,8 +882,8 @@ end
 factorize(A::Bidiagonal) = A
 function inv(B::Bidiagonal{T}) where T
     n = size(B, 1)
-    dest = zeros(typeof(oneunit(T)\one(T)), (n, n))
-    ldiv!(dest, B, Diagonal{typeof(one(T)\one(T))}(I, n))
+    dest = zeros(typeof(inv(oneunit(T))), (n, n))
+    ldiv!(dest, B, Diagonal{typeof(one(T)/one(T))}(I, n))
     return B.uplo == 'U' ? UpperTriangular(dest) : LowerTriangular(dest)
 end
 

@@ -482,6 +482,32 @@ julia> trailing_ones(3)
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
+"""
+    top_set_bit(x::Integer) -> Integer
+
+The number of bits in `x`'s binary representation, excluding leading zeros.
+
+Equivalently, the position of the most significant set bit in `x`'s binary
+representation, measured from the least significant side.
+
+Negative `x` are only supported when `x::BitSigned`.
+
+See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.top_set_bit(4)
+3
+
+julia> Base.top_set_bit(0)
+0
+
+julia> Base.top_set_bit(-1)
+64
+```
+"""
+top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+
 ## integer comparisons ##
 
 (< )(x::T, y::T) where {T<:BitUnsigned} = ult_int(x, y)
@@ -611,8 +637,8 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to the absolute value of `x`.
 
-`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the truncated
+value is not representable a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 
@@ -640,8 +666,8 @@ function trunc end
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
 
-`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the floored
+value is not representable a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
@@ -655,8 +681,8 @@ function floor end
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
 
-`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
-representable.
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the ceiled
+value is not representable as a `T`.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
@@ -728,6 +754,15 @@ julia> big"_"
 ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 [...]
 ```
+
+!!! warning
+    Using `@big_str` for constructing [`BigFloat`](@ref) values may not result
+    in the behavior that might be naively expected: as a macro, `@big_str`
+    obeys the global precision ([`setprecision`](@ref)) and rounding mode
+    ([`setrounding`](@ref)) settings as they are at *load time*. Thus, a
+    function like `() -> precision(big"0.3")` returns a constant whose value
+    depends on the value of the precision at the point when the function is
+    defined, **not** at the precision at the time when the function is called.
 """
 macro big_str(s)
     message = "invalid number format $s for BigInt or BigFloat"

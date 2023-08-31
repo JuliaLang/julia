@@ -57,9 +57,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -978,24 +978,29 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
+For convenience, `NamedTuple` types are printed using the [`@NamedTuple`](@ref) macro which provides a
+convenient `struct`-like syntax for declaring these types via `key::Type` declarations,
+where an omitted `::Type` corresponds to `::Any`.
+
 
 ```jldoctest
-julia> typeof((a=1,b="hello"))
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+julia> typeof((a=1,b="hello")) # prints in macro form
+@NamedTuple{a::Int64, b::String}
+
+julia> NamedTuple{(:a, :b), Tuple{Int64, String}} # long form of the type
+@NamedTuple{a::Int64, b::String}
 ```
 
-The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
-`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+The `begin ... end` form of the `@NamedTuple` macro allows the declarations to be
+split across multiple lines (similar to a struct declaration), but is otherwise equivalent:
+
 
 ```jldoctest
-julia> @NamedTuple{a::Int, b::String}
-NamedTuple{(:a, :b), Tuple{Int64, String}}
-
 julia> @NamedTuple begin
            a::Int
            b::String
        end
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+@NamedTuple{a::Int64, b::String}
 ```
 
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
@@ -1003,10 +1008,10 @@ The constructed `NamedTuple` type can be either a concrete type, with both param
 or a type that specifies only field names:
 
 ```jldoctest
-julia> @NamedTuple{a::Float32,b::String}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1, ""))
 (a = 1.0f0, b = "")
 
-julia> NamedTuple{(:a, :b)}((1,""))
+julia> NamedTuple{(:a, :b)}((1, ""))
 (a = 1, b = "")
 ```
 
@@ -1332,6 +1337,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 [`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
+
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
 
 ## Operations on Types
 

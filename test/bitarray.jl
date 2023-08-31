@@ -1539,6 +1539,21 @@ timesofar("reductions")
             end
         end
     end
+    @testset "Issue #50780, map! bitarray map! where dest aliases source" begin
+        a = BitVector([1,0])
+        b = map(!, a)
+        map!(!, a, a) # a .= !.a
+        @test a == b == BitVector([0,1])
+
+        a = BitVector([1,0])
+        c = map(|, a, b)
+        map!(|, a, a, b)
+        @test c == a == BitVector([1, 1])
+
+        a = BitVector([1,0])
+        map!(|, b, a, b)
+        @test c == b == BitVector([1, 1])
+    end
 end
 
 ## Filter ##
@@ -1652,7 +1667,7 @@ timesofar("cat")
     @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
             svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
     @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
-            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
+            Matrix(qrb1.Q) == Matrix(qrb1A.Q) && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix

@@ -17,7 +17,7 @@ using namespace llvm;
 
 namespace {
 
-static bool removeNI(Module &M)
+static bool removeNI(Module &M) JL_NOTSAFEPOINT
 {
     auto dlstr = M.getDataLayoutStr();
     auto nistart = dlstr.find("-ni:");
@@ -36,7 +36,7 @@ static bool removeNI(Module &M)
 }
 }
 
-PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses RemoveNIPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (removeNI(M)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -68,7 +68,8 @@ Pass *createRemoveNIPass()
     return new RemoveNILegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddRemoveNIPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveNIPass());
 }

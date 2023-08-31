@@ -49,7 +49,7 @@ endif
 
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
+        -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
 ifneq ($(OS), emscripten)
 FLAGS += -DUSE_COMPUTED_GOTO
 endif
@@ -94,6 +94,13 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
 CCLD := $(CC)
+
+# Override `-shared-libasan` from root Make.inc
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_ADDRESS),1)
+JLDFLAGS += -static-libsan
+endif
+endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))

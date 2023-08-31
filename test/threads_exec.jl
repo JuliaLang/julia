@@ -27,6 +27,8 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+@testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
+
 @test Threads.threadid() == 1
 @test 1 <= threadpoolsize() <= Threads.maxthreadid()
 
@@ -232,7 +234,7 @@ end
 # Make sure that eval'ing in a different module doesn't mess up other threads
 orig_curmodule14726 = @__MODULE__
 main_var14726 = 1
-module M14726
+@eval Main module M14726
 module_var14726 = 1
 end
 
@@ -252,7 +254,7 @@ end
     @test @__MODULE__() == orig_curmodule14726
 end
 
-module M14726_2
+@eval Main module M14726_2
 using Test
 using Base.Threads
 @threads for i in 1:100
@@ -1067,3 +1069,43 @@ end
         popfirst!(LOAD_PATH)
     end
 end
+
+# issue #49746, thread safety in `atexit(f)`
+@testset "atexit thread safety" begin
+    f = () -> nothing
+    before_len = length(Base.atexit_hooks)
+    @sync begin
+        for _ in 1:1_000_000
+            Threads.@spawn begin
+                atexit(f)
+            end
+        end
+    end
+    @test length(Base.atexit_hooks) == before_len + 1_000_000
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+
+    # cleanup
+    Base.@lock Base._atexit_hooks_lock begin
+        deleteat!(Base.atexit_hooks, 1:1_000_000)
+    end
+end
+
+#Thread safety of threacall
+function threadcall_threads()
+    Threads.@threads for i = 1:8
+        ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 3)
+        @test unsafe_load(ptr) == 3
+        ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 4, 2)
+        @test unsafe_load(ptr, 1) == 3
+        @test unsafe_load(ptr, 2) == 4
+        @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+    end
+end
+@testset "threadcall + threads" begin
+    threadcall_threads() #Shouldn't crash!
+end
+end # main testset

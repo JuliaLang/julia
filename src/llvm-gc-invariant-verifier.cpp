@@ -26,7 +26,7 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 
 #define DEBUG_TYPE "verify_gc_invariants"
@@ -222,7 +222,8 @@ Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifierLegacy(Strong);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
 {
     unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

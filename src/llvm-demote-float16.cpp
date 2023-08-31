@@ -47,41 +47,35 @@ INST_STATISTIC(FCmp);
 
 extern JuliaOJIT *jl_ExecutionEngine;
 
-Optional<bool> always_have_fp16() {
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-    // x86 doesn't support fp16
-    // TODO: update for sapphire rapids when it comes out
-    return false;
-#else
-    return {};
-#endif
-}
-
 namespace {
 
-bool have_fp16(Function &caller) {
-    auto unconditional = always_have_fp16();
-    if (unconditional.hasValue())
-        return unconditional.getValue();
-
+static bool have_fp16(Function &caller, const Triple &TT) {
     Attribute FSAttr = caller.getFnAttribute("target-features");
-    StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
-#if defined(_CPU_AARCH64_)
-    if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
+    StringRef FS = "";
+    if (FSAttr.isValid())
+        FS = FSAttr.getValueAsString();
+    else if (jl_ExecutionEngine)
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    // else probably called from opt, just do nothing
+    if (TT.isAArch64()) {
+        if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
+            return true;
+        }
+    } else if (TT.getArch() == Triple::x86_64) {
+        if (FS.find("+avx512fp16") != llvm::StringRef::npos){
+            return true;
+        }
+    }
+    if (caller.hasFnAttribute("julia.hasfp16")) {
         return true;
     }
-#else
-    if (FS.find("+avx512fp16") != llvm::StringRef::npos){
-        return true;
-    }
-#endif
     return false;
 }
 
 static bool demoteFloat16(Function &F)
 {
-    if (have_fp16(F))
+    auto TT = Triple(F.getParent()->getTargetTriple());
+    if (have_fp16(F, TT))
         return false;
 
     auto &ctx = F.getContext();
@@ -190,7 +184,7 @@ static bool demoteFloat16(Function &F)
         for (auto V : erase)
             V->eraseFromParent();
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
+        assert(!verifyLLVMIR(F));
 #endif
         return true;
     }
@@ -200,7 +194,7 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses DemoteFloat16Pass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (demoteFloat16(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -233,7 +227,8 @@ Pass *createDemoteFloat16Pass()
     return new DemoteFloat16Legacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createDemoteFloat16Pass());
 }

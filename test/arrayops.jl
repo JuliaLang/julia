@@ -604,6 +604,15 @@ end
     @testset "issue 43078" begin
         @test_throws TypeError findall([1])
     end
+
+    @testset "issue #46425" begin
+        counter = 0
+        function pred46425(x)
+            counter += 1
+            counter < 4 && x
+        end
+        @test findall(pred46425, [false, false, true, true]) == [3]
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -1703,6 +1712,39 @@ end
     @test !isdiag([1 0 0; 0 4 1])
     @test !istril([1 0 0; 3 4 1])
     @test istriu([1 2 0; 0 4 1])
+end
+
+#issue 49021
+@testset "reverse cartesian indices" begin
+    @test reverse(CartesianIndices((2, 3))) === CartesianIndices((2:-1:1, 3:-1:1))
+    @test reverse(CartesianIndices((2:5, 3:7))) === CartesianIndices((5:-1:2, 7:-1:3))
+    @test reverse(CartesianIndices((5:-1:2, 7:-1:3))) === CartesianIndices((2:1:5, 3:1:7))
+end
+
+@testset "reverse cartesian indices dim" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=1) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test reverse(A, dims=3) === CartesianIndices((2, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=0)
+    @test_throws ArgumentError reverse(A, dims=4)
+end
+
+@testset "reverse cartesian indices multiple dims" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=(1, 3)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test reverse(A, dims=(3, 1)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=(1, 2, 4))
+    @test_throws ArgumentError reverse(A, dims=(0, 1, 2))
+    @test_throws ArgumentError reverse(A, dims=(1, 1))
+end
+
+@testset "stability of const propagation" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    f1(x) = reverse(x; dims=1)
+    f2(x) = reverse(x; dims=(1, 3))
+    @test @inferred(f1(A)) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test @inferred(f2(A)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test @inferred(reverse(A; dims=())) === A
 end
 
 # issue 4228

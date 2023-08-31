@@ -74,7 +74,7 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @Experimental.sync begin
+    Experimental.@sync begin
         global ready = 0
         global ready_c = Condition()
         for idx in 1:n

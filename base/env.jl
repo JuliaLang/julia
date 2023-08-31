@@ -74,7 +74,7 @@ all keys to uppercase for display, iteration, and copying. Portable code should 
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
 
-    !!! warning
+!!! warning
     Mutating the environment is not thread-safe.
 
 # Examples
@@ -111,7 +111,7 @@ const get_bool_env_falsy = (
     "0")
 
 """
-    Base.get_bool_env(name::String, default::Bool = false)::Union{Bool,Nothing}
+    Base.get_bool_env(name::String, default::Bool)::Union{Bool,Nothing}
 
 Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
 and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
@@ -121,7 +121,7 @@ Recognized values are the following, and their Capitalized and UPPERCASE forms:
     truthy: "t", "true", "y", "yes", "1"
     falsy:  "f", "false", "n", "no", "0"
 """
-function get_bool_env(name::String, default::Bool = false)
+function get_bool_env(name::String, default::Bool)
     haskey(ENV, name) || return default
     val = ENV[name]
     if isempty(val)
@@ -138,6 +138,10 @@ end
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
+function get!(default::Callable, ::EnvDict, k::AbstractString)
+    haskey(ENV, k) && return ENV[k]
+    ENV[k] = default()
+end
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
@@ -222,7 +226,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 
-    !!! warning
+!!! warning
     Changing the environment is not thread-safe. For running external commands with a different
     environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """

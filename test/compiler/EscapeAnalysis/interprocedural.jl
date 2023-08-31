@@ -36,13 +36,13 @@ end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
         return identity(x)
     end
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
         return Ref(x)
     end
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
@@ -50,7 +50,7 @@ let result = code_escapes((SafeRef{String},); optimize=false) do x
         r[] = x
         return r
     end
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
@@ -98,16 +98,14 @@ identity_if_string(x::SafeRef) = nothing
 let result = code_escapes((SafeRef{String},); optimize=false) do x
         identity_if_string(x)
     end
-    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
-    @test !has_thrown_escape(result.state[Argument(2)], i)
-    @test !has_return_escape(result.state[Argument(2)], r)
+    @test !has_thrown_escape(result.state[Argument(2)])
+    @test !has_return_escape(result.state[Argument(2)])
 end
 let result = code_escapes((Union{SafeRef{String},Vector{String}},); optimize=false) do x
         identity_if_string(x)
     end
-    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_thrown_escape(result.state[Argument(2)], i)
     @test !has_return_escape(result.state[Argument(2)], r)
 end
@@ -138,8 +136,8 @@ ambig_error_test(a, b) = nothing
 let result = code_escapes((SafeRef{String},Any); optimize=false) do x, y
         ambig_error_test(x, y)
     end
-    i = only(findall(iscall((result.ir, ambig_error_test)), result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(iscall((result.ir, ambig_error_test)), result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_thrown_escape(result.state[Argument(2)], i)  # x
     @test has_thrown_escape(result.state[Argument(3)], i)  # y
     @test !has_return_escape(result.state[Argument(2)], r)  # x
@@ -170,7 +168,7 @@ end
 let result = code_escapes() do
         broadcast_noescape1(Ref("Hi"))
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
     @test_broken !has_return_escape(result.state[SSAValue(i)])
     @test_broken !has_thrown_escape(result.state[SSAValue(i)])
 end
@@ -178,7 +176,7 @@ end
 let result = code_escapes() do
         broadcast_noescape2(Ref("Hi"))
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
     @test_broken !has_return_escape(result.state[SSAValue(i)])
     @test_broken !has_thrown_escape(result.state[SSAValue(i)])
 end
@@ -186,7 +184,7 @@ end
 let result = code_escapes() do
         allescape_argument(Ref("Hi"))
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
     @test has_all_escape(result.state[SSAValue(i)])
 end
 # if we can't determine the matching method statically, we should be conservative
@@ -209,7 +207,7 @@ let result = code_escapes((Union{Int,Nothing},)) do x
         unionsplit_noescape(s[])
         return nothing
     end
-    inds = findall(isnew, result.ir.stmts.inst) # find allocation statement
+    inds = findall(isnew, result.ir.stmts.stmt) # find allocation statement
     @assert !isempty(inds)
     for i in inds
         @test has_no_escape(result.state[SSAValue(i)])
@@ -225,8 +223,8 @@ let result = code_escapes() do
         b = unused_argument(a)
         nothing
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test !has_return_escape(result.state[SSAValue(i)], r)
 
     result = code_escapes() do
@@ -234,8 +232,8 @@ let result = code_escapes() do
         b = unused_argument(a)
         return a
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[SSAValue(i)], r)
 end
 
@@ -246,8 +244,8 @@ let result = code_escapes() do
         ret = returnescape_argument(obj)
         return ret                 # alias of `obj`
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[SSAValue(i)], r)
 end
 @noinline noreturnescape_argument(a) = (println("prevent inlining"); identity("hi"))
@@ -256,7 +254,7 @@ let result = code_escapes() do
         ret = noreturnescape_argument(obj)
         return ret                    # must not alias to `obj`
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test !has_return_escape(result.state[SSAValue(i)], r)
 end

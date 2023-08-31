@@ -1,4 +1,4 @@
-# Package Images
+# [Package Images](@id pkgimages)
 
 Julia package images provide object (native code) caches for Julia packages.
 They are similar to Julia's [system image](@ref dev-sysimg) and support many of the same features.
@@ -32,7 +32,7 @@ To avoid having to deal with `link.exe` we use `-flavor gnu`, effectively turnin
 Dynamic libraries on macOS need to link against `-lSystem`. On recent macOS versions, `-lSystem` is only available for linking when Xcode is available.
 To that effect we link with `-undefined dynamic_lookup`.
 
-## Package images optimized for multiple microarchitectures
+## [Package images optimized for multiple microarchitectures](@id pkgimgs-multi-versioning)
 Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogenous environment, with a unified cache,
 you can set the environment variable `JULIA_CPU_TARGET=generic` to multi-version the object caches.
 
@@ -43,6 +43,7 @@ that were created with different flags will be rejected.
 
 - `-g`, `--debug-info`: Exact match required since it changes code generation.
 - `--check-bounds`: Exact match required since it changes code generation.
+- `--inline`: Exact match required since it changes code generation.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.

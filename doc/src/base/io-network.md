@@ -71,6 +71,8 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
+Base.copyline
+Base.copyuntil
 Base.displaysize
 ```
 

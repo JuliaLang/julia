@@ -485,7 +485,7 @@ julia> remotecall_fetch(sqrt, 2, 4)
 julia> remotecall_fetch(sqrt, 2, -4)
 ERROR: On worker 2:
 DomainError with -4.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 ...
 ```
 """
@@ -778,3 +778,23 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+function iterate(c::RemoteChannel, state=nothing)
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) ||
+                (isa(e, RemoteException) &&
+                isa(e.captured.ex, InvalidStateException) &&
+                e.captured.ex.state === :closed)
+                return nothing
+            end
+            rethrow()
+        end
+    else
+        return nothing
+    end
+end
+
+IteratorSize(::Type{<:RemoteChannel}) = SizeUnknown()
