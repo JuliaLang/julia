@@ -259,9 +259,10 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    abstractq = qr(tridiagmat).Q
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq)
     for specialmata in specialmats, specialmatb in specialmats
-        MA = Matrix(specialmata); MB = Matrix(specialmatb)
+        MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
         @test vcat(specialmata, specialmatb) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
@@ -302,7 +303,8 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialconcatmats = testfull ? (diagmat, bidiagmat, tridiagmat, symtridiagmat) : (diagmat,)
+    abstractq = qr(tridiagmat).Q
+    specialconcatmats = testfull ? (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq) : (diagmat, abstractq)
     # Concatenations involving strictly these types, un/annotated
     densevec = fill(1., N)
     densemat = fill(1., N, N)
@@ -311,7 +313,7 @@ end
     annospcmats = [annot(spcmat) for annot in annotations, spcmat in specialconcatmats]
     # Test concatenations of pairwise combinations of annotated special matrices
     for annospcmata in annospcmats, annospcmatb in annospcmats
-        AM = Array(annospcmata); BM = Array(annospcmatb)
+        AM = collect(annospcmata); BM = collect(annospcmatb)
         @test vcat(annospcmata, annospcmatb) == vcat(AM, BM)
         @test hcat(annospcmata, annospcmatb) == hcat(AM, BM)
         @test hvcat((2,), annospcmata, annospcmatb) == hvcat((2,), AM, BM)
@@ -319,16 +321,16 @@ end
     end
     # Test concatenations of pairwise combinations of annotated special matrices and other matrix/vector types
     for annospcmat in annospcmats
-        AM = Array(annospcmat)
+        AM = collect(annospcmat)
         # --> Tests applicable to pairs including only matrices
         for othermat in (densemat, annodmats..., specialconcatmats...)
-            OM = Array(othermat)
+            OM = collect(othermat)
             @test vcat(annospcmat, othermat) == vcat(AM, OM)
             @test vcat(othermat, annospcmat) == vcat(OM, AM)
         end
         # --> Tests applicable to pairs including other vectors or matrices
         for other in (densevec, densemat, annodmats..., specialconcatmats...)
-            OM = Array(other)
+            OM = collect(other)
             @test hcat(annospcmat, other) == hcat(AM, OM)
             @test hcat(other, annospcmat) == hcat(OM, AM)
             @test hvcat((2,), annospcmat, other) == hvcat((2,), AM, OM)
