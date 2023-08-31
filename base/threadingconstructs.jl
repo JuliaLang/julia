@@ -150,7 +150,7 @@ mutable struct ThreadedRegion
 end
 const THREADED_REGION = ThreadedRegion(UInt(0))
 
-in_threaded_region() = THREADED_REGION.counter
+in_threaded_region() = THREADED_REGION.counter != 0
 
 function enter_threaded_region()
     @atomic THREADED_REGION.counter += 1
