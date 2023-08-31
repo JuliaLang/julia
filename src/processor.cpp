@@ -618,6 +618,10 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
     return targets;
 }
 
+extern "C" {
+extern void * __attribute__((weak)) jl_image_pointers;
+}
+
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
@@ -627,7 +631,10 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
-    jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
+    if (hdl == jl_RTLD_DEFAULT_handle && &jl_image_pointers)
+        pointers = (const jl_image_pointers_t *)&jl_image_pointers;
+    else
+        jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
     const void *ids = pointers->target_data;
     jl_value_t* rejection_reason = nullptr;
