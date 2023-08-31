@@ -365,7 +365,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (wait_empty)) {
+        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == 0 && wait_empty)) {
             // acquire sleep-check lock
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
@@ -412,15 +412,9 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    if (wait_empty) {
+                    if (wait_empty)
                         task = wait_empty;
-                        break;
-                    } else {
-                        uv_mutex_unlock(&ptls->sleep_lock);
-                        jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
-                        start_cycles = 0;
-                        continue;
-                    }
+                    break;
                 }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
             }
