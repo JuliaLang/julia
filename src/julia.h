@@ -2363,6 +2363,10 @@ typedef struct {
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
+typedef struct {
+    int emit_metadata;
+} jl_emission_params_t;
+
 #ifdef __cplusplus
 }
 #endif

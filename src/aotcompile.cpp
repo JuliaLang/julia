@@ -1470,13 +1470,16 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     return threads;
 }
 
+jl_emission_params_t default_emission_params = { 1 };
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        ios_t *z, ios_t *s)
+        ios_t *z, ios_t *s,
+        jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -1485,6 +1488,11 @@ void jl_dump_native_impl(void *native_code,
         delete data;
         return;
     }
+
+    if (!params) {
+        params = &default_emission_params;
+    }
+
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1655,6 +1663,7 @@ void jl_dump_native_impl(void *native_code,
         data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
     }
 
+    if (params->emit_metadata)
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
