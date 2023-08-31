@@ -352,6 +352,38 @@ end
     end
 end
 
+@testset "rounding floats with specified return type #50778" begin
+    @test round(Float64, 1.2) === 1.0
+    @test round(Float32, 1e60) === Inf32
+    x = floatmax(Float32)-1.0
+    @test round(Float32, x) == x
+end
+
+@testset "rounding complex numbers (#42060, #47128)" begin
+    # 42060
+    @test ceil(Complex(4.6, 2.2)) === Complex(5.0, 3.0)
+    @test floor(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test trunc(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test round(Complex(4.6, 2.2)) === Complex(5.0, 2.0)
+    @test ceil(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test floor(Complex(-4.6, -2.2)) === Complex(-5.0, -3.0)
+    @test trunc(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test round(Complex(-4.6, -2.2)) === Complex(-5.0, -2.0)
+
+    # 47128
+    @test round(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 2)
+    @test ceil(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 3)
+end
+
+@testset "rounding to custom integers" begin
+    struct Int50812 <: Integer
+        x::Int
+    end
+    @test round(Int50812, 1.2) === Int50812(1)
+    @test round(Int50812, π) === Int50812(3)
+    @test ceil(Int50812, π) === Int50812(4)
+end
+
 const MPFRRM = Base.MPFR.MPFRRoundingMode
 
 function mpfr_to_ieee(::Type{Float32}, x::BigFloat, r::MPFRRM)
@@ -415,4 +447,11 @@ const native_rounding_modes = (
             end
         end
     end
+end
+
+@testset "round(Int, -Inf16) should throw (#51113)" begin
+    @test_throws InexactError round(Int32, -Inf16)
+    @test_throws InexactError round(Int64, -Inf16)
+    @test_throws InexactError round(Int128, -Inf16)
+    # More comprehensive testing is present in test/floatfuncs.jl
 end

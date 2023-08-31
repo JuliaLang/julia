@@ -328,9 +328,8 @@ TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
     TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
-    T  # Type
-    val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
+    args
+    InexactError(f::Symbol, @nospecialize(args...)) = (@noinline; new(f, args))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -630,8 +629,6 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
-
 function is_top_bit_set(x)
     @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
@@ -641,6 +638,9 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     @inline
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
+
+#TODO delete this function (but see #48097):
+throw_inexacterror(args...) = throw(InexactError(args...))
 
 function check_top_bit(::Type{To}, x) where {To}
     @inline
