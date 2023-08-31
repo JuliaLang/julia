@@ -366,3 +366,21 @@ end
     Base.:(<)(::B46327, ::B46327) = false
     @test B46327() <= B46327()
 end
+
+@testset "concrete eval `x in itr::Tuple`" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
+    for i = (1,2,3)
+        @testset let i = i
+            @test @eval Base.return_types() do
+                Val($i in (1,2,3))
+            end |> only == Val{true}
+        end
+    end
+    @test Base.return_types() do
+        Val(4 in (1,2,3))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val('1' in ('1','2','3'))
+    end |> only == Val{true}
+end

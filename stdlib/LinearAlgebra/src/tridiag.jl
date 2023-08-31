@@ -138,16 +138,7 @@ end
 Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
-size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
-function size(A::SymTridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d<=2
-        return length(A.dv)
-    else
-        return 1
-    end
-end
+size(A::SymTridiagonal) = (n = length(A.dv); (n, n))
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
@@ -427,6 +418,19 @@ logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shif
     end
 end
 
+@inline function Base.isstored(A::SymTridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.ev, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.ev, i)
+    else
+        return false
+    end
+end
+
 @inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -545,16 +549,7 @@ function Tridiagonal{T}(A::Tridiagonal) where {T}
     end
 end
 
-size(M::Tridiagonal) = (length(M.d), length(M.d))
-function size(M::Tridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.d)
-    else
-        return 1
-    end
-end
+size(M::Tridiagonal) = (n = length(M.d); (n, n))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
@@ -620,7 +615,7 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
 end
 
 @inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
-    @boundscheck checkbounds(A, i, j)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
     if i == j
         return @inbounds isassigned(A.d, i)
     elseif i == j + 1
@@ -629,6 +624,19 @@ end
         return @inbounds isassigned(A.du, i)
     else
         return true
+    end
+end
+
+@inline function Base.isstored(A::Tridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.d, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.dl, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.du, i)
+    else
+        return false
     end
 end
 

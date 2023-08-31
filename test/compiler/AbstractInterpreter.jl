@@ -6,13 +6,21 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+
 # OverlayMethodTable
 # ==================
 
-import Base.Experimental: @MethodTable, @overlay
+using Base.Experimental: @MethodTable, @overlay
+
+# @overlay method with return type annotation
+@MethodTable RT_METHOD_DEF
+@overlay RT_METHOD_DEF Base.sin(x::Float64)::Float64 = cos(x)
+@overlay RT_METHOD_DEF function Base.sin(x::T)::T where T<:AbstractFloat
+    cos(x)
+end
 
 @newinterp MTOverlayInterp
-@MethodTable(OverlayedMT)
+@MethodTable OverlayedMT
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
@@ -47,7 +55,8 @@ callstrange(::Float64) = strangesin(x)
 callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
-    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
+    @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
         @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
@@ -84,9 +93,9 @@ end |> only === Union{Nothing,Missing}
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
-Base.@assume_effects :terminates_globally function issue41694(x)
+Base.@assume_effects :terminates_locally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -113,10 +122,48 @@ end |> only === Nothing
 @MethodTable Issue48097MT
 CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
 CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
+function CC.concrete_eval_eligible(interp::Issue48097Interp,
+    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
+        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    if ret === :semi_concrete_eval
+        # disable semi-concrete interpretation
+        return :none
+    end
+    return ret
+end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
 @test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
+end
+
+# Should not concrete-eval overlayed methods in semi-concrete interpretation
+@newinterp OverlaySinInterp
+@MethodTable OverlaySinMT
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlaySinMT)
+overlay_sin1(x) = error("Not supposed to be called.")
+@overlay OverlaySinMT overlay_sin1(x) = cos(x)
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
+end
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
+end
+_overlay_sin2(x) = error("Not supposed to be called.")
+@overlay OverlaySinMT _overlay_sin2(x) = cos(x)
+overlay_sin2(x) = _overlay_sin2(x)
+@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
+let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+        sin(0.)
+    end |> only |> first |> Core.OpaqueClosure
+    @test oc() == cos(0.)
 end
 
 # AbstractLattice

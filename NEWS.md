@@ -9,6 +9,9 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
 
 Command-line option changes
 ---------------------------
@@ -21,6 +24,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
 --------------------
@@ -29,6 +33,8 @@ New library features
 
 Standard library changes
 ------------------------
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Package Manager
 
@@ -68,6 +74,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------

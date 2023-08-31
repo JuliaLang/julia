@@ -267,7 +267,7 @@ module IteratorsMD
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
     _convert2ind(sz::Bool) = Base.OneTo(Int8(sz))
-    _convert2ind(sz::Integer) = Base.OneTo(sz)
+    _convert2ind(sz::Integer) = Base.oneto(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
@@ -1564,7 +1564,7 @@ end
 
 isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
 function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(i...))
+    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
     ninds = length(i)
@@ -1843,7 +1843,7 @@ but the result order will be row-major instead.
 
 # Higher dimensional examples
 ```
-julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
+julia> A = [4 3; 2 1 ;;; 'A' 'B'; 'C' 'D']
 2×2×2 Array{Any, 3}:
 [:, :, 1] =
  4  3

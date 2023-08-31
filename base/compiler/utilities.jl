@@ -489,8 +489,7 @@ end
 # using a function to ensure we can infer this
 @inline function slot_id(s)
     isa(s, SlotNumber) && return s.id
-    isa(s, Argument) && return s.n
-    return (s::TypedSlot).id
+    return (s::Argument).n
 end
 
 ###########

@@ -165,6 +165,8 @@ julia> begin
                unlock(lk)
            end
        end
+
+julia> @lock lk use(a)
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
@@ -292,7 +294,7 @@ sum_multi_good (generic function with 1 method)
 julia> sum_multi_good(1:1_000_000)
 500000500000
 ```
-!!! Note
+!!! note
     Buffers should not be managed based on `threadid()` i.e. `buffers = zeros(Threads.nthreads())` because concurrent tasks
     can yield, meaning multiple concurrent tasks may use the same buffer on a given thread, introducing risk of data races.
     Further, when more than one thread is available tasks may change thread at yield points, which is known as
@@ -439,7 +441,7 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * The schedule used by `@spawn` is nondeterministic and should not be relied on.
+  * The schedule used by [`@spawn`](@ref Threads.@spawn) is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may
     be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.

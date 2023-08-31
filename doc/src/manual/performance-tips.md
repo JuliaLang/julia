@@ -358,6 +358,27 @@ julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isc
 ```
 In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
 
+The previous advice is especially useful when the fields of a struct are meant to be functions, or more generally callable objects.
+It is very tempting to define a struct as follows:
+
+```julia
+struct MyCallableWrapper
+    f::Function
+end
+```
+
+But since `Function` is an abstract type, every call to `wrapper.f` will require dynamic dispatch, due to the type instability of accessing the field `f`.
+Instead, you should write something like:
+
+```julia
+struct MyCallableWrapper{F}
+    f::F
+end
+```
+
+which has nearly identical behavior but will be much faster (because the type instability is eliminated).
+Note that we do not impose `F<:Function`: this means callable objects which do not subtype `Function` are also allowed for the field `f`.
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
@@ -1013,6 +1034,20 @@ Taken to its extreme, pre-allocation can make your code uglier, so performance m
 some judgment may be required. However, for "vectorized" (element-wise) functions, the convenient
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
 (see the [dot syntax for vectorizing functions](@ref man-vectorized)).
+
+## [Use `MutableArithmetics` for more control over allocation for mutable arithmetic types](@id man-perftips-mutablearithmetics)
+
+Some [`Number`](@ref) subtypes, such as [`BigInt`](@ref) or [`BigFloat`](@ref), may
+be implemented as [`mutable struct`](@ref) types, or they may have mutable
+components. The arithmetic interfaces in Julia `Base` usually opt for convenience
+over efficiency in such cases, so using them in a naive manner may result in
+suboptimal performance. The abstractions of the
+[`MutableArithmetics`](https://juliahub.com/ui/Packages/General/MutableArithmetics)
+package, on the other hand, make it possible to exploit the mutability of such types
+for writing fast code that allocates only as much as necessary. `MutableArithmetics`
+also makes it possible to copy values of mutable arithmetic types explicitly when
+necessary. `MutableArithmetics` is a user package and is not affiliated with the
+Julia project.
 
 ## More dots: Fuse vectorized operations
 

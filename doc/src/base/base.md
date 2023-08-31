@@ -129,6 +129,7 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.isunordered
 Base.ifelse
 Core.typeassert
 Core.typeof
@@ -464,6 +465,7 @@ Base.locate_package
 Base.require
 Base.compilecache
 Base.isprecompiled
+Base.get_extension
 ```
 
 ## Internals

@@ -363,6 +363,10 @@ public:
 void LineNumberAnnotatedWriter::emitFunctionAnnot(
       const Function *F, formatted_raw_ostream &Out)
 {
+    if (F->hasFnAttribute("julia.fsig")) {
+        auto sig = F->getFnAttribute("julia.fsig").getValueAsString();
+        Out << "; Function Signature: " << sig << "\n";
+    }
     InstrLoc = nullptr;
     DISubprogram *FuncLoc = F->getSubprogram();
     if (!FuncLoc) {
