@@ -5086,6 +5086,9 @@ let x = Issue50544((1, Issue50544((2.0, 'x'))))
     @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
 end
 
+# issue #50709
+@test Base.code_typed_by_type(Tuple{Type{Vector{S}} where {T, S<:AbstractVector{T}}, UndefInitializer, Int})[1][2] == Vector{<:AbstractVector{T}} where T
+
 # override const-prop' return type with the concrete-eval result
 # if concrete-eval returns non-inlineable constant
 Base.@assume_effects :foldable function continue_const_prop(i, j)
