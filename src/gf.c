@@ -2363,7 +2363,7 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
+jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world, const jl_cgparams_t *cgparams)
 {
     // quick check if we already have a compiled result
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
@@ -2374,7 +2374,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // instead and just copy it here for caching
     jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
     if (mi2 != mi) {
-        jl_code_instance_t *codeinst2 = jl_compile_method_internal(mi2, world);
+        jl_code_instance_t *codeinst2 = jl_compile_method_internal(mi2, world, NULL);
         jl_code_instance_t *codeinst = jl_get_method_inferred(
                 mi, codeinst2->rettype,
                 codeinst2->min_world, codeinst2->max_world);
@@ -2475,7 +2475,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
     }
 
-    codeinst = jl_generate_fptr(mi, world);
+    codeinst = jl_generate_fptr(mi, world, cgparams);
     if (!codeinst) {
         jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
@@ -2801,7 +2801,7 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
     else {
         // Otherwise (this branch), assuming we are at runtime (normal JIT) and
         // we should generate the native code immediately in preparation for use.
-        (void)jl_compile_method_internal(mi, world);
+        (void)jl_compile_method_internal(mi, world, NULL);
     }
 }
 
@@ -2881,7 +2881,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    codeinst = jl_compile_method_internal(mfunc, world);
+    codeinst = jl_compile_method_internal(mfunc, world, NULL);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif

@@ -28,6 +28,7 @@ end
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
 using Core.Compiler: IRCode, SSAValue
 using Core: CodeInfo
+using Base: CodegenParams
 
 function compute_ir_rettype(ir::IRCode)
     rt = Union{}
@@ -58,7 +59,8 @@ end
 
 function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
                             isva::Bool = false,
-                            do_compile::Bool = true)
+                            do_compile::Bool = true,
+                            params::CodegenParams=CodegenParams())
     # NOTE: we need ir.argtypes[1] == typeof(env)
     ir = Core.Compiler.copy(ir)
     nargs = length(ir.argtypes)-1
@@ -70,17 +72,19 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     src.slottypes = copy(ir.argtypes)
     src.rettype = rt
     src = Core.Compiler.ir_to_codeinf!(src, ir)
-    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile)
+    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile, params)
 end
 
-function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...)
+function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...;
+                            do_compile::Bool = true,
+                            params::CodegenParams=CodegenParams())
     src.inferred || throw(ArgumentError("Expected inferred src::CodeInfo"))
     mi = src.parent::Core.MethodInstance
     sig = Base.tuple_type_tail(mi.specTypes)
     method = mi.def::Method
     nargs = method.nargs-1
     isva = method.isva
-    return generate_opaque_closure(sig, Union{}, src.rettype, src, nargs, isva, env...)
+    return generate_opaque_closure(sig, Union{}, src.rettype, src, nargs, isva, env...; do_compile, params)
 end
 
 function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nospecialize(rt_ub),
@@ -88,7 +92,9 @@ function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nosp
                                  mod::Module=@__MODULE__,
                                  lineno::Int=0,
                                  file::Union{Nothing,Symbol}=nothing,
-                                 do_compile::Bool=true)
-    return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-        sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile)
+                                 do_compile::Bool=true,
+                                 params::CodegenParams=CodegenParams())
+    return ccall(:jl_new_opaque_closure_from_code_info, Any,
+        (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Any),
+        sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile, params)
 end

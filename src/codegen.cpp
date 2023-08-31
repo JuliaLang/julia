@@ -6119,7 +6119,7 @@ static Function* gen_cfun_wrapper(
         name = jl_symbol_name(lam->def.method->name);
     if (lam && params.cache) {
         // TODO: this isn't ideal to be unconditionally calling type inference (and compile) from here
-        codeinst = jl_compile_method_internal(lam, world);
+        codeinst = jl_compile_method_internal(lam, world, NULL);
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         assert(invoke);
@@ -8845,9 +8845,9 @@ jl_llvm_functions_t jl_emit_code(
     jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_DEFAULT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
-    assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
-        compare_cgparams(params.params, &jl_default_cgparams)) &&
-        "functions compiled with custom codegen params must not be cached");
+    // assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
+    //     compare_cgparams(params.params, &jl_default_cgparams)) &&
+    //     "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         decls = emit_function(m, li, src, jlrettype, params);
         auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();

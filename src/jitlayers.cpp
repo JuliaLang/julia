@@ -189,7 +189,8 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_info_t *src,
         size_t world,
         orc::ThreadSafeContext context,
-        bool is_recompile)
+        bool is_recompile,
+        const jl_cgparams_t *cgparams)
 {
     // caller must hold codegen_lock
     // and have disabled finalizers
@@ -208,11 +209,14 @@ static jl_callptr_t _jl_compile_codeinst(
         TracyCZoneColor(JL_TIMING_DEFAULT_BLOCK->tracy_ctx, 0xFFA500);
     }
 #endif
+    if (cgparams == NULL)
+        cgparams = &jl_default_cgparams;
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.cache = true;
     params.world = world;
+    params.params = cgparams;
     params.imaging_mode = imaging_default();
     params.debug_level = jl_options.debug_level;
     {
@@ -470,7 +474,8 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 
 // this compiles li and emits fptr
 extern "C" JL_DLLEXPORT_CODEGEN
-jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+                                          const jl_cgparams_t *cgparams)
 {
     auto ct = jl_current_task;
     bool timed = (ct->reentrant_timing & 1) == 0;
@@ -522,7 +527,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
         }
         ++SpecFPtrCount;
-        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), is_recompile);
+        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), is_recompile, cgparams);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
@@ -545,14 +550,14 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
+void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap, const jl_cgparams_t *cgparams)
 {
     if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
         return;
     }
     JL_LOCK(&jl_codegen_lock);
     if (jl_atomic_load_relaxed(&oc_wrap->invoke) == NULL) {
-        _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0);
+        _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0, cgparams);
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
@@ -588,7 +593,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (src) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
-            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0, NULL);
         }
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
@@ -612,7 +617,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
-    jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
+    jl_code_instance_t *codeinst = jl_generate_fptr(mi, world, NULL);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
         if (getwrapper)
@@ -648,7 +653,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), 0);
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), 0, NULL);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
