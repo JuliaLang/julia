@@ -42,8 +42,9 @@ following meanings:
   Note that undefined behavior may technically cause the method to violate any other effect
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
   and they assume the absence of undefined behavior.
-- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
-  are not defined in an [overlayed method table](@ref OverlayMethodTable).
+- `native_executable::Bool`: indicates whether this method can be executed using Julia's
+  native compiler and runtime. Note that in particular this is generally not the case when
+  any methods defined in an [`OverlayMethodTable`](OverlayMethodTable) can be called.
 - `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
   state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
   to any children that do.
@@ -91,7 +92,8 @@ The output represents the state of different effect properties in the following 
     - `+i` (green): `true`
     - `-i` (red): `false`
 
-Additionally, if the `nonoverlayed` property is false, a red prime symbol (′) is displayed after the tuple.
+Additionally, if the `native_executable` property is `false`,
+a red prime symbol (′) is displayed after the tuple.
 """
 struct Effects
     consistent::UInt8
@@ -101,7 +103,7 @@ struct Effects
     notaskstate::Bool
     inaccessiblememonly::UInt8
     noub::Bool
-    nonoverlayed::Bool
+    native_executable::Bool
     noinbounds::Bool
     function Effects(
         consistent::UInt8,
@@ -111,7 +113,7 @@ struct Effects
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
         noub::Bool,
-        nonoverlayed::Bool,
+        native_executable::Bool,
         noinbounds::Bool)
         return new(
             consistent,
@@ -121,7 +123,7 @@ struct Effects
             notaskstate,
             inaccessiblememonly,
             noub,
-            nonoverlayed,
+            native_executable,
             noinbounds)
     end
 end
@@ -152,7 +154,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     notaskstate::Bool = effects.notaskstate,
     inaccessiblememonly::UInt8 = effects.inaccessiblememonly,
     noub::Bool = effects.noub,
-    nonoverlayed::Bool = effects.nonoverlayed,
+    native_executable::Bool = effects.native_executable,
     noinbounds::Bool = effects.noinbounds)
     return Effects(
         consistent,
@@ -162,7 +164,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
         notaskstate,
         inaccessiblememonly,
         noub,
-        nonoverlayed,
+        native_executable,
         noinbounds)
 end
 
@@ -175,7 +177,7 @@ function merge_effects(old::Effects, new::Effects)
         merge_effectbits(old.notaskstate, new.notaskstate),
         merge_effectbits(old.inaccessiblememonly, new.inaccessiblememonly),
         merge_effectbits(old.noub, new.noub),
-        merge_effectbits(old.nonoverlayed, new.nonoverlayed),
+        merge_effectbits(old.native_executable, new.native_executable),
         merge_effectbits(old.noinbounds, new.noinbounds))
 end
 
@@ -194,7 +196,7 @@ is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
 is_noub(effects::Effects)                = effects.noub
-is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
+is_native_executable(effects::Effects)   = effects.native_executable
 
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
 is_foldable(effects::Effects) =
@@ -232,7 +234,7 @@ function encode_effects(e::Effects)
            ((e.notaskstate         % UInt32) << 7)  |
            ((e.inaccessiblememonly % UInt32) << 8)  |
            ((e.noub                % UInt32) << 10) |
-           ((e.nonoverlayed        % UInt32) << 11) |
+           ((e.native_executable   % UInt32) << 11) |
            ((e.noinbounds          % UInt32) << 12)
 end
 
@@ -258,29 +260,32 @@ struct EffectsOverride
     notaskstate::Bool
     inaccessiblememonly::Bool
     noub::Bool
+    native_executable::Bool
 end
 
 function encode_effects_override(eo::EffectsOverride)
-    e = 0x00
-    eo.consistent          && (e |= (0x01 << 0))
-    eo.effect_free         && (e |= (0x01 << 1))
-    eo.nothrow             && (e |= (0x01 << 2))
-    eo.terminates_globally && (e |= (0x01 << 3))
-    eo.terminates_locally  && (e |= (0x01 << 4))
-    eo.notaskstate         && (e |= (0x01 << 5))
-    eo.inaccessiblememonly && (e |= (0x01 << 6))
-    eo.noub                && (e |= (0x01 << 7))
+    e = zero(UInt32)
+    eo.consistent          && (e |= (1 << 0) % UInt32)
+    eo.effect_free         && (e |= (1 << 1) % UInt32)
+    eo.nothrow             && (e |= (1 << 2) % UInt32)
+    eo.terminates_globally && (e |= (1 << 3) % UInt32)
+    eo.terminates_locally  && (e |= (1 << 4) % UInt32)
+    eo.notaskstate         && (e |= (1 << 5) % UInt32)
+    eo.inaccessiblememonly && (e |= (1 << 6) % UInt32)
+    eo.noub                && (e |= (1 << 7) % UInt32)
+    eo.native_executable   && (e |= (1 << 8) % UInt32)
     return e
 end
 
-function decode_effects_override(e::UInt8)
+function decode_effects_override(e::UInt32)
     return EffectsOverride(
-        (e & (0x01 << 0)) != 0x00,
-        (e & (0x01 << 1)) != 0x00,
-        (e & (0x01 << 2)) != 0x00,
-        (e & (0x01 << 3)) != 0x00,
-        (e & (0x01 << 4)) != 0x00,
-        (e & (0x01 << 5)) != 0x00,
-        (e & (0x01 << 6)) != 0x00,
-        (e & (0x01 << 7)) != 0x00)
+        !iszero(e & (1 << 0)),
+        !iszero(e & (1 << 1)),
+        !iszero(e & (1 << 2)),
+        !iszero(e & (1 << 3)),
+        !iszero(e & (1 << 4)),
+        !iszero(e & (1 << 5)),
+        !iszero(e & (1 << 6)),
+        !iszero(e & (1 << 7)),
+        !iszero(e & (1 << 8)))
 end

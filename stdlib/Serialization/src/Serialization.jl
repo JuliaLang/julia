@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 24 # do not make changes without bumping the version #!
+const ser_version = 25 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1028,7 +1028,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
     nospecializeinfer = false
-    constprop = purity = 0x00
+    constprop = 0x00
+    purity = format_version(s) >= 25 ? zero(UInt32) : 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
@@ -1039,7 +1040,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             constprop = deserialize(s)::UInt8
         end
         if format_version(s) >= 17
-            purity = deserialize(s)::UInt8
+            purity = deserialize(s)::(format_version(s) >= 25 ? UInt32 : UInt8)
         end
         template = deserialize(s)
     else
@@ -1211,7 +1212,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.constprop = deserialize(s)::UInt8
     end
     if format_version(s) >= 17
-        ci.purity = deserialize(s)::UInt8
+        ci.purity = deserialize(s)::(format_version(s) >= 25 ? UInt32 : UInt8)
     end
     if format_version(s) >= 22
         ci.inlining_cost = deserialize(s)::UInt16
