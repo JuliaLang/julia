@@ -318,7 +318,7 @@ Random.seed!(1)
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
                     if relty != BigFloat # not supported by pivoted QR
-                        @test T/b' ≈ Tfull/b'
+                        @test (@test_deprecated T/b') ≈ (@test_deprecated Tfull/b')
                     end
                 end
             end
