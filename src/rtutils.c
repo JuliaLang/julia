@@ -134,6 +134,11 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)
+{
+    jl_errorf("type %s has no field %s", jl_symbol_name(type_name), jl_symbol_name(var));
+}
+
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
 {
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
@@ -320,7 +325,7 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
     dest->top = src->top;
 }
 
-static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+static void jl_reserve_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                                 size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
@@ -334,13 +339,14 @@ static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
     if (s)
         jl_copy_excstack(new_s, s);
     *stack = new_s;
+    jl_gc_wb(task, new_s);
 }
 
-void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    jl_reserve_excstack(task, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);

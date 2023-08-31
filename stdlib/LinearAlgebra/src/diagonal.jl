@@ -53,8 +53,9 @@ julia> I(2)
  ⋅  1
 ```
 
-Note that a one-column matrix is not treated like a vector, but instead calls the
-method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+!!! note
+    A one-column matrix is not treated like a vector, but instead calls the
+    method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
 
 ```jldoctest
 julia> A = transpose([7.0 13.0])
@@ -72,27 +73,31 @@ Diagonal(V::AbstractVector)
 """
     Diagonal(A::AbstractMatrix)
 
-Construct a matrix from the diagonal of `A`.
+Construct a matrix from the principal diagonal of `A`.
+The input matrix `A` may be rectangular, but the output will
+be square.
 
 # Examples
 ```jldoctest
-julia> A = permutedims(reshape(1:15, 5, 3))
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> D = Diagonal(A)
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  4
+
+julia> A = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
 julia> Diagonal(A)
-3×3 Diagonal{$Int, Vector{$Int}}:
- 1  ⋅   ⋅
- ⋅  7   ⋅
- ⋅  ⋅  13
-
-julia> diag(A, 2)
-3-element Vector{$Int}:
-  3
-  9
- 15
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  5
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
@@ -111,7 +116,8 @@ Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     n = size(D, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
+    n > 1 && fill!(B, zero(T))
     @inbounds for i in 1:n
         B[i,i] = D.diag[i]
     end
@@ -132,12 +138,7 @@ copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
-function size(D::Diagonal,d::Integer)
-    if d<1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    end
-    return d<=2 ? length(D.diag) : 1
-end
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
 
 @inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(Bool, D, i, j) || return false
@@ -145,6 +146,16 @@ end
         @inbounds r = isassigned(D.diag, i)
     else
         r = true
+    end
+    r
+end
+
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
     end
     r
 end
@@ -795,12 +806,11 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
         return eigen(Diagonal(A), D; sortby)
-    elseif ishermitian(A)
+    elseif all(isposdef, D.diag)
         S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+        return eigen(A, cholesky(Diagonal{S}(D)); sortby)
     else
-        S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+        return eigen!(D \ A; sortby)
     end
 end
 

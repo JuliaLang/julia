@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname
+using Base: Threads, sync_varname, is_function_def
 using Base.Meta
 
 """
@@ -86,7 +86,8 @@ end
 """
     Experimental.@sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
 rethrown. It is the responsibility of the user to cancel any still-running operations
 during error handling.
@@ -333,21 +334,25 @@ Define a method and add it to the method table `mt` instead of to the global met
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
 method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
-
 """
 macro overlay(mt, def)
     def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)])
-        error("@overlay requires a function Expr")
-    end
-    if isexpr(def.args[1], :call)
-        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
-    elseif isexpr(def.args[1], :where)
-        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    is_function_def(def) || error("@overlay requires a function definition")
+    return esc(overlay_def!(mt, def))
+end
+
+function overlay_def!(mt, @nospecialize ex)
+    arg1 = ex.args[1]
+    if isexpr(arg1, :call)
+        arg1.args[1] = Expr(:overlay, mt, arg1.args[1])
+    elseif isexpr(arg1, :(::))
+        overlay_def!(mt, arg1)
+    elseif isexpr(arg1, :where)
+        overlay_def!(mt, arg1)
     else
-        error("@overlay requires a function Expr")
+        error("@overlay requires a function definition")
     end
-    esc(def)
+    return ex
 end
 
 let new_mt(name::Symbol, mod::Module) = begin

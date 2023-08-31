@@ -96,19 +96,6 @@ widenlattice(𝕃::InferenceLattice) = 𝕃.parent
 is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, LimitedAccuracy)
 
 """
-    struct OptimizerLattice{𝕃<:AbstractLattice} <: AbstractLattice
-
-The lattice used by the optimizer.
-Extends a base lattice `𝕃` and adjoins `MaybeUndef`.
-"""
-struct OptimizerLattice{𝕃<:AbstractLattice} <: AbstractLattice
-    parent::𝕃
-end
-OptimizerLattice() = OptimizerLattice(SimpleInferenceLattice.instance)
-widenlattice(𝕃::OptimizerLattice) = 𝕃.parent
-is_valid_lattice_norec(::OptimizerLattice, @nospecialize(elem)) = isa(elem, MaybeUndef)
-
-"""
     tmeet(𝕃::AbstractLattice, a, b::Type)
 
 Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`.
@@ -262,9 +249,7 @@ end
     isa(x, Const) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
-@nospecializeinfer function is_forwardable_argtype(::JLTypeLattice, @nospecialize x)
-    return false
-end
+@nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false
 
 """
     widenreturn(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo) -> new_bestguess

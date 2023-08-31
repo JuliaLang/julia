@@ -54,7 +54,9 @@ Random.seed!(1)
     end
 
     @testset "Basic properties" begin
-        @test_throws ArgumentError size(D,0)
+        @test_throws BoundsError size(D,0)
+        @test size(D,1) == size(D,2) == length(dd)
+        @test size(D,3) == 1
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
@@ -78,6 +80,9 @@ Random.seed!(1)
         @test !istril(D, -1)
         @test istril(D, 1)
         @test istril(Diagonal(zero(diag(D))), -1)
+        @test Base.isstored(D,1,1)
+        @test !Base.isstored(D,1,2)
+        @test_throws BoundsError Base.isstored(D, n + 1, 1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -457,6 +462,12 @@ Random.seed!(1)
     end
 end
 
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
+end
+
 @testset "rdiv! (#40887)" begin
     @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
     @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
@@ -755,6 +766,12 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    M = [1 2; 3 4]
+    for n in 0:1
+        D = Diagonal(fill(M, n))
+        @test D == Matrix{eltype(D)}(D)
+    end
 end
 
 @testset "linear solve for block diagonal matrices" begin

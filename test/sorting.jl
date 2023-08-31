@@ -1025,6 +1025,46 @@ Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49
     @test all(sort!(y, dims=2) .== sort!(x,dims=2))
 end
 
+@testset "MissingOptimization fastpath for Perm ordering when lo:hi ≠ eachindex(v)" begin
+    v = [rand() < .5 ? missing : rand() for _ in 1:100]
+    ix = collect(1:100)
+    sort!(ix, 1, 10, Base.Sort.DEFAULT_STABLE, Base.Order.Perm(Base.Order.Forward, v))
+    @test issorted(v[ix[1:10]])
+end
+
+struct NonScalarIndexingOfWithoutMissingVectorAlg <: Base.Sort.Algorithm end
+function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlg, o::Base.Order.Ordering, kw)
+    Base.Sort.@getkw lo hi
+    first_half = v[lo:lo+(hi-lo)÷2]
+    second_half = v[lo+(hi-lo)÷2+1:hi]
+    whole = v[lo:hi]
+    all(vcat(first_half, second_half) .=== whole) || error()
+    out = Base.Sort._sort!(whole, Base.Sort.DEFAULT_STABLE, o, (;kw..., lo=1, hi=length(whole)))
+    v[lo:hi] .= whole
+    out
+end
+
+@testset "Non-scaler indexing of WithoutMissingVector" begin
+    @testset "Unit test" begin
+        wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
+        @test wmv[[1, 3]] == [1, 2]
+        @test wmv[1:3] == [1, 7, 2]
+    end
+    @testset "End to end" begin
+        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlg())
+        @test issorted(sort(rand(100); alg))
+        @test issorted(sort([rand() < .5 ? missing : randstring() for _ in 1:100]; alg))
+    end
+end
+
+struct DispatchLoopTestAlg <: Base.Sort.Algorithm end
+function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopTestAlg, order::Base.Order.Ordering)
+    sort!(view(v, lo:hi); order)
+end
+@testset "Support dispatch from the old style to the new style and back" begin
+    @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,

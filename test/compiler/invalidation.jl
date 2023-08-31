@@ -138,7 +138,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`
@@ -173,15 +173,14 @@ end
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)
-
-    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, x); nothing)
+    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
     pr48932_caller_unuse(x) = (pr48932_callee_inferrable(Base.inferencebarrier(x)); nothing)
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
     let rt = only(Base.return_types(pr48932_callee_inferrable, (Any,)))
-        @test rt === Nothing
+        @test rt === Int
         effects = Base.infer_effects(pr48932_callee_inferrable, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:
@@ -225,7 +224,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee_inlined, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on `pr48932_caller_inlined` and `pr48932_callee_inlined`
