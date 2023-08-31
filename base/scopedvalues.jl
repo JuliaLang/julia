@@ -61,13 +61,17 @@ Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 #   be really fancy we could use a CTrie or HAMT.
 
 mutable struct Scope
-    const parent::Union{Nothing, Scope}
-    const key::ScopedValue
-    const value::Any
-    Scope(parent, key::ScopedValue{T}, value::T) where T = new(parent, key, value)
+    values::Base.PersistentDict{ScopedValue, Any}
 end
-Scope(parent, key::ScopedValue{T}, value) where T =
-    Scope(parent, key, convert(T, value))
+function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
+    if parent === nothing
+        values = Base.PersistentDict{ScopedValue, Any}()
+    else
+        values = parent.values
+    end
+    values = Base.PersistentDict(values, key=>convert(T, value))
+    return Scope(values)
+end
 
 function Scope(scope, pairs::Pair{<:ScopedValue}...)
     for pair in pairs
@@ -85,32 +89,27 @@ current_scope() = current_task().scope::Union{Nothing, Scope}
 
 function Base.show(io::IO, scope::Scope)
     print(io, Scope, "(")
-    seen = Set{ScopedValue}()
-    while scope !== nothing
-        if scope.key ∉ seen
-            if !isempty(seen)
-                print(io, ", ")
-            end
-            print(io, typeof(scope.key), "@")
-            show(io, Base.objectid(scope.key))
-            print(io, " => ")
-            show(IOContext(io, :typeinfo => eltype(scope.key)), scope.value)
-            push!(seen, scope.key)
+    first = true
+    for (key, value) in scope.values
+        if first
+            first = false
+        else
+            print(io, ", ")
         end
-        scope = scope.parent
+        print(io, typeof(key), "@")
+        show(io, Base.objectid(key))
+        print(io, " => ")
+        show(IOContext(io, :typeinfo => eltype(key)), value)
     end
     print(io, ")")
 end
 
-function Base.getindex(var::ScopedValue{T})::T where T
+function Base.getindex(val::ScopedValue{T})::T where T
     scope = current_scope()
-    while scope !== nothing
-        if scope.key === var
-            return scope.value::T
-        end
-        scope = scope.parent
+    if scope === nothing
+        return val.initial_value
     end
-    return var.initial_value
+    @inline get(scope.values, val, val.initial_value)::T
 end
 
 function Base.show(io::IO, var::ScopedValue)
