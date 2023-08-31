@@ -2164,6 +2164,9 @@ end
 # intersection of #45396 and #48822
 @test_repr "Union{Missing, Rational{Int64}}[missing, 1//2, 2]"
 
+# Don't go too far with #48822
+@test_repr "Union{String, Bool}[true]"
+
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
 
