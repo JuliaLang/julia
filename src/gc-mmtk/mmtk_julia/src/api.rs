@@ -387,7 +387,7 @@ pub extern "C" fn mmtk_unreachable() {
 pub extern "C" fn mmtk_set_vm_space(start: Address, size: usize) {
     let mmtk: &mmtk::MMTK<JuliaVM> = &SINGLETON;
     let mmtk_mut: &mut mmtk::MMTK<JuliaVM> = unsafe { std::mem::transmute(mmtk) };
-    memory_manager::lazy_init_vm_space(mmtk_mut, start, size);
+    memory_manager::set_vm_space(mmtk_mut, start, size);
 
     #[cfg(feature = "stickyimmix")]
     set_side_log_bit_for_region(start, size);

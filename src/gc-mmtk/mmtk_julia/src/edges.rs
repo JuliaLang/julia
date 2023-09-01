@@ -8,7 +8,7 @@ use mmtk::{
 };
 
 /// If a VM supports multiple kinds of edges, we can use tagged union to represent all of them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum JuliaVMEdge {
     Simple(SimpleEdge),
     Offset(OffsetEdge),
@@ -28,6 +28,15 @@ impl Edge for JuliaVMEdge {
         match self {
             JuliaVMEdge::Simple(e) => e.store(object),
             JuliaVMEdge::Offset(e) => e.store(object),
+        }
+    }
+}
+
+impl std::fmt::Debug for JuliaVMEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Simple(e) => write!(f, "{}", e.as_address()),
+            Self::Offset(e) => write!(f, "{}+{}", e.slot_address(), e.offset),
         }
     }
 }
