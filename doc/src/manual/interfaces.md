@@ -152,7 +152,7 @@ julia> collect(Iterators.reverse(Squares(4)))
 
 | Methods to implement | Brief description                |
 |:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed access, shouldn't return a [`view`](@ref)  |
+| `getindex(X, i)`     | `X[i]`, indexed access, should allocate a copy  |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
 | `firstindex(X)`         | The first index, used in `X[begin]` |
 | `lastindex(X)`           | The last index, used in `X[end]`   |
