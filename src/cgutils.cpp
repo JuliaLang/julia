@@ -4146,8 +4146,10 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->prefer_specsig == b->prefer_specsig) &&
            (a->gnu_pubnames == b->gnu_pubnames) &&
            (a->debug_info_kind == b->debug_info_kind) &&
-           (a->lookup == b->lookup) &&
-           (a->generic_context == b->generic_context);
+           (a->safepoint_on_entry == b->safepoint_on_entry) &&
+           (a->gcstack_arg == b->gcstack_arg) &&
+           (a->use_jlplt == b->use_jlplt) &&
+           (a->lookup == b->lookup);
 }
 #endif
 

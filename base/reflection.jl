@@ -1212,33 +1212,98 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
+    """
+    If enabled, generate the necessary code to support the --track-allocations
+    command line flag to julia itself. Note that the option itself does not enable
+    allocation tracking. Rather, it merely generates the support code necessary
+    to perform allocation tracking if requested by the command line option.
+    """
     track_allocations::Cint
+
+    """
+    If enabled, generate the necessary code to support the --code-coverage
+    command line flag to julia itself. Note that the option itself does not enable
+    code coverage. Rather, it merely generates the support code necessary
+    to code coverage if requested by the command line option.
+    """
     code_coverage::Cint
+
+    """
+    If enabled, force the compiler to use the specialized signature
+    for all generated functions, whenever legal. If disabled, the choice is made
+    heuristically and specsig is only used when deemed profitable.
+    """
     prefer_specsig::Cint
+
+    """
+    If enabled, enable emission of `.debug_names` sections.
+    """
     gnu_pubnames::Cint
+
+    """
+    Controls what level of debug info to emit. Currently supported values are:
+    - 0: no debug info
+    - 1: full debug info
+    - 2: Line tables only
+    - 3: Debug directives only
+
+    The integer values currently match the llvm::DICompilerUnit::DebugEmissionKind enum,
+    although this is not guaranteed.
+    """
     debug_info_kind::Cint
+
+    """
+    If enabled, generate a GC safepoint at the entry to every function. Emitting
+    these extra safepoints can reduce the amount of time that other threads are
+    waiting for the currently running thread to reach a safepoint. The cost for
+    a safepoint is small, but non-zero. The option is enabled by default.
+    """
     safepoint_on_entry::Cint
+
+    """
+    If enabled, add an implicit argument to each function call that is used to
+    pass down the current task local state pointer. This argument is passed
+    using the `swiftself` convention, which in the ordinary case means that the
+    pointer is kept in a register and accesses are thus very fast. If this option
+    is disabled, the task local state pointer must be loaded from thread local
+    stroage, which incurs a small amount of additional overhead. The option is enabled by
+    default.
+    """
     gcstack_arg::Cint
+
+    """
+    If enabled, use the Julia PLT mechanism to support lazy-resolution of `ccall`
+    targets. The option may be disabled for use in environments where the julia
+    runtime is unavailable, but is otherwise recommended to be enabled, even if
+    lazy resolution is not required, as the Julia PLT mechanism may have superior
+    performance compared to the native platform mechanism. The options is enabled by default.
+    """
     use_jlplt::Cint
 
-    lookup::Ptr{Cvoid}
+    """
+    A pointer of type
 
-    generic_context::Any
+    typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
+    size_t min_world, size_t max_world);
+
+    that may be used by external compilers as a callback to look up the code instance corresponding
+    to a particular method instance.
+    """
+    lookup::Ptr{Cvoid}
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true,
-                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
-                   generic_context = nothing)
+                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt),
-            lookup, generic_context)
+            lookup)
     end
 end
 

@@ -2371,10 +2371,6 @@ typedef struct {
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
-
-    // If not `nothing`, rewrite all generic calls to call
-    // generic_context(f, args...) instead of f(args...).
-    jl_value_t *generic_context;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
