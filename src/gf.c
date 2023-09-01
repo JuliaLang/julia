@@ -1458,6 +1458,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
 
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
+
+    //jl_printf(JL_STDERR, "\nNATHAN: gf invoke lookup: ");
+    //jl_(tt);
     jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
     jl_method_instance_t *nf = NULL;
     if (matc) {
@@ -3066,6 +3069,9 @@ have_entry:
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
+    //jl_printf(JL_STDERR, "nargs: %d\n", nargs);
+
+
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
@@ -3073,6 +3079,129 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
+
+static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data);
+
+JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint32_t nargs)
+{
+    //static jl_value_t* ans = 0;
+    //if (ans == NULL) {
+    //    jl_box_uint64(10);
+    //}
+    //return ans;
+
+    size_t world = jl_current_task->world_age;
+
+    size_t min_valid;
+    size_t max_valid;
+
+    //jl_printf(JL_STDERR, "nargs: %d\n", nargs);
+
+    nargs = nargs / 2;
+    jl_value_t** types = (jl_value_t**)&args[nargs];
+    size_t ntypes = nargs + 1;
+
+    //jl_printf(JL_STDERR, "world: %zu\n", world);
+    //jl_printf(JL_STDERR, "F: ");
+    //jl_(F);
+
+    // To get the true dynamic types tuple, we need to fetch the typeof from any boxes.
+    for (int i = 1; i < ntypes; ++i) {
+        //jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
+        //jl_(types[i]);
+        //jl_printf(JL_STDERR, "\n is concrete: %d\n", jl_is_concrete_type(types[i]));
+        if (!jl_is_concrete_type(types[i])) {
+            //jl_(args[i-1]);
+            // Get the runtime type
+            types[i] = jl_typeof(args[i-1]);
+        }
+        //jl_(types[i]);
+    }
+
+    jl_datatype_t* tt = (jl_datatype_t*)jl_apply_tuple_type_v(types, ntypes);
+    //jl_(tt);
+
+    //jl_method_match_t *match = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
+    ////jl_printf(JL_STDERR, "match: %p\n", match);
+    //if (match == NULL) {
+    //    //jl_printf(JL_STDERR, "No match\n");
+    //    return jl_nothing;
+    //}
+    //jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
+
+
+    // TODO: Share the method caching from jl_apply_generic.
+    // cache miss case
+    JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
+    jl_methtable_t *mt = jl_gf_mtable(F);
+    jl_method_instance_t *mfunc = jl_mt_assoc_by_type(mt, tt, world);
+
+    if (mfunc == NULL) {
+#ifdef JL_TRACE
+        if (error_en)
+            show_call(F, args, nargs);
+#endif
+        jl_method_error(F, args, nargs, world);
+        // unreachable
+    }
+
+
+    //jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
+    //jl_printf(JL_STDERR, "spectypes: "); jl_(mfunc->specTypes);
+    // jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
+    //                                                  jl_int32hash_fast(jl_return_address()),
+    //                                                  world);
+
+    //jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
+    //jl_printf(JL_STDERR, "new args:\n");
+
+    // Matched specialized types
+    jl_svec_t *spec_types = ((jl_datatype_t*)mfunc->specTypes)->parameters;
+
+    // Reuse the array of args, but point to the newly boxed args when reboxed.
+    jl_value_t** newargs = (jl_value_t**)args;
+
+    //jl_datatype_t* tt = (jl_datatype_t*)types;
+    for (size_t i = 0; i < nargs; i++) {
+        jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
+        //jl_printf(JL_STDERR, "Expecting type %zu: ", i);
+        //jl_(jl_svecref(spec_types, i+1));
+        // If the function is expecting a boxed value (because it's not specialized)
+        // we need to ensure the value is boxed.
+        if (!jl_is_concrete_type(jl_svecref(spec_types, i+1)) &&
+            // Does this need to be "and isbits"? I don't _think_ so?
+            jl_is_concrete_type(jl_typeof(args[i]))) {
+            // re-box the value
+            jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
+            newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
+        } else {
+            newargs[i] = args[i];
+        }
+        //jl_printf(JL_STDERR, "new arg %zu: ", i);
+        //jl_(newargs[i]);
+    }
+    JL_GC_PROMISE_ROOTED(mfunc);
+    return _jl_invoke(F, newargs, nargs, mfunc, world);
+}
+
+static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
+    //jl_(typ);
+    //jl_(jl_int64_type);
+    if (typ == jl_int64_type) {
+        return jl_box_int64(*(int64_t*)data);
+    } else if (typ == jl_uint64_type) {
+        //jl_printf(JL_STDERR, "reboxing uint64: %d\n", *(uint64_t*)data);
+        return jl_box_uint64(*(uint64_t*)data);
+    } else if (typ == jl_float64_type) {
+        return jl_box_float64(*(double*)data);
+    } else {
+        jl_printf(JL_STDERR, "STILL NEED TO HANDLE THIS TYPE: ");
+        jl_(typ);
+        // this will crash :)
+        return 0;
+    }
+}
+
 
 static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid)
 {

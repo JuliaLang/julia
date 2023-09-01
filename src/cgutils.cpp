@@ -1452,6 +1452,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
 }
 
 static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
+static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
 
 static void just_emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const Twine &msg)
 {
@@ -3221,9 +3222,43 @@ static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
             (jl_value_t*)ty));
 }
 
+static Value *address_of_stack(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t) {
+    auto &builder = ctx.builder;
+
+    // Convert the type to a _pointer to lt_ type
+    // TODO: what is AddressSpace::Derived?
+    //Type *pt = PointerType::get(t, AddressSpace::Derived);
+    Type *pt = PointerType::get(t, 0);
+
+    // .... I'm not sure why this is needed. This seems like it's making another copy of the
+    // already stack-allocated value?
+    llvm::AllocaInst* allocaInst = builder.CreateAlloca(t);
+
+    // Store the value %0 into the stack-allocated value (%2) ???
+    builder.CreateStore(vinfo.V, allocaInst);
+
+    // Create the alloca instruction for the pointer to the stack-allocated value
+    llvm::AllocaInst* allocaPtrInst = builder.CreateAlloca(pt);
+
+    // Store the address of the stack-allocated value (%2) into the pointer (%3)
+    // This is the magic. Apparently this doesn't store the _contents_ of allocaInst, but
+    // somehow stores the pointer?
+    builder.CreateStore(allocaInst, allocaPtrInst, true);
+
+    // Load the value from the pointer (%3)
+    llvm::LoadInst* loadInst = builder.CreateLoad(pt, allocaPtrInst);
+
+    // The resulting load instruction (%4) can be used further in your code
+    return loadInst;
+}
+
+
+
+
+
 // some types have special boxing functions with small-value caches
 // Returns ctx.types().T_prjlvalue
-static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t)
+static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t, bool nobox_stack = false)
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == (jl_value_t*)jl_bool_type)
@@ -3244,6 +3279,18 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     Value *box = NULL;
+    if (nobox_stack) {
+        // TODO: Cover a bunch of types here.
+        // Is this type check needed at all? Can we do it for all things?
+        //if (jb == jl_int64_type || jb == jl_uint64_type || jb == jl_pointer_type) {
+        if (jl_is_concrete_type(jt) && jl_isbits(jt)) {
+            //jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
+
+            box = address_of_stack(ctx, vinfo, t);
+
+            return box;
+        }
+    }
     if (jb == jl_int8_type)
         box = track_pjlvalue(ctx, load_i8box(ctx, as_value(ctx, t, vinfo), jb));
     else if (jb == jl_int16_type)
@@ -3547,6 +3594,70 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
             } else {
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt);
                 setName(ctx.emission_context, box, "box");
+                init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            }
+        }
+    }
+    return box;
+}
+
+// TODO: comments
+static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotable)
+{
+    jl_value_t *jt = vinfo.typ;
+    if (jt == jl_bottom_type || jt == NULL)
+        // We have an undef value on a (hopefully) dead branch
+        return UndefValue::get(ctx.types().T_prjlvalue);
+    if (vinfo.constant)
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
+    // This can happen in early bootstrap for `gc_preserve_begin` return value.
+    if (jt == (jl_value_t*)jl_nothing_type)
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
+    if (vinfo.isboxed) {
+        assert(vinfo.V == vinfo.Vboxed && vinfo.V != nullptr);
+        assert(vinfo.V->getType() == ctx.types().T_prjlvalue);
+        return vinfo.V;
+    }
+
+    Value *box;
+    if (vinfo.TIndex) {
+        // TODO
+        jl_printf(JL_STDERR, "Boxing 'union' arg.\n");
+        SmallBitVector skip_none;
+        box = box_union(ctx, vinfo, skip_none);
+    }
+    else {
+        assert(vinfo.V && "Missing data for unboxed value.");
+        assert(jl_is_concrete_immutable(jt) && "This type shouldn't have been unboxed.");
+        Type *t = julia_type_to_llvm(ctx, jt);
+        assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
+        // TODO: special
+        box = _boxed_special(ctx, vinfo, t, true);
+        if (box) {
+            jl_printf(JL_STDERR, "Boxed 'special' arg.\n");
+        } else {
+            bool do_promote = vinfo.promotion_point;
+            if (do_promote && is_promotable) {
+                jl_printf(JL_STDERR, "Boxed promote arg.\n");
+                auto IP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(vinfo.promotion_point);
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
+                Value *decayed = decay_derived(ctx, box);
+                AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
+                decayed = maybe_bitcast(ctx, decayed, PointerType::getWithSamePointeeType(originalAlloca->getType(), AddressSpace::Derived));
+                // Warning: Very illegal IR here temporarily
+                originalAlloca->mutateType(decayed->getType());
+                recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
+                originalAlloca->replaceAllUsesWith(decayed);
+                // end illegal IR
+                originalAlloca->eraseFromParent();
+                ctx.builder.restoreIP(IP);
+            } else {
+                // TODO: This here too?
+                // box = address_of_stack(ctx, vinfo, t);
+                // TODO: Maybe we just replace this whole function even?? Not clear to me yet.
+
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
                 init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
             }
         }
@@ -3875,6 +3986,8 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
 
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable)
 {
+    //jl_printf(JL_STDERR, "emit new struct:\n");
+    //jl_(ty);
     ++EmittedNewStructs;
     assert(jl_is_datatype(ty));
     assert(jl_is_concrete_type(ty));

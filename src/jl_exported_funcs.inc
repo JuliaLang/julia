@@ -15,6 +15,7 @@
     XX(jl_apply_array_type) \
     XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
+    XX(jl_apply_generic_stack) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
     XX(jl_apply_type) \
@@ -558,6 +559,7 @@
     YY(jl_dump_emitted_mi_name) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
+    YY(jl_set_jlcall_stack) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \

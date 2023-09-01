@@ -885,6 +885,11 @@ static const auto jlapplygeneric_func = new JuliaFunction<>{
     get_func_sig,
     get_func_attrs,
 };
+static const auto jlapplygeneric_stack_func = new JuliaFunction<>{
+    XSTR(jl_apply_generic_stack),
+    get_func_sig,
+    get_func_attrs,
+};
 static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
     get_func2_sig,
@@ -1878,6 +1883,13 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
     ++EmittedAllocas;
     return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
+}
+
+static AllocaInst *emit_static_alloca_unsafe_stack_value(jl_codectx_t &ctx, Type *lty)
+{
+    ++EmittedAllocas;
+    // We are allocating a full jl_value_t object on the stack, so leave room for the header.
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace() + 8, "", /*InsertBefore=*/ctx.topalloca);
 }
 
 static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -4218,6 +4230,8 @@ isdefined_unknown_idx:
     return false;
 }
 
+extern int jlcall_stack;
+
 // Returns ctx.types().T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
                              const jl_cgval_t *argv, size_t nargs, JuliaFunction<> *trampoline)
@@ -4230,9 +4244,26 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *t
     if (theF)
         theArgs.push_back(theF);
     for (size_t i = 0; i < nargs; i++) {
+        // jl_printf(JL_STDERR, "NATHAN arg:\n");
+        // jl_((argv[i]).typ);
+        // Value *arg = stack_boxed(ctx, argv[i]);
         Value *arg = boxed(ctx, argv[i]);
         theArgs.push_back(arg);
     }
+
+//    if (jlcall_stack) {
+//        for (size_t i = 1; i < nargs; i++) {
+//            jl_printf(JL_STDERR, "NATHAN Types arg:\n");
+//            jl_((argv[i]).typ);
+//            // Value *arg = boxed(ctx, argv[i]);
+//            // Value *arg = boxed(ctx, argv[i].typ);
+//            //Value *arg = track_pjlvalue(ctx, literal_pointer_val(ctx, (argv[i]).typ));
+//            // Value *arg = literal_pointer_val(ctx, (argv[i]).typ);
+//            theArgs.push_back(arg);
+//        }
+//    }
+
+
     CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
     result->setAttributes(TheTrampoline->getAttributes());
     // TODO: we could add readonly attributes in many cases to the args
@@ -4245,6 +4276,65 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
 {
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
+
+static CallInst *emit_jlcall_stack(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
+                             const jl_cgval_t *argv, size_t nargs, JuliaFunction<> *trampoline)
+{
+    ++EmittedJLCalls;
+    Function *TheTrampoline = prepare_call(trampoline);
+    // emit arguments
+    SmallVector<Value*, 4> theArgs;
+    theArgs.push_back(theFptr.getCallee());
+    if (theF)
+        theArgs.push_back(theF);
+    for (size_t i = 0; i < nargs; i++) {
+        //jl_printf(JL_STDERR, "NATHAN arg:\n");
+        //jl_((argv[i]).typ);
+        Value *arg = stack_boxed(ctx, argv[i]);
+        // Value *arg = boxed(ctx, argv[i]);
+        theArgs.push_back(arg);
+    }
+    // emit types
+    // SmallVector<Value*, 4> theTypes;
+    // theTypes.push_back(theFptr.getCallee());
+    //if (theF)
+    //    theTypes.push_back(literal_pointer_val(ctx, theF->typ));
+    // push the function itself
+    // {
+    //     Value *arg = boxed(ctx, argv[0]);
+    //     theArgs.push_back(arg);
+    // }
+    for (size_t i = 0; i < nargs; i++) {
+      //jl_printf(JL_STDERR, "NATHAN Types arg:\n");
+      //jl_((argv[i]).typ);
+      //Value *arg = boxed(ctx, argv[i]);
+        Value *arg;
+        // if (argv[i].isboxed) {
+            //Value *datatype = emit_typeof(ctx, argv[i].V, false, false);
+            //arg = track_pjlvalue(ctx, datatype);
+            //arg = datatype;
+        // } else {
+            arg = track_pjlvalue(ctx, literal_pointer_val(ctx, (argv[i]).typ));
+        // }
+    //   Value *arg = literal_pointer_val(ctx, (jl_value_t*)(argv[i]).typ);
+      theArgs.push_back(arg);
+    }
+    CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
+    result->setAttributes(TheTrampoline->getAttributes());
+    // TODO: we could add readonly attributes in many cases to the args
+    return result;
+}
+
+static CallInst *emit_jlcall_stack(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value *theF,
+                             const jl_cgval_t *argv, size_t nargs, JuliaFunction<> *trampoline)
+{
+    return emit_jlcall_stack(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
+}
+
+int jlcall_stack = 0;
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_set_jlcall_stack_impl(int x) { jlcall_stack = x; }
+
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
                                           const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
@@ -4633,7 +4723,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
 
     jl_value_t *context = ctx.params->generic_context == jl_nothing ? nullptr : ctx.params->generic_context;
-    size_t n_generic_args = nargs + (context ? 1 : 0);
+   size_t n_generic_args = nargs + (context ? 1 : 0);
 
     SmallVector<jl_cgval_t> generic_argv(n_generic_args);
     jl_cgval_t *argv = generic_argv.data();
@@ -4646,6 +4736,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         argv[i] = emit_expr(ctx, args[i]);
         if (argv[i].typ == jl_bottom_type)
             return jl_cgval_t(); // anything past here is unreachable
+
+//        // Store the types at the end
+//        if (jlcall_stack) {
+//            argv[nargs + i] = literal_pointer_val(ctx, argv[i].typ);
+//        }
     }
 
     if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
@@ -4682,7 +4777,14 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
 
     // emit function and arguments
-    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
+    Value *callval;
+    if (jlcall_stack) {
+        //jl_printf(JL_STDERR, "emitting jlapplygeneric_stack:\n");
+        callval = emit_jlcall_stack(ctx, jlapplygeneric_stack_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
+    } else {
+        //jl_printf(JL_STDERR, "emitting normal apply generic:\n");
+        callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
+    }
     return mark_julia_type(ctx, callval, true, rt);
 }
 
@@ -5574,6 +5676,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
             is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
+        //jl_printf(JL_STDERR, "NATHAN:\n");
+        //jl_(ex);
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
@@ -9225,6 +9329,7 @@ static void init_jit_functions(void)
     for (auto it : builtin_func_map())
         add_named_global(it.second, it.first);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
+    add_named_global(jlapplygeneric_stack_func, &jl_apply_generic_stack);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
