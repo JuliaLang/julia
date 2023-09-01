@@ -1084,9 +1084,10 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 second is used for rounding the imaginary components.
 
 
-`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
+`RoundingModeReal` defaults to [`RoundNearest`](@ref),
 which rounds to the nearest integer, with ties (fractional values of 0.5)
-being rounded to the nearest even integer.
+being rounded to the nearest even integer. `RoundingModeImaginary` defaults to
+the mode `RoundingModeReal` is set to.
 
 # Example
 ```jldoctest
@@ -1108,6 +1109,20 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
             round(imag(z), ri; kwargs...))
 end
 
+trunc(x::Complex; kws...) = throw_complex_round(trunc, (typeof(x),))
+floor(x::Complex; kws...) = throw_complex_round(floor, (typeof(x),))
+ ceil(x::Complex; kws...) = throw_complex_round( ceil, (typeof(x),))
+
+trunc(::Type{T}, x::Complex) where T = throw_complex_round(trunc, (T, typeof(x)))
+floor(::Type{T}, x::Complex) where T = throw_complex_round(floor, (T, typeof(x)))
+ ceil(::Type{T}, x::Complex) where T = throw_complex_round( ceil, (T, typeof(x)))
+round(::Type{T}, x::Complex) where T = throw_complex_round(round, (T, typeof(x)))
+
+@noinline function throw_complex_round(f, args)
+    argstr = join(args, ", ::")
+    str = "`$f(::$argstr)` is not defined - use `round` and specify rounding modes for the real & complex parts instead."
+    throw(DomainError(str))
+end
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
