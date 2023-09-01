@@ -335,15 +335,14 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """
     searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the first value in `v` greater than or equivalent to `x`.
-If `x` is greater than all values in `v`, return `lastindex(v) + 1`.
+Return the index of the first value in `v` that is not ordered before `x`.
+If all values in `v` are ordered before `x`, return `lastindex(v) + 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
 `insert!`ing `x` at the returned index will maintain the sorted order. Refer to
 [`sort!`](@ref) for the meaning of the keywords and the definition of
 "greater than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`. When `rev=true`, this will
-instead return the index of the first value less than or equivalent to `x`.
+searched value `x` as well as the values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
@@ -378,14 +377,13 @@ julia> searchsortedfirst([7, 5, 5, 4, 2, 1], 3; rev=true) # reversed, no match, 
 """
     searchsortedlast(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the last value in `v` less than or equivalent to `x`.
-If `x` is less than all values in `v` the function returns `firstindex(v) - 1`.
+Return the index of the last value in `v` that is not ordered after `x`.
+If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
 Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
 "less than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`. When `rev=true`, this will
-instead return the index of the last value greater than or equivalent to `x`.
+searched value `x` as well as the values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs
@@ -409,9 +407,6 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 
 julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
 2
-
-julia> searchsortedlast([7, 5, 5, 4, 2, 1], 3; rev=true) # reversed, no match, insert in the middle
-4
 ```
 """ searchsortedlast
 
