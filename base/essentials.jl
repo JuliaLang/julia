@@ -219,7 +219,7 @@ macro _foldable_meta()
         #=:nothrow=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
+        #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true))
 end
@@ -263,6 +263,9 @@ end
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
+end
+macro _nospecializeinfer_meta()
+    return Expr(:meta, :nospecializeinfer)
 end
 
 function iterate end

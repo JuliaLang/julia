@@ -5175,3 +5175,13 @@ end |> only === Val{5}
 @test fully_eliminated() do
     length(continue_const_prop(1, 5))
 end
+
+# issue #51090
+@noinline function bar51090(b)
+    b == 0 && return
+    r = foo51090(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090(b) = return bar51090(b)
+@test !fully_eliminated(foo51090, (Int,))

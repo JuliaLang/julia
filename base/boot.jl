@@ -249,11 +249,25 @@ macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
 
-TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    return _is_internal(__module__) && _expr(:meta, _expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
+end
 
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+# n.b. the effects and model of these is refined in inference abstractinterpretation.jl
+TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
+TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
+TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
+UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
@@ -450,20 +464,6 @@ Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
-end
-
-_is_internal(__module__) = __module__ === Core
-# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
-macro _foldable_meta()
-    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
-        #=:consistent=#true,
-        #=:effect_free=#true,
-        #=:nothrow=#false,
-        #=:terminates_globally=#true,
-        #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#true))
 end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}

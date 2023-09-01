@@ -847,7 +847,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             end
             # disable concrete-evaluation if this function call is tainted by some overlayed
             # method since currently there is no easy way to execute overlayed methods
-            add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
+            add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
         if !any_conditional(arginfo)
             return :semi_concrete_eval
@@ -1852,7 +1852,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     return rt
 end
 
-function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any})
+function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
     if length(argtypes) == 3
         canconst = true
         a2 = argtypes[2]
@@ -1865,10 +1865,10 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
             body = a3.parameters[1]
             canconst = false
         else
-            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
         end
         if !(isa(body, Type) || isa(body, TypeVar))
-            return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            return CallMeta(Any, EFFECTS_THROWS, call.info)
         end
         if has_free_typevars(body)
             if isa(a2, Const)
@@ -1877,13 +1877,13 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
                 tv = a2.tv
                 canconst = false
             else
-                return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+                return CallMeta(Any, EFFECTS_THROWS, call.info)
             end
-            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, call.info)
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), call.info)
     end
     return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
 end
@@ -1998,12 +1998,20 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
+        # make sure generic code is prepared for inlining if needed later
+        call = let T = Any[Type{TypeVar}, Any, Any, Any]
+            resize!(T, la)
+            atype = Tuple{T...}
+            T[1] = Const(TypeVar)
+            abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)
+        end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
         effects = builtin_effects(𝕃ᵢ, Core._typevar, ArgInfo(nothing,
             Any[Const(Core._typevar), n, lb_var, ub_var]), pT)
-        return CallMeta(pT, effects, NoCallInfo())
+        return CallMeta(pT, effects, call.info)
     elseif f === UnionAll
-        return abstract_call_unionall(interp, argtypes)
+        call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)
+        return abstract_call_unionall(interp, argtypes, call)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
@@ -2021,13 +2029,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
     elseif la == 3 && istopfunction(f, :!==)
         # mark !== as exactly a negated call to ===
+        call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, sv, max_methods)
         rty = abstract_call_known(interp, (===), arginfo, si, sv, max_methods).rt
         if isa(rty, Conditional)
             return CallMeta(Conditional(rty.slot, rty.elsetype, rty.thentype), EFFECTS_TOTAL, NoCallInfo()) # swap if-else
         elseif isa(rty, Const)
             return CallMeta(Const(rty.val === false), EFFECTS_TOTAL, MethodResultPure())
         end
-        return CallMeta(rty, EFFECTS_TOTAL, NoCallInfo())
+        return call
     elseif la == 3 && istopfunction(f, :(>:))
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
