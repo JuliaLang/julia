@@ -162,7 +162,7 @@ size_t loader_wcslen(const wchar_t * x) {
     return idx;
 }
 
-char * loader_strncat(char * base, const char * tail, size_t maxlen) {
+char * loader_strlcat(char * base, const char * tail, size_t maxlen) {
     int base_len = strlen(base);
     int tail_len = strlen(tail);
     for (int idx=base_len; idx<min(maxlen, base_len + tail_len); ++idx) {
