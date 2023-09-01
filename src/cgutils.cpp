@@ -411,7 +411,7 @@ static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         if (addr->smalltag) {
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), addr->smalltag << 4);
-            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jlsmall_typeof_var), tag);
+            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jl_small_typeof_var), tag);
             return ConstantExpr::getBitCast(smallp, ctx.types().T_ppjlvalue);
         }
         // DataTypes are prefixed with a +
@@ -1096,7 +1096,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         if (jl_has_intersect_type_not_kind(typ))
             return false;
         for (size_t i = 0; i < jl_tags_count; i++) {
-            jl_datatype_t *dt = small_typeof[(i << 4) / sizeof(*small_typeof)];
+            jl_datatype_t *dt = jl_small_typeof[(i << 4) / sizeof(*jl_small_typeof)];
             if (dt && !jl_has_empty_intersection((jl_value_t*)dt, typ))
                 return false;
         }
@@ -1457,7 +1457,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
             // we lied a bit: this wasn't really an object (though it was valid for GC rooting)
             // and we need to use it as an index to get the real object now
             Module *M = jl_Module;
-            Value *smallp = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), prepare_global_in(M, jlsmall_typeof_var), tag);
+            Value *smallp = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
             smallp = ctx.builder.CreateBitCast(smallp, typetag->getType()->getPointerTo(0));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             auto small = ctx.builder.CreateAlignedLoad(typetag->getType(), smallp, M->getDataLayout().getPointerABIAlignment(0));
