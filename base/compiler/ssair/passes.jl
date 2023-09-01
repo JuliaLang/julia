@@ -2178,7 +2178,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     copyto!(key, no_of_edges+3, stmt.values)
 
     firstval = nothing
-    allthesame = true
+    allthesame = true # If all values into phi node are the same SSAValue
     deletions = 0
     for j in eachindex(stmt.values)
         !isassigned(stmt.values, j) && return nothing
@@ -2189,16 +2189,19 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
             deletions += 1
             deleteat!(key, no_of_edges+2-deletions+j)
             deletions += 1
-        else
-            if val isa SSAValue
-                key[no_of_edges+2-deletions+j] = ssa_to_ssa[val.id]
-            end
+        elseif val isa SSAValue
+            key[no_of_edges+2-deletions+j] = ssa_to_ssa[val.id]
             if firstval === nothing
                 firstval = val
             else
                 allthesame &= val === firstval
             end
+        else
+            allthesame = false
         end
+    end
+    if allthesame
+        return firstval
     end
     return svec(key...)
 end
@@ -2247,7 +2250,15 @@ function gvn!(ir::IRCode)
                 end
                 perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
-                perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
+                value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
+                if value isa SSAValue 
+                    if ssa_to_ssa[i] != value.id
+                        ssa_to_ssa[i] = value.id
+                        changed = true
+                    end
+                    continue
+                end
+                value
             end
             if value === nothing
                 ssa_to_ssa[i] = i
