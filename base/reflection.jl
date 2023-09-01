@@ -1241,6 +1241,15 @@ struct CodegenParams
     end
 end
 
+# this type mirrors jl_emission_params_t (documented in julia.h)
+struct EmissionParams
+    emit_metadata::Cint
+
+    function EmissionParams(; emit_metadata::Bool=true)
+        return new(Cint(emit_metadata))
+    end
+end
+
 const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
