@@ -979,7 +979,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
                 setName(ctx.emission_context, src, "memcpy_refined_src");
             if (isa<Instruction>(dst) && !dst->hasName())
                 setName(ctx.emission_context, dst, "memcpy_refined_dst");
-            auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, Align(align_src), is_volatile));
+            auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, Align(align_dst), is_volatile));
             ++SkippedMemcpys;
             return;
