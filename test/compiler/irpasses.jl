@@ -1224,7 +1224,7 @@ function foo_cfg_empty(b)
         @goto x
     end
     @label x
-    return 1
+    return b
 end
 let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Core.Compiler.inflate_ir(ci)
