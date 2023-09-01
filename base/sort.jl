@@ -368,9 +368,6 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 
 julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
 3
-
-julia> searchsortedfirst([7, 5, 5, 4, 2, 1], 3; rev=true) # reversed, no match, insert in the middle
-5
 ```
 """ searchsortedfirst
 
