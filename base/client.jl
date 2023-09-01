@@ -228,11 +228,8 @@ incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
-    quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
+    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -324,24 +321,7 @@ function exec_options(opts)
         end
     end
 
-    ret = 0
-    if isdefined(Main, :main)
-        if Core.Compiler.generating_sysimg()
-            precompile(Main.main, (typeof(ARGS),))
-        else
-            ret = invokelatest(Main.main, ARGS)
-        end
-    end
-
-    if repl || is_interactive::Bool
-        b = opts.banner
-        auto = b == -1
-        banner = b == 0 || (auto && !interactiveinput) ? :no  :
-                 b == 1 || (auto && interactiveinput)  ? :yes :
-                 :short # b == 2
-        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
-    end
-    return ret
+    return repl || is_interactive::Bool
 end
 
 function _global_julia_startup_file()
@@ -558,22 +538,19 @@ function _start()
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
-    local ret
+    local ret = 0
     try
-        if isdefined(Core, :Main) && isdefined(Core.Main, :main)
-            ret = Core.Main.main(ARGS)
-        elseif isassigned(REPL_MODULE_REF)
-            ret = REPL_MODULE_REF[].main(ARGS)
-        else
-            # TODO: This is the case for system image execution without main function
-            # and without REPL loaded. We fall back here to the pre-main behavior.
-            # However, we may instead want to adjust the sysimage build process to
-            # emit an explicit main function for this case. We should revisit this once
-            # the `main` story is fully worked out.
-            #
-            # error("No entry point defined and REPL not loaded.")
-            #
-            ret = exec_options(JLOptions())
+        should_run_repl = exec_options(JLOptions())
+        if should_run_repl
+            if isassigned(REPL_MODULE_REF)
+                ret = REPL_MODULE_REF[].main(ARGS)
+            end
+        elseif isdefined(Main, :main)
+            if Core.Compiler.generating_sysimg()
+                precompile(Main.main, (typeof(ARGS),))
+            else
+                ret = invokelatest(Main.main, ARGS)
+            end
         end
         ret === nothing && (ret = 0)
         ret = Cint(ret)
