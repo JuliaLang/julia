@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 _Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
-jl_datatype_t *small_typeof[(jl_max_tags << 4) / sizeof(*small_typeof)]; // 16-bit aligned, like the GC
+jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(*ijl_small_typeof)]; // 16-bit aligned, like the GC
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
@@ -2529,19 +2529,13 @@ static jl_tvar_t *tvar(const char *name)
                           (jl_value_t*)jl_any_type);
 }
 
-void export_small_typeof(void)
+void export_jl_small_typeof(void)
 {
-    void *copy;
-#ifdef _OS_WINDOWS_
-    jl_dlsym(jl_libjulia_handle, "small_typeof", &copy, 1);
-#else
-    jl_dlsym(jl_libjulia_internal_handle, "small_typeof", &copy, 1);
-#endif
-    memcpy(copy, &small_typeof, sizeof(small_typeof));
+    memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
 #define XX(name) \
-    small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type; \
+    ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
@@ -3363,7 +3357,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
-    export_small_typeof();
+
+    export_jl_small_typeof();
 }
 
 static jl_value_t *core(const char *name)
@@ -3444,7 +3439,8 @@ void post_boot_hooks(void)
             }
         }
     }
-    export_small_typeof();
+
+    export_jl_small_typeof();
 }
 
 void post_image_load_hooks(void) {
