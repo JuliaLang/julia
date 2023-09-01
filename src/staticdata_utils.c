@@ -510,7 +510,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
 #ifndef NDEBUG
                     jl_methtable_t *mt = jl_method_get_table(m);
                     if ((jl_value_t*)mt != jl_nothing) {
-                        matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
+                        jl_value_t *matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
                         if (matches != jl_nothing) {
                             assert(m == ((jl_method_match_t*)matches)->method);
                         }
