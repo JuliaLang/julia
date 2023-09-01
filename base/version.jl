@@ -299,7 +299,7 @@ function banner(io::IO = stdout)
 
         print(io,"""
                      $(d3)_$(tx)
-          $(d1)_$(jl)   _    $(d2)_$(tx)$(d3)(_)$(tx) $(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+          $(d1)_$(jl)   _    $(d2)_$(tx)$(d3)(_)$(tx) $(d4)_$(tx)     |  Documentation: https://github.com/KMPSUJ/Julia-course-2023
          $(d1)(_)$(jl) | |  $(d2)(_)$(jl) |$(d4)(_)$(jl)_  |  SeMPage: http://smp.if.uj.edu.pl
          $(jl)____| |_  _| | / /$(tx)  |  Type \"?\" for help, \"]?\" for Pkg help.
         $(jl)|_  /| _ \\| | |/ /$(tx)   |
@@ -310,12 +310,12 @@ function banner(io::IO = stdout)
     else
         print(io,"""
                      _
-          _   _    _(_)_     |  Documentation: https://docs.julialang.org
+          _   _    _(_)_     |  Documentation: https://github.com/KMPSUJ/Julia-course-2023
          (_) | |  (_) |(_)_  |  SeMPage: http://smp.if.uj.edu.pl
          ____| |_  _| | / /  |  Type "?" for help, "]?" for Pkg help.
         |_  /| _ \\| | |/ /   |
-         / /_||_| | | |\\ \\   |  Version 1.8.4 (2022-12-23)
-        /____|___/|_|_| \\_\\  |  Official https://julialang.org/ release
+         / /_||_| | | |\\ \\   |  Version $(VERSION)$(commit_date)
+        /____|___/|_|_| \\_\\  |  $(commit_string)
 
         """)
     end
