@@ -1351,17 +1351,23 @@ static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(j
 static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
+
 extern "C" {
-    jl_cgparams_t jl_default_cgparams = {1, 1, 0,
+    jl_cgparams_t jl_default_cgparams = {
+        /* track_allocations */ 1,
+        /* code_coverage */ 1,
+        /* prefer_specsig */ 0,
 #ifdef _OS_WINDOWS_
-        0,
+        /* gnu_pubnames */ 0,
 #else
-        1,
+        /* gnu_pubnames */ 1,
 #endif
-        (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        1,
-        1,
-        jl_rettype_inferred_addr, NULL };
+        /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
+        /* safepoint_on_entry */ 1,
+        /* gcstack_arg */ 1,
+        /* use_jlplt*/ 1,
+        /* lookup */ jl_rettype_inferred_addr,
+        /* generic_context */ NULL };
 }
 
 

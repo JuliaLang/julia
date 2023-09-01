@@ -1219,6 +1219,7 @@ struct CodegenParams
     debug_info_kind::Cint
     safepoint_on_entry::Cint
     gcstack_arg::Cint
+    use_jlplt::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1228,7 +1229,7 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true,
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
                    generic_context = nothing)
         return new(
@@ -1236,7 +1237,7 @@ struct CodegenParams
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             Cint(safepoint_on_entry),
-            Cint(gcstack_arg),
+            Cint(gcstack_arg), Cint(use_jlplt),
             lookup, generic_context)
     end
 end
