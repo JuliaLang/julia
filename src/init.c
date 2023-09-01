@@ -649,7 +649,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
-    if (jl_options.image_file && rel != JL_IMAGE_IN_MEMORY) {
+    if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc_s(JL_PATH_MAX);
@@ -843,7 +843,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (rel == JL_IMAGE_IN_MEMORY)
-        jl_set_sysimg_so(jl_RTLD_DEFAULT_handle);
+        jl_set_sysimg_so(jl_exe_handle);
     else if (jl_options.image_file)
         jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)

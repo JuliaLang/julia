@@ -583,13 +583,13 @@ static void jl_load_sysimg_so(void)
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
     }
     const char *sysimg_data;
-    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle &&
+    if (jl_sysimg_handle == jl_exe_handle &&
             &jl_system_image_data != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
         sysimg_data = (const char*)&jl_system_image_data;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
     size_t *plen;
-    if (jl_sysimg_handle == jl_RTLD_DEFAULT_handle &&
+    if (jl_sysimg_handle == jl_exe_handle &&
             &jl_system_image_size != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
         plen = (size_t *)&jl_system_image_size;
     else

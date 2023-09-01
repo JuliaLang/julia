@@ -632,7 +632,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
-    if (hdl == jl_RTLD_DEFAULT_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
+    if (hdl == jl_exe_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
         pointers = (const jl_image_pointers_t *)&jl_image_pointers;
     else
         jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
