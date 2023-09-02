@@ -898,7 +898,7 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
   :a => 1
 
 julia> dict2 = Base.delete(dict, :a)
-  Base.PersistentDict{Symbol, Int64}()
+Base.PersistentDict{Symbol, Int64}()
 
 julia> dict3 = Base.PersistentDict(dict, :a=>2)
 Base.PersistentDict{Symbol, Int64} with 1 entry:
