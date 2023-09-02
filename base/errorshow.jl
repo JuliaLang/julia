@@ -176,7 +176,7 @@ function showerror(io::IO, ex::InexactError)
     T = first(ex.args)
     nameof(T) === ex.func || print(io, T, ", ")
     join(io, ex.args[2:end], ", ")
-    print(io, ")")
+    print(io, repr(ex.val), ')')
     Experimental.show_error_hints(io, ex)
 end
 
