@@ -172,6 +172,14 @@ module IteratorsMD
         error("range with a specified length is deliberately unsupported for CartesianIndex arguments."*
             " Use StepRangeLen($start, $step, $len) to construct this range")
 
+    # show is special-cased to avoid the start:stop:step display,
+    # which constructs a CartesianIndices
+    # See #50784
+    function show(io::IO, r::StepRangeLen{<:CartesianIndex})
+        print(io, "StepRangeLen(", first(r), ", ",
+                    step(r), ", ", length(r), ")")
+    end
+
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}
     """
