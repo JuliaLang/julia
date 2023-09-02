@@ -448,7 +448,6 @@ static size_t dereferenceable_size(jl_value_t *jt)
     return 0;
 }
 
-static unsigned union_minalign(jl_uniontype_t *ut);
 // Return the min required / expected alignment of jltype (on the stack or heap)
 static unsigned julia_alignment(jl_value_t *jt)
 {
@@ -461,8 +460,6 @@ static unsigned julia_alignment(jl_value_t *jt)
         // and this is the guarantee we have for the GC bits
         return 16;
     }
-    if (jl_is_uniontype(jt))
-        return union_minalign((jl_uniontype_t*)jt);
 
     assert(jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt));
     unsigned alignment = jl_datatype_align(jt);
@@ -3319,23 +3316,6 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
     return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
-static unsigned union_minalign(jl_uniontype_t *ut)
-{
-    // Compute the min alignment for this union
-    unsigned min_align = MAX_ALIGN;
-    unsigned counter = 0;
-    for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
-                if (!jl_is_datatype_singleton(jt)) {
-                    size_t align1 = jl_datatype_align(jt);
-                    if (align1 < min_align)
-                        min_align = align1;
-                }
-            },
-            (jl_value_t*)ut,
-            counter);
-    return min_align;
-}
 
 static void union_alloca_type(jl_uniontype_t *ut,
         bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align)
@@ -3660,9 +3640,8 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
         auto f = [&] {
             Value *datatype = emit_typeof(ctx, src, false, false);
             Value *copy_bytes = emit_datatype_size(ctx, datatype);
-            unsigned alignment = julia_alignment(src.typ);
             (void)emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), data_pointer(ctx, src),
-                              jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), copy_bytes, alignment, alignment, isVolatile);
+                              jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), copy_bytes, 1, 1, isVolatile);
             return nullptr;
         };
         if (skip)
