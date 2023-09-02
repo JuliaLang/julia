@@ -364,6 +364,43 @@ end
     close(lockf2)
 end
 
+@testset "mkpidlock ignore lock from dead process" begin
+    # stale_age = 1 here means that the lock will be:
+    # - respected for at least 1 second
+    # - ignored after 1 second if the pid no longer exists
+    # - ignored after 25 seconds if the pid still exists
+    @testset "process that finished before this process enters lock" begin
+        @assert !ispath("pidfile-3")
+        # mkpidlock with no waiting, in another process
+        run(`$(Base.julia_cmd()) -e "using FileWatching; mkpidlock(\"pidfile-3\", wait=false)"`)
+        t = @elapsed mkpidlock("pidfile-3", wait=false, stale_age=1, poll_interval=1, refresh=0)
+        @test t ≈ 1 atol=1
+        rm("pidfile-3", force=true)
+    end
+    @testset "process that finished after this process entered lock" begin
+        @assert !ispath("pidfile-4")
+        # mkpidlock with no waiting, in another process, async and keep process alive for a while
+        tsk = @async run(`$(Base.julia_cmd()) -e "using FileWatching; mkpidlock(\"pidfile-4\", wait=false); sleep(5)"`)
+        Base.errormonitor(tsk)
+        sleep(1)
+        t = @elapsed mkpidlock("pidfile-4", wait=true, stale_age=1, poll_interval=1, refresh=0)
+        @test 4 < t < 5
+        wait(tsk)
+        rm("pidfile-4", force=true)
+    end
+    @testset "process that exists beyond 25x the stale_age" begin
+        @assert !ispath("pidfile-5")
+        # mkpidlock with no waiting, in another process, async and keep process alive for a while
+        tsk = @async run(`$(Base.julia_cmd()) -e "using FileWatching; mkpidlock(\"pidfile-5\", wait=false); sleep(5)"`)
+        Base.errormonitor(tsk)
+        sleep(1)
+        t = @elapsed mkpidlock("pidfile-5", wait=true, stale_age=0.1, poll_interval=0.25, refresh=0)
+        @test t ≈ 1.5 atol=1 # 25 * 0.1 - 1
+        wait(tsk)
+        rm("pidfile-5", force=true)
+    end
+end
+
 end; end # cd(tempdir)
 finally
     umask(old_umask)
