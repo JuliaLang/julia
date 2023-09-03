@@ -23,7 +23,7 @@ This message conveys two key pieces of information:
 - the hang is occurring during precompilation of `Test1`, a dependency of `Test2` (the package we were trying to load with `using Test2`)
 - during precompilation of `Test1`, Julia created a `Timer` object (use `?Timer` if you're unfamiliar with Timers) which is still open; until that closes, the process is hung
 
-If this is enough of a hint for you to figure out how that `Timer` object is being created, one good solution is to `close(obj::Timer)` before the final `end` of the module.
+If this is enough of a hint for you to figure out how `timer = Timer(args...)` is being created, one good solution is to add `wait(timer)` if `timer` eventually finishes on its own, or `close(timer)` if you need to force-close it, before the final `end` of the module.
 
 However, there are cases that may not be that straightforward. Usually the best option is to start by determining whether the hang is due to code in Test1 or whether it is due to one of Test1's dependencies:
 
@@ -84,6 +84,6 @@ is not problematic in and of itself: it can cause this problem only if `maketime
 const GLOBAL_TIMER = maketimer()
 ```
 
-or it might conceivably occur in a [precomile workload](https://github.com/JuliaLang/PrecompileTools.jl).
+or it might conceivably occur in a [precompile workload](https://github.com/JuliaLang/PrecompileTools.jl).
 
 If you struggle to identify the causative lines, then consider doing a binary search: comment out sections of your package (or `include` lines to omit entire files) until you've reduced the problem in scope.
