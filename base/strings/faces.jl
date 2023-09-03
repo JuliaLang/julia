@@ -164,6 +164,99 @@ end
     getfield.(Ref(a), fieldnames(Face)) ==
     getfield.(Ref(b), fieldnames(Face))
 
+function show(io::IO, ::MIME"text/plain", color::SimpleColor)
+    skiptype = get(io, :typeinfo, nothing) === SimpleColor
+    skiptype || show(io, SimpleColor)
+    skiptype || print(io, '(')
+    if get(io, :color, false)::Bool
+        print(io, StyledString("■", :face => Face(foreground=color)), ' ')
+    end
+    if color.value isa Symbol
+        print(io, color.value)
+    else # rgb tuple
+        print(io, '#', join(lpad.(string.(values(color.value), base=16), 2, '0')))
+    end
+    skiptype || print(io, ')')
+    nothing
+end
+
+function show(io::IO, ::MIME"text/plain", face::Face)
+    if get(io, :compact, false)::Bool
+        show(io, Face)
+        if get(io, :color, false)::Bool
+            # Could do S"({$face:sample})", but S_str isn't defined yet
+            print(io, StyledString("(sample)", [(2:7, :face => face)]))
+        else
+            print(io, '(')
+            isfirst = true
+            for field in setdiff(fieldnames(Face), (:inherit,))
+                if !isnothing(getfield(face, field))
+                    if isfirst; isfirst = false else print(io, ", ") end
+                    print(io, field, '=')
+                    show(io, getfield(face, field))
+                end
+            end
+            if !isempty(face.inherit)
+                if isfirst; isfirst = false else print(io, ", ") end
+                print(io, "inherit=")
+                show(IOContext(io, :typeinfo => Vector{Symbol}), face.inherit)
+            end
+            print(io, ')')
+        end
+    else
+        show(io, Face)
+        print(io, StyledString(" (sample)", [(3:8, :face => face)]))
+        showcolor(io, color) = show(IOContext(io, :typeinfo => SimpleColor),
+                                    MIME("text/plain"), color)
+        setfields = Pair{Symbol, Any}[]
+        isempty(setfields) || print(io, ":")
+        fieldnamepad = 14
+        for field in (:font, :height, :weight, :slant)
+            if !isnothing(getfield(face, field))
+                print(io, '\n', lpad(String(field), fieldnamepad, ' '), ": ",
+                      getfield(face, field))
+            end
+        end
+        for field in (:foreground, :background)
+            if !isnothing(getfield(face, field))
+                print(io, '\n', lpad(String(field), fieldnamepad, ' '), ": ")
+                showcolor(io, getfield(face, field))
+            end
+        end
+        if !isnothing(face.underline)
+            print(io, '\n', lpad("underline", fieldnamepad, ' '), ": ")
+            if face.underline isa Bool
+                print(io, face.underline)
+            elseif face.underline isa SimpleColor
+                showcolor(io, face.underline)
+            elseif face.underline isa Tuple{Nothing, Symbol}
+                print(io, last(face.underline))
+            elseif face.underline isa Tuple{SimpleColor, Symbol}
+                showcolor(io, first(face.underline))
+                print(io, ", ", last(face.underline))
+            end
+        end
+        for field in (:strikethrough, :inverse)
+            if !isnothing(getfield(face, field))
+                print(io, '\n', lpad(String(field), fieldnamepad, ' '), ": ",
+                      getfield(face, field))
+            end
+        end
+        if !isempty(face.inherit)
+            print(io, '\n', lpad("inherit", fieldnamepad, ' '), ": ")
+            isfirst = true
+            for iface in face.inherit
+                if isfirst; isfirst = false else print(io, ", ") end
+                print(io, iface, '(', StyledString("*", :face => iface), ')')
+            end
+        end
+    end
+end
+
+function show(io::IO, face::Face)
+    show(IOContext(io, :compact => true), MIME("text/plain"), face)
+end
+
 """
 Globally named [`Face`](@ref)s.
 
