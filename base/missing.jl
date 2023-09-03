@@ -149,6 +149,7 @@ round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = roun
 round(::Type{T}, x::Real, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(::Type{T}, x::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T>:Missing} = round(nonmissingtype_checked(T), x, rr, ri)
 
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing
