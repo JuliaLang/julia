@@ -1863,7 +1863,7 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 typedef enum {
     JL_IMAGE_CWD = 0,
     JL_IMAGE_JULIA_HOME = 1,
-    //JL_IMAGE_LIBJULIA = 2,
+    JL_IMAGE_IN_MEMORY = 2
 } JL_IMAGE_SEARCH;
 
 JL_DLLIMPORT const char *jl_get_libdir(void);
