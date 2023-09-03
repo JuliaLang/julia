@@ -872,6 +872,7 @@ int under_pressure = 0;
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
 // Full collection heuristics
+static int64_t pool_live_bytes = 0;
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
@@ -1691,6 +1692,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
 done:
     gc_time_count_page(freedall, pg_skpd);
     gc_num.freed += (nfree - old_nfree) * osize;
+    pool_live_bytes += GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize;
     return pfl;
 }
 
@@ -3335,6 +3337,11 @@ JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
     return newtb - oldtb;
 }
 
+JL_DLLEXPORT int64_t jl_gc_pool_live_bytes(void)
+{
+    return pool_live_bytes;
+}
+
 JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
 {
     return live_bytes;
@@ -3587,7 +3594,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         promoted_bytes = 0;
     }
     scanned_bytes = 0;
-    // 5. start sweeping
+    pool_live_bytes = 0;
+    // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     sweep_weak_refs();
