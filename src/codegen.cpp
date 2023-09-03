@@ -691,8 +691,8 @@ static const auto jldlli_var = new JuliaVariable{
     true,
     [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
-static const auto jlsmall_typeof_var = new JuliaVariable{
-    XSTR(small_typeof),
+static const auto jl_small_typeof_var = new JuliaVariable{
+    XSTR(jl_small_typeof),
     true,
     [](Type *T_size) -> Type * { return getInt8Ty(T_size->getContext()); },
 };
@@ -1366,8 +1366,7 @@ extern "C" {
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1,
-        /* lookup */ jl_rettype_inferred_addr,
-        /* generic_context */ NULL };
+        /* lookup */ jl_rettype_inferred_addr };
 }
 
 
@@ -4632,15 +4631,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         return emit_intrinsic(ctx, fi, args, nargs - 1);
     }
 
-    jl_value_t *context = ctx.params->generic_context == jl_nothing ? nullptr : ctx.params->generic_context;
-    size_t n_generic_args = nargs + (context ? 1 : 0);
+    size_t n_generic_args = nargs;
 
     SmallVector<jl_cgval_t> generic_argv(n_generic_args);
     jl_cgval_t *argv = generic_argv.data();
-    if (context) {
-        generic_argv[0] = mark_julia_const(ctx, context);
-        argv = &generic_argv[1];
-    }
+
     argv[0] = f;
     for (size_t i = 1; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i]);
@@ -9184,7 +9179,7 @@ static void init_f16_funcs(void)
 
 static void init_jit_functions(void)
 {
-    add_named_global(jlsmall_typeof_var, &small_typeof);
+    add_named_global(jl_small_typeof_var, &jl_small_typeof);
     add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
     add_named_global(jlexe_var, &jl_exe_handle);
@@ -9304,7 +9299,6 @@ extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    jl_default_cgparams.generic_context = jl_nothing;
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();

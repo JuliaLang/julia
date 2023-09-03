@@ -753,6 +753,7 @@ int prev_sweep_full = 1;
 int under_pressure = 0;
 
 // Full collection heuristics
+static int64_t pool_live_bytes = 0;
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
@@ -1530,6 +1531,7 @@ done:
     }
     gc_time_count_page(freedall, pg_skpd);
     gc_num.freed += (nfree - old_nfree) * osize;
+    pool_live_bytes += GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize;
     return pfl;
 }
 
@@ -2427,7 +2429,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             vtag == (jl_vararg_tag << 4)) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
-            vtag = (uintptr_t)small_typeof[vtag / sizeof(*small_typeof)];
+            vtag = (uintptr_t)ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
         }
         else if (vtag < jl_max_tags << 4) {
             // these objects either have specialing handling
@@ -2532,7 +2534,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objprofile_count(jl_string_type, bits == GC_OLD_MARKED, dtsz);
             }
             else {
-                jl_datatype_t *vt = small_typeof[vtag / sizeof(*small_typeof)];
+                jl_datatype_t *vt = ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
                 size_t dtsz = jl_datatype_size(vt);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
@@ -3108,6 +3110,11 @@ JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
     return newtb - oldtb;
 }
 
+JL_DLLEXPORT int64_t jl_gc_pool_live_bytes(void)
+{
+    return pool_live_bytes;
+}
+
 JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
 {
     return live_bytes;
@@ -3269,6 +3276,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         promoted_bytes = 0;
     }
     scanned_bytes = 0;
+    pool_live_bytes = 0;
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);

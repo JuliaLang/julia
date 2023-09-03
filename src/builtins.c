@@ -222,7 +222,7 @@ JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const j
 JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
     if (dtag < jl_max_tags << 4) {
-        switch ((enum jlsmall_typeof_tags)(dtag >> 4)) {
+        switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
             return *(uint8_t*)a == *(uint8_t*)b;

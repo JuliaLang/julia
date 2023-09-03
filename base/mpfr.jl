@@ -433,7 +433,7 @@ function to_ieee754(::Type{T}, x::BigFloat, rm) where {T<:AbstractFloat}
     ret_u = if is_regular & !rounds_to_inf & !rounds_to_zero
         if !exp_is_huge_p
             # significand
-            v = RawBigInt(x.d, significand_limb_count(x))
+            v = RawBigInt{Limb}(x._d, significand_limb_count(x))
             len = max(ieee_precision + min(exp_diff, 0), 0)::Int
             signif = truncated(U, v, len) & significand_mask(T)
 
