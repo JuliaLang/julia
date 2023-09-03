@@ -81,7 +81,7 @@ Random.MersenneTwister
 Random.RandomDevice
 ```
 
-## Hooking into the `Random` API
+## [Hooking into the `Random` API](@id rand-api-hook)
 
 There are two mostly orthogonal ways to extend `Random` functionalities:
 1) generating random values of custom types

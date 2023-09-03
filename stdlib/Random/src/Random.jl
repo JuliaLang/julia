@@ -319,7 +319,7 @@ Pick a random element or array of random elements from the set of values specifi
 
 * a string (considered as a collection of characters), or
 
-* a supported type: the set of values to pick from is then equivalent to
+* a type (and corresponding domain) from the list below
 
   + `typemin(S):typemax(S)` for concrete integer types (excepting [`BigInt`](@ref) which is not supported)
 
@@ -329,7 +329,9 @@ Pick a random element or array of random elements from the set of values specifi
 
   + a valid Unicode scalar for any `<:AbstractChar` type
 
-* a Tuple type of supported types
+* a user-defined type and domain; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
+
+* a Tuple type `T` where each parameter of `T` is itself a sampleable type; return a value of type `T``
 
 
 `S` defaults to [`Float64`](@ref).

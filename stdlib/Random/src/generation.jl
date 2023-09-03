@@ -169,8 +169,17 @@ end
 
 ### random tuples
 
-function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:Tuple}
-    ntuple(i -> rand(r, fieldtype(T, i)), Val(fieldcount(T)))
+function Sampler(RNG::Type{<:AbstractRNG}, t::Type{T}, n::Repetition) where {T <: Tuple}
+    tail_sp_ = Sampler(RNG, Tuple{fieldtypes(t)[2:end]...}, n)
+    SamplerTag{t}((Sampler(RNG, fieldtype(t, 1), n), tail_sp_.data...))
+end
+
+function Sampler(RNG::Type{<:AbstractRNG}, t::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N}
+    SamplerTag{t}((Sampler(RNG, T, n),))
+end
+
+function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
+    ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())
 end
 
 ## Generate random integer within a range
