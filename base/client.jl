@@ -321,7 +321,7 @@ function exec_options(opts)
         end
     end
 
-    return repl || is_interactive::Bool
+    return repl
 end
 
 function _global_julia_startup_file()
@@ -540,16 +540,16 @@ function _start()
     empty!(Base.postoutput_hooks)
     local ret = 0
     try
-        should_run_repl = exec_options(JLOptions())
-        if should_run_repl
-            if isassigned(REPL_MODULE_REF)
-                ret = REPL_MODULE_REF[].main(ARGS)
-            end
-        elseif isdefined(Main, :main)
+        repl_was_requested = exec_options(JLOptions())
+        if isdefined(Main, :main) && !is_interactive
             if Core.Compiler.generating_sysimg()
                 precompile(Main.main, (typeof(ARGS),))
             else
                 ret = invokelatest(Main.main, ARGS)
+            end
+        elseif (repl_was_requested || is_interactive)
+            if isassigned(REPL_MODULE_REF)
+                ret = REPL_MODULE_REF[].main(ARGS)
             end
         end
         ret === nothing && (ret = 0)
