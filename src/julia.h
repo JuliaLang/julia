@@ -1852,7 +1852,7 @@ JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
 JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
-JL_DLLEXPORT void JL_NORETURN jl_exit(int status, int wait_task);
+JL_DLLEXPORT void JL_NORETURN jl_exit(int status, int kill_tasks);
 JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);

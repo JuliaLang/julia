@@ -2537,7 +2537,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             (intmax_t)sysimg.size,
             ((uintptr_t)1 << RELOC_TAG_OFFSET)
         );
-        jl_exit(1, 0);
+        jl_exit(1, 1);
     }
     if (const_data.size / sizeof(void*) > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
@@ -2546,7 +2546,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             (intmax_t)const_data.size,
             ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
         );
-        jl_exit(1, 0);
+        jl_exit(1, 1);
     }
     htable_free(&s.callers_with_edges);
 

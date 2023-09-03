@@ -81,7 +81,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
         if (!jl_ignore_sigint()) {
             if (exit_on_sigint)
-                jl_exit(130, 0); // 128 + SIGINT
+                jl_exit(130, 1); // 128 + SIGINT
             jl_try_throw_sigint();
         }
         break;
@@ -220,7 +220,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     if (!jl_ignore_sigint()) {
         if (exit_on_sigint)
-            jl_exit(128 + sig, 0); // 128 + SIGINT
+            jl_exit(128 + sig, 1); // 128 + SIGINT
         jl_try_deliver_sigint();
     }
     return 1;
@@ -334,7 +334,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     if (recursion++)
         exit(1);
     else
-        jl_exit(1, 0);
+        jl_exit(1, 1);
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)

@@ -34,7 +34,7 @@ JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
 {
     if (jl_errorexception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: %s\n", str);
-        jl_exit(1, 0);
+        jl_exit(1, 1);
     }
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH1(&msg);
@@ -50,7 +50,7 @@ jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
         jl_printf(JL_STDERR, "ERROR: ");
         jl_vprintf(JL_STDERR, fmt, args);
         jl_printf(JL_STDERR, "\n");
-        jl_exit(1, 0);
+        jl_exit(1, 1);
     }
     char *str = NULL;
     int ok = vasprintf(&str, fmt, args);

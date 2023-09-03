@@ -696,7 +696,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     jlbacktrace(); // written to STDERR_FILENO
     if (ct == NULL)
         jl_raise(6);
-    jl_exit(1, 0);
+    jl_exit(1, 1);
 }
 
 /* throw_internal - yield to exception handler */

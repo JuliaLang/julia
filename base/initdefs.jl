@@ -19,13 +19,16 @@ An array of the command line arguments passed to Julia, as strings.
 const ARGS = String[]
 
 """
-    exit(code=0)
+    exit(code=0; kill_tasks=true)
 
 Stop the program with an exit code. The default exit code is zero, indicating that the
 program completed successfully. In an interactive session, `exit()` can be called with
 the keyboard shortcut `^D`.
+
+Setting `kill_tasks=false` will cause Julia to wait for running tasks (other than the
+main task) to finish before exiting.
 """
-exit(n; wait_task::Bool=false) = ccall(:jl_exit, Cvoid, (Int32, Int32), n, wait_task)
+exit(n; kill_tasks::Bool=true) = ccall(:jl_exit, Cvoid, (Int32, Int32), n, kill_tasks)
 exit(; kwargs...) = exit(0; kwargs...)
 
 const roottask = current_task()
