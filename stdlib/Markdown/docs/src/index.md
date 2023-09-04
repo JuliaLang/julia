@@ -47,8 +47,8 @@ parts of a Julia program.
 
 ### ``\LaTeX``
 
-Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks,
-``` `` ```  or a single `$`.
+Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks:
+``` `` ```.
 
 ```
 A paragraph containing some ``\LaTeX`` markup. More $\LaTeX$ markup.
@@ -69,6 +69,12 @@ See the [Display equations](@ref) section for non-inline LaTeX.
     ```
     @doc raw"``\LaTeX`` syntax in a docstring." functionname
     ```
+    
+!!! note
+    Inline ``\LaTeX`` may also be created within a set of single of `$` characters, though this is 
+    depreciated. The ``` `` ``` syntax is preferred as `$` is also used for string interpolation -
+    the parser will interpret an accidentally unmatched `$` as an intented string interpolation 
+    whereas it will alert the user to an unmatched ``` `` ```.
 
 ### Links
 
@@ -279,7 +285,7 @@ elements.
 ### Display equations
 
 Large ``\LaTeX`` equations that do not fit inline within a paragraph may be written as display
-equations using a fenced code block with the "language" `math`, or a double `$$`, as in the examples below.
+equations using a fenced code block with the "language" `math` as in the example below.
 
 ````julia
 ```math
@@ -287,11 +293,13 @@ f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
 ```
 ````
 
+Note that the `\$\$` version is available but depreciated:
+
 ```julia
 md"$$H = - \sum p(x) \log p(x)$$"
 ```
 
-See the [Inline elements](@ref) for inline ``\LaTeX``.
+See the [Inline elements](@ref) for inline ``\LaTeX`` and a note about the status of the dollar-sign (`\$`) depreciated form.
 
 ### Footnotes
 
