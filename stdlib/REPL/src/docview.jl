@@ -405,9 +405,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     end
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
-        println(io, "Module does not export any names.")
+        println(io, "Module does not have any public names.")
     else
-        println(io, "# Exported names")
+        println(io, "# Public names")
         print(io, "  `")
         join(io, exports, "`, `")
         println(io, "`\n")
