@@ -169,7 +169,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
+function _searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
     @inbounds while len != 0
@@ -188,7 +188,7 @@ end
 
 # index of the last value of vector a that is less than or equivalent to x;
 # returns firstindex(v)-1 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
+function _searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -206,7 +206,7 @@ end
 # returns the range of indices of v equivalent to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
+function _searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
@@ -217,8 +217,8 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
         elseif lt(o, x, v[m])
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = _searchsortedfirst(v, x, max(lo,ilo), m, o)
+            b = _searchsortedlast(v, x, m, min(hi,ihi), o)
             return a : b
         end
     end
@@ -287,8 +287,9 @@ searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
+    _s = Symbol("_", s)
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,firstindex(v),lastindex(v),o)
+        $s(v::AbstractVector, x, o::Ordering) = $_s(v,x,firstindex(v),lastindex(v),o)
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
