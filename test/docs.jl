@@ -12,16 +12,13 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2; debug=true, internal_warning=false)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    if internal_warning
-        s2 = "!!! warning\n    This symbol may be internal. Behavior documented here might change in future versions.\n\n\n" * s2
-    end
     if debug && s1 != s2
         print(s1)
         println("--------------------------------------------------------------------------------")
@@ -30,7 +27,7 @@ function docstrings_equal(d1, d2; debug=true, internal_warning=false)
     end
     return s1 == s2
 end
-docstrings_equal(d1::DocStr, d2; kw...) = docstrings_equal(parsedoc(d1), d2; kw...)
+docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
 function docstring_startswith(d1, d2)
     io1 = IOBuffer()
@@ -41,7 +38,6 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-public C74685
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
 @test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
@@ -76,14 +72,13 @@ function break_me_docs end
 # issue #11548
 
 module ModuleMacroDoc
-public @m
 macro m() end
 end
 
 @doc "I am a module" ModuleMacroDoc
 @doc "I am a macro"  :@ModuleMacroDoc.m
 
-@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module", internal_warning=true)
+@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # issue #38819
@@ -317,13 +312,13 @@ let fns = @var(DocsTest.fnospecialize)
     @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
-@test docstrings_equal(@doc(DocsTest.TA), doc"TA", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.TA), doc"TA")
 
-@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()", internal_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()", internal_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)", internal_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)", internal_warning=true)
-@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()")
+@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()")
+@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)")
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)")
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)")
 let m = doc"""
         @mac()
 
@@ -333,31 +328,31 @@ let m = doc"""
 
         :@mac
         """
-    @test docstrings_equal(@doc(:@DocsTest.mac), m, internal_warning=true)
-    @test docstrings_equal(@doc(:(DocsTest.@mac)), m, internal_warning=true)
+    @test docstrings_equal(@doc(:@DocsTest.mac), m)
+    @test docstrings_equal(@doc(:(DocsTest.@mac)), m)
 end
 
-@test docstrings_equal(@doc(DocsTest.G), doc"G", internal_warning=true)
-@test docstrings_equal(@doc(DocsTest.K), doc"K", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.G), doc"G")
+@test docstrings_equal(@doc(DocsTest.K), doc"K")
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2,internal_warning=true)
+    @test docstrings_equal(d1,d2)
 end
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
-    @test docstrings_equal(d1,d2,internal_warning=true)
+    @test docstrings_equal(d1,d2)
 end
 
 let d1 = @doc(DocsTest.t(::Int, ::Any)),
     d2 = doc"t-2"
-    @test docstrings_equal(d1,d2,internal_warning=true)
+    @test docstrings_equal(d1,d2)
 end
 
 let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
-    @test docstrings_equal(d1,d2,internal_warning=true)
+    @test docstrings_equal(d1,d2)
 end
 
 let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
@@ -370,12 +365,8 @@ let a = @doc(DocsTest.multidoc),
     @test docstrings_equal(a, b)
 end
 
-public BareModule
-
 "BareModule"
 baremodule BareModule
-
-public f, g, h, @m, C, A
 
 "f/1"
 f(x) = x
@@ -411,7 +402,7 @@ end
 @test docstrings_equal(@doc(BareModule.@m), doc"@m")
 @test docstrings_equal(@doc(BareModule.C), doc"C")
 @test docstrings_equal(@doc(BareModule.A), doc"A")
-@test docstrings_equal(@doc(BareModule.T), doc"T", internal_warning=true)
+@test docstrings_equal(@doc(BareModule.T), doc"T")
 
 @test_throws ErrorException @doc("...", "error")
 @test_throws ErrorException @doc("...", @time 0)
@@ -644,7 +635,7 @@ const i13385 = I13385(true)
 @test @doc(i13385) !== nothing
 
 # Issue #12700.
-@test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m", internal_warning=true)
+@test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
 
 # issue 11993
 # Check if we are documenting the expansion of the macro
@@ -1286,8 +1277,6 @@ begin
     f15684(x) = 1
 end
 
-public f15684
-
 @test string(@doc f15684) == "abc\n"
 
 # Dynamic docstrings
@@ -1321,30 +1310,30 @@ end
 let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
-    @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] === Symbol("@doc")
-    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+    @test dt1.args[1].head === :call
+    @test dt1.args[1].args[1] === Base.Docs.doc
+    @test dt1.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
-    @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] === Symbol("@doc")
-    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+    @test dt2.args[1].head === :call
+    @test dt2.args[1].args[1] === Base.Docs.doc
+    @test dt2.args[1].args[3] == :(Union{Tuple{String}})
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
-    @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] === Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head === :(::) # can't test equality due to line numbers
+    @test dt3.args[1].head === :call
+    @test dt3.args[1].args[1] === Base.Docs.doc
+    @test dt3.args[1].args[3].args[2].head === :curly # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
-    @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] === Symbol("@doc")
-    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+    @test dt4.args[1].head === :call
+    @test dt4.args[1].args[1] === Base.Docs.doc
+    @test dt4.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 
 # Equality testing
@@ -1361,8 +1350,6 @@ end
 
 # issue 21016
 module I21016
-
-public Struct
 
 struct Struct{T}
 end
@@ -1423,12 +1410,12 @@ end
     @doc "second" f23011() = 2
 end
 @test Main.f23011() == 2
-@test_broken docstrings_equal(@doc(Main.f23011), doc"second")
+@test docstrings_equal(@doc(Main.f23011), doc"second")
 
 # issue 22098
 "an empty macro"
 macro mdoc22098 end
-@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro", internal_warning=true)
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
 
 # issue #24468
 let ex = try
@@ -1472,28 +1459,26 @@ Docs for calling `f::MyParametricFunc{T}`.
 @test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
-""",
-internal_warning=true)
+""")
 
 @test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
 doc"""
 Docs for calling `f::MyParametricFunc{T}`.
-""",
-internal_warning=true)
+""")
 
 struct A_20087 end
 
 """a"""
 (a::A_20087)() = a
 
-@test docstrings_equal(@doc(A_20087()), doc"a", internal_warning=true)
+@test docstrings_equal(@doc(A_20087()), doc"a")
 
 struct B_20087 end
 
 """b"""
 (::B_20087)() = a
 
-@test docstrings_equal(@doc(B_20087()), doc"b", internal_warning=true)
+@test docstrings_equal(@doc(B_20087()), doc"b")
 
 # issue #27832
 
@@ -1518,11 +1503,11 @@ Core.atdoc!(_last_atdoc)
 Test.collect_test_logs() do                          # suppress printing of any warning
     eval(quote "Second docstring" Module29432 end)   # requires toplevel
 end
-@test docstrings_equal(@doc(Module29432), doc"Second docstring", internal_warning=true)
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")
 
 # Issue #13109
 eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
-@test docstrings_equal(@doc(MBareModuleEmpty), doc"...", internal_warning=true)
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
 
 # issue #41727
 "struct docstring"
