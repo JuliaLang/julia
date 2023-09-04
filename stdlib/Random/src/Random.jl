@@ -323,7 +323,7 @@ Pick a random element or array of random elements from the set of values specifi
 
   + `typemin(S):typemax(S)` for concrete integer types (excepting [`BigInt`](@ref) which is not supported)
 
-  + ``[0, 1)`` for concrete floating point types
+  + `[0, 1)` for concrete floating point types
 
   + `rand(T) + rand(T) * im` for concrete complex types `Complex{T}`
 
