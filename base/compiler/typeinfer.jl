@@ -320,7 +320,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         end
     end
     relocatability = 0x0
-    if const_flags == 0x3
+    if const_flags == 0x3 && may_discard_trees(interp)
         inferred_result = nothing
         relocatability = 0x1
     else
