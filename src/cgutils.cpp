@@ -1019,17 +1019,17 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                        jl_aliasinfo_t const &src_ai, T1 &&sz, unsigned align_dst, unsigned aligned_src, bool is_volatile=false)
+                        jl_aliasinfo_t const &src_ai, T1 &&sz, unsigned align_dst, unsigned align_src, bool is_volatile=false)
 {
-    emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, sz, align_dst, aligned_src, is_volatile);
+    emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, sz, align_dst, align_src, is_volatile);
 }
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, const jl_cgval_t &src,
-                        T1 &&sz, unsigned align_dst, bool is_volatile=false)
+                        T1 &&sz, unsigned align_dst, unsigned align_src, bool is_volatile=false)
 {
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src.tbaa);
-    emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, julia_alignment(src.typ), is_volatile);
+    emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, align_src, is_volatile);
 }
 
 static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, Value *idx, MDNode *tbaa, Type *type)
