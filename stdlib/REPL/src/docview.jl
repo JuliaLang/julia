@@ -68,7 +68,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
-# Print vertical lines along each docstring if there are multiple docs
+# Print horizontal lines between each docstring if there are multiple docs
 function insert_hlines(io::IO, docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
