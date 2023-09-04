@@ -260,4 +260,12 @@ using Test
         end
     end
     rm(atexit_temp_dir; force = true, recursive = true)
+
+    @testset "block exit with unfinished tasks" begin
+        t = @elapsed run(`$(Base.julia_cmd()) --startup=no -e 't=Timer(0.1; interval=1); exit()'`; wait=true)
+        p =          run(`$(Base.julia_cmd()) --startup=no -e 't=Timer(0.1; interval=1); exit(; kill_tasks=false)'`; wait=false)
+        sleep(10*t)
+        @test process_running(p)
+        kill(p)
+    end
 end
