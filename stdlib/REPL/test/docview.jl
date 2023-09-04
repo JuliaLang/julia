@@ -65,3 +65,38 @@ end
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
+
+@testset "replace_dotaccess_with_f" begin
+    function func50105 end
+    @test REPL.replace_dotaccess_with_f(func50105, :(print.abc)) == :($func50105(print, :abc))
+    @test REPL.replace_dotaccess_with_f(func50105, :(print.())) == :(print.())
+    @test REPL.replace_dotaccess_with_f(func50105, :(print.().abc)) == :($func50105(print.(), :abc))
+    @test REPL.replace_dotaccess_with_f(func50105, :(println.([1,2], [3,4]))) == :(println.([1,2], [3,4]))
+end
+
+@testset "hook_into_nonpublic_getproperty" begin
+    module Mod50105
+        expr = :(Mod50105.A.B.x.field)
+        module A
+            module B
+                struct T
+                    field::Int
+                end
+                x = T(4)
+            end
+            public B
+        end
+        log = []
+        logged_expr = REPL.hook_into_nonpublic_getproperty(expr) do m, s
+            push!(log, (m, s))
+        end
+        using Test
+        @test eval(logged_expr) == 4
+        @test log == [(Mod50105, :A), (Mod50105.A.B, :x)]
+    end
+end
+
+@testset "moveme" begin
+    module A
+    end
+end
