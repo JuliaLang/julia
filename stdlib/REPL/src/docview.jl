@@ -158,22 +158,22 @@ _trimdocs(md, brief::Bool) = md, false
 is_tuple(expr) = false
 is_tuple(expr::Expr) = expr.head == :tuple
 
-struct Logged1{F}
+struct Logged{F}
     f::F
     mod::Module
     collection::Set{Pair{Module,Symbol}}
 end
-function (la::Logged1)(m::Module, s::Symbol)
+function (la::Logged)(m::Module, s::Symbol)
     m !== la.mod && !Base.ispublic(m, s) && push!(la.collection, m => s)
     la.f(m, s)
 end
-(la::Logged1)(args...) = la.f(args...)
+(la::Logged)(args...) = la.f(args...)
 
 function log_nonpublic_access(expr::Expr, mod::Module, internal_access::Set{Pair{Module,Symbol}})
     if expr.head === :. && length(expr.args) == 2 && !is_tuple(expr.args[2])
-        Expr(:call, Logged1(getproperty, mod, internal_access), log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
+        Expr(:call, Logged(getproperty, mod, internal_access), log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
     elseif expr.head === :call && expr.args[1] === Base.Docs.Binding
-        Expr(:call, Logged1(Base.Docs.Binding, mod, internal_access), log_nonpublic_access.(expr.args[2:end], (mod,), (internal_access,))...)
+        Expr(:call, Logged(Base.Docs.Binding, mod, internal_access), log_nonpublic_access.(expr.args[2:end], (mod,), (internal_access,))...)
     else
         Expr(expr.head, log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
     end

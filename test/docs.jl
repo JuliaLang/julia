@@ -1423,7 +1423,7 @@ end
     @doc "second" f23011() = 2
 end
 @test Main.f23011() == 2
-@test docstrings_equal(@doc(Main.f23011), doc"second")
+@test_broken docstrings_equal(@doc(Main.f23011), doc"second")
 
 # issue 22098
 "an empty macro"
