@@ -53,6 +53,14 @@ Dict{String, Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
+
+!!! warning
+
+    Keys are allowed to be mutable, but if you do mutate stored
+    keys, the hash table may become internally inconsistent, in which case
+    the `Dict` will not work properly. [`IdDict`](@ref) can be an
+    alternative if you need to mutate keys.
+
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
