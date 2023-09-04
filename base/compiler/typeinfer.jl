@@ -924,7 +924,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return nothing, Any
     is_inferred(frame) || return nothing, Any
     if result_is_constabi(interp, run_optimizer, frame.result)
-        rt = ignorelimited(frame.result.result)
+        rt = frame.result.result::Const
         return codeinfo_for_const(interp, frame.linfo, frame.result.valid_worlds, rt.val), widenconst(rt)
     end
     code = frame.src
