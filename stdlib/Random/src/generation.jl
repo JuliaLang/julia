@@ -179,7 +179,7 @@ function Sampler(RNG::Type{<:AbstractRNG}, t::Type{Tuple{Vararg{T, N}}}, n::Repe
 end
 
 function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
-    ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())
+    ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
 end
 
 ## Generate random integer within a range
