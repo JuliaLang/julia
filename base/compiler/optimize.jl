@@ -523,6 +523,17 @@ function get!(lazyagdomtree::LazyAugmentedDomtree)
     return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
 end
 
+# TODO refine `:effect_free` using EscapeAnalysis
+mutable struct PostOptAnalysisState
+    all_retpaths_consistent::Bool
+    all_effect_free::Bool
+    all_nothrow::Bool
+    all_noub::Bool
+    any_conditional_ub::Bool
+    had_trycatch::Bool
+    PostOptAnalysisState() = new(true, true, true, true, false, false)
+end
+
 function is_ipo_dataflow_analysis_profitable(effects::Effects)
     return !(is_consistent(effects) && is_effect_free(effects) &&
              is_nothrow(effects) && is_noub(effects))
@@ -539,12 +550,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     lazypostdomtree = LazyPostDomtree(ir)
     lazyagdomtree = LazyAugmentedDomtree(ir)
 
-    all_effect_free = true # TODO refine using EscapeAnalysis
-    all_nothrow = true
-    all_retpaths_consistent = true
-    all_noub = true
-    any_conditional_ub = false
-    had_trycatch = false
+    sv = PostOptAnalysisState()
 
     scanner = BBScanner(ir)
 
@@ -566,7 +572,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         isexpr(bstmt, :boundscheck) || return false
         # If IR_FLAG_INBOUNDS is already set, no more conditional ub
         (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
-        any_conditional_ub = true
+        sv.any_conditional_ub = true
         return true
     end
 
@@ -577,12 +583,12 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             # ignore control flow node – they are not removable on their own and thus not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
-            all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+            sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
         end
-        all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
+        sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
         if iszero(flag & IR_FLAG_NOUB)
             if !is_conditional_noub(inst)
-                all_noub = false
+                sv.all_noub = false
             end
         end
     end
@@ -619,7 +625,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
         if isexpr(stmt, :enter)
             # try/catch not yet modeled
-            had_trycatch = true
+            sv.had_trycatch = true
             return nothing
         end
 
@@ -628,24 +634,24 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
         if idx == lstmt
             if isa(stmt, ReturnNode) && isdefined(stmt, :val) && stmt_inconsistent
-                all_retpaths_consistent = false
+                sv.all_retpaths_consistent = false
             elseif isa(stmt, GotoIfNot) && stmt_inconsistent
                 # Conditional Branch with inconsistent condition.
                 # If we do not know this function terminates, taint consistency, now,
                 # :consistent requires consistent termination. TODO: Just look at the
                 # inconsistent region.
                 if !result.ipo_effects.terminates
-                    all_retpaths_consistent = false
+                    sv.all_retpaths_consistent = false
                     # Check if there are potential throws that require
                 elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
-                    all_retpaths_consistent = false
+                    sv.all_retpaths_consistent = false
                 else
                     (; cfg, domtree) = get!(lazyagdomtree)
                     for succ in iterated_dominance_frontier(cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), domtree)
                         if succ == length(cfg.blocks)
                             # Phi node in the virtual exit -> We have a conditional
                             # return. TODO: Check if all the retvals are egal.
-                            all_retpaths_consistent = false
+                            sv.all_retpaths_consistent = false
                         else
                             visit_bb_phis!(ir, succ) do phiidx::Int
                                 push!(inconsistent, phiidx)
@@ -663,9 +669,9 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     effects = result.ipo_effects
     if completed_scan
-        had_trycatch && return effects
+        sv.had_trycatch && return effects
     else
-        if !all_retpaths_consistent
+        if !sv.all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst)
@@ -699,7 +705,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                     end
                     any_non_boundscheck_inconsistent || continue
                 elseif isa(stmt, ReturnNode)
-                    all_retpaths_consistent = false
+                    sv.all_retpaths_consistent = false
                 else isa(stmt, GotoIfNot)
                     bb = block_for_inst(ir, idx)
                     blockliveness = BlockLiveness(ir.cfg.blocks[bb].succs, nothing)
@@ -711,7 +717,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                         end
                     end
                 end
-                all_retpaths_consistent || break
+                sv.all_retpaths_consistent || break
                 append!(inconsistent, tpdum[idx])
                 append!(stmt_ip, tpdum[idx])
             end
@@ -719,10 +725,10 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     end
 
     return result.ipo_effects = Effects(effects;
-        consistent = all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
-        effect_free = all_effect_free ? ALWAYS_TRUE : effects.effect_free,
-        nothrow = all_nothrow ? true : effects.nothrow,
-        noub = all_noub ? (any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+        consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = sv.all_nothrow ? true : effects.nothrow,
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
 end
 
 # run the optimization work
