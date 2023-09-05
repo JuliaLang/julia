@@ -852,7 +852,7 @@ end # module
 doc_str = Markdown.parse("""
 No docstring or readme file found for internal module `$(curmod_prefix)Undocumented`.
 
-# Exported names
+# Public names
 
 `A`, `B`, `C`, `at0`, `pt2`
 """)
