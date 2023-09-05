@@ -514,7 +514,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     end
 
     inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
-    inconsistent_bbs = BitSet()
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
     lazypostdomtree = LazyPostDomtree(ir)
 
