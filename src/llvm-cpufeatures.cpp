@@ -21,7 +21,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassManager.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
@@ -126,32 +125,3 @@ PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
     return PreservedAnalyses::all();
 }
 
-namespace {
-struct CPUFeaturesLegacy : public ModulePass {
-    static char ID;
-    CPUFeaturesLegacy() JL_NOTSAFEPOINT : ModulePass(ID) {};
-
-    bool runOnModule(Module &M)
-    {
-        return lowerCPUFeatures(M);
-    }
-};
-
-char CPUFeaturesLegacy::ID = 0;
-static RegisterPass<CPUFeaturesLegacy>
-        Y("CPUFeatures",
-          "Lower calls to CPU feature testing intrinsics.",
-          false,
-          false);
-}
-
-Pass *createCPUFeaturesPass()
-{
-    return new CPUFeaturesLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddCPUFeaturesPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createCPUFeaturesPass());
-}
