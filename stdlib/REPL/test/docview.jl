@@ -4,16 +4,17 @@ using Test
 import REPL, REPL.REPLCompletions
 import Markdown
 
-function get_help(input)
+function get_help_io(input)
     buf = IOBuffer()
-    Core.eval(Main, REPL.helpmode(buf, input))
+    eval(REPL.helpmode(buf, input))
     String(take!(buf))
 end
+get_help_standard(input) = string(eval(REPL.helpmode(IOBuffer(), input)))
 
 @testset "symbol completion" begin
-    @test startswith(get_help("α"), "\"α\" can be typed by \\alpha<tab>\n")
-    @test startswith(get_help("🐨"), "\"🐨\" can be typed by \\:koala:<tab>\n")
-    @test startswith(get_help("ᵞ₁₂₃¹²³α"), "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
+    @test startswith(get_help_io("α"), "\"α\" can be typed by \\alpha<tab>\n")
+    @test startswith(get_help_io("🐨"), "\"🐨\" can be typed by \\:koala:<tab>\n")
+    @test startswith(get_help_io("ᵞ₁₂₃¹²³α"), "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
 
     # Check that all symbols with several completions have a canonical mapping (#39148)
     symbols = values(REPLCompletions.latex_symbols)
@@ -22,7 +23,7 @@ end
 end
 
 @testset "quoting in doc search" begin
-    str = get_help("mutable s")
+    str = get_help_io("mutable s")
     @test occursin("'mutable struct'", str)
     @test occursin("Couldn't find 'mutable s'", str)
 end
@@ -67,7 +68,7 @@ end
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
 
-@testset "Struct field help (#?????)" begin
+@testset "Struct field help (#51178)" begin
     struct StructWithNoFields end
     struct StructWithOneField
         field1
@@ -82,8 +83,8 @@ end
         field3
     end
 
-    @test get_help("StructWithNoFields.not_a_field")  == "`StructWithNoFields` has no fields."
-    @test get_help("StructWithOneField.not_a_field")  == "`StructWithOneField` has field `field1`."
-    @test get_help("StructWithTwoFields.not_a_field")  == "`StructWithTwoField` has fields `field1`, and `field2`."
-    @test get_help("StructWithThreeFields.not_a_field")  == "`StructWithThreeField` has fields `field1`, `field2`, and `field3`."
+    @test endswith(get_help_standard("StructWithNoFields.not_a_field"), "StructWithNoFields` has no fields.\n")
+    @test endswith(get_help_standard("StructWithOneField.not_a_field"), "StructWithOneField` has field `field1`.\n")
+    @test endswith(get_help_standard("StructWithTwoFields.not_a_field"), "StructWithTwoFields` has fields `field1`, and `field2`.\n")
+    @test endswith(get_help_standard("StructWithThreeFields.not_a_field"), "StructWithThreeFields` has fields `field1`, `field2`, and `field3`.\n")
 end
