@@ -357,16 +357,12 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     end
 
     # now forward those marks to all :leave statements
-    pc´´ = 0
     while true
         # make progress on the active ip set
-        pc = _bits_findnext(ip.bits, pc´´)::Int
+        pc = _bits_findnext(ip.bits, 0)::Int
         pc > n && break
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             pc´ = pc + 1 # next program-counter (after executing instruction)
-            if pc == pc´´
-                pc´´ = pc´
-            end
             delete!(ip, pc)
             cur_hand = handler_at[pc]
             @assert cur_hand != 0 "unbalanced try/catch"
@@ -378,9 +374,6 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 if handler_at[l] != cur_hand
                     @assert handler_at[l] == 0 "unbalanced try/catch"
                     handler_at[l] = cur_hand
-                    if l < pc´´
-                        pc´´ = l
-                    end
                     push!(ip, l)
                 end
             elseif isa(stmt, ReturnNode)
