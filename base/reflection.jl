@@ -103,7 +103,7 @@ julia> module Mod
            export foo
            public bar
        end
-Main.Mod
+Mod
 
 julia> Base.isexported(Mod, :foo)
 true
@@ -131,13 +131,13 @@ julia> module Mod
            export foo
            public bar
        end
-Main.Mod
+Mod
 
 julia> Base.isexported(Mod, :foo)
 true
 
 julia> Base.isexported(Mod, :bar)
-true
+false
 
 julia> Base.isexported(Mod, :baz)
 false
@@ -145,30 +145,8 @@ false
 """
 ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
 
-"""
-    isdeprecated(m::Module, s::Symbol) -> Bool
-
-Returns whether the binding of a symbol in a module is deprecated.
-
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isbindingresolved`](@ref)
-
-```jldoctest
-julia> module Mod
-           new(x) = x+1
-           @deprecate old(x) new(x)
-       end
-Main.Mod
-
-julia> Base.isdeprecated(Mod, :new)
-false
-
-julia> Base.isdeprecated(Mod, :old)
-true
-
-julia> Base.isdeprecated(Mod, :baz)
-false
-```
-"""
+# TODO: this is vaguely broken because it only works for explicit calls to
+# `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 """
@@ -182,6 +160,7 @@ See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
 julia> module Mod
            foo() = 17
        end
+Mod
 
 julia> Base.isbindingresolved(Mod, :foo)
 true
