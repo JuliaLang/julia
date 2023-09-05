@@ -137,7 +137,7 @@ function extendedterminfo(data::IO; NumInt::Union{Type{UInt16}, Type{UInt32}})
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section, expected to position the start of the numbers section on an even byte"))
     end
-    numbers = reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))) .|> ltoh
+    numbers = map(n -> Int(ltoh(n)), reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
     table_indices = reinterpret(UInt16, read(data, table_count * sizeof(UInt16))) .|> ltoh
     table_strings = [String(readuntil(data, 0x00)) for _ in 1:length(table_indices)]
     strings = table_strings[1:string_count]
