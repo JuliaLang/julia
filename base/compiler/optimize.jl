@@ -483,13 +483,12 @@ end
 function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
-    postdomtree = get!(lazypostdomtree)
     while !isempty(worklist)
         thisbb = pop!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(postdomtree, succ, thisbb) && continue
+            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
             any_stmt_may_throw(ir, succ) && return true
             push!(worklist, succ)
         end
