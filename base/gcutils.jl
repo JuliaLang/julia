@@ -54,7 +54,7 @@ will throw.
     Julia may interrupt any other code when it calls a finalizer function so you must take special care to avoid concurrency bugs when writing your finalizers.
     Even if you use no other concurrency features in your program, one finalizer call can interrupt another and cause a concurrency bug if they interact with the same global state.
 
-    If your finalizer interacts with global state (and it probably will), then you must use a synchronisation strategy for that interaction that is safe even if your finalizer is interrupted by another finalizer.
+    If your finalizer interacts with global state (and it probably will), then you must use a synchronization strategy for that interaction that is safe even if your finalizer is interrupted by another finalizer.
     Review the extended help for suggested strategies.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
@@ -104,7 +104,7 @@ You can protect access to a critical region in your finalizer with one of these 
     end
     ```
 
-    If your global state is accessible from more than one thread then you must use a lock or some other synchronisation control as well:
+    If your global state is accessible from more than one thread then you must use a lock or some other synchronization control as well:
 
     ```julia
     function my_finalizer(x)
@@ -121,39 +121,13 @@ You can protect access to a critical region in your finalizer with one of these 
 
     Julia uses this strategy in its locks and to prevent recursion when doing certain operations (incremental package loading, codegen, etc.).
 
- 2. A second strategy, employed by Base in a couple places, is to explicitly
-    delay a finalizer until it may be able to acquire its lock non-recursively.
-    The following example demonstrates how this strategy could be applied to
-    `Distributed.finalize_ref`:
-
-    ```julia
-    function finalize_ref(r::AbstractRemoteRef)
-        if r.where > 0 # Check if the finalizer is already run
-            if islocked(client_refs) || !trylock(client_refs)
-                # delay finalizer for later if we aren't free to acquire the lock
-                finalizer(finalize_ref, r)
-                return nothing
-            end
-            try # `lock` should always be followed by `try`
-                if r.where > 0 # Must check again here
-                    # Do actual cleanup here
-                    r.where = 0
-                end
-            finally
-                unlock(client_refs)
-            end
-        end
-        nothing
-    end
-    ```
-
- 3. A third strategy is to use the finalizer only to schedule the work to be done at another time.
+ 2. Another strategy is to use the finalizer only to schedule the work to be done at another time.
     This means we don't have to care about finalizers interrupting each other because the actual work will be done in a non-finalizer context.
 
     Do this by pushing the work into a concurrent queue such as `Base.IntrusiveLinkedListSynchronized{T}`
     or by using `Threads.@spawn` to add a task to the Julia task scheduler's queue.
 
-    This can frequently be a good strategy to use for code with event loops
+    This can be a good strategy to use for code with event loops
     and is employed by `Gtk.jl` to manage lifetime ref-counting.
 
     If you use `Threads.@spawn` then you will not have control over with thread the spawned task will run on, so you will still need to acquire a lock in the task.
