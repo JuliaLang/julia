@@ -628,7 +628,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 # If we do not know this function terminates, taint consistency, now,
                 # :consistent requires consistent termination. TODO: Just look at the
                 # inconsistent region.
-                if !effects.terminates
+                if !result.ipo_effects.terminates
                     all_retpaths_consistent = false
                     # Check if there are potential throws that require
                 elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
@@ -652,7 +652,13 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
         return true
     end
-    if !scan!(scan_stmt!, scanner, true)
+
+    completed_scan = scan!(scan_stmt!, scanner, true)
+
+    effects = result.ipo_effects
+    if completed_scan
+        had_trycatch && return effects
+    else
         if !all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
@@ -707,20 +713,11 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    had_trycatch && return
-    if all_effect_free
-        effects = Effects(effects; effect_free = true)
-    end
-    if all_nothrow
-        effects = Effects(effects; nothrow = true)
-    end
-    if all_retpaths_consistent
-        effects = Effects(effects; consistent = ALWAYS_TRUE)
-    end
-    if all_noub
-        effects = Effects(effects; noub = any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE)
-    end
-    result.ipo_effects = effects
+    return result.ipo_effects = Effects(effects;
+        consistent = all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = all_nothrow ? true : effects.nothrow,
+        noub = all_noub ? (any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
 end
 
 # run the optimization work
