@@ -2824,10 +2824,14 @@ function show(io::IO, inferred::Core.Compiler.InferenceResult)
     end
 end
 
-function show(io::IO, ::Core.Compiler.NativeInterpreter)
-    print(io, "Core.Compiler.NativeInterpreter(...)")
-end
+show(io::IO, sv::Core.Compiler.InferenceState) =
+    (print(io, "InferenceState for "); show(io, sv.linfo))
 
+show(io::IO, ::Core.Compiler.NativeInterpreter) =
+    print(io, "Core.Compiler.NativeInterpreter(...)")
+
+show(io::IO, cache::Core.Compiler.CachedMethodTable) =
+    print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
