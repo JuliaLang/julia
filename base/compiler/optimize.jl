@@ -554,8 +554,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     scanner = BBScanner(ir)
 
-    function is_getfield_with_boundscheck_arg(inst::Instruction)
-        stmt = inst[:stmt]
+    function is_getfield_with_boundscheck_arg(@nospecialize stmt)
         is_known_call(stmt, getfield, ir) || return false
         length(stmt.args) < 4 && return false
         boundscheck = stmt.args[end]
@@ -566,8 +565,9 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     function is_conditional_noub(inst::Instruction)
         # Special case: `:boundscheck` into `getfield`
-        is_getfield_with_boundscheck_arg(inst) || return false
-        barg = inst[:stmt].args[end]
+        stmt = inst[:stmt]
+        is_getfield_with_boundscheck_arg(stmt) || return false
+        barg = stmt.args[end]
         bstmt = ir[barg][:stmt]
         isexpr(bstmt, :boundscheck) || return false
         # If IR_FLAG_INBOUNDS is already set, no more conditional ub
@@ -598,7 +598,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
         stmt = inst[:stmt]
         # Special case: For getfield, we allow inconsistency of the :boundscheck argument
-        if is_getfield_with_boundscheck_arg(inst)
+        if is_getfield_with_boundscheck_arg(stmt)
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
                 if isa(val, SSAValue)
@@ -694,7 +694,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 idx = popfirst!(stmt_ip)
                 inst = ir[SSAValue(idx)]
                 stmt = inst[:inst]
-                if is_getfield_with_boundscheck_arg(inst)
+                if is_getfield_with_boundscheck_arg(stmt)
                     any_non_boundscheck_inconsistent = false
                     for i = 1:(length(stmt.args)-1)
                         val = stmt.args[i]
