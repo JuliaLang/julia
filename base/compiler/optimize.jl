@@ -501,6 +501,28 @@ struct AugmentedDomtree
     domtree::DomTree
 end
 
+mutable struct LazyAugmentedDomtree
+    ir::IRCode
+    agdomtree::AugmentedDomtree
+    LazyAugmentedDomtree(ir::IRCode) = new(ir)
+end
+
+function get!(lazyagdomtree::LazyAugmentedDomtree)
+    isdefined(lazyagdomtree, :agdomtree) && return lazyagdomtree.agdomtree
+    ir = lazyagdomtree.ir
+    cfg = copy(ir.cfg)
+    # Add a virtual basic block to represent the exit
+    push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
+    for bb = 1:(length(cfg.blocks)-1)
+        terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:inst]
+        if isa(terminator, ReturnNode) && isdefined(terminator, :val)
+            cfg_insert_edge!(cfg, bb, length(cfg.blocks))
+        end
+    end
+    domtree = construct_domtree(cfg.blocks)
+    return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
+end
+
 function is_ipo_dataflow_analysis_profitable(effects::Effects)
     return !(is_consistent(effects) && is_effect_free(effects) &&
              is_nothrow(effects) && is_noub(effects))
@@ -515,6 +537,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
     lazypostdomtree = LazyPostDomtree(ir)
+    lazyagdomtree = LazyAugmentedDomtree(ir)
 
     all_effect_free = true # TODO refine using EscapeAnalysis
     all_nothrow = true
@@ -524,27 +547,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     had_trycatch = false
 
     scanner = BBScanner(ir)
-
-    agdomtree = nothing
-    function get_augmented_domtree()
-        if agdomtree !== nothing
-            return agdomtree
-        end
-        cfg = copy(ir.cfg)
-        # Add a virtual basic block to represent the exit
-        push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
-
-        for bb = 1:(length(cfg.blocks)-1)
-            terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:inst]
-            if isa(terminator, ReturnNode) && isdefined(terminator, :val)
-                cfg_insert_edge!(cfg, bb, length(cfg.blocks))
-            end
-        end
-
-        domtree = construct_domtree(cfg.blocks)
-        agdomtree = AugmentedDomtree(cfg, domtree)
-        return agdomtree
-    end
 
     function is_getfield_with_boundscheck_arg(inst::Instruction)
         stmt = inst[:stmt]
@@ -638,7 +640,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                 elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
                     all_retpaths_consistent = false
                 else
-                    (; cfg, domtree) = get_augmented_domtree()
+                    (; cfg, domtree) = get!(lazyagdomtree)
                     for succ in iterated_dominance_frontier(cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), domtree)
                         if succ == length(cfg.blocks)
                             # Phi node in the virtual exit -> We have a conditional
@@ -673,7 +675,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             scan!(scan_stmt!, scanner, true)
             complete!(tpdum); push!(scanner.bb_ip, 1)
             populate_def_use_map!(tpdum, scanner)
-
             stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
             for def in inconsistent
                 for use in tpdum[def]
