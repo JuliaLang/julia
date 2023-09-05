@@ -84,7 +84,7 @@ are also included.
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
 
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(unsorted_names(m; all, imported))

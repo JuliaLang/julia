@@ -453,6 +453,8 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
+Base.isexported
+Base.ispublic
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
