@@ -618,7 +618,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         if isexpr(stmt, :enter)
             # try/catch not yet modeled
             had_trycatch = true
-            return false
+            return nothing
         end
 
         scan_non_dataflow_flags!(inst)

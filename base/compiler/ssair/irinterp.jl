@@ -227,7 +227,8 @@ function scan!(@specialize(callback), scanner::BBScanner, forwards_only::Bool)
         for idx = stmts
             inst = ir[SSAValue(idx)]
             ret = callback(inst, idx, lstmt, bb)
-            ret === false && break
+            ret === nothing && return true
+            ret::Bool || break
             idx == lstmt && process_terminator!(inst[:inst], bb, bb_ip) && forwards_only && return false
         end
     end
