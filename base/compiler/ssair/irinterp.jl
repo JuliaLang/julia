@@ -217,7 +217,7 @@ function BBScanner(ir::IRCode)
     return BBScanner(ir, bb_ip)
 end
 
-function scan!(callback, scanner::BBScanner, forwards_only::Bool)
+function scan!(@specialize(callback), scanner::BBScanner, forwards_only::Bool)
     (; bb_ip, ir) = scanner
     bbs = ir.cfg.blocks
     while !isempty(bb_ip)
@@ -235,7 +235,7 @@ function scan!(callback, scanner::BBScanner, forwards_only::Bool)
 end
 
 function populate_def_use_map!(tpdum::TwoPhaseDefUseMap, scanner::BBScanner)
-    scan!(scanner, false) do inst, idx, lstmt, bb
+    scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
         for ur in userefs(inst)
             val = ur[]
             if isa(val, SSAValue)
@@ -262,7 +262,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     # Fast path: Scan both use counts and refinement in one single pass of
     #            of the instructions. In the absence of backedges, this will
     #            converge.
-    completed_scan = scan!(scanner, true) do inst, idx, lstmt, bb
+    completed_scan = scan!(scanner, true) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
         irsv.curridx = idx
         stmt = ir.stmts[idx][:inst]
         typ = ir.stmts[idx][:type]
@@ -315,7 +315,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
 
         # Slow Path Phase 1.A: Complete use scanning
-        scan!(scanner, false) do inst, idx, lstmt, bb
+        scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
             irsv.curridx = idx
             stmt = inst[:inst]
             flag = inst[:flag]

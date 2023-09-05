@@ -564,7 +564,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         bstmt = ir[barg][:stmt]
         isexpr(bstmt, :boundscheck) || return false
         # If IR_FLAG_INBOUNDS is already set, no more conditional ub
-        (length(bstmt.args) != 0 && bstmt.args[1] === false) && return false
+        (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
         any_conditional_ub = true
         return true
     end
@@ -576,10 +576,10 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             # ignore control flow node – they are not removable on their own and thus not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
-            all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
+            all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
         end
-        all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
-        if (flag & IR_FLAG_NOUB) == 0
+        all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
+        if iszero(flag & IR_FLAG_NOUB)
             if !is_conditional_noub(inst)
                 all_noub = false
             end
@@ -588,7 +588,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     function scan_inconsistency!(inst::Instruction, idx::Int)
         flag = inst[:flag]
-        stmt_inconsistent = (flag & IR_FLAG_CONSISTENT) == 0
+        stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
         stmt = inst[:stmt]
         # Special case: For getfield, we allow inconsistency of the :boundscheck argument
         if is_getfield_with_boundscheck_arg(inst)
@@ -612,7 +612,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         return stmt_inconsistent
     end
 
-    function scan_stmt!(inst, idx, lstmt, bb)
+    function scan_stmt!(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
         stmt = inst[:inst]
         flag = inst[:flag]
 
@@ -705,7 +705,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                     blockliveness = BlockLiveness(ir.cfg.blocks[bb].succs, nothing)
                     domtree = construct_domtree(ir.cfg.blocks)
                     for succ in iterated_dominance_frontier(ir.cfg, blockliveness, domtree)
-                        visit_bb_phis!(ir, succ) do phiidx
+                        visit_bb_phis!(ir, succ) do phiidx::Int
                             push!(inconsistent, phiidx)
                             push!(stmt_ip, phiidx)
                         end

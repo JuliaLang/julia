@@ -464,7 +464,6 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     return ipo_effects
 end
 
-
 function adjust_effects(sv::InferenceState)
     ipo_effects = sv.ipo_effects
 
@@ -553,7 +552,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
     me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
-
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
