@@ -4,7 +4,7 @@ using Test
 using Base.Meta
 import Core:
     CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
-    QuoteNode, ReturnNode
+    PhiCNode, QuoteNode, ReturnNode
 
 include("irutils.jl")
 
@@ -1490,4 +1490,32 @@ function call_big_dead_throw_catch()
         return big_dead_throw_catch()
     end
     return 4
+end
+
+# Issue #51159 - Unreachable reached in try-catch block
+function f_with_early_try_catch_exit()
+    result = false
+    for i in 3
+        x = try
+        catch
+            # This introduces an early Expr(:leave) that we must respect when building
+            # φᶜ-nodes in slot2ssa. In particular, we have to ignore the `result = x`
+            # assignment that occurs outside of this try-catch block
+            continue
+        end
+        result = x
+    end
+    result
+end
+
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+    for i = 1:length(ir.stmts)
+        expr = ir.stmts[i][:stmt]
+        if isa(expr, PhiCNode)
+            # The φᶜ should only observe the value of `result` at the try-catch :enter
+            # (from the `result = false` assignment), since `result = x` assignment is
+            # dominated by an Expr(:leave).
+            @test length(expr.values) == 1
+        end
+    end
 end
