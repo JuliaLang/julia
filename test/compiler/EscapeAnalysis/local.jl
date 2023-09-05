@@ -7,6 +7,7 @@ include(normpath(@__DIR__, "setup.jl"))
 @testset "basics" begin
     let # arg return
         result = code_escapes((Any,)) do a # return to caller
+            Base.donotdelete(1) # TODO #51143
             return nothing
         end
         @test has_arg_escape(result.state[Argument(2)])
@@ -46,6 +47,7 @@ include(normpath(@__DIR__, "setup.jl"))
     end
     let # :gc_preserve_begin / :gc_preserve_end
         result = code_escapes((String,)) do s
+            Base.donotdelete(1) # TODO #51143
             m = SafeRef(s)
             GC.@preserve m begin
                 return nothing
