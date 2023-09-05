@@ -65,6 +65,8 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
     return idx in bsbmp.elems
 end
 
+iterate(bsbmp::BitSetBoundedMinPrioritySet, s...) = iterate(bsbmp.elems, s...)
+
 function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
     for val in itr
         push!(bsbmp, val)
