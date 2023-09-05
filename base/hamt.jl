@@ -46,7 +46,7 @@ const BITMAP = UInt32
 const NBITS = sizeof(UInt) * 8
 # @assert ispow2(ENTRY_COUNT)
 const BITS_PER_LEVEL = trailing_zeros(ENTRY_COUNT)
-const LEVEL_MASK = (UInt(1) << BITS_PER_LEVEL) - 1
+const LEVEL_MASK = (UInt(1) << BITS_PER_LEVEL) - UInt(1)
 const MAX_SHIFT = (NBITS ÷ BITS_PER_LEVEL - 1) *  BITS_PER_LEVEL
 
 mutable struct Leaf{K, V}
@@ -97,11 +97,7 @@ function next(h::HashState)
 end
 
 struct BitmapIndex
-    x::UInt8
-    function BitmapIndex(x)
-        @assert 0 <= x < 32
-        new(x)
-    end
+    x::UInt
 end
 BitmapIndex(h::HashState) = BitmapIndex((h.hash >> h.shift) & LEVEL_MASK)
 
@@ -111,12 +107,12 @@ Base.:(>>)(v, bi::BitmapIndex) = v >> bi.x
 isset(trie::HAMT, bi::BitmapIndex) = isodd(trie.bitmap >> bi)
 function set!(trie::HAMT, bi::BitmapIndex)
     trie.bitmap |= (UInt32(1) << bi)
-    @assert count_ones(trie.bitmap) == Base.length(trie.data)
+    # Invariant: count_ones(trie.bitmap) == Base.length(trie.data)
 end
 
 function unset!(trie::HAMT, bi::BitmapIndex)
     trie.bitmap &= ~(UInt32(1) << bi)
-    @assert count_ones(trie.bitmap) == Base.length(trie.data)
+    # Invariant: count_ones(trie.bitmap) == Base.length(trie.data)
 end
 
 function entry_index(trie::HAMT, bi::BitmapIndex)
