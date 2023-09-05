@@ -530,8 +530,24 @@ mutable struct PostOptAnalysisState
     all_nothrow::Bool
     all_noub::Bool
     any_conditional_ub::Bool
-    had_trycatch::Bool
-    PostOptAnalysisState() = new(true, true, true, true, false, false)
+    PostOptAnalysisState() = new(true, true, true, true, false)
+end
+give_up_refinements!(sv::PostOptAnalysisState) =
+    sv.all_retpaths_consistent = sv.all_effect_free = sv.all_nothrow = sv.all_noub = false
+function any_refinable(sv::PostOptAnalysisState, effects::Effects)
+    return ((!is_consistent(effects) & sv.all_retpaths_consistent) |
+            (!is_effect_free(effects) & sv.all_effect_free) |
+            (!is_nothrow(effects) & sv.all_nothrow) |
+            (!is_noub(effects) & sv.all_noub))
+end
+
+function refine_effects!(result::InferenceResult, sv::PostOptAnalysisState)
+    effects = result.ipo_effects
+    return result.ipo_effects = Effects(effects;
+        consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = sv.all_nothrow ? true : effects.nothrow,
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
 end
 
 function is_ipo_dataflow_analysis_profitable(effects::Effects)
@@ -540,9 +556,8 @@ function is_ipo_dataflow_analysis_profitable(effects::Effects)
 end
 
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
-    effects = result.ipo_effects
-    if !is_ipo_dataflow_analysis_profitable(effects)
-        return effects
+    if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
+        return result.ipo_effects
     end
 
     inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
@@ -625,25 +640,26 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
         if isexpr(stmt, :enter)
             # try/catch not yet modeled
-            sv.had_trycatch = true
+            give_up_refinements!(sv)
             return nothing
         end
 
         scan_non_dataflow_flags!(inst)
+
         stmt_inconsistent = scan_inconsistency!(inst, idx)
 
-        if idx == lstmt
-            if isa(stmt, ReturnNode) && isdefined(stmt, :val) && stmt_inconsistent
+        if stmt_inconsistent && idx == lstmt
+            if isa(stmt, ReturnNode) && isdefined(stmt, :val)
                 sv.all_retpaths_consistent = false
-            elseif isa(stmt, GotoIfNot) && stmt_inconsistent
+            elseif isa(stmt, GotoIfNot)
                 # Conditional Branch with inconsistent condition.
                 # If we do not know this function terminates, taint consistency, now,
                 # :consistent requires consistent termination. TODO: Just look at the
                 # inconsistent region.
                 if !result.ipo_effects.terminates
                     sv.all_retpaths_consistent = false
-                    # Check if there are potential throws that require
                 elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
+                    # Check if there are potential throws that require
                     sv.all_retpaths_consistent = false
                 else
                     (; cfg, domtree) = get!(lazyagdomtree)
@@ -662,19 +678,25 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             end
         end
 
+        # bail out early if there are no possibilities to refine the effects
+        if !any_refinable(sv, result.ipo_effects)
+            return nothing
+        end
+
         return true
     end
 
     completed_scan = scan!(scan_stmt!, scanner, true)
 
-    effects = result.ipo_effects
-    if completed_scan
-        sv.had_trycatch && return effects
-    else
+    if !completed_scan
         if !sv.all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst)
+                # bail out early if there are no possibilities to refine the effects
+                if !any_refinable(sv, result.ipo_effects)
+                    return nothing
+                end
                 return true
             end
         else
@@ -724,11 +746,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    return result.ipo_effects = Effects(effects;
-        consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
-        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
-        nothrow = sv.all_nothrow ? true : effects.nothrow,
-        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+    return refine_effects!(result, sv)
 end
 
 # run the optimization work
