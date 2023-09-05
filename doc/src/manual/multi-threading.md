@@ -470,4 +470,4 @@ A [`finalizer`](@ref) function can be registered for any value of any `mutable s
 Finalizer functions will be called when there are no program-accessible references to the value they were registered for and can *interrupt any code*.
 
 Because they can interrupt any code and usually interact with global state, they must be written carefully to avoid concurrency issues.
-Read the [extended help for `finalizer`](@ref finalizer) for more details and for strategies for dealing with this issue.
+Read the extended help for `finalizer` for more details and for strategies for dealing with this issue.
