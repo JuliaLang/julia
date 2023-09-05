@@ -4,6 +4,7 @@
 ##             and REPL
 
 have_color = nothing
+have_truecolor = nothing
 const default_color_warn = :yellow
 const default_color_error = :light_red
 const default_color_info = :cyan
@@ -103,8 +104,8 @@ scrub_repl_backtrace(stack::ExceptionStack) =
     ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
-    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
-    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace; MethodError see #50803
 
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
@@ -225,12 +226,10 @@ function incomplete_tag(ex::Expr)
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
-    quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
+    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -238,10 +237,7 @@ function exec_options(opts)
     repl = !arg_is_program
     cmds = unsafe_load_commands(opts.commands)
     for (cmd, arg) in cmds
-        if cmd == 'e'
-            arg_is_program = false
-            repl = false
-        elseif cmd == 'E'
+        if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
@@ -324,15 +320,8 @@ function exec_options(opts)
             end
         end
     end
-    if repl || is_interactive::Bool
-        b = opts.banner
-        auto = b == -1
-        banner = b == 0 || (auto && !interactiveinput) ? :no  :
-                 b == 1 || (auto && interactiveinput)  ? :yes :
-                 :short # b == 2
-        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
-    end
-    nothing
+
+    return repl
 end
 
 function _global_julia_startup_file()
@@ -415,6 +404,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner == :no || Base.banner(term, short=banner==:short)
             if term.term_type == "dumb"
@@ -548,13 +538,28 @@ function _start()
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    local ret = 0
     try
-        exec_options(JLOptions())
+        repl_was_requested = exec_options(JLOptions())
+        if isdefined(Main, :main) && !is_interactive
+            if Core.Compiler.generating_sysimg()
+                precompile(Main.main, (typeof(ARGS),))
+            else
+                ret = invokelatest(Main.main, ARGS)
+            end
+        elseif (repl_was_requested || is_interactive)
+            if isassigned(REPL_MODULE_REF)
+                ret = REPL_MODULE_REF[].main(ARGS)
+            end
+        end
+        ret === nothing && (ret = 0)
+        ret = Cint(ret)
     catch
+        ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
-        exit(1)
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
+    return ret
 end

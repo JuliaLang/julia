@@ -297,7 +297,7 @@ julia> function (x)
 #3 (generic function with 1 method)
 ```
 
-This creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
+Each statement creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
 2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
@@ -327,6 +327,9 @@ julia> map(x -> x^2 + 2x - 1, [1, 3, -1])
 ```
 
 An anonymous function accepting multiple arguments can be written using the syntax `(x,y,z)->2x+y-z`.
+Argument-type declarations for anonymous functions work as for named functions, for example `x::Integer->2x`.
+The return type of an anonymous function cannot be specified.
+
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
@@ -981,7 +984,7 @@ can create performance challenges as discussed in [performance tips](@ref man-pe
 Functions in Julia can be combined by composing or piping (chaining) them together.
 
 Function composition is when you combine functions together and apply the resulting composition to arguments.
-You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...)` is the same as `f(g(args...))`.
+You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...; kw...)` is the same as `f(g(args...; kw...))`.
 
 You can type the composition operator at the REPL and suitably-configured editors using `\circ<tab>`.
 

@@ -229,6 +229,7 @@ mutable struct InferenceState
 
     #= results =#
     result::InferenceResult # remember where to put the result
+    unreachable::BitSet # statements that were found to be statically unreachable
     valid_worlds::WorldRange
     bestguess #::Type
     ipo_effects::Effects
@@ -278,6 +279,7 @@ mutable struct InferenceState
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
 
+        unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
@@ -294,7 +296,11 @@ mutable struct InferenceState
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
 
-        restrict_abstract_call_sites = isa(linfo.def, Module)
+        if def isa Method
+            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+        end
+
+        restrict_abstract_call_sites = isa(def, Module)
         @assert cache === :no || cache === :local || cache === :global
         cached = cache === :global
 
@@ -306,11 +312,18 @@ mutable struct InferenceState
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
-            result, valid_worlds, bestguess, ipo_effects,
+            result, unreachable, valid_worlds, bestguess, ipo_effects,
             restrict_abstract_call_sites, cached, insert_coverage,
             interp)
     end
 end
+
+is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
+is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable) = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
 
 is_inferred(sv::InferenceState) = is_inferred(sv.result)
 is_inferred(result::InferenceResult) = result.result !== nothing
@@ -809,11 +822,11 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
-add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
-add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] |= flag
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
 
 merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects) =
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)

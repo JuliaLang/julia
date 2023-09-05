@@ -54,6 +54,15 @@ end
     # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
     # shouldn't throw when there is a space in a middle of query
     @test (REPL.matchinds("a ", "a file.txt"); true)
+    @test isapprox(REPL.fuzzyscore("abcdef", ""), 0.0; atol=0.001)
+    @test 0.8 < REPL.fuzzyscore(
+    "supercalifragilisticexpialidocious",
+    "bupercalifragilisticexpialidocious"
+    ) < 1.0
+
+    # Unicode
+    @test 1.0 > REPL.fuzzyscore("αkδψm", "αkδm") > 0.0
+    @test 1.0 > REPL.fuzzyscore("αkδψm", "α") > 0.0
 end
 
 @testset "Unicode doc lookup (#41589)" begin

@@ -72,7 +72,7 @@ end
 # https://github.com/JuliaLang/julia/issues/41694
 Base.@assume_effects :terminates_globally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -85,26 +85,35 @@ end
 end
 
 Base.@assume_effects :terminates_globally function recur_termination1(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
+    x == 0 && return 1
+    0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
-@test fully_eliminated() do
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination1, (Int,)))
+function recur_termination2()
+    Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
+@test_broken fully_eliminated(recur_termination2)
+@test fully_eliminated() do; recur_termination2(); end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
+    x == 0 && return 1
+    0 ≤ x < 20 || error("bad fact")
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
-@test fully_eliminated() do
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination22, (Int,)))
+function recur_termination2x()
+    Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
+@test_broken fully_eliminated(recur_termination2x)
+@test fully_eliminated() do; recur_termination2x(); end
 
 # anonymous function support for `@assume_effects`
 @test fully_eliminated() do
@@ -112,7 +121,7 @@ end
         # this :terminates_locally allows this anonymous function to be constant-folded
         Base.@assume_effects :terminates_locally
         res = 1
-        1 < x < 20 || error("bad pow")
+        0 ≤ x < 20 || error("bad fact")
         while x > 1
             res *= x
             x -= 1
@@ -337,7 +346,7 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
-# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
+# `@inbounds`/`@boundscheck` expression should taint :consistent correctly
 # https://github.com/JuliaLang/julia/issues/48099
 function A1_inbounds()
     r = 0
@@ -356,7 +365,7 @@ function f_boundscheck_elim(n)
     # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
     ntuple(x->(@inbounds ()[x]), n)
 end
-@test_broken !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test !Core.Compiler.is_noub(Base.infer_effects(f_boundscheck_elim, (Int,)))
 @test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
@@ -445,10 +454,8 @@ mutable struct SetfieldNothrow
 end
 f_setfield_nothrow() = SetfieldNothrow(0).x = 1
 let effects = Base.infer_effects(f_setfield_nothrow, ())
-    # Technically effect free even though we use the heap, since the
-    # object doesn't escape, but the compiler doesn't know that.
-    #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_effect_free(effects) # see EFFECT_FREE_IF_INACCESSIBLEMEMONLY
 end
 
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
@@ -460,7 +467,7 @@ end
     Core.svec(nothing, 1, "foo")
 end |> Core.Compiler.is_consistent
 
-# fastmath operations are inconsistent
+# fastmath operations are in-`:consistent`
 @test !Core.Compiler.is_consistent(Base.infer_effects((a,b)->@fastmath(a+b), (Float64,Float64)))
 
 # issue 46122: @assume_effects for @ccall
@@ -835,6 +842,11 @@ for op = Any[
     end
 end
 
+# tuple indexing
+# --------------
+
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{Tuple{Int, Int}, Int}))
+
 # end to end
 # ----------
 
@@ -894,7 +906,7 @@ end |> Core.Compiler.is_foldable_nothrow
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
-end |> !Core.Compiler.is_consistent
+end |> !Core.Compiler.is_noub
 
 @test Base.infer_effects(Tuple{Tuple{Int64}}) do x
     @inbounds x[1]
@@ -1030,3 +1042,39 @@ f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Core.Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+
+# Optimizer-refined effects
+function f1_optrefine(b)
+    if Base.inferencebarrier(b)
+        error()
+    end
+    return b
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(f1_optrefine, (Bool,)))
+
+function f2_optrefine()
+    if Ref(false)[]
+        error()
+    end
+    return true
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
+
+function f3_optrefine(x)
+    @fastmath sqrt(x)
+    return x
+end
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+
+# Check that :consistent is properly modeled for throwing statements
+const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
+
+check_switch(switch::Base.RefValue{Bool}) = (switch[] && error(); return nothing)
+check_switch2() = check_switch(GLOBAL_MUTABLE_SWITCH)
+
+@test (Base.return_types(check_switch2) |> only) === Nothing
+GLOBAL_MUTABLE_SWITCH[] = true
+# Check that flipping the switch doesn't accidentally change the return type
+@test (Base.return_types(check_switch2) |> only) === Nothing
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))

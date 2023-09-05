@@ -492,10 +492,10 @@ JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
-# AArch64 needs this flag to generate the .eh_frame used by libunwind
+# These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON)
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
+JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
 JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
@@ -897,6 +897,17 @@ else
 ISX86:=0
 endif
 
+
+#If nothing is set default to native
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+MCPU=native
+else
+MARCH=native
+MTUNE=native
+endif
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
@@ -971,6 +982,14 @@ CC += -mcpu=$(MCPU)
 CXX += -mcpu=$(MCPU)
 FC += -mcpu=$(MCPU)
 JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+# Set MTUNE-specific flags
+ifneq ($(MTUNE),)
+CC += -mtune=$(MTUNE)
+CXX += -mtune=$(MTUNE)
+FC += -mtune=$(MTUNE)
+JULIA_CPU_TARGET ?= $(MTUNE)
 endif
 
 ifneq ($(MARCH)$(MCPU),)

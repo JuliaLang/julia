@@ -120,7 +120,14 @@ Here are example settings using `bash` syntax:
 On occasion, it can be useful to debug LLVM's transformations in isolation from
 the rest of the Julia system, e.g. because reproducing the issue inside `julia`
 would take too long, or because one wants to take advantage of LLVM's tooling
-(e.g. bugpoint). To get unoptimized IR for the entire system image, pass the
+(e.g. bugpoint).
+
+To start with, you can install the developer tools to work with LLVM via:
+```
+make -C deps install-llvm-tools
+```
+
+To get unoptimized IR for the entire system image, pass the
 `--output-unopt-bc unopt.bc` option to the system image build process, which will
 output the unoptimized IR to an `unopt.bc` file. This file can then be passed to
 LLVM tools as usual. `libjulia` can function as an LLVM pass plugin and can be
@@ -147,11 +154,25 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default))
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default, false))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
 above.
+
+## Running the LLVM test suite
+
+To run the llvm tests locally, you need to first install the tools, build julia, then you
+can run the tests:
+```
+make -C deps install-llvm-tools
+make -j julia-src-release
+make -C test/llvmpasses
+```
+
+If you want to run the individual test files directly, via the commands at the top of each
+test file, the first step here will have installed the tools into `./usr/tools/opt`. Then
+you'll want to manually replace `%s` with the name of the test file.
 
 ## Improving LLVM optimizations for Julia
 

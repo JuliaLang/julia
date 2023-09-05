@@ -1288,11 +1288,7 @@ end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
 @propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
-function unsafe_getindex(A::AbstractArray, I...)
-    @inline
-    @inbounds r = getindex(A, I...)
-    r
-end
+unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
 struct CanonicalIndexError <: Exception
     func::String
@@ -1587,10 +1583,14 @@ eltypeof(x::AbstractArray) = eltype(x)
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
+promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
+promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 #TODO: ERROR CHECK
 _cat(catdim::Int) = Vector{Any}()

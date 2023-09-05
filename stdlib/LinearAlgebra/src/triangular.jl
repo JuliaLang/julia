@@ -34,7 +34,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
 
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
 
-        size(A::$t, d) = size(A.data, d)
         size(A::$t) = size(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same

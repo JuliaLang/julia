@@ -505,19 +505,17 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
                     assert(jl_is_method_instance(callee));
-                    jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                    if ((jl_value_t*)mt == jl_nothing) {
-                        callee_ids = NULL; // invalid
-                        break;
-                    }
-                    else {
-                        matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
-                        if (matches == jl_nothing) {
-                            callee_ids = NULL; // invalid
-                            break;
+                    jl_method_t *m = ((jl_method_instance_t*)callee)->def.method;
+                    matches = (jl_value_t*)m; // valid because there is no method replacement permitted
+#ifndef NDEBUG
+                    jl_methtable_t *mt = jl_method_get_table(m);
+                    if ((jl_value_t*)mt != jl_nothing) {
+                        jl_value_t *matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
+                        if (matches != jl_nothing) {
+                            assert(m == ((jl_method_match_t*)matches)->method);
                         }
-                        matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
                     }
+#endif
                 }
                 else {
                     if (jl_is_method_instance(callee)) {
@@ -855,19 +853,27 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
         size_t max_valid = ~(size_t)0;
         if (invokesig) {
             assert(callee && "unsupported edge");
-            jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-            if ((jl_value_t*)mt == jl_nothing) {
-                max_valid = 0;
+            jl_method_t *m = ((jl_method_instance_t*)callee)->def.method;
+            if (jl_egal(invokesig, m->sig)) {
+                // the invoke match is `m` for `m->sig`, unless `m` is invalid
+                if (m->deleted_world < max_valid)
+                    max_valid = 0;
             }
             else {
-                matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, minworld, &min_valid, &max_valid);
-                if (matches == jl_nothing) {
-                     max_valid = 0;
+                jl_methtable_t *mt = jl_method_get_table(m);
+                if ((jl_value_t*)mt == jl_nothing) {
+                    max_valid = 0;
                 }
                 else {
-                    matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
-                    if (matches != expected) {
-                        max_valid = 0;
+                    matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, minworld, &min_valid, &max_valid);
+                    if (matches == jl_nothing) {
+                         max_valid = 0;
+                    }
+                    else {
+                        matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
+                        if (matches != expected) {
+                            max_valid = 0;
+                        }
                     }
                 }
             }

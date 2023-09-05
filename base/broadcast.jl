@@ -441,7 +441,9 @@ Base.Broadcast.DefaultArrayStyle{1}()
 function result_style end
 
 result_style(s::BroadcastStyle) = s
-result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
+function result_style(s1::S, s2::S) where S<:BroadcastStyle
+    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+end
 # Test both orders so users typically only have to declare one order
 result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyle(s2, s1))
 
@@ -457,7 +459,8 @@ result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
     ArrayConflict()
 # Fallbacks in case users define `rule` for both argument-orders (not recommended)
-result_join(::Any, ::Any, ::S, ::S) where S<:BroadcastStyle = S()
+result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle = result_style(s1, s2)
+
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
     error("""
 conflicting broadcast rules defined
@@ -711,8 +714,8 @@ _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
-# eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
+eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
+# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)

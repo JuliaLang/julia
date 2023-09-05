@@ -569,6 +569,7 @@ end
     function f1(cond)
         val = [1]
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f1, Tuple{Bool}, true, false, false))
 
@@ -576,6 +577,7 @@ end
     function f3(cond)
         val = ([1],)
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
 
@@ -583,12 +585,14 @@ end
     function f2(cond)
         val = cond ? 1 : 1f0
         GC.@preserve val begin end
+        return cond
     end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
     # make sure the fix for the above doesn't regress #34241
     function f4(cond)
         val = cond ? ([1],) : ([1f0],)
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
 end
@@ -853,3 +857,9 @@ let res = @timed a50317[:b]
     @test res.bytes == 0
     return res
 end
+
+# https://github.com/JuliaLang/julia/issues/50964
+@noinline bar50964(x::Core.Const) = Base.inferencebarrier(1)
+@noinline bar50964(x::DataType) = Base.inferencebarrier(2)
+foo50964(x) = bar50964(Base.inferencebarrier(Core.Const(x)))
+foo50964(1) # Shouldn't assert!

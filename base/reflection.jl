@@ -618,6 +618,7 @@ ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
@@ -636,6 +637,7 @@ ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 """
 function isstructtype(@nospecialize t)
     @_total_meta
@@ -650,6 +652,7 @@ end
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
+If `T` is not a type, then return `false`.
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -670,6 +673,7 @@ Typical examples are numeric types such as [`UInt8`](@ref),
 This category of types is significant since they are valid as type parameters,
 may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
 and have a defined layout that is compatible with C.
+If `T` is not a type, then return `false`.
 
 See also [`isbits`](@ref), [`isprimitivetype`](@ref), [`ismutable`](@ref).
 
@@ -719,18 +723,20 @@ _objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
+If `T` is not a type, then return `false`.
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
 datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
 
 """
-    ismutationfree(T)
+    Base.ismutationfree(T)
 
 Determine whether type `T` is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
+If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -746,10 +752,11 @@ end
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
 
 """
-    isidentityfree(T)
+    Base.isidentityfree(T)
 
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
+If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -764,7 +771,7 @@ end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+has_free_typevars(@nospecialize(t)) = (@_total_meta; ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0)
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
@@ -781,6 +788,8 @@ isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
+Note that this is not the negation of `isabstracttype(T)`.
+If `T` is not a type, then return `false`.
 
 See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
@@ -812,6 +821,8 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
+Note that this is not the negation of `isconcretetype(T)`.
+If `T` is not a type, then return `false`.
 
 # Examples
 ```jldoctest
@@ -834,6 +845,7 @@ end
 
 Determine whether type `T` has exactly one possible instance; for example, a
 struct type with no fields.
+If `T` is not a type, then return `false`.
 """
 issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance))
 
@@ -1164,6 +1176,7 @@ See also: [`which`](@ref) and `@which`.
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -1177,8 +1190,7 @@ methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
-    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
@@ -1297,32 +1309,107 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
+    """
+    If enabled, generate the necessary code to support the --track-allocations
+    command line flag to julia itself. Note that the option itself does not enable
+    allocation tracking. Rather, it merely generates the support code necessary
+    to perform allocation tracking if requested by the command line option.
+    """
     track_allocations::Cint
+
+    """
+    If enabled, generate the necessary code to support the --code-coverage
+    command line flag to julia itself. Note that the option itself does not enable
+    code coverage. Rather, it merely generates the support code necessary
+    to code coverage if requested by the command line option.
+    """
     code_coverage::Cint
+
+    """
+    If enabled, force the compiler to use the specialized signature
+    for all generated functions, whenever legal. If disabled, the choice is made
+    heuristically and specsig is only used when deemed profitable.
+    """
     prefer_specsig::Cint
+
+    """
+    If enabled, enable emission of `.debug_names` sections.
+    """
     gnu_pubnames::Cint
+
+    """
+    Controls what level of debug info to emit. Currently supported values are:
+    - 0: no debug info
+    - 1: full debug info
+    - 2: Line tables only
+    - 3: Debug directives only
+
+    The integer values currently match the llvm::DICompilerUnit::DebugEmissionKind enum,
+    although this is not guaranteed.
+    """
     debug_info_kind::Cint
+
+    """
+    If enabled, generate a GC safepoint at the entry to every function. Emitting
+    these extra safepoints can reduce the amount of time that other threads are
+    waiting for the currently running thread to reach a safepoint. The cost for
+    a safepoint is small, but non-zero. The option is enabled by default.
+    """
     safepoint_on_entry::Cint
+
+    """
+    If enabled, add an implicit argument to each function call that is used to
+    pass down the current task local state pointer. This argument is passed
+    using the `swiftself` convention, which in the ordinary case means that the
+    pointer is kept in a register and accesses are thus very fast. If this option
+    is disabled, the task local state pointer must be loaded from thread local
+    stroage, which incurs a small amount of additional overhead. The option is enabled by
+    default.
+    """
     gcstack_arg::Cint
 
-    lookup::Ptr{Cvoid}
+    """
+    If enabled, use the Julia PLT mechanism to support lazy-resolution of `ccall`
+    targets. The option may be disabled for use in environments where the julia
+    runtime is unavailable, but is otherwise recommended to be enabled, even if
+    lazy resolution is not required, as the Julia PLT mechanism may have superior
+    performance compared to the native platform mechanism. The options is enabled by default.
+    """
+    use_jlplt::Cint
 
-    generic_context::Any
+    """
+    A pointer of type
+
+    typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
+    size_t min_world, size_t max_world);
+
+    that may be used by external compilers as a callback to look up the code instance corresponding
+    to a particular method instance.
+    """
+    lookup::Ptr{Cvoid}
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true,
-                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
-                   generic_context = nothing)
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
+                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             Cint(safepoint_on_entry),
-            Cint(gcstack_arg),
-            lookup, generic_context)
+            Cint(gcstack_arg), Cint(use_jlplt),
+            lookup)
+    end
+end
+
+# this type mirrors jl_emission_params_t (documented in julia.h)
+struct EmissionParams
+    emit_metadata::Cint
+
+    function EmissionParams(; emit_metadata::Bool=true)
+        return new(Cint(emit_metadata))
     end
 end
 
@@ -1718,12 +1805,12 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
             Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
-    result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if result === missing
-        # unanalyzable call, return the unknown effects
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if matches === nothing
+        # unanalyzable call, i.e. the interpreter world might be newer than the world where
+        # the `f` is defined, return the unknown effects
         return Core.Compiler.Effects()
     end
-    (; matches) = result
     effects = Core.Compiler.EFFECTS_TOTAL
     if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -1732,9 +1819,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     for match in matches.matches
         match = match::Core.MethodMatch
         frame = Core.Compiler.typeinf_frame(interp,
-            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            match.method, match.spec_types, match.sparams, #=run_optimizer=#true)
         frame === nothing && return Core.Compiler.Effects()
-        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+        effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
     return effects
 end
@@ -1754,6 +1841,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world::UInt=get_world_counter(),
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
@@ -2045,6 +2133,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             has_bottom_parameter(ti) && return false
         end
         world = get_world_counter()
+        world == typemax(UInt) && return true # intersecting methods are always ambiguous in the generator world, which is true, albeit maybe confusing for some
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)

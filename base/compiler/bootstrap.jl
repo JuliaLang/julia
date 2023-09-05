@@ -13,7 +13,7 @@ let interp = NativeInterpreter()
     fs = Any[
         # we first create caches for the optimizer, because they contain many loop constructions
         # and they're better to not run in interpreter even during bootstrapping
-        #=analyze_escapes_tt,=# run_passes,
+        #=analyze_escapes_tt,=# run_passes_ipo_safe,
         # then we create caches for inference entries
         typeinf_ext, typeinf, typeinf_edge,
     ]

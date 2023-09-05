@@ -1470,13 +1470,16 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     return threads;
 }
 
+jl_emission_params_t default_emission_params = { 1 };
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        ios_t *z, ios_t *s)
+        ios_t *z, ios_t *s,
+        jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -1485,6 +1488,11 @@ void jl_dump_native_impl(void *native_code,
         delete data;
         return;
     }
+
+    if (!params) {
+        params = &default_emission_params;
+    }
+
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1634,10 +1642,10 @@ void jl_dump_native_impl(void *native_code,
 
             // let the compiler know we are going to internalize a copy of this,
             // if it has a current usage with ExternalLinkage
-            auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
-            if (small_typeof_copy) {
-                small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-                small_typeof_copy->setDSOLocal(true);
+            auto jl_small_typeof_copy = dataM.getGlobalVariable("jl_small_typeof");
+            if (jl_small_typeof_copy) {
+                jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+                jl_small_typeof_copy->setDSOLocal(true);
             }
         }
 
@@ -1655,6 +1663,7 @@ void jl_dump_native_impl(void *native_code,
         data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
     }
 
+    if (params->emit_metadata)
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
@@ -1712,13 +1721,13 @@ void jl_dump_native_impl(void *native_code,
             auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
             auto ptls = emit_ptls_table(metadataM, T_size, T_psize);
             auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
-            auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
-            auto small_typeof_copy = new GlobalVariable(metadataM, AT, false,
+            auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
+            auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
                                                         Constant::getNullValue(AT),
-                                                        "small_typeof");
-            small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-            small_typeof_copy->setDSOLocal(true);
+                                                        "jl_small_typeof");
+            jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+            jl_small_typeof_copy->setDSOLocal(true);
             AT = ArrayType::get(T_psize, 5);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
@@ -1726,7 +1735,7 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(header, T_psize),
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
-                                                    ConstantExpr::getBitCast(small_typeof_copy, T_psize),
+                                                    ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize)
                                             }),
                                             "jl_image_pointers");
@@ -2085,7 +2094,7 @@ void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int l
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
-// this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
+// This is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
@@ -2103,12 +2112,13 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     jl_code_instance_t *codeinst = NULL;
     JL_GC_PUSH3(&src, &jlrettype, &codeinst);
     if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && mi->def.method->source != jl_nothing && jl_ir_flag_inferred(mi->def.method->source)) {
+        // uninferred opaque closure
         src = (jl_code_info_t*)mi->def.method->source;
         if (src && !jl_is_code_info(src))
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
     }
     else {
-        jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
+        jl_value_t *ci = params.lookup(mi, world, world);
         if (ci != jl_nothing) {
             codeinst = (jl_code_instance_t*)ci;
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
