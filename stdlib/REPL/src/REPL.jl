@@ -1115,7 +1115,7 @@ function setup_interface(
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
                 if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+                    Pkg = Base.require(pkgid)
                     # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
                     pkg_mode = nothing
                     for mode in repl.interface.modes
