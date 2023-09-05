@@ -23,6 +23,8 @@ using Unicode: normalize
 helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
 helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
+# A hack to make the line entered at the REPL available at trimdocs without
+# passing the string through the entire mechanism.
 const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
@@ -30,10 +32,10 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
     ternary_operator_help = (line == "?" || line == "?:")
     if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
-        extended_help_on[] = line
+        extended_help_on[] = nothing
         brief = false
     else
-        extended_help_on[] = nothing
+        extended_help_on[] = line
         brief = true
     end
     # interpret anything starting with # or #= as asking for help on comments
