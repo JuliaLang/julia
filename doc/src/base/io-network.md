@@ -6,8 +6,8 @@
 Base.stdout
 Base.stderr
 Base.stdin
-Base.read(::String)
-Base.write(::String, ::Any)
+Base.read(::AbstractString)
+Base.write(::AbstractString, ::Any)
 Base.open
 Base.IOStream
 Base.IOBuffer
