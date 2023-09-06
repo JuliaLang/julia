@@ -109,7 +109,8 @@ You can protect access to a critical region in your finalizer with one of these 
     finalizer(my_finalizer, my_object)
     ```
 
-    Locks prevent multiple finalizers entering the critical region concurrently.
+    The locks in `Base` prevent multiple finalizers entering the critical region concurrently.
+    If you want to use a lock from another package then check its documentation.
 
  2. Another strategy is to use the finalizer only to schedule the work to be done at another time.
     This means we don't have to care about finalizers interrupting each other because the actual work will be done in a non-finalizer context.
