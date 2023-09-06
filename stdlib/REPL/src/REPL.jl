@@ -1506,20 +1506,4 @@ end
 
 import .Numbered.numbered_prompt!
 
-# TODO: Move more of this implementation into REPL.
-function main(ARGS)
-    opts = Base.JLOptions()
-    interactiveinput = isa(stdin, Base.TTY)
-    b = opts.banner
-    auto = b == -1
-    banner = b == 0 || (auto && !interactiveinput) ? :no  :
-             b == 1 || (auto && interactiveinput)  ? :yes :
-             :short # b == 2
-
-    quiet                 = (opts.quiet != 0)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    Base.run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
-end
-
 end # module

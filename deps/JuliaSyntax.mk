@@ -12,5 +12,5 @@ get-JuliaSyntax: $(JULIASYNTAX_SRC_FILE)
 extract-JuliaSyntax: $(BUILDDIR)/$(JULIASYNTAX_SRC_DIR)/source-extracted
 configure-JuliaSyntax: extract-JuliaSyntax
 compile-JuliaSyntax: $(BUILDDIR)/$(JULIASYNTAX_SRC_DIR)/build-compiled
-fastcheck-JuliSyntax: check-JuliSyntax
-check-JuliSyntax: compile-JuliSyntax
+fastcheck-JuliaSyntax: check-JuliaSyntax
+check-JuliaSyntax: compile-JuliaSyntax

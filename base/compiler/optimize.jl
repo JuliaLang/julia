@@ -502,8 +502,18 @@ struct AugmentedDomtree
     domtree::DomTree
 end
 
+function is_ipo_dataflow_analysis_profitable(effects::Effects)
+    return !(is_consistent(effects) && is_effect_free(effects) &&
+             is_nothrow(effects) && is_noub(effects))
+end
+
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
-    inconsistent = BitSet()
+    effects = result.ipo_effects
+    if !is_ipo_dataflow_analysis_profitable(effects)
+        return effects
+    end
+
+    inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
     inconsistent_bbs = BitSet()
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
     lazypostdomtree = LazyPostDomtree(ir)
@@ -516,8 +526,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     had_trycatch = false
 
     scanner = BBScanner(ir)
-
-    effects = result.ipo_effects
 
     agdomtree = nothing
     function get_augmented_domtree()
@@ -655,6 +663,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             scan!(scan_stmt!, scanner, true)
             complete!(tpdum); push!(scanner.bb_ip, 1)
             populate_def_use_map!(tpdum, scanner)
+
+            stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
             for def in inconsistent
                 for use in tpdum[def]
                     if !(use in inconsistent)
@@ -663,8 +673,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                     end
                 end
             end
-
-            stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
             while !isempty(stmt_ip)
                 idx = popfirst!(stmt_ip)
                 inst = ir[SSAValue(idx)]
@@ -683,7 +691,9 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
                     all_retpaths_consistent = false
                 else isa(stmt, GotoIfNot)
                     bb = block_for_inst(ir, idx)
-                    for succ in iterated_dominance_frontier(ir.cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), get!(lazydomtree))
+                    blockliveness = BlockLiveness(ir.cfg.blocks[bb].succs, nothing)
+                    domtree = construct_domtree(ir.cfg.blocks)
+                    for succ in iterated_dominance_frontier(ir.cfg, blockliveness, domtree)
                         visit_bb_phis!(ir, succ) do phiidx
                             push!(inconsistent, phiidx)
                             push!(stmt_ip, phiidx)

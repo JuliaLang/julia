@@ -296,12 +296,13 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true) where {T}
-    lu!(_lucopy(A, lutype(T)), pivot; check = check)
-end
+lu(A::AbstractMatrix{T}, args...; kwargs...) where {T} =
+    _lu(_lucopy(A, lutype(T)), args...; kwargs...)
 # TODO: remove for Julia v2.0
 @deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
 @deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
+# allow packages like SparseArrays.jl to interfere here and call their own `lu`
+_lu(A::AbstractMatrix, args...; kwargs...) = lu!(A, args...; kwargs...)
 
 _lucopy(A::AbstractMatrix, T) = copy_similar(A, T)
 _lucopy(A::HermOrSym, T)      = copymutable_oftype(A, T)

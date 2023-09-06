@@ -23,12 +23,14 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
 helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
+# A hack to make the line entered at the REPL available at trimdocs without
+# passing the string through the entire mechanism.
 const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
@@ -36,10 +38,10 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
     ternary_operator_help = (line == "?" || line == "?:")
     if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
-        extended_help_on[] = line
+        extended_help_on[] = nothing
         brief = false
     else
-        extended_help_on[] = nothing
+        extended_help_on[] = line
         brief = true
     end
     # interpret anything starting with # or #= as asking for help on comments
@@ -75,7 +77,7 @@ end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs)
+function insert_hlines(docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
