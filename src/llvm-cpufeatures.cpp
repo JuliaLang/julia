@@ -124,4 +124,3 @@ PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
     }
     return PreservedAnalyses::all();
 }
-
