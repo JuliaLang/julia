@@ -20,7 +20,7 @@ using Unicode: normalize
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
-helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
+helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($(REPL._helpmode(io, line, mod))))
 helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
 const extended_help_on = Ref{Any}(nothing)
@@ -69,7 +69,7 @@ end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs)
+function insert_hlines(docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
