@@ -1941,7 +1941,7 @@ function _require(pkg::PkgId, env=nothing)
             if pkg == concrete_pkg
                 @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
                      This may mean $pkg does not support precompilation but is imported by a module that does."""
-                if JLOptions().incremental != 0
+                if true # JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
                     throw(PrecompilableError())
                 end
