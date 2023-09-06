@@ -2346,3 +2346,7 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
     end
     return f, args, kwargs
 end
+
+generating_image() = ccall(:jl_generating_output, Cint, ()) != 0
+
+generating_system_image() = generating_image() && JLOptions().incremental == 0
