@@ -502,7 +502,17 @@ struct AugmentedDomtree
     domtree::DomTree
 end
 
+function is_ipo_dataflow_analysis_profitable(effects::Effects)
+    return !(is_consistent(effects) && is_effect_free(effects) &&
+             is_nothrow(effects) && is_noub(effects))
+end
+
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
+    effects = result.ipo_effects
+    if !is_ipo_dataflow_analysis_profitable(effects)
+        return effects
+    end
+
     inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
     inconsistent_bbs = BitSet()
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
@@ -516,8 +526,6 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
     had_trycatch = false
 
     scanner = BBScanner(ir)
-
-    effects = result.ipo_effects
 
     agdomtree = nothing
     function get_augmented_domtree()
