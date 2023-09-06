@@ -566,6 +566,7 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
 
 function displaysize(io::TTY)
     # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
+    # Why was this not put inside the lock??
     check_open(io)
 
     local h::Int, w::Int
@@ -588,6 +589,7 @@ function displaysize(io::TTY)
     s1 = Ref{Int32}(0)
     s2 = Ref{Int32}(0)
     iolock_begin()
+    check_open(io)
     Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                       Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}),
                                       io, s1, s2) != 0)
