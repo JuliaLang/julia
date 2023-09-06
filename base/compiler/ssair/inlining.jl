@@ -1003,6 +1003,11 @@ function flags_for_effects(effects::Effects)
     end
     if is_effect_free(effects)
         flags |= IR_FLAG_EFFECT_FREE
+    elseif is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_EFIIMO
+    end
+    if is_inaccessiblemem_or_argmemonly(effects)
+        flags |= IR_FLAG_INACCESSIBLE_OR_ARGMEM
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW

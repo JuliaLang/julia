@@ -1133,20 +1133,60 @@ end
     post_opt_refine_effect_free(y, true)
 end |> Core.Compiler.is_effect_free
 
-# effects for Cmd construction
-for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
-    effects = Base.infer_effects(f)
+# Check EA-based refinement of :effect_free
+Base.@assume_effects :nothrow @noinline _noinline_set!(x) = (x[] = 1; nothing)
+
+function set_ref_with_unused_arg_1(_)
+    x = Ref(0)
+    _noinline_set!(x)
+    return nothing
+end
+function set_ref_with_unused_arg_2(_)
+    x = @noinline Ref(0)
+    _noinline_set!(x)
+    return nothing
+end
+function set_arg_ref!(x)
+    _noinline_set!(x)
+    y = Ref(false)
+    y[] && (Main.x = x)
+    return nothing
+end
+
+function set_arr_with_unused_arg_1(_)
+    x = Int[0]
+    _noinline_set!(x)
+    return nothing
+end
+function set_arr_with_unused_arg_2(_)
+    x = @noinline Int[0]
+    _noinline_set!(x)
+    return nothing
+end
+function set_arg_arr!(x)
+    _noinline_set!(x)
+    y = Bool[false]
+    y[] && (Main.x = x)
+    return nothing
+end
+
+# This is inferable by type analysis only since the arguments have no mutable memory
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(_noinline_set!, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(_noinline_set!, (Vector{Int},)))
+for func in (set_ref_with_unused_arg_1, set_ref_with_unused_arg_2,
+             set_arr_with_unused_arg_1, set_arr_with_unused_arg_2)
+    effects = Base.infer_effects(func, (Nothing,))
+    @test Core.Compiler.is_inaccessiblememonly(effects)
     @test Core.Compiler.is_effect_free(effects)
-    @test Core.Compiler.is_terminates(effects)
-    @test Core.Compiler.is_noub(effects)
-    @test !Core.Compiler.is_consistent(effects)
 end
-let effects = Base.infer_effects(x -> `a $x`, (Any,))
-    @test !Core.Compiler.is_effect_free(effects)
-    @test !Core.Compiler.is_terminates(effects)
-    @test !Core.Compiler.is_noub(effects)
-    @test !Core.Compiler.is_consistent(effects)
-end
+
+# These need EA
+@test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_1, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_2, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_ref!, (Base.RefValue{Int},)))
+@test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_1, (Vector{Int},)))
+@test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_2, (Vector{Int},)))
+@test_broken Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_arr!, (Vector{Int},)))
 
 function issue51837(; openquotechar::Char, newlinechar::Char)
     ncodeunits(openquotechar) == 1 || throw(ArgumentError("`openquotechar` must be a single-byte character"))

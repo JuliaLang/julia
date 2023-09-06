@@ -59,6 +59,16 @@ end
 
 abstract type ForwardableArgtypes end
 
+struct AnalysisResults
+    result
+    next::AnalysisResults
+    AnalysisResults(@nospecialize(result), next::AnalysisResults) = new(result, next)
+    AnalysisResults(@nospecialize(result)) = new(result)
+    # NullAnalysisResults() = new(nothing)
+    # global const NULL_ANALYSIS_RESULTS = NullAnalysisResults()
+end
+const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
+
 """
     InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
@@ -75,20 +85,35 @@ mutable struct InferenceResult
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
-    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
+    analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
         return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
-            WorldRange(), Effects(), Effects(), nothing, false)
+            WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
 InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
     InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
 InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
     InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+
+function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
+    return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)
+end
+
+function traverse_analysis_results(callback, (;analysis_results)::Union{InferenceResult,CodeInstance})
+    analysis_results isa AnalysisResults || return nothing
+    while isdefined(analysis_results, :next)
+        if (result = callback(analysis_results.result)) !== nothing
+            return result
+        end
+        analysis_results = analysis_results.next
+    end
+    return nothing
+end
 
 """
     inf_params::InferenceParams

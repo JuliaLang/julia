@@ -610,7 +610,7 @@ end
 
 Analyzes escape information in `ir`:
 - `nargs`: the number of actual arguments of the analyzed call
-- `get_escape_cache(::MethodInstance) -> Union{Nothing,ArgEscapeCache}`:
+- `get_escape_cache(::MethodInstance) -> Union{Bool,ArgEscapeCache}`:
   retrieves cached argument escape information
 """
 function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
@@ -1061,11 +1061,14 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
-    if cache === nothing
-        return add_conservative_changes!(astate, pc, args, 2)
-    else
-        cache = cache::ArgEscapeCache
+    if cache isa Bool
+        if cache
+            return nothing # guaranteed to have no escape
+        else
+            return add_conservative_changes!(astate, pc, args, 2)
+        end
     end
+    cache = cache::ArgEscapeCache
     ret = SSAValue(pc)
     retinfo = astate.estate[ret] # escape information imposed on the call statement
     method = mi.def::Method

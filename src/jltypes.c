@@ -3255,7 +3255,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             //"edges",
                             //"absolute_max",
                             "ipo_purity_bits", "purity_bits",
-                            "argescapes",
+                            "analysis_results",
                             "isspecsig", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(15,
