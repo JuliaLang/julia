@@ -2,9 +2,7 @@
 
 using Test
 using Base.Meta
-import Core:
-    CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
-    PhiCNode, QuoteNode, ReturnNode
+using Core.IR
 
 include("irutils.jl")
 
@@ -1519,3 +1517,5 @@ let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_u
         end
     end
 end
+
+@test isnothing(f_with_early_try_catch_exit())
