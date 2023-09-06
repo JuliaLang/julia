@@ -287,7 +287,7 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
-                      valid_worlds::WorldRange)
+                      valid_worlds::WorldRange, mi::MethodInstance=result.linfo)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type === nothing || result_type isa LimitedAccuracy)
@@ -324,7 +324,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         inferred_result = nothing
         relocatability = 0x1
     else
-        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result)
+        inferred_result = transform_result_for_cache(interp, mi, valid_worlds, result)
         if isa(inferred_result, String)
             t = @_gc_preserve_begin inferred_result
             relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
@@ -334,7 +334,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         end
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
-    return CodeInstance(result.linfo,
+    return CodeInstance(mi,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects

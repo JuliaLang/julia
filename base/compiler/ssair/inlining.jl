@@ -1485,14 +1485,25 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
     result::ConstPropResult, argtypes::Vector{Any}, @nospecialize(info::CallInfo),
     flag::UInt32, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
-    mi = result.result.linfo
+    inf_result = result.result
+    mi = inf_result.linfo
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
-    item = resolve_todo(mi, result.result, argtypes, info, flag, state)
+    item = resolve_todo(mi, inf_result, argtypes, info, flag, state)
     item === nothing && return false
+    if item isa InvokeCase
+        # invoke const-prop'ed source by placing a new MethodInstance whose `cache` is set
+        # to CodeInstance that contains the const-prop'ed source
+        if !(inf_result.result === nothing || inf_result.result isa LimitedAccuracy) # avoid recursive source
+            new_invoke = independent_method_instance_to_invoke(item.invoke, state.interp, inf_result)
+            if new_invoke !== nothing
+                item = InvokeCase(new_invoke, item.effects, item.info)
+            end
+        end
+    end
     push!(cases, InliningCase(spec_types, item))
     return true
 end

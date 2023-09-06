@@ -263,6 +263,25 @@ Check if `method` is declared as `Base.@constprop :none`.
 """
 is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 
+const INDEPENDENT_MI_CACHE = IdDict{UInt, MethodInstance}()
+
+function independent_method_instance_to_invoke(mi::MethodInstance, interp::AbstractInterpreter, inf_result::InferenceResult)
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        # XXX system image doesn't support this
+        return nothing
+    end
+    cache_key = objectid(inf_result)
+    cached_mi = get(INDEPENDENT_MI_CACHE, cache_key, nothing)
+    if cached_mi !== nothing
+        return cached_mi
+    end
+    new_mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    new_mi.def, new_mi.specTypes, new_mi.sparam_vals = mi.def, mi.specTypes, mi.sparam_vals
+    new_ci = CodeInstance(interp, inf_result, inf_result.valid_worlds, new_mi)
+    @atomic new_mi.cache = new_ci
+    return INDEPENDENT_MI_CACHE[cache_key] = new_mi
+end
+
 #############
 # backedges #
 #############
