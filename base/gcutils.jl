@@ -94,32 +94,22 @@ end
 
 You can protect access to a critical region in your finalizer with one of these techniques:
 
- 1. If your Julia process is single-threaded or the state that you are modifying is only accessible from your current thread then all you need to do is prevent other finalizers from running during your critical region:
+ 1. The simplest strategy is to guard access to your critical region with a lock:
 
     ```julia
     function my_finalizer(x)
-        GC.disable_finalizers()
-        # Your critical section here
-        GC.enable_finalizers()
-    end
-    ```
-
-    If your global state is accessible from more than one thread then you must use a lock or some other synchronization control as well:
-
-    ```julia
-    function my_finalizer(x)
-        GC.disable_finalizers()
         lock(my_lock)
         try
-            # Your critical section here
+            # Your critical region here
         finally
             unlock(my_lock)
         end
-        GC.enable_finalizers()
     end
+
+    finalizer(my_finalizer, my_object)
     ```
 
-    Julia uses this strategy in its locks and to prevent recursion when doing certain operations (incremental package loading, codegen, etc.).
+    Locks prevent multiple finalizers entering the critical region concurrently.
 
  2. Another strategy is to use the finalizer only to schedule the work to be done at another time.
     This means we don't have to care about finalizers interrupting each other because the actual work will be done in a non-finalizer context.
@@ -140,7 +130,7 @@ You can protect access to a critical region in your finalizer with one of these 
         Threads.@spawn begin
             lock(my_lock)
             try
-                # Your critical area here
+                # Your critical region here
             finally
                 unlock(my_lock)
             end
