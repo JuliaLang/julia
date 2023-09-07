@@ -4,7 +4,7 @@ $(BUILDDIR)/$(JULIASYNTAX_SRC_DIR)/build-compiled: $(BUILDDIR)/$(JULIASYNTAX_SRC
 	@# no build steps
 	echo 1 > $@
 
-$(eval $(call symlink_install,JuliaSyntax,$$(JULIASYNTAX_SRC_DIR),$$(JULIAHOME)/base))
+$(eval $(call symlink_install,JuliaSyntax,$$(JULIASYNTAX_SRC_DIR),$$(BUILDROOT)/base))
 
 clean-JuliaSyntax:
 	-rm -f $(BUILDDIR)/$(JULIASYNTAX_SRC_DIR)/build-compiled
