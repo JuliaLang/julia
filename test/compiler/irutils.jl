@@ -48,9 +48,9 @@ function fully_eliminated(code::Vector{Any}; retval=(@__FILE__), kwargs...)
     retval === (@__FILE__) && return true
     retval′ = retstmt.val
     if retval′ isa QuoteNode
-        val = retval′.value
+        retval′ = retval′.value
     end
-    return val == retval
+    return retval′ == retval
 end
 macro fully_eliminated(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0)
