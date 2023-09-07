@@ -408,7 +408,7 @@ function cholesky(A::AbstractMatrix{Float16}, ::NoPivot=NoPivot(); check::Bool =
 end
 @deprecate cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 # allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `cholesky`
-_cholesky(A::AbstractMatrix, args...; kwargs) = cholesky!(A, args...; kwargs...)
+_cholesky(A::AbstractMatrix, args...; kwargs...) = cholesky!(A, args...; kwargs...)
 
 ## With pivoting
 """
