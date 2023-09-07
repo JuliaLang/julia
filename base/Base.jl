@@ -604,7 +604,9 @@ function __init__()
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
         cond = Base.AsyncCondition()
+        Base.iolock_begin() # uv_unref needs lock
         Base.uv_unref(cond.handle)
+        Base.iolock_end()
         PROFILE_PRINT_COND[] = cond
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
