@@ -170,7 +170,7 @@ end
 ### random tuples
 
 function Sampler(RNG::Type{<:AbstractRNG}, t::Type{T}, n::Repetition) where {T <: Tuple}
-    tail_sp_ = Sampler(RNG, Tuple{fieldtypes(t)[2:end]...}, n)
+    tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(t))...}, n)
     SamplerTag{t}((Sampler(RNG, fieldtype(t, 1), n), tail_sp_.data...))
 end
 
