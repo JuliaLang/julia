@@ -863,3 +863,7 @@ end
 @noinline bar50964(x::DataType) = Base.inferencebarrier(2)
 foo50964(x) = bar50964(Base.inferencebarrier(Core.Const(x)))
 foo50964(1) # Shouldn't assert!
+
+# https://github.com/JuliaLang/julia/issues/51233
+obj51233 = (1,)
+@test_throws ErrorException obj51233.x
