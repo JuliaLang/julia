@@ -1078,3 +1078,19 @@ GLOBAL_MUTABLE_SWITCH[] = true
 @test (Base.return_types(check_switch2) |> only) === Nothing
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))
+
+# post-opt IPO analysis refinement of `:effect_free`-ness
+function post_opt_refine_effect_free(y, c=true)
+    x = Ref(c)
+    if x[]
+        return true
+    else
+        r = y[] isa Number
+        y[] = nothing
+    end
+    return r
+end
+@test Core.Compiler.is_effect_free(Base.infer_effects(post_opt_refine_effect_free, (Base.RefValue{Any},)))
+@test Base.infer_effects((Base.RefValue{Any},)) do y
+    post_opt_refine_effect_free(y, true)
+end |> Core.Compiler.is_effect_free
