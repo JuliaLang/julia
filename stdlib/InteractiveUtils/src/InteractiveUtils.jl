@@ -352,7 +352,8 @@ function report_bug(kind)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
                 old_active_project = Base.ACTIVE_PROJECT[]
                 Base.ACTIVE_PROJECT[] = nothing
-                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                pkgspec = @invokelatest Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid)
+                @invokelatest Pkg.add(pkgspec)
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
@@ -361,7 +362,7 @@ function report_bug(kind)
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
+    return @invokelatest BugReporting.make_interactive_report(kind, ARGS)
 end
 
 end
