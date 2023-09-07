@@ -133,13 +133,13 @@ julia> module Mod
        end
 Mod
 
-julia> Base.isexported(Mod, :foo)
+julia> Base.ispublic(Mod, :foo)
 true
 
-julia> Base.isexported(Mod, :bar)
-false
+julia> Base.ispublic(Mod, :bar)
+true
 
-julia> Base.isexported(Mod, :baz)
+julia> Base.ispublic(Mod, :baz)
 false
 ```
 """
