@@ -13,7 +13,6 @@
 #include <llvm/Analysis/ScalarEvolution.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Dominators.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
@@ -123,17 +122,6 @@ static bool makeLoopInvariant(Loop *L, Value *V, bool &Changed, Instruction *Ins
   return true; // All non-instructions are loop-invariant.
 }
 
-struct JuliaLICMPassLegacy : public LoopPass {
-    static char ID;
-    JuliaLICMPassLegacy() : LoopPass(ID) {};
-
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
-
-    protected:
-        void getAnalysisUsage(AnalysisUsage &AU) const override {
-            getLoopAnalysisUsage(AU);
-        }
-};
 struct JuliaLICM : public JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
@@ -364,28 +352,6 @@ struct JuliaLICM : public JuliaPassContext {
     }
 };
 
-bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
-    OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
-    auto GetDT = [this]() -> DominatorTree & {
-        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    };
-    auto GetLI = [this]() -> LoopInfo & {
-        return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-    };
-    auto GetMSSA = []() {
-        return nullptr;
-    };
-    auto GetSE = []() {
-        return nullptr;
-    };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
-    return juliaLICM.runOnLoop(L, ORE);
-}
-
-char JuliaLICMPassLegacy::ID = 0;
-static RegisterPass<JuliaLICMPassLegacy>
-        Y("JuliaLICM", "LICM for julia specific intrinsics.",
-          false, false);
 } //namespace
 
 PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
@@ -416,15 +382,4 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
         return preserved;
     }
     return PreservedAnalyses::all();
-}
-
-Pass *createJuliaLICMPass()
-{
-    return new JuliaLICMPassLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createJuliaLICMPass());
 }
