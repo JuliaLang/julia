@@ -998,7 +998,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_PUSH3(&f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
 
-    argtype = jl_apply_tuple_type(atypes);
+    argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))
         jl_error("invalid type in method definition (Union{})");
 

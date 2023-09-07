@@ -6738,7 +6738,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         sigt = NULL;
     }
     else {
-        sigt = jl_apply_tuple_type((jl_svec_t*)sigt);
+        sigt = jl_apply_tuple_type((jl_svec_t*)sigt, 1);
     }
     if (sigt && !(unionall_env && jl_has_typevar_from_unionall(rt, unionall_env))) {
         unionall_env = NULL;
@@ -7242,7 +7242,7 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
         }
         jl_svecset(tupargs, i-nreq, argType);
     }
-    jl_value_t *typ = jl_apply_tuple_type(tupargs);
+    jl_value_t *typ = jl_apply_tuple_type(tupargs, 1);
     JL_GC_POP();
     return (jl_datatype_t*)typ;
 }
