@@ -572,7 +572,13 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
 
     function scan_non_dataflow_flags!(inst::Instruction)
         flag = inst[:flag]
-        all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
+        istmt = inst[:stmt]
+        if !isterminator(istmt) && istmt !== nothing
+            # ignore control flow node – they are not removable on their own and thus not
+            # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
+            # the whole method invocation
+            all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
+        end
         all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
         if (flag & IR_FLAG_NOUB) == 0
             if !is_conditional_noub(inst)
