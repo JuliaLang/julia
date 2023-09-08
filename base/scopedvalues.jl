@@ -66,7 +66,7 @@ end
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
     val = convert(T, value)
     if parent === nothing
-        return Scope(Base.PersistentDict{ScopedValue, Any}(key=>val)
+        return Scope(Base.PersistentDict{ScopedValue, Any}(key=>val))
     end
     return Scope(Base.PersistentDict(parent.values, key=>convert(T, val)))
 end
