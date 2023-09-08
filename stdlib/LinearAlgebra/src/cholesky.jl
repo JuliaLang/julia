@@ -398,12 +398,13 @@ julia> C.L * C.U == A
 true
 ```
 """
-cholesky(A::AbstractMatrix, ::NoPivot=NoPivot(); check::Bool = true) =
-    _cholesky(cholcopy(A); check)
+cholesky(A::AbstractMatrix, args...; kwargs...) =
+    _cholesky(cholcopy(A), args...; kwargs...)
 @deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
-function cholesky(A::AbstractMatrix{Float16}, ::NoPivot=NoPivot(); check::Bool = true)
-    X = _cholesky(cholcopy(A); check = check)
+cholesky(A::AbstractMatrix{Float16}; kwargs...) = cholesky(A, NoPivot(); kwargs...)
+function cholesky(A::AbstractMatrix{Float16}, ::NoPivot; check::Bool = true)
+    X = _cholesky(cholcopy(A), NoPivot(); check)
     return Cholesky{Float16}(X)
 end
 @deprecate cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
@@ -466,14 +467,12 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-cholesky(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true) =
-    _cholesky(cholcopy(A), RowMaximum(); tol, check)
-@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
-
 function cholesky(A::AbstractMatrix{Float16}, ::RowMaximum; tol = 0.0, check::Bool = true)
     X = _cholesky(cholcopy(A), RowMaximum(); tol, check)
     return CholeskyPivoted{Float16}(X)
 end
+
+@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
 
 ## Number
 function cholesky(x::Number, uplo::Symbol=:U)
