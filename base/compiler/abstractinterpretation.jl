@@ -2498,7 +2498,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         end
     elseif ehead === :boundscheck
         t = Bool
-        effects = Effects(EFFECTS_TOTAL; consistent = ALWAYS_FALSE)
+        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
     elseif ehead === :the_exception
         t = Any
         effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)

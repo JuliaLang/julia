@@ -833,9 +833,9 @@ sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc]
 sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
-    if effects.effect_free == EFFECT_FREE_GLOBALLY
+    if effects.effect_free === EFFECT_FREE_GLOBALLY
         # This tracks the global effects
-        effects = Effects(effects; effect_free = ALWAYS_TRUE)
+        effects = Effects(effects; effect_free=ALWAYS_TRUE)
     end
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
