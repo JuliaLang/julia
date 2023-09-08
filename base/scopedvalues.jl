@@ -64,21 +64,20 @@ mutable struct Scope
     values::Base.PersistentDict{ScopedValue, Any}
 end
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
+    val = convert(T, value)
     if parent === nothing
-        values = Base.PersistentDict{ScopedValue, Any}()
-    else
-        values = parent.values
+        return Scope(Base.PersistentDict{ScopedValue, Any}(key=>val)
     end
-    values = Base.PersistentDict(values, key=>convert(T, value))
-    return Scope(values)
+    return Scope(Base.PersistentDict(parent.values, key=>convert(T, val)))
 end
 
 function Scope(scope, pairs::Pair{<:ScopedValue}...)
     for pair in pairs
         scope = Scope(scope, pair...)
     end
-    return scope
+    return scope::Scope
 end
+Scope(::Nothing) = nothing
 
 """
     current_scope()::Union{Nothing, Scope}
