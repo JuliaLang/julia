@@ -39,6 +39,8 @@ const IR_FLAG_REFINED     = UInt32(1) << 7
 # This is :noub == ALWAYS_TRUE
 const IR_FLAG_NOUB        = UInt32(1) << 8
 
+const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 # This corresponds to the type of `CodeInfo`'s `inlining_cost` field
