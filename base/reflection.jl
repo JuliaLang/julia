@@ -2347,6 +2347,18 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
     return f, args, kwargs
 end
 
-generating_image() = ccall(:jl_generating_output, Cint, ()) != 0
+"""
+    Base.generating_output([incremental::Bool])::Bool
 
-generating_system_image() = generating_image() && JLOptions().incremental == 0
+Return `true` if the current process is being used to pre-generate a
+code cache via any of the `--output-*` command line arguments. The
+optional argument `incremental` controls whether to only return `true`
+for that specific mode of compilation.
+"""
+function generating_output(incremental::Union{Bool,Nothing}=nothing)
+    ccall(:jl_generating_output, Cint, ()) == 0 && return false
+    if incremental !== nothing
+        JLOptions().incremental == incremental || return false
+    end
+    return true
+end
