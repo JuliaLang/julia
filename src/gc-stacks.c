@@ -115,6 +115,9 @@ static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
+#ifndef _OS_WINDOWS_
+            madvise(stkbuf, bufsz, MADV_DONTNEED);
+#endif
             arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
             return;
         }
@@ -143,6 +146,9 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
             task->stkbuf = NULL;
 #ifdef _COMPILER_ASAN_ENABLED_
             __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
+#ifndef _OS_WINDOWS_
+            madvise(stkbuf, bufsz, MADV_DONTNEED);
 #endif
             arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
