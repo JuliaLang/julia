@@ -908,9 +908,12 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
 PersistentDict
 
 PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
-PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT(KV...))
+PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
+PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
 PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
-function PersistentDict(dict::PersistentDict{K,V}, key::K, val::V) where {K,V}
+function PersistentDict(dict::PersistentDict{K,V}, key, val) where {K,V}
+    key = convert(K, key)
+    val = convert(V, val)
     trie = dict.trie
     h = hash(key)
     found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
