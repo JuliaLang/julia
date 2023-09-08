@@ -257,11 +257,13 @@ end
 Determine whether a field `s` is declared `const` in a given type `t`.
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
+    @_foldable_meta
     t = unwrap_unionall(t)
     isa(t, DataType) || return false
     return isconst(t, fieldindex(t, s, false))
 end
 function isconst(@nospecialize(t::Type), s::Int)
+    @_foldable_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
@@ -279,11 +281,13 @@ end
 Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
 function isfieldatomic(@nospecialize(t::Type), s::Symbol)
+    @_foldable_meta
     t = unwrap_unionall(t)
     isa(t, DataType) || return false
     return isfieldatomic(t, fieldindex(t, s, false))
 end
 function isfieldatomic(@nospecialize(t::Type), s::Int)
+    @_foldable_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
