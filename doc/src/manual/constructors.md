@@ -121,7 +121,7 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
 is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (constrained to be of the correct type, if the corresponding field has a type),
+as parameters (without type constraints, even if the corresponding field has a type),
 and passes them to `new`, returning the resulting object:
 
 ```jldoctest
