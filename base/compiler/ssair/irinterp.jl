@@ -217,7 +217,7 @@ function BBScanner(ir::IRCode)
     return BBScanner(ir, bb_ip)
 end
 
-function scan!(@specialize(callback), scanner::BBScanner, forwards_only::Bool)
+function scan!(callback, scanner::BBScanner, forwards_only::Bool)
     (; bb_ip, ir) = scanner
     bbs = ir.cfg.blocks
     while !isempty(bb_ip)
