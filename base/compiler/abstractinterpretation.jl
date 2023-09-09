@@ -2481,6 +2481,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                     t = Const(false)
                 end
             end
+        else
+            effects = EFFECTS_UNKNOWN
         end
     elseif ehead === :throw_undef_if_not
         condt = argextype(stmt.args[2], ir)

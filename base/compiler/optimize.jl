@@ -335,9 +335,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 return (false, false, false)
             end
             return (false, true, true)
-        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds
+        elseif head === :inbounds
             return (true, true, true)
-        elseif head === :boundscheck
+        elseif head === :boundscheck || head === :isdefined || head === :the_exception || head === :copyast
             return (false, true, true)
         else
             # e.g. :loopinfo
