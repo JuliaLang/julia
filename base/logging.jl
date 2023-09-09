@@ -494,10 +494,7 @@ LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger
 
 const CURRENT_LOGSTATE = ScopedValue{Union{Nothing, LogState}}(nothing)
 
-function current_logstate()
-    logstate = CURRENT_LOGSTATE[]
-    return (logstate !== nothing ? logstate : _global_logstate)::LogState
-end
+current_logstate() = something(CURRENT_LOGSTATE[], _global_logstate)::LogState
 
 # helper function to get the current logger, if enabled for the specified message type
 @noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
