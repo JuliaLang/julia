@@ -2453,11 +2453,12 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             try
                 return Const(f(argvals...))
             catch
+                return Bottom
             end
         end
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
-            # invalid intrinsic
+            # unknown intrinsic
             return Any
         end
         tf = T_IFUNC[iidx]
