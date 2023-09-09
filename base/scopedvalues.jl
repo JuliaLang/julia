@@ -108,7 +108,8 @@ function Base.getindex(val::ScopedValue{T})::T where T
     if scope === nothing
         return val.initial_value
     end
-    @inline get(scope.values, val, val.initial_value)::T
+    # get(scope.values, val, val.initial_value) get's union-split if T is `Union{Nothing, V}`
+    @inline get(()-> val.initial_value, scope.values, val)::T
 end
 
 function Base.show(io::IO, var::ScopedValue)
