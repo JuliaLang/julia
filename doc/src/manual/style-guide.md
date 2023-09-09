@@ -448,10 +448,11 @@ julia> h(1)
 Thus, use `Int` literals when possible, with `Rational{Int}` for literal non-integer numbers,
 in order to make it easier to use your code.
 
-## Workarounds for named positional arguments
-Named positional arguments are not supported in Julia, however, some users may still wish to use a named positional arguments code-style.
-There are several workarounds that can provide an experience similar to named positionals.
-Consider the `mod` method, which a user might call with the ambiguous variables `a` and `b` in the positional arguments:
+## Options for referencing positional arguments by name
+Named positional arguments are not supported in Julia, however, some users may still wish to use a named positional arguments code-style supported by some languages.
+An example of a function, in a different language, supporting named positional arguments and keyword arguments is `f(x,y;z)`, which could then be called by either `f(a,b,z=c)` or with `f(x=a,b=y,z=c)`.  There are several workarounds that can provide an experience similar to named positionals.
+Consider the `mod` method, which a user might call with the variables `a` and `b` in the positional arguments:
+
 ```julia
 a = 5; b = 2
 mod( a, b )
