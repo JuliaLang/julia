@@ -119,10 +119,15 @@ existence by a call to one of the inner constructor methods provided with the ty
 some degree of enforcement of a type's invariants.
 
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
-that you have supplied yourself with all the inner constructors you need. The default constructor
-is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (without type constraints, even if the corresponding field has a type),
-and passes them to `new`, returning the resulting object:
+that you have supplied yourself with all the inner constructors you need.
+
+The default constructor is equivalent to writing one or two of your own constructor methods that take
+all of the object's fields as parameters.  One is an inner constructor method without type constraints
+on its parameters that passes the parameters to `new`, returning the resulting object.  The other
+default constructor method is provided if there are any type constraints on the fields. This method
+is an inner constructor method if the type is not generic and similarly passes the parameters to `new`.
+However, if the type is generic, it is an outer [Parametric Constructor](@ref) method that delegates
+to the inner constructor.
 
 ```jldoctest
 julia> struct Foo
@@ -130,12 +135,11 @@ julia> struct Foo
            baz
            Foo(bar,baz) = new(bar,baz)
        end
-
 ```
 
 This declaration has the same effect as the earlier definition of the `Foo` type without an explicit
 inner constructor method. The following two types are equivalent -- one with a default constructor,
-the other with an explicit constructor:
+the other with explicit constructors:
 
 ```jldoctest
 julia> struct T1
@@ -145,6 +149,7 @@ julia> struct T1
 julia> struct T2
            x::Int64
            T2(x) = new(x)
+           T2(x::Int64) = new(x)
        end
 
 julia> T1(1)
