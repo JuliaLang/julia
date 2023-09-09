@@ -805,8 +805,6 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
     return false
 end
 
-generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 struct EdgeCallResult
@@ -840,7 +838,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     else
         cache = :global # cache edge targets by default
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
@@ -1011,7 +1009,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             return inf
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         return retrieve_code_info(mi, get_world_counter(interp))
     end
     lock_mi_inference(interp, mi)

@@ -2346,3 +2346,22 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
     end
     return f, args, kwargs
 end
+
+"""
+    Base.generating_output([incremental::Bool])::Bool
+
+Return `true` if the current process is being used to pre-generate a
+code cache via any of the `--output-*` command line arguments. The
+optional argument `incremental` controls whether to only return `true`
+for that specific mode of compilation.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+function generating_output(incremental::Union{Bool,Nothing}=nothing)
+    ccall(:jl_generating_output, Cint, ()) == 0 && return false
+    if incremental !== nothing
+        JLOptions().incremental == incremental || return false
+    end
+    return true
+end
