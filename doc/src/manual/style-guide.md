@@ -447,3 +447,43 @@ julia> h(1)
 
 Thus, use `Int` literals when possible, with `Rational{Int}` for literal non-integer numbers,
 in order to make it easier to use your code.
+
+## Workarounds for named positional arguments
+Named positional arguments are not supported in Julia, however, some users may still wish to use a named positional arguments code-style.
+There are several workarounds that can provide an experience similar to named positionals.
+Consider the `mod` method, which a user might call with the ambiguous variables `a` and `b` in the positional arguments:
+```julia
+a = 5; b = 2
+mod( a, b )
+```
+
+One approach is to use inline comment blocks when calling the method:
+```julia
+mod( #=x=# a, #=y=# b )
+```
+
+or with end-of-line comments
+
+```julia
+mod( a, # x
+     b, # y
+    )
+```
+
+Furthermore the use of comments permit more descriptive names while not interfering with Julia's multiple dispatch on positional arguments:
+
+```julia
+mod( #=Dividend=# a, #=Divisor=# b )
+mod( a, # Dividend
+     b, # Divisor
+    )
+```
+
+A final option is to define your own wrapper for the method using keyword arguments:
+```julia
+import Base.mod
+function mod(; dividend, divisor )
+    return mod( dividend, divisor )
+end
+mod( dividend = a, divisor = b )
+```
