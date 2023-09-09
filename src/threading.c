@@ -702,21 +702,22 @@ void jl_init_threading(void)
     gc_first_tid = nthreads;
 }
 
-int jl_process_events_locked(void);
-void jl_utility_io_threadfun(void *arg) {
-
+int jl_process_events_locked(void) JL_NOTSAFEPOINT;
+void jl_utility_io_threadfun(void *arg)
+{
     jl_adopt_thread();
     jl_ptls_t ptls = jl_current_task->ptls;
-    jl_gc_safe_enter(ptls);
+    int8_t gc_state  = jl_gc_safe_enter(ptls);
     while (1) {
-        // Only reader of the rwlock, according to libuv lock is writer-biased
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0)
             if (JL_UV_TRYLOCK_NOGC())
             {
                 jl_process_events_locked();
                 JL_UV_UNLOCK_NOGC();
             }
+        // TODO: jl_fence(); // [^store_buffering_2]
     }
+    jl_gc_safe_leave(ptls, gc_state);
     return;
 }
 
@@ -781,10 +782,11 @@ void jl_start_threads(void)
         }
         uv_thread_detach(&uvtid);
     }
+    uv_barrier_wait(&thread_init_done);
+
+    // utility thread uses jl_adopt_thread
     uv_thread_create(&uvtid, jl_utility_io_threadfun, NULL);
     uv_thread_detach(&uvtid);
-
-    uv_barrier_wait(&thread_init_done);
 }
 
 // Profiling stubs

@@ -56,7 +56,7 @@ static void jl_uv_cb_walk_print(uv_handle_t *h, void *arg)
         jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
 }
 
-static void jl_uv_cb_wait_empty(uv_timer_t *t)
+static void jl_uv_cb_wait_empty(uv_timer_t *t) JL_NOTSAFEPOINT_ENTER
 {
     // make sure this is hidden now, since we would auto-unref it later
     uv_unref((uv_handle_t*)&signal_async);
@@ -69,7 +69,7 @@ static void jl_uv_cb_wait_empty(uv_timer_t *t)
     jl_ptls_t ptls = jl_current_task->ptls;
     int old_state = jl_gc_unsafe_enter(ptls);
     jl_gc_collect(JL_GC_FULL);
-    jl_gc_unsafe_leave(ptls,old_state);
+    jl_gc_unsafe_leave(ptls, old_state);
 }
 
 void jl_wait_empty_begin(void)
@@ -154,7 +154,7 @@ JL_DLLEXPORT void jl_iolock_end(void)
 }
 
 
-static void jl_uv_call_hook_close(jl_value_t *val)
+static void jl_uv_call_hook_close(jl_value_t *val) JL_NOTSAFEPOINT_ENTER
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     int old_state = jl_gc_unsafe_enter(ptls);
@@ -166,7 +166,7 @@ static void jl_uv_call_hook_close(jl_value_t *val)
     assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
     JL_GC_POP();
-    jl_gc_unsafe_leave(ptls,old_state);
+    jl_gc_unsafe_leave(ptls, old_state);
 }
 
 static void jl_uv_cb_close_handle(uv_handle_t *handle)
@@ -282,7 +282,10 @@ JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data;
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
 
-int jl_process_events_locked(void) {
+// This is JL_NOTSAFEPOINT, but the analyzer complains about uv_run.
+// Callabacks need to handle their GC transitions themselves.
+int jl_process_events_locked(void) // JL_NOTSAFEPOINT
+{
     uv_loop_t *loop = jl_io_loop;
     loop->stop_flag = 0;
     uv_ref((uv_handle_t*)&signal_async); // force the loop alive
