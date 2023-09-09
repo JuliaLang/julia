@@ -480,11 +480,36 @@ mod( a, # Dividend
     )
 ```
 
-A final option is to define your own wrapper for the method using keyword arguments:
+Another option is to define your own wrapper for the method using keyword arguments:
 ```julia
 import Base.mod
 function mod(; dividend, divisor )
     return mod( dividend, divisor )
 end
 mod( dividend = a, divisor = b )
+```
+
+A final option is to (re-)assign variable names that are clear within the context of your code.
+For example, instead of
+
+```julia
+a, b, c = get_unit_sale_data()
+d = mod( a, c )
+```
+
+do
+
+```julia
+units_sold, price_per_unit, units_per_package = get_unit_sale_data()
+leftover_units = mod( units_sold, units_per_package )
+```
+
+or
+
+```julia
+a, b, c = get_unit_sale_data()
+units_sold = a
+price_per_unit = b
+units_per_package = c
+leftover_units = mod( units_sold, units_per_package )
 ```
