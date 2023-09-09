@@ -817,14 +817,28 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
+function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
+    curr_flag = sv.src.ssaflags[sv.currpc]
+    sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
+end
+function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32=typemax(UInt32))
+    curr_flag = sv.ir.stmts[sv.curridx][:flag]
+    sv.ir.stmts[sv.curridx][:flag] = (curr_flag & ~mask) | flag
+end
+
 add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
 add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
 
 sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
 sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
 
-merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects) =
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
+    if effects.effect_free === EFFECT_FREE_GLOBALLY
+        # This tracks the global effects
+        effects = Effects(effects; effect_free=ALWAYS_TRUE)
+    end
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
 struct InferenceLoopState

@@ -1001,6 +1001,11 @@ isassigned_effects(s) = isassigned(Ref(s))
     isassigned_effects(:foo)
 end
 
+# :isdefined effects
+@test @eval Base.infer_effects() do
+    @isdefined($(gensym("some_undef_symbol")))
+end |> !Core.Compiler.is_consistent
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)

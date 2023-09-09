@@ -953,7 +953,7 @@ end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     inst = compact[SSAValue(idx)]
-    if !(iszero(inst[:flag] & IR_FLAG_NOTHROW) && iszero(inst[:flag] & IR_FLAG_EFFECT_FREE))
+    if (inst[:flag] & (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)) == (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)
         return # already accurate
     end
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
