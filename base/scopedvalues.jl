@@ -84,7 +84,7 @@ Scope(::Nothing) = nothing
 
 Return the current dynamic scope.
 """
-current_scope() = current_task().scope::Union{Nothing, Scope}
+current_scope() = current_task().scope
 
 function Base.show(io::IO, scope::Scope)
     print(io, Scope, "(")
@@ -118,7 +118,7 @@ end
     if scope === nothing
         return val.initial_value
     end
-    getindex_slow(scope, val)
+    getindex_slow(scope::Scope, val)
 end
 
 function Base.show(io::IO, var::ScopedValue)
