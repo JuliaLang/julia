@@ -984,6 +984,21 @@ function get(dict::PersistentDict{K,V}, key::K, default::V) where {K,V}
     return default
 end
 
+# Private version for ScopedValue
+function _get(dict::PersistentDict{K,V}, key::K) where {K,V}
+    trie = dict.trie
+    if HAMT.islevel_empty(trie)
+        return false, nothing
+    end
+    h = hash(key)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    if found && present
+        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        return true, leaf.val
+    end
+    return false, nothing
+end
+
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     trie = dict.trie
     if HAMT.islevel_empty(trie)

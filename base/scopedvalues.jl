@@ -103,13 +103,22 @@ function Base.show(io::IO, scope::Scope)
     print(io, ")")
 end
 
-function Base.getindex(val::ScopedValue{T})::T where T
+# Base._get is rather large and we don't want to inline that
+@noinline function getindex_slow(scope::Scope, val::ScopedValue{T})::T where T
+    found, v = @inline Base._get(scope.values, val)
+    if found
+        return v::T
+    else
+        return val.initial_value
+    end
+end
+
+@inline function Base.getindex(val::ScopedValue{T})::T where T
     scope = current_scope()
     if scope === nothing
         return val.initial_value
     end
-    # get(scope.values, val, val.initial_value) get's union-split if T is `Union{Nothing, V}`
-    @inline get(()-> val.initial_value, scope.values, val)::T
+    getindex_slow(scope, val)
 end
 
 function Base.show(io::IO, var::ScopedValue)
