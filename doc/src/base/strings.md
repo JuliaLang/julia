@@ -17,6 +17,13 @@ Core.String(::AbstractString)
 Base.SubString
 Base.LazyString
 Base.@lazy_str
+Base.StyledString
+Base.StyledChar
+Base.styledstring
+Base.Face
+Base.@S_str
+Base.addface!
+Base.loadfaces!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
