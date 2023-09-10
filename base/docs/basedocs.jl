@@ -1882,6 +1882,14 @@ Determine whether the given generic function has a method applicable to the give
 
 See also [`hasmethod`](@ref).
 
+!!! warning
+    It is not guaranteed that the function `f` will provide the expected return
+    or will not throw exceptions if `applicable` returns `true`. For example,
+    one function can define a general method like `f(x::Any) = error("Type not
+    supported")` to catch unsupported types. In this case, `applicable` can
+    return `true`, but an error will be thrown when calling `f` with the
+    selected arguments.
+
 # Examples
 ```jldoctest
 julia> function f(x, y)

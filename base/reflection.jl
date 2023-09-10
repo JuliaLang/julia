@@ -1902,6 +1902,14 @@ the provided names must be a subset of the method's keyword arguments.
 
 See also [`applicable`](@ref).
 
+!!! warning
+    It is not guaranteed that the function `f` will provide the expected return
+    or will not throw exceptions if `hasmethod` returns `true`. For example,
+    one function can define a general method like `f(x::Any) = error("Type not
+    supported")` to catch unsupported types. In this case, `hasmethod` can
+    return `true`, but an error will be thrown when calling `f` with the
+    selected arguments.
+
 !!! compat "Julia 1.2"
     Providing keyword argument names requires Julia 1.2 or later.
 
