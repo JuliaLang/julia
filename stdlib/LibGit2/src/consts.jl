@@ -341,6 +341,10 @@ const LIBSSH2_KNOWNHOST_CHECK_MISMATCH = 1
 const LIBSSH2_KNOWNHOST_CHECK_NOTFOUND = 2
 const LIBSSH2_KNOWNHOST_CHECK_FAILURE  = 3
 
+# Constants for fetch depth (shallowness of fetch).
+const FETCH_DEPTH_FULL = 0
+const FETCH_DEPTH_UNSHALLOW = 2147483647
+
 @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                             SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
                             SUBMODULE_IGNORE_UNTRACKED    = 2,  # dirty if tracked files change
@@ -432,19 +436,49 @@ Global library options.
 
 These are used to select which global option to set or get and are used in `git_libgit2_opts()`.
 """
-@enum(GIT_OPT, GET_MWINDOW_SIZE         = 0,
-               SET_MWINDOW_SIZE         = 1,
-               GET_MWINDOW_MAPPED_LIMIT = 2,
-               SET_MWINDOW_MAPPED_LIMIT = 3,
-               GET_SEARCH_PATH          = 4,
-               SET_SEARCH_PATH          = 5,
-               SET_CACHE_OBJECT_LIMIT   = 6,
-               SET_CACHE_MAX_SIZE       = 7,
-               ENABLE_CACHING           = 8,
-               GET_CACHED_MEMORY        = 9,
-               GET_TEMPLATE_PATH        = 10,
-               SET_TEMPLATE_PATH        = 11,
-               SET_SSL_CERT_LOCATIONS   = 12)
+@enum(GIT_OPT, GET_MWINDOW_SIZE = 0,
+               SET_MWINDOW_SIZE,
+               GET_MWINDOW_MAPPED_LIMIT,
+               SET_MWINDOW_MAPPED_LIMIT,
+               GET_SEARCH_PATH,
+               SET_SEARCH_PATH,
+               SET_CACHE_OBJECT_LIMIT,
+               SET_CACHE_MAX_SIZE,
+               ENABLE_CACHING,
+               GET_CACHED_MEMORY,
+               GET_TEMPLATE_PATH,
+               SET_TEMPLATE_PATH,
+               SET_SSL_CERT_LOCATIONS,
+               SET_USER_AGENT,
+               ENABLE_STRICT_OBJECT_CREATION,
+               ENABLE_STRICT_SYMBOLIC_REF_CREATION,
+               SET_SSL_CIPHERS,
+               GET_USER_AGENT,
+               ENABLE_OFS_DELTA,
+               ENABLE_FSYNC_GITDIR,
+               GET_WINDOWS_SHAREMODE,
+               SET_WINDOWS_SHAREMODE,
+               ENABLE_STRICT_HASH_VERIFICATION,
+               SET_ALLOCATOR,
+               ENABLE_UNSAVED_INDEX_SAFETY,
+               GET_PACK_MAX_OBJECTS,
+               SET_PACK_MAX_OBJECTS,
+               DISABLE_PACK_KEEP_FILE_CHECKS,
+               ENABLE_HTTP_EXPECT_CONTINUE,
+               GET_MWINDOW_FILE_LIMIT,
+               SET_MWINDOW_FILE_LIMIT,
+               SET_ODB_PACKED_PRIORITY,
+               SET_ODB_LOOSE_PRIORITY,
+               GET_EXTENSIONS,
+               SET_EXTENSIONS,
+               GET_OWNER_VALIDATION,
+               SET_OWNER_VALIDATION,
+               GET_HOMEDIR,
+               SET_HOMEDIR,
+               SET_SERVER_CONNECT_TIMEOUT,
+               GET_SERVER_CONNECT_TIMEOUT,
+               SET_SERVER_TIMEOUT,
+               GET_SERVER_TIMEOUT)
 
 """
 Option flags for `GitProxy`.
@@ -467,5 +501,10 @@ Option flags for `GitProxy`.
     TRACE_DEBUG
     TRACE_TRACE
 end
+
+# The type of object id
+@enum(GIT_OID_TYPE,
+      OID_DEFAULT = 0,
+      OID_SHA1 = 1)
 
 end
