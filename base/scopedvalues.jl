@@ -42,26 +42,35 @@ end
 
 Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 
-##
-# Notes on the implementation.
-# We want lookup to be unreasonably fast.
-# - IDDict/Dict are ~10ns
-# - ImmutableDict is faster up to about ~15 entries
-# - ScopedValue are meant to be constant, Immutabilty
-#   is thus a boon
-# - If we were to use IDDict/Dict we would need to split
-#   the cache portion and the value portion of the hash-table,
-#   the value portion is read-only/write-once, but the cache version
-#   would need a lock which makes ImmutableDict incredibly attractive.
-#   We could also use task-local-storage, but that added about 12ns.
-# - Values are GC'd when scopes become unreachable, one could use
-#   a WeakKeyDict to also ensure that values get GC'd when ScopedValues
-#   become unreachable.
-# - Scopes are an inline implementation of an ImmutableDict, if we wanted
-#   be really fancy we could use a CTrie or HAMT.
+mutable struct ScopedValueCache
+    parent::Union{Nothing, ScopedValueCache}
+    const key::ScopedValue
+    const val::Any
+end
+
+function lookup(cache::ScopedValueCache, key::ScopedValue)
+    depth = 0
+    while cache !== nothing
+        if cache.key === key
+            return true, cache.val
+        end
+        cache = cache.parent
+        depth += 1
+        if depth > 3
+            break
+        end
+    end
+    if cache !== nothing
+        cache.parent = nothing
+    end
+    return false, nothing
+end
 
 mutable struct Scope
-    values::Base.PersistentDict{ScopedValue, Any}
+    const task::Base.Task
+    const values::Base.PersistentDict{ScopedValue, Any}
+    cache::Union{Nothing, ScopedValueCache} # Only accessed if current_task() == task
+    Scope(values::Base.PersistentDict{ScopedValue, Any}) = new(Base.current_task(), values, nothing)
 end
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
     val = convert(T, value)
@@ -118,7 +127,20 @@ end
     if scope === nothing
         return val.initial_value
     end
-    getindex_slow(scope::Scope, val)
+    scope = scope::Scope
+    if scope.task !== current_task() # unlikely -- detect child.task and invalidate cache
+        current_task().scope = scope = Scope(scope.values)
+    end
+    cache = scope.cache
+    if cache !== nothing
+        found, v = @inline lookup(cache, val)
+        if found
+            return v::T
+        end
+    end
+    v = getindex_slow(scope, val)
+    scope.cache = ScopedValueCache(cache, val, v)
+    return v::T
 end
 
 function Base.show(io::IO, var::ScopedValue)
