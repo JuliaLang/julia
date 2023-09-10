@@ -507,4 +507,9 @@ end
       OID_DEFAULT = 0,
       OID_SHA1 = 1)
 
+# Direction of the connection.
+@enum(GIT_DIRECTION,
+      DIRECTION_FETCH = 0,
+      DIRECTION_PUSH = 1)
+
 end

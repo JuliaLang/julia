@@ -596,6 +596,44 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
     return repo
 end
 
+"""
+    connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION; kwargs...)
+
+Open a connection to a remote. `direction` can be either `DIRECTION_FETCH`
+or `DIRECTION_PUSH`.
+
+The keyword arguments are:
+  * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
+    against a private repository.
+  * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
+"""
+function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
+                 credentials::Creds=nothing,
+                 callbacks::Callbacks=Callbacks())
+    cred_payload = reset!(CredentialPayload(credentials))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
+    remote_callbacks = RemoteCallbacks(callbacks)
+    try
+        connect(rmt, direction, remote_callbacks)
+    catch err
+        if isa(err, GitError) && err.code === Error.EAUTH
+            reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
+        end
+        rethrow()
+    end
+    approve(cred_payload)
+    return rmt
+end
+
 """ git reset [<committish>] [--] <pathspecs>... """
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
     obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)

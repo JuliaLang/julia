@@ -1010,7 +1010,7 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
-    (:GitRemote,         :GitRepo,                :AbstractGitObject, :git_remote),
+    (:GitRemote,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_remote),
     (:GitRevWalker,      :GitRepo,                :AbstractGitObject, :git_revwalk),
     (:GitReference,      :GitRepo,                :AbstractGitObject, :git_reference),
     (:GitDescribeResult, :GitRepo,                :AbstractGitObject, :git_describe_result),
@@ -1486,3 +1486,26 @@ end
 
 # Useful for functions which can handle various kinds of credentials
 const Creds = Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}
+
+struct _GitRemoteHead
+    available_local::Cint
+    oid::GitHash
+    loid::GitHash
+    name::Cstring
+    symref_target::Cstring
+end
+
+struct GitRemoteHead
+    available_local::Bool
+    oid::GitHash
+    loid::GitHash
+    name::String
+    symref_target::Union{Nothing,String}
+    function GitRemoteHead(head::_GitRemoteHead)
+        name = unsafe_string(head.name)
+        symref_target = (head.symref_target != C_NULL ?
+            unsafe_string(head.symref_target) : nothing)
+        return new(head.available_local != 0,
+                   head.oid, head.loid, name, symref_target)
+    end
+end
