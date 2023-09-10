@@ -61,56 +61,64 @@ Base.eltype(::Type{ScopedValue{T}}) where {T} = T
 #   be really fancy we could use a CTrie or HAMT.
 
 mutable struct Scope
-    const parent::Union{Nothing, Scope}
-    const key::ScopedValue
-    const value::Any
-    Scope(parent, key::ScopedValue{T}, value::T) where T = new(parent, key, value)
+    values::Base.PersistentDict{ScopedValue, Any}
 end
-Scope(parent, key::ScopedValue{T}, value) where T =
-    Scope(parent, key, convert(T, value))
+function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
+    val = convert(T, value)
+    if parent === nothing
+        return Scope(Base.PersistentDict{ScopedValue, Any}(key=>val))
+    end
+    return Scope(Base.PersistentDict(parent.values, key=>convert(T, val)))
+end
 
 function Scope(scope, pairs::Pair{<:ScopedValue}...)
     for pair in pairs
         scope = Scope(scope, pair...)
     end
-    return scope
+    return scope::Scope
 end
+Scope(::Nothing) = nothing
 
 """
     current_scope()::Union{Nothing, Scope}
 
 Return the current dynamic scope.
 """
-current_scope() = current_task().scope::Union{Nothing, Scope}
+current_scope() = current_task().scope
 
 function Base.show(io::IO, scope::Scope)
     print(io, Scope, "(")
-    seen = Set{ScopedValue}()
-    while scope !== nothing
-        if scope.key ∉ seen
-            if !isempty(seen)
-                print(io, ", ")
-            end
-            print(io, typeof(scope.key), "@")
-            show(io, Base.objectid(scope.key))
-            print(io, " => ")
-            show(IOContext(io, :typeinfo => eltype(scope.key)), scope.value)
-            push!(seen, scope.key)
+    first = true
+    for (key, value) in scope.values
+        if first
+            first = false
+        else
+            print(io, ", ")
         end
-        scope = scope.parent
+        print(io, typeof(key), "@")
+        show(io, Base.objectid(key))
+        print(io, " => ")
+        show(IOContext(io, :typeinfo => eltype(key)), value)
     end
     print(io, ")")
 end
 
-function Base.getindex(var::ScopedValue{T})::T where T
-    scope = current_scope()
-    while scope !== nothing
-        if scope.key === var
-            return scope.value::T
-        end
-        scope = scope.parent
+# Base._get is rather large and we don't want to inline that
+@noinline function getindex_slow(scope::Scope, val::ScopedValue{T})::T where T
+    found, v = @inline Base._get(scope.values, val)
+    if found
+        return v::T
+    else
+        return val.initial_value
     end
-    return var.initial_value
+end
+
+@inline function Base.getindex(val::ScopedValue{T})::T where T
+    scope = current_scope()
+    if scope === nothing
+        return val.initial_value
+    end
+    getindex_slow(scope::Scope, val)
 end
 
 function Base.show(io::IO, var::ScopedValue)
