@@ -25,7 +25,6 @@
     XX(jl_arrayref) \
     XX(jl_arrayset) \
     XX(jl_arrayunset) \
-    XX(jl_array_cconvert_cstring) \
     XX(jl_array_copy) \
     XX(jl_array_del_at) \
     XX(jl_array_del_beg) \
