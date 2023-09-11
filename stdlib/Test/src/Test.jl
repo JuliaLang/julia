@@ -2173,7 +2173,7 @@ function guardseed(f::Function, r::AbstractRNG=default_rng())
     end
 end
 
-"`guardseed(f, seed)` is equivalent to running 
+"`guardseed(f, seed)` is equivalent to running
 `Random.seed!(Random.default_rng(), seed); f()` and
 then restoring the state of the task-local RNG as it was before."
 guardseed(f::Function, seed::Union{Vector{UInt64},Vector{UInt32},Integer,NTuple{4,UInt64}}) = guardseed() do
