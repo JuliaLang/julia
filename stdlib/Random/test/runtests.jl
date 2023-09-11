@@ -330,7 +330,7 @@ for f in (:<, :<=, :>, :>=, :(==), :(!=))
 end
 
 # test all rand APIs
-for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
+for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()], [Random.XoshiroSplit()])
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
@@ -452,7 +452,7 @@ function hist(X, n)
 end
 
 # test uniform distribution of floats
-for rng in [MersenneTwister(), RandomDevice(), Xoshiro()],
+for rng in [MersenneTwister(), RandomDevice(), Xoshiro(), Random.XoshiroSplit()],
     T in [Float16, Float32, Float64, BigFloat],
         prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
     setprecision(BigFloat, prec) do
@@ -474,7 +474,7 @@ end
         # but also for 3 linear combinations of positions (for the array version)
         lcs = unique!.([rand(1:n, 2), rand(1:n, 3), rand(1:n, 5)])
         aslcs = zeros(Int, 3)
-        for rng = (MersenneTwister(), RandomDevice(), Xoshiro())
+        for rng = (MersenneTwister(), RandomDevice(), Xoshiro(), Random.XoshiroSplit())
             for scalar = [false, true]
                 fill!(a, 0)
                 fill!(as, 0)
@@ -499,7 +499,7 @@ end
     end
 end
 
-@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro,Random.XoshiroSplit)
     mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
@@ -685,7 +685,7 @@ end
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
-@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro)
+@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro, Random.XoshiroSplit)
     m = RNG()
     a = rand(m, Int)
     m = RNG()
@@ -706,9 +706,9 @@ end
     @test rand(m, Int) ∉ (a, b, c, d)
 end
 
-@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
+@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro,Random.XoshiroSplit)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
-    if RNG == Xoshiro
+    if RNG == Xoshiro || RNG == Random.XoshiroSplit
         push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
@@ -759,7 +759,7 @@ struct RandomStruct23964 end
     @test_throws MethodError rand(RandomStruct23964())
 end
 
-@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro(), Random.XoshiroSplit()),
                                                         T ∈ (Int8, Int16, Int32, UInt32, Int64, Int128, UInt128)
     for S in (SamplerRangeInt, SamplerRangeFast, SamplerRangeNDL)
         S == SamplerRangeNDL && sizeof(T) > 8 && continue
@@ -813,7 +813,7 @@ end
     @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
 
-    xo = Xoshiro()
+    xo = Random.XoshiroSplit()
     @test copy!(xo, GLOBAL_RNG) === xo
     @test xo == LOCAL_RNG
     Random.seed!(xo, 2)

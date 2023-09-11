@@ -1419,12 +1419,12 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
-Moreover, after the execution of the body, the state of the global RNG is
-restored to what it was before the `@testset`. This is meant to ease
+call to `Random.seed!(seed)` where `seed` is the current global RNG seed.
+Moreover, after the execution of the body, the state of the task-local RNG and
+the global RNG seed are
+restored to what they were before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
-re-arrangements of `@testset`s regardless of their side-effect on the
-global RNG state.
+re-arrangements of `@testset`s regardless of their RNG side-effects.
 
 ## Examples
 ```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
@@ -2163,7 +2163,7 @@ Base.setindex!(a::GenericArray, x, i::Int) = a.a[i] = x
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardseed(f)` runs the function `f()` and then restores the
-state of the global RNG as it was before."
+state of the task-local RNG as it was before."
 function guardseed(f::Function, r::AbstractRNG=default_rng())
     old = copy(r)
     try
@@ -2173,10 +2173,11 @@ function guardseed(f::Function, r::AbstractRNG=default_rng())
     end
 end
 
-"`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
-then restoring the state of the global RNG as it was before."
+"`guardseed(f, seed)` is equivalent to running 
+`Random.seed!(Random.default_rng(), seed); f()` and
+then restoring the state of the task-local RNG as it was before."
 guardseed(f::Function, seed::Union{Vector{UInt64},Vector{UInt32},Integer,NTuple{4,UInt64}}) = guardseed() do
-    Random.seed!(seed)
+    Random.seed!(Random.default_rng(), seed)
     f()
 end
 

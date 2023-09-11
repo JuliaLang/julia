@@ -2,7 +2,7 @@
 
 module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
-import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, CloseOpen01, UnsafeView,
+import ..Random: TaskLocalRNG, rand, rand!, XoshiroLike, CloseOpen01, UnsafeView,
                  SamplerType, SamplerTrivial
 using Base: BitInteger_types
 using Base.Libc: memcpy
@@ -122,12 +122,21 @@ for N in [4,8,16]
 end
 
 
-function forkRand(rng::Union{TaskLocalRNG, Xoshiro}, ::Val{N}) where N
-    # constants have nothing up their sleeve. For more discussion, cf rng_split in task.c
-    # 0x02011ce34bce797f == hash(UInt(1))|0x01
-    # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
-    # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
-    # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
+function forkRand(rng::XoshiroLike, ::Val{N}) where N
+    #= TODO: consider a less ad-hoc construction
+       Ideally we could just use the output of the random stream to seed the initial
+       state of the child. Out of an overabundance of caution we multiply with
+       effectively random coefficients, to break possible self-interactions.
+       It is not the goal to mix bits -- we work under the assumption that the
+       source is well-seeded, and its output looks effectively random.
+       However, xoshiro has never been studied in the mode where we seed the
+       initial state with the output of another xoshiro instance.
+       Constants have nothing up their sleeve:
+       0x02011ce34bce797f == hash(UInt(1))|0x01
+       0x5a94851fb48a6e05 == hash(UInt(2))|0x01
+       0x3688cf5d48899fa7 == hash(UInt(3))|0x01
+       0x867b4bb4c42e5661 == hash(UInt(4))|0x01
+    =#
     s0 = ntuple(i->VecElement(0x02011ce34bce797f * rand(rng, UInt64)), Val(N))
     s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 * rand(rng, UInt64)), Val(N))
     s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 * rand(rng, UInt64)), Val(N))
@@ -137,7 +146,7 @@ end
 
 _id(x, T) = x
 
-@inline function xoshiro_bulk(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, T::Union{Type{UInt8}, Type{Bool}, Type{Float32}, Type{Float64}}, ::Val{N}, f::F = _id) where {N, F}
+@inline function xoshiro_bulk(rng::XoshiroLike, dst::Ptr{UInt8}, len::Int, T::Union{Type{UInt8}, Type{Bool}, Type{Float32}, Type{Float64}}, ::Val{N}, f::F = _id) where {N, F}
     if len >= simdThreshold(T)
         written = xoshiro_bulk_simd(rng, dst, len, T, Val(N), f)
         len -= written
@@ -149,12 +158,12 @@ _id(x, T) = x
     nothing
 end
 
-@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, f::F) where {T, F}
+@noinline function xoshiro_bulk_nosimd(rng::XoshiroLike, dst::Ptr{UInt8}, len::Int, ::Type{T}, f::F) where {T, F}
     if rng isa TaskLocalRNG
         task = current_task()
         s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
     else
-        (; s0, s1, s2, s3) = rng::Xoshiro
+        (; s0, s1, s2, s3) = rng
     end
 
     i = 0
@@ -191,12 +200,12 @@ end
     nothing
 end
 
-@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, f)
+@noinline function xoshiro_bulk_nosimd(rng::XoshiroLike, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, f)
     if rng isa TaskLocalRNG
         task = current_task()
         s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
     else
-        (; s0, s1, s2, s3) = rng::Xoshiro
+        (; s0, s1, s2, s3) = rng
     end
 
     i = 0
@@ -241,7 +250,7 @@ end
 end
 
 
-@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}, f::F) where {T,N,F}
+@noinline function xoshiro_bulk_simd(rng::XoshiroLike, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}, f::F) where {T,N,F}
     s0, s1, s2, s3 = forkRand(rng, Val(N))
 
     i = 0
@@ -260,7 +269,7 @@ end
     return i
 end
 
-@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}, f) where {N}
+@noinline function xoshiro_bulk_simd(rng::XoshiroLike, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}, f) where {N}
     s0, s1, s2, s3 = forkRand(rng, Val(N))
     msk = ntuple(i->VecElement(0x0101010101010101), Val(N))
     i = 0
@@ -284,24 +293,24 @@ end
 end
 
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Float32}, ::SamplerTrivial{CloseOpen01{Float32}})
+function rand!(rng::XoshiroLike, dst::Array{Float32}, ::SamplerTrivial{CloseOpen01{Float32}})
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*4, Float32, xoshiroWidth(), _bits2float)
     dst
 end
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Float64}, ::SamplerTrivial{CloseOpen01{Float64}})
+function rand!(rng::XoshiroLike, dst::Array{Float64}, ::SamplerTrivial{CloseOpen01{Float64}})
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*8, Float64, xoshiroWidth(), _bits2float)
     dst
 end
 
 for T in BitInteger_types
-    @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Union{Array{$T}, UnsafeView{$T}}, ::SamplerType{$T})
+    @eval function rand!(rng::XoshiroLike, dst::Union{Array{$T}, UnsafeView{$T}}, ::SamplerType{$T})
         GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof($T), UInt8, xoshiroWidth())
         dst
     end
 end
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Bool}, ::SamplerType{Bool})
+function rand!(rng::XoshiroLike, dst::Array{Bool}, ::SamplerType{Bool})
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst), Bool, xoshiroWidth())
     dst
 end

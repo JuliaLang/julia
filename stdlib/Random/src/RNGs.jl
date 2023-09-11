@@ -333,7 +333,7 @@ typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
 """
     default_rng() -> rng
 
-Return the default global random number generator (RNG).
+Return the default task-local random number generator (RNG).
 
 !!! note
     What the default RNG is is an implementation detail.  Across different versions of
@@ -346,8 +346,8 @@ Return the default global random number generator (RNG).
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()
 
-copy!(dst::Xoshiro, ::_GLOBAL_RNG) = copy!(dst, default_rng())
-copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
+copy!(dst::XoshiroSplit, ::_GLOBAL_RNG) = copy!(dst, default_rng())
+copy!(::_GLOBAL_RNG, src::XoshiroSplit) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
