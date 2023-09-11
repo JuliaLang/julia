@@ -1185,7 +1185,7 @@ Base.show(io::IO, ::Struct49454) =
 
 let buf = IOBuffer()
     ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
-    show(stdout, MIME("text/plain"), md"""
+    show(ctx, MIME("text/plain"), md"""
     text without $(Struct49454()) underline.
     """)
     lines = split(String(take!(buf)), '\n')
