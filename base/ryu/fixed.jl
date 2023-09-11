@@ -59,7 +59,7 @@ function writefixed(buf, pos, v::T,
                 pos = append_nine_digits(digits, buf, pos)
             elseif digits != 0
                 olength = decimallength(digits)
-                pos = append_n_digits(olength, digits, buf, pos)
+                pos = append_c_digits(olength, digits, buf, pos)
                 nonzero = true
             end
             i -= 1
