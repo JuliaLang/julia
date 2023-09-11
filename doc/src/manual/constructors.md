@@ -122,10 +122,10 @@ If any inner constructor method is defined, no default constructor method is pro
 that you have supplied yourself with all the inner constructors you need.
 
 The default constructor is equivalent to writing one or two of your own constructor methods that take
-all of the object's fields as parameters.  One is an inner constructor method without type constraints
-on its parameters that passes the parameters to `new`, returning the resulting object.  The other
+all of the object's fields as arguments.  One is an inner constructor method without type constraints
+on its arguments that passes the them to `new`, returning the resulting object.  The other
 default constructor method is provided if there are any type constraints on the fields. This method
-is an inner constructor method if the type is not generic and similarly passes the parameters to `new`.
+is an inner constructor method if the type is not generic and similarly passes the arguments to `new`.
 However, if the type is generic, it is an outer [Parametric Constructor](@ref) method that delegates
 to the inner constructor.
 
