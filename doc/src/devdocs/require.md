@@ -7,7 +7,7 @@ precompilation cache. It is the implementation of the `import` statement.
 The features below are experimental and not part of the stable Julia API.
 Before building upon them inform yourself about the current thinking and whether they might change soon.
 
-### Module loading callbacks
+### Package loading callbacks
 
 It is possible to listen to the packages loaded by `Base.require`, by registering a callback.
 
