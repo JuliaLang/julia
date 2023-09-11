@@ -1490,6 +1490,16 @@ let src = @eval Module() begin
     @test count(iscall((src, Base.add_int)), src.code) == 1
 end
 
+function foo()
+    arr = Int[0]
+    a = arr[]
+    arr[] = 1
+    b = arr[]
+    (a, b)
+end
+
+@test foo() == (0, 1)
+
 # Issue #51144 - UndefRefError during compaction
 let code = Any[
         # block 1  → 2, 3
