@@ -2167,7 +2167,7 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
         return nothing
     end
 end
-function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
+function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree)
     length(stmt.values) == 0 && return nothing
 
     no_of_edges = length(stmt.edges)
@@ -2177,6 +2177,9 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
     key[no_of_edges+2] = blockidx
     copyto!(key, no_of_edges+3, stmt.values)
 
+    firstval = nothing
+    firstedge = Int32(0)
+    allthesame = true # If all values into phi node are the same SSAValue
     deletions = 0
     for j in eachindex(stmt.values)
         !isassigned(stmt.values, j) && return nothing
@@ -2189,7 +2192,18 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx)
             deletions += 1
         elseif val isa SSAValue
             key[no_of_edges+2-deletions+j] = ssa_to_ssa[val.id]
+            if firstval === nothing
+                firstval = val
+                firstedge = stmt.edges[j]
+            else
+                allthesame &= val === firstval
+            end
+        else
+            allthesame = false
         end
+    end
+    if isempty(stmt.values) & allthesame && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
+        return firstval
     end
     return svec(key...)
 end
@@ -2212,6 +2226,8 @@ function gvn!(ir::IRCode)
     # Value type is SSAValue in order to reuse cache from it being boxed in svec
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
     sizehint!(val_to_ssa, length(ir.stmts))
+
+    lazydomtree = LazyDomtree(ir)
 
     while changed
         changed = false
@@ -2238,7 +2254,15 @@ function gvn!(ir::IRCode)
                 end
                 perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
-                perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx)
+                value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
+                if value isa SSAValue 
+                    if ssa_to_ssa[i] != value.id
+                        ssa_to_ssa[i] = value.id
+                        changed = true
+                    end
+                    continue
+                end
+                value
             end
             if value === nothing
                 ssa_to_ssa[i] = i
@@ -2274,7 +2298,7 @@ function gvn!(ir::IRCode)
         return ir
     end
 
-    domtree = construct_domtree(ir.cfg.blocks)
+    domtree = get!(lazydomtree)
     dfsnumbers = construct_dfsnumbers(domtree)
 
     # Eliminate Common Subexpressions
