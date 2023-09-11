@@ -2209,7 +2209,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
 end
 
 """
-    gnv!(ir::IRCode) -> newir::IRCode
+    gvn!(ir::IRCode) -> newir::IRCode
 
 Global Value Numbering (GVN) pass.
 
@@ -2222,8 +2222,8 @@ The elimination step is based on the implemenation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
     changed = true
-    ssa_to_ssa = fill(0, length(ir.stmts.stmt)) # Map from ssa to ssa of equivalent value
-    # Value type is SSAValue in order to reuse cache from it being boxed in svec
+    ssa_to_ssa = fill(0, length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    # Value type of val_to_ssa is a SSAValue in order to reuse cache from it being boxed in svec
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
     sizehint!(val_to_ssa, length(ir.stmts))
 
@@ -2276,6 +2276,7 @@ function gvn!(ir::IRCode)
                 changed = true
             end
         end
+
         empty!(val_to_ssa)
         sizehint!(val_to_ssa, length(ir.stmts))
     end
