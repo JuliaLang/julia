@@ -709,13 +709,15 @@ void jl_utility_io_threadfun(void *arg)
     jl_ptls_t ptls = jl_current_task->ptls;
     int8_t gc_state  = jl_gc_safe_enter(ptls);
     while (1) {
+        jl_fence(); // [^store_buffering_2]
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0)
+        {
             if (JL_UV_TRYLOCK_NOGC())
             {
                 jl_process_events_locked();
                 JL_UV_UNLOCK_NOGC();
             }
-        // TODO: jl_fence(); // [^store_buffering_2]
+        }
     }
     jl_gc_safe_leave(ptls, gc_state);
     return;
