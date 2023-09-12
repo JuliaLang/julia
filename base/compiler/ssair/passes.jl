@@ -2255,7 +2255,7 @@ function gvn!(ir::IRCode)
                 perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
                 value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
-                if value isa SSAValue 
+                if value isa SSAValue
                     if ssa_to_ssa[i] != value.id
                         ssa_to_ssa[i] = value.id
                         changed = true
