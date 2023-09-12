@@ -221,6 +221,8 @@ allocations, and the total number of bytes its execution caused to be allocated,
 returning the value of the expression. Any time spent garbage collecting (gc), compiling
 new code, or recompiling invalidated code is shown as a percentage.
 
+Returns the value of `expr`.
+
 Optionally provide a description string to print before the time report.
 
 In some cases the system will look inside the `@time` expression and compile some of the
