@@ -2237,7 +2237,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
         }
         default: {
             // `empty-chunk` should be checked by caller
-            jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c->cid);
+            jl_safe_printf("GC internal error: chunk mismatch\n");
             abort();
         }
     }
