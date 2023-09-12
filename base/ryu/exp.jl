@@ -176,7 +176,7 @@ function writeexp(buf, pos, v::T,
     end
     roundUp = 0
     if lastDigit != 5
-        roundUp = lastDigit > 5
+        roundUp = lastDigit > 5 ? 1 : 0
     else
         rexp = precision - e
         requiredTwos = -e2 - rexp
