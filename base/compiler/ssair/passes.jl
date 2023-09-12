@@ -2168,7 +2168,7 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
     end
 end
 function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree)
-    length(stmt.values) == 0 && return nothing
+    isempty(stmt.values) && return nothing
 
     no_of_edges = length(stmt.edges)
 
@@ -2206,7 +2206,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
             allthesame = false
         end
     end
-    if allthesame && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
+    if allthesame & firstval !== nothing && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
         return firstval
     end
     return svec(key...)
