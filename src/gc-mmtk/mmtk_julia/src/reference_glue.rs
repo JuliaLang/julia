@@ -37,7 +37,7 @@ impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
     type FinalizableType = JuliaFinalizableObject;
     fn set_referent(reference: ObjectReference, referent: ObjectReference) {
         unsafe {
-            let mut reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
+            let reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
             let referent_raw = referent.to_raw_address().to_mut_ptr::<mmtk_jl_value_t>();
             (*reff).value = referent_raw;
         }

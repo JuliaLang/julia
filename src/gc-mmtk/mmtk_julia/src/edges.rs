@@ -252,7 +252,7 @@ impl RootsWorkClosure {
         if !buf.is_null() {
             let buf = unsafe { Vec::<ObjectReference>::from_raw_parts(buf, size, cap) };
             let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-            factory.create_process_node_roots_work(buf);
+            factory.create_process_pinning_roots_work(buf);
         }
 
         if renew {
