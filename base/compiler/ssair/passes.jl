@@ -2202,7 +2202,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
             allthesame = false
         end
     end
-    if isempty(stmt.values) & allthesame && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
+    if allthesame && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
         return firstval
     end
     return svec(key...)
