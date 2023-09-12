@@ -596,7 +596,7 @@ dominates(domtree::DomTree, bb1::BBNumber, bb2::BBNumber) =
     _dominates(domtree, bb1, bb2)
 
 """
-    postdominates(domtree::DomTree, bb1::Int, bb2::Int) -> Bool
+    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int) -> Bool
 
 Checks if `bb1` post-dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.

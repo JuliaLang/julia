@@ -144,14 +144,30 @@ function compute_basic_blocks(stmts::Vector{Any})
 end
 
 # this function assumes insert position exists
+function is_valid_phiblock_stmt(@nospecialize(stmt))
+    isa(stmt, PhiNode) && return true
+    isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
+    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    return true
+end
+
 function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
-    for idx in cfg.blocks[block].stmts
+    stmts = cfg.blocks[block].stmts
+    lastnonphiidx = first(stmts)
+    for idx in stmts
         stmt = code[idx]
         if !isa(stmt, PhiNode)
-            return idx
+            if !is_valid_phiblock_stmt(stmt)
+                return lastnonphiidx
+            end
+        else
+            lastnonphiidx = idx + 1
         end
     end
-    error("any insert position isn't found")
+    if lastnonphiidx > last(stmts)
+        error("any insert position isn't found")
+    end
+    return lastnonphiidx
 end
 
 # SSA values that need renaming
@@ -190,7 +206,7 @@ struct InstructionStream
     type::Vector{Any}
     info::Vector{CallInfo}
     line::Vector{Int32}
-    flag::Vector{UInt8}
+    flag::Vector{UInt32}
 end
 function InstructionStream(len::Int)
     stmts = Vector{Any}(undef, len)
@@ -291,9 +307,9 @@ struct NewInstruction
     type::Any
     info::CallInfo
     line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
-    flag::Union{UInt8,Nothing} # if nothing, IR flags will be recomputed on insertion
+    flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-                            line::Union{Int32,Nothing}, flag::Union{UInt8,Nothing})
+                            line::Union{Int32,Nothing}, flag::Union{UInt32,Nothing})
         return new(stmt, type, info, line, flag)
     end
 end
@@ -306,7 +322,7 @@ function NewInstruction(newinst::NewInstruction;
     type::Any=newinst.type,
     info::CallInfo=newinst.info,
     line::Union{Int32,Nothing}=newinst.line,
-    flag::Union{UInt8,Nothing}=newinst.flag)
+    flag::Union{UInt32,Nothing}=newinst.flag)
     return NewInstruction(stmt, type, info, line, flag)
 end
 function NewInstruction(inst::Instruction;
@@ -314,19 +330,19 @@ function NewInstruction(inst::Instruction;
     type::Any=inst[:type],
     info::CallInfo=inst[:info],
     line::Union{Int32,Nothing}=inst[:line],
-    flag::Union{UInt8,Nothing}=inst[:flag])
+    flag::Union{UInt32,Nothing}=inst[:flag])
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
 effect_free_and_nothrow(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-with_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=add_flag(newinst, flags))
-without_flags(newinst::NewInstruction, flags::UInt8) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
-function add_flag(newinst::NewInstruction, newflag::UInt8)
+with_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=add_flag(newinst, flags))
+without_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
+function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     flag === nothing && return newflag
     return flag | newflag
 end
-function sub_flag(newinst::NewInstruction, newflag::UInt8)
+function sub_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     flag === nothing && return IR_FLAG_NULL
     return flag & ~newflag
@@ -811,7 +827,7 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
 end
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
-    newline::Int32=newinst.line::Int32, newflag::UInt8=newinst.flag::UInt8)
+    newline::Int32=newinst.line::Int32, newflag::UInt32=newinst.flag::UInt32)
     node[:stmt] = newinst.stmt
     node[:type] = newinst.type
     node[:info] = newinst.info
@@ -833,6 +849,10 @@ function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,Incremen
         flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     elseif nothrow
         flag |= IR_FLAG_NOTHROW
+    end
+    if !isexpr(newinst.stmt, :call) && !isexpr(newinst.stmt, :invoke)
+        # See comment in check_effect_free!
+        flag |= IR_FLAG_NOUB
     end
     return flag
 end
@@ -1084,7 +1104,7 @@ end
 
 # N.B.: Don't make this <: Function to avoid ::Function deopt
 struct Refiner
-    result_flags::Vector{UInt8}
+    result_flags::Vector{UInt32}
     result_idx::Int
 end
 (this::Refiner)() = (this.result_flags[this.result_idx] |= IR_FLAG_REFINED; nothing)
@@ -1390,7 +1410,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         if cfg_transforms_enabled
             # Rename phi node edges
             let bb_rename_pred=bb_rename_pred
-                map!(i::Int32->bb_rename_pred[i], stmt.edges, stmt.edges)
+                map!(i::Int32->i == 0 ? 0 : bb_rename_pred[i], stmt.edges, stmt.edges)
             end
 
             # Remove edges and values associated with dead blocks. Entries in
@@ -1449,7 +1469,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
     elseif isa(stmt, PhiCNode)
         ssa_rename[idx] = SSAValue(result_idx)
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        values = stmt.values
+        if cfg_transforms_enabled
+            # Filter arguments that come from dead blocks
+            values = Any[]
+            for value in stmt.values
+                if isa(value, SSAValue)
+                    blk = block_for_inst(compact.ir.cfg, value.id)
+                    if bb_rename_pred[blk] < 0
+                        continue
+                    end
+                end
+                push!(values, value)
+            end
+        end
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)

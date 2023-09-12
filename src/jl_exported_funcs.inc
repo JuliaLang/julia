@@ -176,6 +176,7 @@
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
     XX(jl_gc_is_in_finalizer) \
+    XX(jl_gc_pool_live_bytes) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -562,24 +563,8 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
-    YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraAddLowerSimdLoopPass) \
-    YY(LLVMExtraAddFinalLowerGCPass) \
-    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
-    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraAddCombineMulAddPass) \
-    YY(LLVMExtraAddMultiVersioningPass) \
-    YY(LLVMExtraAddLowerExcHandlersPass) \
-    YY(LLVMExtraAddLateLowerGCFramePass) \
-    YY(LLVMExtraJuliaLICMPass) \
-    YY(LLVMExtraAddAllocOptPass) \
-    YY(LLVMExtraAddLowerPTLSPass) \
-    YY(LLVMExtraAddRemoveNIPass) \
-    YY(LLVMExtraAddGCInvariantVerifierPass) \
-    YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \

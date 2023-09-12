@@ -199,41 +199,31 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
-    if @isdefined(E)
-        return E
-    else
-        # TODO: need to guard against E being miscomputed by subtyping (ref #23017)
-        # and compute the result manually in this case
-        return _compute_eltype(t)
-    end
-end
+# the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
+eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _tuple_unique_fieldtypes(@nospecialize t)
+function _compute_eltype(@nospecialize t)
     @_total_meta
-    types = IdSet()
+    has_free_typevars(t) && return Any
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
     if t´ isa Union
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
-    else
-        for ti in (t´::DataType).parameters
-            push!(types, rewrap_unionall(unwrapva(ti), t))
-        end
+        return promote_typejoin(_compute_eltype(rewrap_unionall(t´.a, t)),
+                                _compute_eltype(rewrap_unionall(t´.b, t)))
     end
-    return Core.svec(types...)
-end
-function _compute_eltype(@nospecialize t)
-    @_total_meta # TODO: the compiler shouldn't need this
-    types = _tuple_unique_fieldtypes(t)
-    return afoldl(types...) do a, b
-        # if we've already reached Any, it can't widen any more
-        a === Any && return Any
-        b === Any && return Any
-        return promote_typejoin(a, b)
+    p = (t´::DataType).parameters
+    length(p) == 0 && return Union{}
+    elt = rewrap_unionall(unwrapva(p[1]), t)
+    elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+    r = elt
+    for i in 2:length(p)
+        r === Any && return r # if we've already reached Any, it can't widen any more
+        elt = rewrap_unionall(unwrapva(p[i]), t)
+        elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+        r = promote_typejoin(elt, r)
     end
+    return r
 end
 
 # We'd like to be able to infer eltype(::Tuple), which needs to be able to

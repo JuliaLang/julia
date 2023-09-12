@@ -23,11 +23,15 @@ end
 
 # MethodMatchInfo -- global cache
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        # TODO: This is to prevent this function from having ConstABI,
+        # which currently breaks EA (xref, #51143)
+        Base.donotdelete(1)
         return noescape(x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         identity(x)
         return nothing
     end
@@ -46,6 +50,7 @@ let result = code_escapes((SafeRef{String},); optimize=false) do x
     @test has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         r = Ref{SafeRef{String}}()
         r[] = x
         return r
@@ -66,6 +71,7 @@ let result = code_escapes((Bool,Vector{Any}); optimize=false) do c, s
     @test has_all_escape(result.state[Argument(3)]) # s
 end
 let result = code_escapes((Bool,Vector{Any}); optimize=false) do c, s
+        Base.donotdelete(1) # TODO #51143
         x = c ? SafeRef(s) : SafeRefs(s, s)
         union_escape!(x)
     end
@@ -73,17 +79,20 @@ let result = code_escapes((Bool,Vector{Any}); optimize=false) do c, s
 end
 # ConstCallInfo -- local cache
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         return conditional_escape!(false, x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 # InvokeCallInfo
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         return @invoke noescape(x::Any)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         return @invoke conditional_escape!(false::Any, x::Any)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
@@ -96,18 +105,20 @@ end
 # no method error
 identity_if_string(x::SafeRef) = nothing
 let result = code_escapes((SafeRef{String},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         identity_if_string(x)
     end
     @test !has_thrown_escape(result.state[Argument(2)])
     @test !has_return_escape(result.state[Argument(2)])
 end
 let result = code_escapes((Union{SafeRef{String},Vector{String}},); optimize=false) do x
+        Base.donotdelete(1) # TODO #51143
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))
     r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_thrown_escape(result.state[Argument(2)], i)
-    @test !has_return_escape(result.state[Argument(2)], r)
+    @test_broken !has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
         try
@@ -140,8 +151,8 @@ let result = code_escapes((SafeRef{String},Any); optimize=false) do x, y
     r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_thrown_escape(result.state[Argument(2)], i)  # x
     @test has_thrown_escape(result.state[Argument(3)], i)  # y
-    @test !has_return_escape(result.state[Argument(2)], r)  # x
-    @test !has_return_escape(result.state[Argument(3)], r)  # y
+    @test_broken !has_return_escape(result.state[Argument(2)], r)  # x
+    @test_broken !has_return_escape(result.state[Argument(3)], r)  # y
 end
 let result = code_escapes((SafeRef{String},Any); optimize=false) do x, y
         try

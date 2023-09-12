@@ -1703,7 +1703,7 @@ If a module or file is *not* safely precompilable, it should call `__precompile_
 order to throw an error if Julia attempts to precompile it.
 """
 @noinline function __precompile__(isprecompilable::Bool=true)
-    if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
+    if !isprecompilable && generating_output()
         throw(PrecompilableError())
     end
     nothing
@@ -1843,7 +1843,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
-            if (0 != ccall(:jl_generating_output, Cint, ())) && (JLOptions().incremental != 0)
+            if generating_output(#=incremental=#true)
                 error("Replacing module `$(key.name)`")
             else
                 @warn "Replacing module `$(key.name)`"
@@ -1894,7 +1894,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
     if path !== nothing
         # Pkg needs access to the version of packages in the sysimage.
-        if Core.Compiler.generating_sysimg()
+        if generating_output(#=incremental=#false)
             pkgorigin.version = get_pkgversion_from_path(joinpath(dirname(path), ".."))
         end
     end
@@ -1949,7 +1949,7 @@ function _require(pkg::PkgId, env=nothing)
         end
 
         if JLOptions().use_compiled_modules == 1
-            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+            if !generating_output(#=incremental=#false)
                 if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)

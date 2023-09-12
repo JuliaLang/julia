@@ -209,8 +209,17 @@ JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEA
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
+    // This is nopl 0(%rax, %rax, 1), but assembler are incosistent about whether
+    // they emit that as a 4 or 5 byte sequence and we need to be guaranteed to use
+    // the 5 byte one.
+#define NOP5_OVERRIDE_NOP ".byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n\t"
     uint64_t low, high;
-    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    // This instruction sequence is promised by rr to be patchable. rr can usually
+    // also patch `rdtsc` in regular code, but without the preceeding nop, there could
+    // be an interfering branch into the middle of rr's patch region. Using this
+    // sequence prevents a massive rr-induced slowdown if the compiler happens to emit
+    // an unlucky pattern. See https://github.com/rr-debugger/rr/pull/3580.
+    __asm__ volatile(NOP5_OVERRIDE_NOP "rdtsc" : "=a"(low), "=d"(high));
     return (high << 32) | low;
 #elif defined(_CPU_X86_)
     int64_t ret;
@@ -1210,7 +1219,7 @@ STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSA
     return itr-2 - jl_excstack_bt_size(stack, itr);
 }
 // Exception stack manipulation
-void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size);
 
@@ -1220,6 +1229,8 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 
 STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
 {
+    if (max == 0)
+        return 0;
     uint64_t mask = ~(uint64_t)0;
     --max;
     mask >>= __builtin_clzll(max|1);
@@ -1634,6 +1645,17 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
 
+#ifdef _OS_WINDOWS_
+// On Windows, weak symbols do not default to 0 due to a GCC bug
+// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
+// aliases with a known value instead.
+#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
+#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
+#else
+#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
+#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
+#endif
+
 JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
@@ -1650,6 +1672,8 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 
 // -- exports from codegen -- //
+
+#define IR_FLAG_INBOUNDS 0x01
 
 JL_DLLIMPORT jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
@@ -1671,7 +1695,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_m
 JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache, size_t world);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, ios_t *s);
+        ios_t *z, ios_t *s, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,

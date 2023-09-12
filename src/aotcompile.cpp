@@ -1021,13 +1021,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     {
         timers.optimize.startTimer();
 
-#ifndef JL_USE_NEW_PM
-        legacy::PassManager optimizer;
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-#else
-
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
                 SourceTM.getTargetTriple().str(),
@@ -1038,7 +1031,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
-#endif
         optimizer.run(M);
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
@@ -1470,13 +1462,16 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     return threads;
 }
 
+jl_emission_params_t default_emission_params = { 1 };
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        ios_t *z, ios_t *s)
+        ios_t *z, ios_t *s,
+        jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -1485,6 +1480,11 @@ void jl_dump_native_impl(void *native_code,
         delete data;
         return;
     }
+
+    if (!params) {
+        params = &default_emission_params;
+    }
+
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1634,10 +1634,10 @@ void jl_dump_native_impl(void *native_code,
 
             // let the compiler know we are going to internalize a copy of this,
             // if it has a current usage with ExternalLinkage
-            auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
-            if (small_typeof_copy) {
-                small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-                small_typeof_copy->setDSOLocal(true);
+            auto jl_small_typeof_copy = dataM.getGlobalVariable("jl_small_typeof");
+            if (jl_small_typeof_copy) {
+                jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+                jl_small_typeof_copy->setDSOLocal(true);
             }
         }
 
@@ -1655,6 +1655,7 @@ void jl_dump_native_impl(void *native_code,
         data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
     }
 
+    if (params->emit_metadata)
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
@@ -1712,13 +1713,13 @@ void jl_dump_native_impl(void *native_code,
             auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
             auto ptls = emit_ptls_table(metadataM, T_size, T_psize);
             auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
-            auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
-            auto small_typeof_copy = new GlobalVariable(metadataM, AT, false,
+            auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
+            auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
                                                         Constant::getNullValue(AT),
-                                                        "small_typeof");
-            small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-            small_typeof_copy->setDSOLocal(true);
+                                                        "jl_small_typeof");
+            jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+            jl_small_typeof_copy->setDSOLocal(true);
             AT = ArrayType::get(T_psize, 5);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
@@ -1726,7 +1727,7 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(header, T_psize),
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
-                                                    ConstantExpr::getBitCast(small_typeof_copy, T_psize),
+                                                    ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize)
                                             }),
                                             "jl_image_pointers");
@@ -1780,312 +1781,10 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
-
-void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
-{
-    // TODO: don't do this on CPUs that natively support Float16
-    PM->add(createDemoteFloat16Pass());
-    if (optlevel > 1)
-        PM->add(createGVNPass());
-}
-
-// this defines the set of optimization passes defined for Julia at various optimization levels.
-// it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native,
-                           bool external_use)
-{
-    // Note: LLVM 12 disabled the hoisting of common instruction
-    //       before loop vectorization (https://reviews.llvm.org/D84108).
-    //
-    // TODO: CommonInstruction hoisting/sinking enables AllocOpt
-    //       to merge allocations and sometimes eliminate them,
-    //       since AllocOpt does not handle PhiNodes.
-    //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
-        .convertSwitchRangeToICmp(true)
-        .convertSwitchToLookupTable(true)
-        .forwardSwitchCondToPhi(true);
-    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
-        .convertSwitchRangeToICmp(true)
-        .convertSwitchToLookupTable(true)
-        .forwardSwitchCondToPhi(true)
-        //These mess with loop rotation, so only do them after that
-        .hoistCommonInsts(true)
-        // Causes an SRET assertion error in late-gc-lowering
-        // .sinkCommonInsts(true)
-        ;
-#ifdef JL_DEBUG_BUILD
-    PM->add(createGCInvariantVerifierPass(true));
-    PM->add(createVerifierPass());
-#endif
-
-    PM->add(createConstantMergePass());
-    if (opt_level < 2) {
-        if (!dump_native) {
-            // we won't be multiversioning, so lower CPU feature checks early on
-            // so that we can avoid an additional CFG simplification pass at the end.
-            PM->add(createCPUFeaturesPass());
-            if (opt_level == 1)
-                PM->add(createInstSimplifyLegacyPass());
-        }
-        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-        if (opt_level == 1) {
-            PM->add(createSROAPass());
-            PM->add(createInstructionCombiningPass());
-            PM->add(createEarlyCSEPass());
-            // maybe add GVN?
-            // also try GVNHoist and GVNSink
-        }
-        PM->add(createMemCpyOptPass());
-        PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (lower_intrinsics) {
-            PM->add(createBarrierNoopPass());
-            PM->add(createLowerExcHandlersPass());
-            PM->add(createGCInvariantVerifierPass(false));
-            PM->add(createRemoveNIPass());
-            PM->add(createLateLowerGCFramePass());
-            PM->add(createFinalLowerGCPass());
-            PM->add(createLowerPTLSPass(dump_native));
-        }
-        else {
-            PM->add(createRemoveNIPass());
-        }
-        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native) {
-            PM->add(createMultiVersioningPass(external_use));
-            PM->add(createCPUFeaturesPass());
-            // minimal clean-up to get rid of CPU feature checks
-            if (opt_level == 1) {
-                PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-            }
-        }
-#if JL_LLVM_VERSION < 150000
-#if defined(_COMPILER_ASAN_ENABLED_)
-        PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-        PM->add(createThreadSanitizerLegacyPassPass());
-#endif
-#endif
-        return;
-    }
-    PM->add(createPropagateJuliaAddrspaces());
-    PM->add(createScopedNoAliasAAWrapperPass());
-    PM->add(createTypeBasedAAWrapperPass());
-    if (opt_level >= 3) {
-        PM->add(createBasicAAWrapperPass());
-    }
-
-    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createSROAPass());
-
-    //PM->add(createMemCpyOptPass());
-
-    PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-
-    // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
-    // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
-    // pass.
-    PM->add(createAllocOptPass());
-    // consider AggressiveInstCombinePass at optlevel > 2
-    PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    if (dump_native) {
-        PM->add(createStripDeadPrototypesPass());
-        PM->add(createMultiVersioningPass(external_use));
-    }
-    PM->add(createCPUFeaturesPass());
-    PM->add(createSROAPass());
-    PM->add(createInstSimplifyLegacyPass());
-    PM->add(createJumpThreadingPass());
-    PM->add(createCorrelatedValuePropagationPass());
-
-    PM->add(createReassociatePass());
-
-    PM->add(createEarlyCSEPass());
-
-    // Load forwarding above can expose allocations that aren't actually used
-    // remove those before optimizing loops.
-    PM->add(createAllocOptPass());
-    PM->add(createLoopRotatePass());
-    // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
-#ifdef USE_POLLY
-    // LCSSA (which has already run at this point due to the dependencies of the
-    // above passes) introduces redundant phis that hinder Polly. Therefore we
-    // run InstCombine here to remove them.
-    PM->add(createInstructionCombiningPass());
-    PM->add(polly::createCodePreparationPass());
-    polly::registerPollyPasses(*PM);
-    PM->add(polly::createCodegenCleanupPass());
-#endif
-    // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-    PM->add(createLICMPass());
-    PM->add(createJuliaLICMPass());
-#if JL_LLVM_VERSION >= 150000
-    PM->add(createSimpleLoopUnswitchLegacyPass());
-#else
-    PM->add(createLoopUnswitchPass());
-#endif
-    PM->add(createLICMPass());
-    PM->add(createJuliaLICMPass());
-    PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
-    // Subsequent passes not stripping metadata from terminator
-    PM->add(createInstSimplifyLegacyPass());
-    PM->add(createLoopIdiomPass());
-    PM->add(createIndVarSimplifyPass());
-    PM->add(createLoopDeletionPass());
-    PM->add(createSimpleLoopUnrollPass());
-
-    // Run our own SROA on heap objects before LLVM's
-    PM->add(createAllocOptPass());
-    // Re-run SROA after loop-unrolling (useful for small loops that operate,
-    // over the structure of an aggregate)
-    PM->add(createSROAPass());
-    // might not be necessary:
-    PM->add(createInstSimplifyLegacyPass());
-
-    PM->add(createGVNPass());
-    PM->add(createMemCpyOptPass());
-    PM->add(createSCCPPass());
-
-    //These next two passes must come before IRCE to eliminate the bounds check in #43308
-    PM->add(createCorrelatedValuePropagationPass());
-    PM->add(createDeadCodeEliminationPass());
-
-    PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
-
-    // Run instcombine after redundancy elimination to exploit opportunities
-    // opened up by them.
-    // This needs to be InstCombine instead of InstSimplify to allow
-    // loops over Union-typed arrays to vectorize.
-    PM->add(createInstructionCombiningPass());
-    PM->add(createJumpThreadingPass());
-    if (opt_level >= 3) {
-        PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
-    }
-    PM->add(createDeadStoreEliminationPass());
-    // see if all of the constant folding has exposed more loops
-    // to simplification and deletion
-    // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
-    PM->add(createAllocOptPass());
-    PM->add(createLoopDeletionPass());
-    PM->add(createInstructionCombiningPass());
-    PM->add(createLoopVectorizePass());
-    PM->add(createLoopLoadEliminationPass());
-    // Cleanup after LV pass
-    PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        aggressiveSimplifyCFGOptions
-    ));
-    PM->add(createSLPVectorizerPass());
-    // might need this after LLVM 11:
-    //PM->add(createVectorCombinePass());
-
-    PM->add(createAggressiveDCEPass());
-
-    if (lower_intrinsics) {
-        // LowerPTLS removes an indirect call. As a result, it is likely to trigger
-        // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-executed. Prevent this by inserting a barrier.
-        PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
-        PM->add(createGCInvariantVerifierPass(false));
-        // Needed **before** LateLowerGCFrame on LLVM < 12
-        // due to bug in `CreateAlignmentAssumption`.
-        PM->add(createRemoveNIPass());
-        PM->add(createLateLowerGCFramePass());
-        PM->add(createFinalLowerGCPass());
-        // We need these two passes and the instcombine below
-        // after GC lowering to let LLVM do some constant propagation on the tags.
-        // and remove some unnecessary write barrier checks.
-        PM->add(createGVNPass());
-        PM->add(createSCCPPass());
-        // Remove dead use of ptls
-        PM->add(createDeadCodeEliminationPass());
-        PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createInstructionCombiningPass());
-        // Clean up write barrier and ptls lowering
-        PM->add(createCFGSimplificationPass());
-    }
-    else {
-        PM->add(createRemoveNIPass());
-    }
-    PM->add(createCombineMulAddPass());
-    PM->add(createDivRemPairsPass());
-#if JL_LLVM_VERSION < 150000
-#if defined(_COMPILER_ASAN_ENABLED_)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-    PM->add(createThreadSanitizerLegacyPassPass());
-#endif
-#endif
-}
-
-// An LLVM module pass that just runs all julia passes in order. Useful for
-// debugging
-template <int OptLevel, bool dump_native>
-class JuliaPipeline : public Pass {
-public:
-    static char ID;
-    // A bit of a hack, but works
-    struct TPMAdapter : public PassManagerBase {
-        PMTopLevelManager *TPM;
-        TPMAdapter(PMTopLevelManager *TPM) : TPM(TPM) {}
-        void add(Pass *P) { TPM->schedulePass(P); }
-    };
-    void preparePassManager(PMStack &Stack) override {
-        (void)jl_init_llvm();
-        PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
-        TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-        addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
-        addMachinePasses(&Adapter, OptLevel);
-    }
-    JuliaPipeline() : Pass(PT_PassManager, ID) {}
-    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
-        return createPrintModulePass(O, Banner);
-    }
-};
-template<> char JuliaPipeline<0,false>::ID = 0;
-template<> char JuliaPipeline<2,false>::ID = 0;
-template<> char JuliaPipeline<3,false>::ID = 0;
-template<> char JuliaPipeline<0,true>::ID = 0;
-template<> char JuliaPipeline<2,true>::ID = 0;
-template<> char JuliaPipeline<3,true>::ID = 0;
-static RegisterPass<JuliaPipeline<0,false>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
-static RegisterPass<JuliaPipeline<2,false>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
-static RegisterPass<JuliaPipeline<3,false>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
-
-static RegisterPass<JuliaPipeline<0,true>> XS("juliaO0-sysimg", "Runs the entire julia pipeline (at -O0/sysimg mode)", false, false);
-static RegisterPass<JuliaPipeline<2,true>> YS("julia-sysimg", "Runs the entire julia pipeline (at -O2/sysimg mode)", false, false);
-static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire julia pipeline (at -O3/sysimg mode)", false, false);
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
-    addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
-}
-
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
-// this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
+// This is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
@@ -2103,12 +1802,13 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     jl_code_instance_t *codeinst = NULL;
     JL_GC_PUSH3(&src, &jlrettype, &codeinst);
     if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && mi->def.method->source != jl_nothing && jl_ir_flag_inferred(mi->def.method->source)) {
+        // uninferred opaque closure
         src = (jl_code_info_t*)mi->def.method->source;
         if (src && !jl_is_code_info(src))
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
     }
     else {
-        jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
+        jl_value_t *ci = params.lookup(mi, world, world);
         if (ci != jl_nothing) {
             codeinst = (jl_code_instance_t*)ci;
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -2188,14 +1888,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
-#ifndef JL_USE_NEW_PM
-                legacy::PassManager PM;
-                addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-                addOptimizationPasses(&PM, jl_options.opt_level);
-                addMachinePasses(&PM, jl_options.opt_level);
-#else
                 NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
-#endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));

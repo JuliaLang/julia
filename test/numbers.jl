@@ -3123,3 +3123,20 @@ end
     end
 
 end
+
+@testset "FP(inf) == inf" begin
+    # Iterate through all pairs of FP types
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    for F ∈ fp_types, G ∈ fp_types, f ∈ (typemin, typemax)
+        i = f(F)
+        @test i == G(i)
+    end
+end
+
+@testset "small int FP conversion" begin
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    m = Int(maxintfloat(Float16))
+    for F ∈ fp_types, G ∈ fp_types, n ∈ (-m):m
+        @test n == G(F(n)) == F(G(n))
+    end
+end

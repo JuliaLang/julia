@@ -53,6 +53,14 @@ Dict{String, Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
+
+!!! warning
+
+    Keys are allowed to be mutable, but if you do mutate stored
+    keys, the hash table may become internally inconsistent, in which case
+    the `Dict` will not work properly. [`IdDict`](@ref) can be an
+    alternative if you need to mutate keys.
+
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
@@ -869,3 +877,145 @@ empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 _similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
 _similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+
+
+include("hamt.jl")
+using .HashArrayMappedTries
+const HAMT = HashArrayMappedTries
+
+struct PersistentDict{K,V} <: AbstractDict{K,V}
+    trie::HAMT.HAMT{K,V}
+end
+
+"""
+    PersistentDict
+
+`PersistentDict` is a dictionary implemented as an hash array mapped trie,
+which is optimal for situations where you need persistence, each operation
+returns a new dictonary separate from the previous one, but the underlying
+implementation is space-efficient and may share storage across multiple
+separate dictionaries.
+
+    PersistentDict(KV::Pair)
+
+# Examples
+
+```jldoctest
+julia> dict = Base.PersistentDict(:a=>1)
+Base.PersistentDict{Symbol, Int64} with 1 entry:
+  :a => 1
+
+julia> dict2 = Base.delete(dict, :a)
+Base.PersistentDict{Symbol, Int64}()
+
+julia> dict3 = Base.PersistentDict(dict, :a=>2)
+Base.PersistentDict{Symbol, Int64} with 1 entry:
+  :a => 2
+```
+"""
+PersistentDict
+
+PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
+PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT(KV...))
+PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
+function PersistentDict(dict::PersistentDict{K,V}, key::K, val::V) where {K,V}
+    trie = dict.trie
+    h = hash(key)
+    found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+    HAMT.insert!(found, present, trie, i, bi, hs, val)
+    return PersistentDict(top)
+end
+
+function PersistentDict(kv::Pair, rest::Pair...)
+    dict = PersistentDict(kv)
+    for kv in rest
+        key, value = kv
+        dict = PersistentDict(dict, key, value)
+    end
+    return dict
+end
+
+eltype(::PersistentDict{K,V}) where {K,V} = Pair{K,V}
+
+function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K,V}
+    trie = dict.trie
+    if HAMT.islevel_empty(trie)
+        return false
+    end
+
+    key, val = key_val
+
+    h = hash(key)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    if found && present
+        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        return valcmp(val, leaf.val) && return true
+    end
+    return false
+end
+
+function haskey(dict::PersistentDict{K}, key::K) where K
+    trie = dict.trie
+    h = hash(key)
+    found, present, _, _, _, _, _ = HAMT.path(trie, key, h)
+    return found && present
+end
+
+function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
+    trie = dict.trie
+    if HAMT.islevel_empty(trie)
+        throw(KeyError(key))
+    end
+    h = hash(key)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    if found && present
+        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        return leaf.val
+    end
+    throw(KeyError(key))
+end
+
+function get(dict::PersistentDict{K,V}, key::K, default::V) where {K,V}
+    trie = dict.trie
+    if HAMT.islevel_empty(trie)
+        return default
+    end
+    h = hash(key)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    if found && present
+        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        return leaf.val
+    end
+    return default
+end
+
+function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
+    trie = dict.trie
+    if HAMT.islevel_empty(trie)
+        return default
+    end
+    h = hash(key)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    if found && present
+        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        return leaf.val
+    end
+    return default()
+end
+
+iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
+
+function delete(dict::PersistentDict{K}, key::K) where K
+    trie = dict.trie
+    h = hash(key)
+    found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+    if found && present
+        deleteat!(trie.data, i)
+        HAMT.unset!(trie, bi)
+    end
+    return PersistentDict(top)
+end
+
+length(dict::PersistentDict) = HAMT.length(dict.trie)
+isempty(dict::PersistentDict) = HAMT.isempty(dict.trie)
+empty(::PersistentDict, ::Type{K}, ::Type{V}) where {K, V} = PersistentDict{K, V}()
