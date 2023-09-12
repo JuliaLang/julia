@@ -2171,27 +2171,31 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     length(stmt.values) == 0 && return nothing
 
     no_of_edges = length(stmt.edges)
-    key = Vector{Any}(undef, no_of_edges*2 + 2)
-    copyto!(key, stmt.edges)
-    key[no_of_edges+1] = :phi # delimiter to seperate edges and rest
-    key[no_of_edges+2] = blockidx
-    copyto!(key, no_of_edges+3, stmt.values)
+
+    perms = collect(1:no_of_edges)
+    sort!(perms; by=i->stmt.edges[i])
+    key = Vector{Any}(undef, no_of_edges*2 + 1)
+    for (i, perm) in enumerate(perms)
+        key[i] = stmt.edges[perm]
+
+        !isassigned(stmt.values, perm) && return nothing
+        key[i + no_of_edges] = stmt.values[perm]
+    end
+    key[end] = blockidx
 
     firstval = nothing
     firstedge = Int32(0)
     allthesame = true # If all values into phi node are the same SSAValue
     deletions = 0
     for j in eachindex(stmt.values)
-        !isassigned(stmt.values, j) && return nothing
-
         val = stmt.values[j]
         if val isa SSAValue && ssa_to_ssa[val.id] == 0
             deleteat!(key, j-deletions)
             deletions += 1
-            deleteat!(key, no_of_edges+2-deletions+j)
+            deleteat!(key, no_of_edges-deletions+j)
             deletions += 1
         elseif val isa SSAValue
-            key[no_of_edges+2-deletions+j] = ssa_to_ssa[val.id]
+            key[no_of_edges-deletions+j] = ssa_to_ssa[val.id]
             if firstval === nothing
                 firstval = val
                 firstedge = stmt.edges[j]
