@@ -562,9 +562,9 @@ end
 # domination analysis
 let ir = Base.code_ircode(exp, (Float64,)) |> only |> first
     domtree = Core.Compiler.construct_domtree(ir)
-    dfsnumbers = Core.Compiler.construct_dfsnumbers(domtree)
+    dfscached_domtree = Core.Compiler.construct_dfscached_domtree(domtree)
     for bb1 in eachindex(ir.cfg.blocks), bb2 in eachindex(ir.cfg.blocks)
-        @test Core.Compiler.dominates(domtree, bb1, bb2) == Core.Compiler.dominates(dfsnumbers, bb1, bb2)
+        @test Core.Compiler.dominates(domtree, bb1, bb2) == Core.Compiler.dominates(dfscached_domtree, bb1, bb2)
     end
 end
 
