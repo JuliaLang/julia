@@ -2300,15 +2300,15 @@ function gvn!(ir::IRCode)
     end
 
     domtree = get!(lazydomtree)
-    dfsnumbers = construct_dfsnumbers(domtree)
+    dfscached_domtree = construct_dfscached_domtree(domtree)
 
     # Eliminate Common Subexpressions
     # https://github.com/llvm/llvm-project/blob/232f0c9a9aa14802139126e97fcd0b5874b2f150/llvm/lib/Transforms/Scalar/NewGVN.cpp#L3979-L4040
     for class in values(congruence_classes)
-        sort!(class; by=x->(dfsnumbers[x.blockidx].in, dfsnumbers[x.blockidx].out, x.ssa))
+        sort!(class; by=x->(dfscached_domtree.dfsnumbers[x.blockidx].in, dfscached_domtree.dfsnumbers[x.blockidx].out, x.ssa))
         elimination_stack = CongruenceClassElement[]
         for (; ssa, blockidx) in class
-            while !isempty(elimination_stack) && !dominates(dfsnumbers, last(elimination_stack).blockidx, blockidx)
+            while !isempty(elimination_stack) && !dominates(dfscached_domtree, last(elimination_stack).blockidx, blockidx)
                 pop!(elimination_stack)
             end
             if isempty(elimination_stack)

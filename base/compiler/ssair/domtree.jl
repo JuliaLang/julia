@@ -733,37 +733,42 @@ struct DFSNumber
     out::Int
 end
 
+struct DFSCachedDomtree
+    dfsnumbers::Vector{DFSNumber}
+end
+
 # Based on updateDFSNumbers() in LLVM
-function construct_dfsnumbers(domtree::DomTree)
+function construct_dfscached_domtree(domtree::DomTree)
     dfsnumbers = fill(DFSNumber(1, 0), length(domtree.nodes))
 
     workstack = [(1, 1)] # index into domtree, index into children of node
 
-    DFSNum = 1
+    dfsnum = 1
     while !isempty(workstack)
-        DFSNum += 1
+        dfsnum += 1
         nodeidx, relchildidx = workstack[end]
 
         # If we have visited all children of this node then this is the last time we will
         # visit this node
         if relchildidx > length(domtree.nodes[nodeidx].children)
-            dfsnumbers[nodeidx] = DFSNumber(dfsnumbers[nodeidx].in, DFSNum)
+            dfsnumbers[nodeidx] = DFSNumber(dfsnumbers[nodeidx].in, dfsnum)
             pop!(workstack)
         else
             # Otherwise visit its next child
             workstack[end] = (nodeidx, relchildidx + 1)
             childidx = domtree.nodes[nodeidx].children[relchildidx]
             push!(workstack, (childidx, 1))
-            dfsnumbers[childidx] = DFSNumber(DFSNum, dfsnumbers[childidx].out)
+            dfsnumbers[childidx] = DFSNumber(dfsnum, dfsnumbers[childidx].out)
         end
     end
 
-    return dfsnumbers
+    return DFSCachedDomtree(dfsnumbers)
 end
 
 """
-    dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::Int, bb2::Int) -> Bool
+    dominates(dfstree::DFSCachedDomtree, bb1::Int, bb2::Int) -> Bool
 """
-function dominates(dfsnumbers::AbstractVector{DFSNumber}, bb1::BBNumber, bb2::BBNumber)
+function dominates(dfstree::DFSCachedDomtree, bb1::BBNumber, bb2::BBNumber)
+    dfsnumbers = dfstree.dfsnumbers
     dfsnumbers[bb1].in <= dfsnumbers[bb2].in && dfsnumbers[bb2].out <= dfsnumbers[bb1].out
 end
