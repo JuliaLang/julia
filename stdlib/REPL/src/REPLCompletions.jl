@@ -429,7 +429,7 @@ function get_code_cache()
     #     that those produced by `NativeInterpreter`, will leak into the native code cache,
     #     potentially causing runtime slowdown.
     #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if (@ccall jl_generating_output()::Cint) == 1
+    if Base.generating_output()
         return REPLInterpreterCache()
     else
         return REPL_INTERPRETER_CACHE

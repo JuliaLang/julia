@@ -587,6 +587,8 @@ end
 end
 
 
+global _global_logstate::LogState
+
 """
     global_logger()
 

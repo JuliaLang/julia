@@ -741,7 +741,7 @@ typedef struct {
     /* XX(slotnumber) */ \
     /* XX(ssavalue) */ \
     /* end of JL_SMALL_TYPEOF */
-enum jlsmall_typeof_tags {
+enum jl_small_typeof_tags {
     jl_null_tag = 0,
 #define XX(name) jl_##name##_tag,
     JL_SMALL_TYPEOF(XX)
@@ -750,13 +750,23 @@ enum jlsmall_typeof_tags {
     jl_bitstags_first = jl_char_tag, // n.b. bool is not considered a bitstype, since it can be compared by pointer
     jl_max_tags = 64
 };
-extern jl_datatype_t *small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+extern JL_DLLIMPORT jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+#ifndef JL_LIBRARY_EXPORTS_INTERNAL
 static inline jl_value_t *jl_to_typeof(uintptr_t t)
 {
     if (t < (jl_max_tags << 4))
-        return (jl_value_t*)small_typeof[t / sizeof(*small_typeof)];
+        return (jl_value_t*)jl_small_typeof[t / sizeof(*jl_small_typeof)];
     return (jl_value_t*)t;
 }
+#else
+extern JL_HIDDEN jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+static inline jl_value_t *jl_to_typeof(uintptr_t t)
+{
+    if (t < (jl_max_tags << 4))
+        return (jl_value_t*)ijl_small_typeof[t / sizeof(*ijl_small_typeof)];
+    return (jl_value_t*)t;
+}
+#endif
 
 
 // kinds
@@ -1853,7 +1863,7 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 typedef enum {
     JL_IMAGE_CWD = 0,
     JL_IMAGE_JULIA_HOME = 1,
-    //JL_IMAGE_LIBJULIA = 2,
+    JL_IMAGE_IN_MEMORY = 2
 } JL_IMAGE_SEARCH;
 
 JL_DLLIMPORT const char *jl_get_libdir(void);
@@ -2371,10 +2381,6 @@ typedef struct {
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
-
-    // If not `nothing`, rewrite all generic calls to call
-    // generic_context(f, args...) instead of f(args...).
-    jl_value_t *generic_context;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 

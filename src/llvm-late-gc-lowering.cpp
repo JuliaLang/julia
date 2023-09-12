@@ -19,7 +19,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/ModuleSlotTracker.h>
@@ -312,23 +311,6 @@ struct State {
     State(Function &F) : F(&F), DT(nullptr), MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
 };
 
-
-
-struct LateLowerGCFrameLegacy: public FunctionPass {
-    static char ID;
-    LateLowerGCFrameLegacy() : FunctionPass(ID) {}
-
-protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
-
-private:
-    bool runOnFunction(Function &F) override;
-};
 
 struct LateLowerGCFrame:  private JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
@@ -2789,18 +2771,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     return true;
 }
 
-bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
-    auto GetDT = [this]() -> DominatorTree & {
-        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    };
-    auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
-    bool modified = lateLowerGCFrame.runOnFunction(F);
-#ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(F));
-#endif
-    return modified;
-}
-
 PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     auto GetDT = [&AM, &F]() -> DominatorTree & {
@@ -2820,18 +2790,4 @@ PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
         }
     }
     return PreservedAnalyses::all();
-}
-
-
-char LateLowerGCFrameLegacy::ID = 0;
-static RegisterPass<LateLowerGCFrameLegacy> X("LateLowerGCFrame", "Late Lower GCFrame Pass", false, false);
-
-Pass *createLateLowerGCFramePass() {
-    return new LateLowerGCFrameLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLateLowerGCFramePass());
 }

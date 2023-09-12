@@ -198,11 +198,33 @@ add_tfunc(div_float_fast, 2, 2, math_tfunc, 2)
 # bitwise operators
 # -----------------
 
+@nospecs and_int_tfunc(𝕃::AbstractLattice, x, y) = and_int_tfunc(widenlattice(𝕃), x, y)
+@nospecs function and_int_tfunc(𝕃::ConstsLattice, x, y)
+    if isa(x, Const) && x.val === false && widenconst(y) === Bool
+        return Const(false)
+    elseif isa(y, Const) && y.val === false && widenconst(x) === Bool
+        return Const(false)
+    end
+    return and_int_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs and_int_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+
+@nospecs or_int_tfunc(𝕃::AbstractLattice, x, y) = or_int_tfunc(widenlattice(𝕃), x, y)
+@nospecs function or_int_tfunc(𝕃::ConstsLattice, x, y)
+    if isa(x, Const) && x.val === true && widenconst(y) === Bool
+        return Const(true)
+    elseif isa(y, Const) && y.val === true && widenconst(x) === Bool
+        return Const(true)
+    end
+    return or_int_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs or_int_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+
 @nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
 @nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
 
-add_tfunc(and_int, 2, 2, math_tfunc, 1)
-add_tfunc(or_int, 2, 2, math_tfunc, 1)
+add_tfunc(and_int, 2, 2, and_int_tfunc, 1)
+add_tfunc(or_int, 2, 2, or_int_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
 add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
 add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
@@ -2453,11 +2475,12 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             try
                 return Const(f(argvals...))
             catch
+                return Bottom
             end
         end
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
-            # invalid intrinsic
+            # unknown intrinsic
             return Any
         end
         tf = T_IFUNC[iidx]

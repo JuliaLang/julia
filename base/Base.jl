@@ -495,7 +495,7 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 

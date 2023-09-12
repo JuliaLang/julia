@@ -5185,3 +5185,16 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+# exploit throwness from concrete eval for intrinsics
+@test Base.return_types() do
+    Base.or_int(true, 1)
+end |> only === Union{}
+
+# [add|or]_int tfuncs
+@test Base.return_types((Bool,)) do b
+    Val(Core.Intrinsics.and_int(b, false))
+end |> only == Val{false}
+@test Base.return_types((Bool,)) do b
+    Val(Core.Intrinsics.or_int(true, b))
+end |> only == Val{true}
