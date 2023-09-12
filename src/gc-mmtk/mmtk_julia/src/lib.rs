@@ -12,6 +12,7 @@ use mmtk::MMTK;
 
 use std::collections::HashMap;
 use std::ptr::null_mut;
+use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 
@@ -76,7 +77,7 @@ pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
 pub static DISABLED_GC: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
-pub static USER_TRIGGERED_GC: AtomicBool = AtomicBool::new(false);
+pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
     pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
@@ -98,12 +99,6 @@ pub struct Julia_Upcalls {
     pub scan_julia_exc_obj:
         extern "C" fn(obj: Address, closure: Address, process_edge: ProcessEdgeFn),
     pub get_stackbase: extern "C" fn(tid: u16) -> usize,
-    pub get_jl_last_err: extern "C" fn() -> u32,
-    pub set_jl_last_err: extern "C" fn(errno: u32),
-    pub wait_for_the_world: extern "C" fn(),
-    pub set_gc_initial_state: extern "C" fn(tls: OpaquePointer) -> i8,
-    pub set_gc_final_state: extern "C" fn(old_state: i8),
-    pub set_gc_old_state: extern "C" fn(old_state: i8),
     pub mmtk_jl_run_finalizers: extern "C" fn(tls: OpaquePointer),
     pub jl_throw_out_of_memory_error: extern "C" fn(),
     pub mmtk_sweep_malloced_array: extern "C" fn(),
@@ -118,6 +113,7 @@ pub struct Julia_Upcalls {
     pub arraylist_grow: extern "C" fn(Address, usize),
     pub get_jl_gc_have_pending_finalizers: extern "C" fn() -> *mut i32,
     pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::edges::RootsWorkClosure),
+    pub prepare_to_collect: extern "C" fn(),
 }
 
 pub static mut UPCALLS: *const Julia_Upcalls = null_mut();

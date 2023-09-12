@@ -19,6 +19,7 @@ use mmtk::util::{Address, ObjectReference, OpaquePointer};
 use mmtk::AllocationSemantics;
 use mmtk::Mutator;
 use std::ffi::CStr;
+use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[no_mangle]
@@ -255,7 +256,7 @@ pub extern "C" fn mmtk_disable_collection() {
     }
 
     // if user has triggered GC, wait until GC is finished
-    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst)
+    while AtomicIsize::load(&USER_TRIGGERED_GC, Ordering::SeqCst) != 0
         || AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst)
     {
         info!("Waiting for a triggered gc to finish...");
@@ -295,9 +296,9 @@ pub extern "C" fn mmtk_modify_check(object: ObjectReference) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
-    AtomicBool::store(&USER_TRIGGERED_GC, true, Ordering::SeqCst);
+    AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
     if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
-        AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
+        AtomicIsize::fetch_add(&USER_TRIGGERED_GC, -1, Ordering::SeqCst);
         return;
     }
     // See jl_gc_collection_t

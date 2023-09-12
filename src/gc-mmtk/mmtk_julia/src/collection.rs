@@ -5,7 +5,7 @@ use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
@@ -63,52 +63,11 @@ impl Collection<JuliaVM> for VMCollection {
         trace!("Resuming mutators.");
     }
 
-    fn block_for_gc(tls: VMMutatorThread) {
+    fn block_for_gc(_tls: VMMutatorThread) {
         info!("Triggered GC!");
 
-        AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
+        unsafe { ((*UPCALLS).prepare_to_collect)() };
 
-        let tls_ptr = match tls {
-            VMMutatorThread(t) => match t {
-                VMThread(ptr) => ptr,
-            },
-        };
-
-        let old_state = unsafe { ((*UPCALLS).set_gc_initial_state)(tls_ptr) };
-
-        if old_state == -1 {
-            info!("Multiple threads entered GC simultaneously.");
-            return;
-        }
-
-        unsafe { ((*UPCALLS).wait_for_the_world)() };
-
-        let last_err = unsafe { ((*UPCALLS).get_jl_last_err)() };
-
-        {
-            let &(ref lock, ref cvar) = &*STW_COND.clone();
-            let mut count = lock.lock().unwrap();
-
-            info!("Blocking for GC!");
-
-            AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
-
-            while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
-                count = cvar.wait(count).unwrap();
-            }
-        }
-
-        info!("GC Done!");
-        if AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
-            AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
-        }
-
-        unsafe { ((*UPCALLS).set_gc_final_state)(old_state) };
-
-        info!("Finalizing objects!");
-        unsafe { ((*UPCALLS).mmtk_jl_run_finalizers)(tls_ptr) };
-
-        unsafe { ((*UPCALLS).set_jl_last_err)(last_err) };
         info!("Finished blocking mutator for GC!");
     }
 
@@ -148,4 +107,22 @@ pub fn is_current_gc_nursery() -> bool {
         Some(gen) => gen.is_current_gc_nursery(),
         None => false,
     }
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_block_thread_for_gc() {
+    AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
+
+    let &(ref lock, ref cvar) = &*STW_COND.clone();
+    let mut count = lock.lock().unwrap();
+
+    info!("Blocking for GC!");
+
+    AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
+
+    while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
+        count = cvar.wait(count).unwrap();
+    }
+
+    AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
 }
