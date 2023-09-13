@@ -237,8 +237,9 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, keyword arguments must be passed using keywords, unlike Python in which it is usually possible
     to pass them positionally. Attempting to pass a keyword argument positionally alters the method
     signature leading to a `MethodError` or calling of the wrong method.
-  * Positional arguments cannot be given by name in Julia.
-    E.g. calling `lognormal(median = 4, g = 1)` will not work for a function defined as `lognormal(median, g)`.
+  * Conversely, positional arguments cannot be given by name in Julia.
+    If a function's signature is e.g. `lognormal(median, g)`,
+    then calling it as `lognormal(median = 4, g = 1)` will not work.
     Instead, you can explain arguments by name on separate lines:
     ```
     median = 4
