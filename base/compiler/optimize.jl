@@ -183,7 +183,17 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     return OptimizationState(linfo, src, interp)
 end
 
-include("compiler/ssair/driver.jl")
+function argextype end # imported by EscapeAnalysis
+function try_compute_field end # imported by EscapeAnalysis
+
+include("compiler/ssair/heap.jl")
+include("compiler/ssair/slot2ssa.jl")
+include("compiler/ssair/inlining.jl")
+include("compiler/ssair/verify.jl")
+include("compiler/ssair/legacy.jl")
+include("compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("compiler/ssair/passes.jl")
+include("compiler/ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
