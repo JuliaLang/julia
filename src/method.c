@@ -1044,9 +1044,16 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        int isvalid = jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt);
-        if (elt == jl_bottom_type || (jl_is_vararg(elt) && jl_unwrap_vararg(elt) == jl_bottom_type))
-            isvalid = 0;
+        if (jl_is_vararg(elt)) {
+            if (i < na-1)
+                jl_exceptionf(jl_argumenterror_type,
+                              "Vararg on non-final argument in method definition for %s at %s:%d",
+                              jl_symbol_name(name),
+                              jl_symbol_name(file),
+                              line);
+            elt = jl_unwrap_vararg(elt);
+        }
+        int isvalid = (jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt)) && elt != jl_bottom_type;
         if (!isvalid) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == jl_unused_sym)
@@ -1064,12 +1071,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(file),
                               line);
         }
-        if (jl_is_vararg(elt) && i < na-1)
-            jl_exceptionf(jl_argumenterror_type,
-                          "Vararg on non-final argument in method definition for %s at %s:%d",
-                          jl_symbol_name(name),
-                          jl_symbol_name(file),
-                          line);
     }
     for (i = jl_svec_len(tvars); i > 0; i--) {
         jl_value_t *tv = jl_svecref(tvars, i - 1);
