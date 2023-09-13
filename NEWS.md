@@ -48,6 +48,9 @@ Standard library changes
 
 #### REPL
 
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
+
 #### SuiteSparse
 
 
