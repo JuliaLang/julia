@@ -749,7 +749,7 @@ end
     # see if any of the union elements have the same TypeName
     # in which case, simplify this tmerge by replacing it with
     # the widest possible version of itself (the wrapper)
-    havetuples = false
+    simplify = falses(length(types))
     for i in 1:length(types)
         typenames[i] === Any.name && continue
         ti = types[i]
@@ -761,10 +761,14 @@ end
                 if ti <: tj
                     types[i] = Union{}
                     typenames[i] = Any.name
+                    simplify[i] = false
+                    simplify[j] = true
                     break
                 elseif tj <: ti
                     types[j] = Union{}
                     typenames[j] = Any.name
+                    simplify[j] = false
+                    simplify[i] = true
                 else
                     if ijname === Tuple.name
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
@@ -772,7 +776,7 @@ end
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
-                        havetuples = true
+                        simplify[j] = false
                     else
                         wr = ijname.wrapper
                         uw = unwrap_unionall(wr)::DataType
@@ -784,42 +788,40 @@ end
                         while uj.name !== ijname
                             uj = uj.super
                         end
-                        merged = Vector{Any}(undef, length(uw.parameters))
-                        use_merged = true
+                        p = Vector{Any}(undef, length(uw.parameters))
+                        usep = true
                         widen = wr
                         for k = 1:length(uw.parameters)
                             ui_k = ui.parameters[k]
                             if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
-                                merged[k] = ui_k
-                                use_merged = true
+                                p[k] = ui_k
+                                usep = true
                             else
-                                merged[k] = uw.parameters[k]
+                                p[k] = uw.parameters[k]
                             end
                         end
-                        if use_merged
-                            widen = rewrap_unionall(wr{merged...}, wr)
+                        if usep
+                            widen = rewrap_unionall(wr{p...}, wr)
                         end
+                        simplify[j] = !usep
                     end
                     types[i] = Union{}
                     typenames[i] = Any.name
+                    simplify[i] = false
                     types[j] = widen
                     break
                 end
             end
         end
     end
-    # don't let elements of the union get too big, if the above didn't reduce something
+    # don't let elements of the union get too big, if the above didn't reduce something enough
     # Specifically widen Tuple{..., Union{lots of stuff}...} to Tuple{..., Any, ...}
-    # Even if there was only one element of the base type, don't let Val{<:Val{<:Val}} keep nesting abstract levels
+    # Don't let Val{<:Val{<:Val}} keep nesting abstract levels either
     for i in 1:length(types)
-        # this element is too complicated, so
-        # just return the widest possible type now
-        tn = typenames[i]
+        simplify[i] || continue
         ti = types[i]
-        if tn === Any.name || issimpleenoughtype(ti)
-            continue
-        elseif tn === Tuple.name
-            havetuples && continue # multiple-tuples case was already handled by tuplemerge above
+        issimpleenoughtype(ti) && continue
+        if typenames[i] === Tuple.name
             # otherwise we need to do a simple version of tuplemerge for one element now
             tip = (unwrap_unionall(ti)::DataType).parameters
             lt = length(tip)
@@ -831,7 +833,7 @@ end
             types[i] = rewrap_unionall(Tuple{p...}, ti)
         else
             # this element is not simple enough yet, make it so now
-            types[i] = tn.wrapper
+            types[i] = typenames[i].wrapper
         end
     end
     u = Union{types...}
@@ -875,6 +877,7 @@ function tuplemerge(a::DataType, b::DataType)
                 #   or (equivalently?) iteratively took super-types until reaching a common wrapper
                 #   e.g. consider the results of `tuplemerge(Tuple{Complex}, Tuple{Number, Int})` and of
                 #   `tuplemerge(Tuple{Int}, Tuple{String}, Tuple{Int, String})`
+                #   c.f. tname_intersect in the algorithm above
                 hasfree = has_free_typevars(ti)
                 if hasfree || !(ti <: tail)
                     if !hasfree && tail <: ti
