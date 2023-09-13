@@ -175,25 +175,6 @@ pub unsafe fn scan_julia_object<EV: EdgeVisitor<JuliaVMEdge>>(obj: Address, clos
         }
 
         let m = obj.to_ptr::<mmtk_jl_module_t>();
-        let bindings = (*m).bindings;
-        let table = mmtk_jl_svec_data(Address::from_mut_ptr(bindings));
-        let bsize = mmtk_jl_svec_len(Address::from_mut_ptr(bindings));
-        let mut begin = table.shift::<Address>(1);
-        let end = table.shift::<Address>(bsize as isize);
-
-        while begin < end {
-            let b: *mut mmtk_jl_binding_t = begin.load::<*mut mmtk_jl_binding_t>();
-            if b == crate::reference_glue::jl_nothing as *mut mmtk_jl_binding_t {
-                begin = begin.shift::<Address>(1);
-                continue;
-            }
-            if PRINT_OBJ_TYPE {
-                println!(" - scan table: {}\n", obj);
-            }
-
-            process_edge(closure, begin);
-            begin = begin.shift::<Address>(1);
-        }
 
         let parent_edge = ::std::ptr::addr_of!((*m).parent);
         if PRINT_OBJ_TYPE {
