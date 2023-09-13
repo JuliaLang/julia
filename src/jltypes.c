@@ -2495,6 +2495,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 
     for (j = 0; j < jl_array_len(partial); j++) {
         jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+        if (ndt == NULL)
+            continue;
         assert(jl_unwrap_unionall(ndt->name->wrapper) == (jl_value_t*)t);
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
@@ -2506,6 +2508,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     if (t->types != jl_emptysvec) {
         for (j = 0; j < jl_array_len(partial); j++) {
             jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+            if (ndt == NULL)
+                continue;
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
@@ -2514,7 +2518,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
+            jl_array_ptr_set(partial, j, NULL);
         }
+        t->name->partial = NULL;
     }
     else {
         assert(jl_field_names(t) == jl_emptysvec);
