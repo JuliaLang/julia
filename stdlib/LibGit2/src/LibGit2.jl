@@ -14,6 +14,8 @@ using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
+using LibGit2_jll
+
 const GITHUB_REGEX =
     r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
@@ -983,7 +985,7 @@ function ensure_initialized()
 end
 
 @noinline function initialize()
-    @check ccall((:git_libgit2_init, :libgit2), Cint, ())
+    @check ccall((:git_libgit2_init, libgit2), Cint, ())
 
     cert_loc = NetworkOptions.ca_roots()
     cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
@@ -991,7 +993,7 @@ end
     atexit() do
         # refcount zero, no objects to be finalized
         if Threads.atomic_sub!(REFCOUNT, 1) == 1
-            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            ccall((:git_libgit2_shutdown, libgit2), Cint, ())
         end
     end
 end
@@ -1003,7 +1005,7 @@ function set_ssl_cert_locations(cert_loc)
     else # files, /dev/null, non-existent paths, etc.
         cert_file = cert_loc
     end
-    ret = @ccall "libgit2".git_libgit2_opts(
+        ret = @ccall libgit2.git_libgit2_opts(
         Consts.SET_SSL_CERT_LOCATIONS::Cint;
         cert_file::Cstring,
         cert_dir::Cstring)::Cint
@@ -1029,7 +1031,7 @@ end
 Sets the system tracing configuration to the specified level.
 """
 function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
-    @check @ccall "libgit2".git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
+    @check @ccall libgit2.git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
 end
 
 end # module
