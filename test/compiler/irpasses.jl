@@ -1139,8 +1139,8 @@ let
     @test all(alloc -> alloc in preserves, refs)
 end
 
-# test `stmt_effect_free` and DCE
-# ===============================
+# test `flags_for_effects` and DCE
+# ================================
 
 let # effect-freeness computation for array allocation
 
