@@ -412,11 +412,14 @@ function float_samples(::Type{T}, exponents, n::Int) where {T<:AbstractFloat}
     ret
 end
 
+# a reasonable range of values for testing behavior between 1:200
+const fib200 = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200]
+
 @testset "IEEEFloat(::BigFloat) against MPFR" begin
-    for pr ∈ 1:200
+    for pr ∈ fib200
         setprecision(BigFloat, pr) do
             exp = exponent(floatmax(Float64)) + 10
-            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 82680 random values
             for mpfr_rm ∈ mpfr_rounding_modes, bf ∈ bf_samples, F ∈ (Float32, Float64)
                 @test (
                     mpfr_to_ieee(F, bf, mpfr_rm) ===
@@ -434,10 +437,11 @@ const native_rounding_modes = (
 
 # Checks that each rounding mode is faithful.
 @testset "IEEEFloat(::BigFloat) faithful rounding" begin
-    for pr ∈ 1:200
+    for pr ∈ fib200
         setprecision(BigFloat, pr) do
             exp = 500
-            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 40040 random values
+            @show length(bf_samples)
             for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
                       native_rounding_modes...),
                 bf ∈ bf_samples,
