@@ -3,7 +3,8 @@ module EAUtils
 export code_escapes, @code_escapes, __clear_cache!
 
 const CC = Core.Compiler
-const EA = CC.EscapeAnalysis
+using ..EscapeAnalysis
+const EA = EscapeAnalysis
 
 # entries
 # -------
@@ -242,7 +243,9 @@ end
 using Core: Argument, SSAValue
 using .CC: widenconst, singleton_type
 
-Base.getindex(estate::EscapeState, @nospecialize(x)) = CC.getindex(estate, x)
+if EA._TOP_MOD === CC
+    Base.getindex(estate::EscapeState, @nospecialize(x)) = CC.getindex(estate, x)
+end
 
 function get_name_color(x::EscapeInfo, symbol::Bool = false)
     getname(x) = string(nameof(x))
