@@ -375,14 +375,14 @@ end
 
 function check_for_hint(s::MIState)
     st = state(s)
-    options(st).hint_tab_completes || return nothing
+    options(st).hint_tab_completes || return false
     completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
     if should_complete
         if length(completions) == 1
             hint = only(completions)[sizeof(partial)+1:end]
             if !isempty(hint) # completion on a complete name returns itself so check that there's something to hint
                 st.hint = hint
-                return refresh_line(s)
+                return true
             end
         elseif length(completions) > 1
             p = common_prefix(completions)
@@ -390,16 +390,16 @@ function check_for_hint(s::MIState)
                 hint = p[sizeof(partial)+1:end]
                 if !isempty(hint)
                     st.hint = hint
-                    return refresh_line(s)
+                    return true
                 end
             end
         end
     end
     if !isnothing(st.hint)
         st.hint = "" # don't set to nothing here. That will be done in `maybe_show_hint`
-        return refresh_line(s)
+        return true
     else
-        return nothing
+        return false
     end
 end
 
@@ -2473,7 +2473,7 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Show hints at what tab complete would do by default
-    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_for_hint(s)),
+    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_for_hint(s) && refresh_line(s)),
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),
