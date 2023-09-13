@@ -462,7 +462,7 @@ end
 function visit_bb_phis!(callback, ir::IRCode, bb::Int)
     stmts = ir.cfg.blocks[bb].stmts
     for idx in stmts
-        stmt = ir[SSAValue(idx)][:inst]
+        stmt = ir[SSAValue(idx)][:stmt]
         if !isa(stmt, PhiNode)
             if !is_valid_phiblock_stmt(stmt)
                 return
@@ -516,7 +516,7 @@ function get!(lazyagdomtree::LazyAugmentedDomtree)
     # Add a virtual basic block to represent the exit
     push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
     for bb = 1:(length(cfg.blocks)-1)
-        terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:inst]
+        terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:stmt]
         if isa(terminator, ReturnNode) && isdefined(terminator, :val)
             cfg_insert_edge!(cfg, bb, length(cfg.blocks))
         end
@@ -560,12 +560,12 @@ end
 
 function refine_effects!(sv::PostOptAnalysisState)
     any_refinable(sv) || return false
-        effects = sv.result.ipo_effects
-        sv.result.ipo_effects = Effects(effects;
-            consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
-            effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
-            nothrow = sv.all_nothrow ? true : effects.nothrow,
-            noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+    effects = sv.result.ipo_effects
+    sv.result.ipo_effects = Effects(effects;
+        consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = sv.all_nothrow ? true : effects.nothrow,
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
     return true
 end
 
@@ -645,7 +645,7 @@ struct ScanStmt
 end
 
 function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
-    stmt = inst[:inst]
+    stmt = inst[:stmt]
     flag = inst[:flag]
 
     if isexpr(stmt, :enter)
@@ -713,7 +713,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
-        stmt = inst[:inst]
+        stmt = inst[:stmt]
         if is_getfield_with_boundscheck_arg(stmt, sv)
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
