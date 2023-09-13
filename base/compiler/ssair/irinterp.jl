@@ -10,9 +10,9 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     world = frame_world(irsv)
     mi_cache = WorldView(code_cache(interp), world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any,Tuple{Bool, Bool}}(nothing, (false, false))
+    code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv)
-    argtypes === nothing && return Pair{Any,Tuple{Bool, Bool}}(Bottom, (false, false))
+    argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     effects = decode_effects(code.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
@@ -21,20 +21,20 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
             try
                 Core._call_in_world_total(world, args...)
             catch
-                return Pair{Any,Tuple{Bool, Bool}}(Bottom, (false, is_noub(effects, false)))
+                return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects, false)))
             end
         end
-        return Pair{Any,Tuple{Bool, Bool}}(Const(value), (true, true))
+        return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
         if is_constprop_edge_recursed(mi, irsv)
-            return Pair{Any,Tuple{Bool, Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
+            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
         end
         newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = irsv
             return ir_abstract_constant_propagation(interp, newirsv)
         end
-        return Pair{Any,Tuple{Bool, Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
+        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
     end
 end
 
@@ -287,12 +287,12 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = isa(stmt, PhiNode) || isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(inst, ReturnNode) || isexpr(inst, :enter)
-        if typ === Bottom && (idx != lstmt || !is_terminator_or_phi)
+        is_terminator_or_phi = (isa(stmt, PhiNode) || isa(stmt, GotoNode) ||
+            isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isexpr(stmt, :enter))
+        if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end
-        if (any_refined && reprocess_instruction!(interp,
-                idx, bb, stmt, typ, irsv)) ||
+        if (any_refined && reprocess_instruction!(interp, idx, bb, stmt, typ, irsv)) ||
             (externally_refined !== nothing && idx in externally_refined)
             push!(ssa_refined, idx)
             stmt = ir.stmts[idx][:inst]
@@ -358,35 +358,30 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             inst = ir[SSAValue(idx)]
             stmt = inst[:stmt]
             typ = inst[:type]
-            if reprocess_instruction!(interp,
-                idx, nothing, stmt, typ, irsv)
+            if reprocess_instruction!(interp, idx, nothing, stmt, typ, irsv)
                 append!(stmt_ip, tpdum[idx])
             end
         end
     end
 
-    begin @label compute_rt
-        ultimate_rt = Bottom
-        for idx in all_rets
-            bb = block_for_inst(ir.cfg, idx)
-            if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
-                # Could have discovered this block is dead after the initial scan
-                continue
-            end
-            inst = ir[SSAValue(idx)][:stmt]::ReturnNode
-            rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
+    ultimate_rt = Bottom
+    for idx in all_rets
+        bb = block_for_inst(ir.cfg, idx)
+        if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
+            # Could have discovered this block is dead after the initial scan
+            continue
         end
+        inst = ir[SSAValue(idx)][:stmt]::ReturnNode
+        rt = argextype(inst.val, ir)
+        ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
 
     nothrow = noub = true
     for idx = 1:length(ir.stmts)
-        if (ir[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0
-            nothrow = false
-        end
-        if (ir[SSAValue(idx)][:flag] & IR_FLAG_NOUB) == 0
-            noub = false
-        end
+        flag = ir[SSAValue(idx)][:flag]
+        nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
+        noub &= !iszero(flag & IR_FLAG_NOUB)
+        (nothrow | noub) || break
     end
 
     if last(irsv.valid_worlds) >= get_world_counter()
@@ -395,7 +390,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         store_backedges(frame_instance(irsv), irsv.edges)
     end
 
-    return Pair{Any,Tuple{Bool, Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
+    return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
 end
 
 function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
