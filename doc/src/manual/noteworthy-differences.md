@@ -237,6 +237,15 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, keyword arguments must be passed using keywords, unlike Python in which it is usually possible
     to pass them positionally. Attempting to pass a keyword argument positionally alters the method
     signature leading to a `MethodError` or calling of the wrong method.
+  * Positional arguments cannot be given by name in Julia.
+    E.g. calling `lognormal(median = 4, g = 1)` will not work for a function defined as `lognormal(median, g)`.
+    Instead, you can explain arguments by name on separate lines:
+    ```
+    median = 4
+    g      = 1  # Geometric standard deviation
+    lognormal(median, g)
+    ```
+    ..or use inline comments: `lognormal( #=median=# 4, #=g=# 1)`.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
   * In Julia, the commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`), unlike in Python, where `int` is an arbitrary length integer.
     This means in Julia the `Int` type will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
