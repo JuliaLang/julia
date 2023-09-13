@@ -1000,6 +1000,8 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
     uintptr_t pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc; // TODO: Do this in linux as well
     uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
     if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
+        signal(sig, SIG_DFL);
+        sig = SIGILL; // redefine this as as an "unreachable reached" error message
         sigdie_handler(sig, info, context);
     }
 }
