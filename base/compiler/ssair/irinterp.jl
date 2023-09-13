@@ -287,8 +287,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = isa(stmt, PhiNode) || isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(inst, ReturnNode) || isexpr(inst, :enter)
-        if typ === Bottom && (idx != lstmt || !is_terminator_or_phi)
+        is_terminator_or_phi = (isa(stmt, PhiNode) || isa(stmt, GotoNode) ||
+            isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isexpr(stmt, :enter))
+        if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end
         if (any_refined && reprocess_instruction!(interp,
