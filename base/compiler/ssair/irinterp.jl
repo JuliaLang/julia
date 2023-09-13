@@ -229,7 +229,7 @@ function scan!(callback, scanner::BBScanner, forwards_only::Bool)
             ret = callback(inst, idx, lstmt, bb)
             ret === nothing && return true
             ret::Bool || break
-            idx == lstmt && process_terminator!(inst[:inst], bb, bb_ip) && forwards_only && return false
+            idx == lstmt && process_terminator!(inst[:stmt], bb, bb_ip) && forwards_only && return false
         end
     end
     return true
@@ -265,7 +265,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     #            converge.
     completed_scan = scan!(scanner, true) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
         irsv.curridx = idx
-        stmt = ir.stmts[idx][:inst]
+        stmt = ir.stmts[idx][:stmt]
         typ = ir.stmts[idx][:type]
         flag = ir.stmts[idx][:flag]
         any_refined = false
@@ -295,7 +295,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         if (any_refined && reprocess_instruction!(interp, idx, bb, stmt, typ, irsv)) ||
             (externally_refined !== nothing && idx in externally_refined)
             push!(ssa_refined, idx)
-            stmt = ir.stmts[idx][:inst]
+            stmt = ir.stmts[idx][:stmt]
             typ = ir.stmts[idx][:type]
         end
         if typ === Bottom && !is_terminator_or_phi
@@ -304,7 +304,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 for idx2 in (idx+1:lstmt-1)
                     ir[SSAValue(idx2)] = nothing
                 end
-                ir[SSAValue(lstmt)][:inst] = ReturnNode()
+                ir[SSAValue(lstmt)][:stmt] = ReturnNode()
             end
             return false
         end
@@ -318,7 +318,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         # Slow Path Phase 1.A: Complete use scanning
         scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
             irsv.curridx = idx
-            stmt = inst[:inst]
+            stmt = inst[:stmt]
             flag = inst[:flag]
             if (flag & IR_FLAG_REFINED) != 0
                 inst[:flag] &= ~IR_FLAG_REFINED
