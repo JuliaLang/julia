@@ -471,7 +471,7 @@ mod( a, # x
     )
 ```
 
-Furthermore the use of comments permit more descriptive names while not interfering with Julia's multiple dispatch on positional arguments:
+Furthermore the use of comments permit you to insert hints describing a positional argument, while not interfering with Julia's multiple dispatch on positional arguments:
 
 ```julia
 mod( #=Dividend=# a, #=Divisor=# b )
