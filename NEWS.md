@@ -48,6 +48,9 @@ Standard library changes
 
 #### REPL
 
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
+
 #### SuiteSparse
 
 
@@ -77,6 +80,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------

@@ -222,8 +222,8 @@ include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
+include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -358,7 +358,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -495,7 +495,7 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 

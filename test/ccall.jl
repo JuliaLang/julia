@@ -1922,10 +1922,15 @@ function somefunction_not_found()
     ccall((:somefunction, libfrobozz), Cvoid, ())
 end
 
+function somefunction_not_found_libc()
+    ccall(:test,Int,())
+end
+
 @testset "library not found" begin
     if Sys.islinux()
         @test_throws "could not load symbol \"somefunction\"" somefunction_not_found()
     else
         @test_throws "could not load library \"\"" somefunction_not_found()
     end
+    @test_throws "could not load symbol \"test\"" somefunction_not_found_libc()
 end

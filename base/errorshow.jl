@@ -173,8 +173,10 @@ end
 
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
-    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
-    print(io, ex.val, ')')
+    T = first(ex.args)
+    nameof(T) === ex.func || print(io, T, ", ")
+    join(io, ex.args[2:end], ", ")
+    print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -268,20 +270,24 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
-        print(io, "(")
+        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
+        print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::", typ)
-            i == length(arg_types_param) || print(io, ", ")
+            print(iob, "::", typ)
+            i == length(arg_types_param) || print(iob, ", ")
         end
         if !isempty(kwargs)
-            print(io, "; ")
+            print(iob, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "::", typeof(v))
-                i == length(kwargs)::Int || print(io, ", ")
+                print(iob, k, "::", typeof(v))
+                i == length(kwargs)::Int || print(iob, ", ")
             end
         end
-        print(io, ")")
+        print(iob, ")")
+        str = String(take!(unwrapcontext(iob)[1]))
+        str = type_limited_string_from_context(io, str)
+        print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
     if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
