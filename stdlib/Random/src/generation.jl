@@ -169,13 +169,13 @@ end
 
 ### random tuples
 
-function Sampler(RNG::Type{<:AbstractRNG}, t::Type{T}, n::Repetition) where {T <: Tuple}
-    tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(t))...}, n)
-    SamplerTag{t}((Sampler(RNG, fieldtype(t, 1), n), tail_sp_.data...))
+function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
+    tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
+    SamplerTag{T}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
 end
 
-function Sampler(RNG::Type{<:AbstractRNG}, t::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N}
-    SamplerTag{t}((Sampler(RNG, T, n),))
+function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
+    SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple

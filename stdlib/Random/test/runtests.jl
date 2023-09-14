@@ -446,6 +446,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         @test_throws MethodError r(rng..., Number, (2,3))
         @test_throws MethodError r(rng..., Any, 1)
     end
+
+    # Test that you cannot call rand with a tuple type of unknown size or with isbits parameters
+    @test_throws ArgumentError rand(rng..., Tuple{Vararg{Int}})
+    @test_throws TypeError rand(rng..., Tuple{1:2})
 end
 
 function hist(X, n)

@@ -319,19 +319,20 @@ Pick a random element or array of random elements from the set of values specifi
 
 * a string (considered as a collection of characters), or
 
-* a type (and corresponding domain) from the list below
+* a type from the list below, corresponding to the specified set of values
 
-  + `typemin(S):typemax(S)` for concrete integer types (excepting [`BigInt`](@ref) which is not supported)
+  + concrete integer types sample from `typemin(S):typemax(S)` (excepting [`BigInt`](@ref) which is not supported)
 
-  + `[0, 1)` for concrete floating point types
+  + concrete floating point types sample from `[0, 1)`
 
-  + `rand(T) + rand(T) * im` for concrete complex types `Complex{T}`
+  + concrete complex types `Complex{T}` sample from `rand(T) + rand(T) * im`
 
-  + a valid Unicode scalar for any `<:AbstractChar` type
+  + all `<:AbstractChar` types sample from the set of valid Unicode scalars
 
-* a user-defined type and domain; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
+  + a user-defined type and set of values; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
 
-* a Tuple type `T` where each parameter of `T` is itself a sampleable type; return a value of type `T``
+  + `S` can also be a tuple type of known size and where each parameter of `S` is itself a sampleable type; return a value of type `S`.
+    Note that tuple types such as `Tuple{Vararg{T}}` (unknown size) and `Tuple{1:2}` (parameterized with a value) are not supported.
 
 
 `S` defaults to [`Float64`](@ref).
