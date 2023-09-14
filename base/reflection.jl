@@ -868,6 +868,7 @@ function argument_datatype(@nospecialize t)
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 
+datatype_fieldcount(::Type{Type{T}}) where T = 0
 function datatype_fieldcount(t::DataType)
     if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]

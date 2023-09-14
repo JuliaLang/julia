@@ -626,6 +626,8 @@ end
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
+@test fieldcount(Type{Int}) == 0
+@test fieldcount(Type{Type{DataType}}) == 0
 @test_throws(ArgumentError("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
 @test_throws ArgumentError fieldcount(Real)
