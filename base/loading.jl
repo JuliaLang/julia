@@ -475,6 +475,8 @@ or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
+
+See also [`pkgdir`](@ref).
 """
 function pathof(m::Module)
     @lock require_lock begin
@@ -506,6 +508,8 @@ julia> pkgdir(Foo)
 julia> pkgdir(Foo, "src", "file.jl")
 "/path/to/Foo.jl/src/file.jl"
 ```
+
+See also [`pathof`](@ref).
 
 !!! compat "Julia 1.7"
     The optional argument `paths` requires at least Julia 1.7.
@@ -2968,11 +2972,13 @@ global parse_pidfile_hook
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
 # Allows processes to wait if another process is precompiling a given source already.
-# The lock file is deleted and precompilation will proceed after `stale_age` seconds if
+# The lock file mtime will be updated when held every `stale_age/2` seconds.
+# After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
+# precompilation will proceed if
 #  - the locking process no longer exists
 #  - the lock is held by another host, since processes cannot be checked remotely
 # or after `stale_age * 25` seconds if the process does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)

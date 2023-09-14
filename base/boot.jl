@@ -527,7 +527,7 @@ export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional

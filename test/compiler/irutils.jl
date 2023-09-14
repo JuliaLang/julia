@@ -1,4 +1,4 @@
-using Core: CodeInfo, ReturnNode, MethodInstance
+using Core.IR
 using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
@@ -16,7 +16,7 @@ end
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
 issplatnew(@nospecialize x) = isexpr(x, :splatnew)
-isreturn(@nospecialize x) = isa(x, ReturnNode)
+isreturn(@nospecialize x) = isa(x, ReturnNode) && isdefined(x, :val)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
