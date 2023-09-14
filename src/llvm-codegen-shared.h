@@ -93,7 +93,7 @@ struct CountTrackedPointers {
     unsigned count = 0;
     bool all = true;
     bool derived = false;
-    CountTrackedPointers(llvm::Type *T);
+    CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
 unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::Type *DTy, llvm::IRBuilder<> &irbuilder);

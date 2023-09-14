@@ -294,19 +294,17 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 // without risk of creating pointers out of thin air
 // TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
 //       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
+static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
 {
     size_t i;
-    _Atomic(void*) *srcpa = (_Atomic(void*)*)srcp;
-    _Atomic(void*) *dstpa = (_Atomic(void*)*)dstp;
     if (dstp < srcp || dstp > srcp + n) {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
+            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
         }
     }
     else {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
+            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
         }
     }
 }
@@ -571,6 +569,7 @@ JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT;
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
+void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
@@ -776,15 +775,13 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
-jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int hasptr, int isunion, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *sym, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
-extern jl_array_t *jl_global_roots_table JL_GLOBALLY_ROOTED;
+extern jl_genericmemory_t *jl_global_roots_table JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED);
 
@@ -968,8 +965,8 @@ uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
-JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
-_Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz);
+_Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
@@ -1287,7 +1284,7 @@ JL_DLLEXPORT unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int is_valid_intrinsic_elptr(jl_value_t *ety)
 {
-    return ety == (jl_value_t*)jl_any_type || (jl_is_concrete_type(ety) && !jl_is_layout_opaque(((jl_datatype_t*)ety)->layout));
+    return ety == (jl_value_t*)jl_any_type || (jl_is_concrete_type(ety) && !jl_is_layout_opaque(((jl_datatype_t*)ety)->layout) && !jl_is_array(ety));
 }
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
@@ -1382,7 +1379,6 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
-JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;

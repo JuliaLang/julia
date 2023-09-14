@@ -6,8 +6,6 @@
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
-    XX(jl_alloc_array_2d) \
-    XX(jl_alloc_array_3d) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -21,29 +19,15 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_arraylen) \
-    XX(jl_arrayref) \
-    XX(jl_arrayset) \
-    XX(jl_arrayunset) \
-    XX(jl_array_copy) \
-    XX(jl_array_del_at) \
-    XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
-    XX(jl_array_grow_at) \
-    XX(jl_array_grow_beg) \
     XX(jl_array_grow_end) \
-    XX(jl_array_isassigned) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_array_ptr_copy) \
+    XX(jl_genericmemory_owner) \
     XX(jl_array_rank) \
-    XX(jl_array_size) \
-    XX(jl_array_sizehint) \
     XX(jl_array_to_string) \
-    XX(jl_array_typetagdata) \
-    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -341,7 +325,6 @@
     XX(jl_module_uuid) \
     XX(jl_native_alignment) \
     XX(jl_nb_available) \
-    XX(jl_new_array) \
     XX(jl_new_bits) \
     XX(jl_new_codeinst) \
     XX(jl_new_code_info_uninit) \
@@ -393,7 +376,6 @@
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
-    XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \
     XX(jl_queue_work) \
@@ -404,7 +386,6 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_reshape_array) \
     XX(jl_resolve_globals_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \

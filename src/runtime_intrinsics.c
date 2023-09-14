@@ -1667,12 +1667,6 @@ un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
-JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
-{
-    JL_TYPECHK(arraylen, array, a);
-    return jl_box_long(jl_array_len((jl_array_t*)a));
-}
-
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
     JL_TYPECHK(have_fma, datatype, typ);

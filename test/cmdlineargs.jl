@@ -513,9 +513,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
         if Sys.WORD_SIZE == 64
-            @test popfirst!(got) == "       48     []"
-        else
             @test popfirst!(got) == "       32     []"
+        else
+            @test popfirst!(got) == "       16     []"
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
@@ -543,7 +543,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test occursin("llvm.module.flags", code)
                 @test !occursin("llvm.dbg.cu", code)
                 @test !occursin("int.jl", code)
-                @test !occursin("\"Int64\"", code)
+                @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
@@ -551,7 +551,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
                 @test occursin("int.jl", code)
-                @test !occursin("\"Int64\"", code)
+                @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
@@ -559,7 +559,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
                 @test occursin("int.jl", code)
-                @test occursin("\"Int64\"", code)
+                @test occursin("name: \"Int64\"", code)
             end
         end
     end
