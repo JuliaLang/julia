@@ -83,6 +83,9 @@ is like an outer constructor method, except for two differences:
 2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
    block's type.
 
+The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
+of the corresponding field.
+
 For example, suppose one wants to declare a type that holds a pair of real numbers, subject to
 the constraint that the first number is not greater than the second one. One could declare it
 like this:
@@ -206,8 +209,6 @@ the unspecified fields uninitialized. The inner constructor method can then use 
 object, finishing its initialization before returning it. Here, for example, is another attempt
 at defining the `SelfReferential` type, this time using a zero-argument inner constructor returning instances
 having `obj` fields pointing to themselves:
-The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
-of the corresponding field.
 
 ```jldoctest selfrefer2
 julia> mutable struct SelfReferential
