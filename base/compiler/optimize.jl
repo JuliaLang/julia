@@ -788,32 +788,6 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::I
     return finish(interp, opt, ir, caller)
 end
 
-using .EscapeAnalysis
-import .EscapeAnalysis: EscapeState, ArgEscapeCache, is_ipo_profitable
-
-"""
-    cache_escapes!(caller::InferenceResult, estate::EscapeState)
-
-Transforms escape information of call arguments of `caller`,
-and then caches it into a global cache for later interprocedural propagation.
-"""
-cache_escapes!(caller::InferenceResult, estate::EscapeState) =
-    caller.argescapes = ArgEscapeCache(estate)
-
-function ipo_escape_cache(mi_cache::MICache) where MICache
-    return function (linfo::Union{InferenceResult,MethodInstance})
-        if isa(linfo, InferenceResult)
-            argescapes = linfo.argescapes
-        else
-            codeinst = get(mi_cache, linfo, nothing)
-            isa(codeinst, CodeInstance) || return nothing
-            argescapes = codeinst.argescapes
-        end
-        return argescapes !== nothing ? argescapes::ArgEscapeCache : nothing
-    end
-end
-null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
-
 macro pass(name, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
