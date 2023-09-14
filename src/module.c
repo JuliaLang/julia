@@ -296,6 +296,20 @@ static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROO
 }
 #endif
 
+static int eq_bindings(jl_binding_t *owner, jl_binding_t *alias)
+{
+    assert(owner == jl_atomic_load_relaxed(&owner->owner));
+    if (owner == alias)
+        return 1;
+    alias = jl_atomic_load_relaxed(&alias->owner);
+    if (owner == alias)
+        return 1;
+    if (owner->constp && alias->constp && jl_atomic_load_relaxed(&owner->value) && jl_atomic_load_relaxed(&alias->value) == jl_atomic_load_relaxed(&owner->value))
+        return 1;
+    return 0;
+}
+
+// find a binding from a module's `usings` list
 static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, jl_module_t **from, modstack_t *st, int warn)
 {
     jl_binding_t *b = NULL;
