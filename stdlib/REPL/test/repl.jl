@@ -1164,7 +1164,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line))
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1249,6 +1249,7 @@ let emptyH1 = Markdown.parse("# "),
 end
 
 module BriefExtended
+public f, f_plain
 """
     f()
 

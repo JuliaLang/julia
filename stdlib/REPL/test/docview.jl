@@ -74,3 +74,47 @@ end
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
+
+module InternalWarningsTests
+
+    module A
+        public B, B3
+        module B
+            public e
+            c = 4
+            "d is 5"
+            d = 5
+            "e is 6"
+            e = 6
+        end
+
+        module B2
+            module C
+                public e
+                d = 1
+                "e is 2"
+                e = 2
+            end
+        end
+
+        module B3 end
+    end
+
+    using Test, REPL
+    @testset "internal warnings" begin
+        header = "!!! warning\n    The following bindings may be internal; they may change or be removed in future versions:\n\n"
+        prefix(warnings) = header * join("      * `$(@__MODULE__).$w`\n" for w in warnings) * "\n\n"
+        docstring(input) = string(eval(REPL.helpmode(input, @__MODULE__)))
+
+        @test docstring("A") == "No docstring or readme file found for internal module `$(@__MODULE__).A`.\n\n# Public names\n\n`B`, `B3`\n"
+        @test docstring("A.B") == "No docstring or readme file found for public module `$(@__MODULE__).A.B`.\n\n# Public names\n\n`e`\n"
+        @test startswith(docstring("A.B.c"), prefix(["A.B.c"]))
+        @test startswith(docstring("A.B.d"), prefix(["A.B.d"]))
+        @test docstring("A.B.e") == "e is 6\n"
+        @test startswith(docstring("A.B2"), prefix(["A.B2"]))
+        @test startswith(docstring("A.B2.C"), prefix(["A.B2", "A.B2.C"]))
+        @test startswith(docstring("A.B2.C.d"), prefix(["A.B2", "A.B2.C", "A.B2.C.d"]))
+        @test startswith(docstring("A.B2.C.e"), prefix(["A.B2", "A.B2.C"]))
+        @test docstring("A.B3") == "No docstring or readme file found for public module `$(@__MODULE__).A.B3`.\n\nModule does not have any public names.\n"
+    end
+end
