@@ -7,7 +7,8 @@ Modules in Julia help organize code into coherent units. They are delimited synt
    allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
 2. Modules have facilities for detailed namespace management: each defines a set of names it
-   `export`s, and can import names from other modules with `using` and `import` (we explain these below).
+   `export`s and marks as `public`, and can import names from other modules with `using` and
+   `import` (we explain these below).
 
 3. Modules can be precompiled for faster loading, and may contain code for runtime initialization.
 
@@ -16,7 +17,7 @@ Typically, in larger Julia packages you will see module code organized into file
 ```julia
 module SomeModule
 
-# export, using, import statements are usually here; we discuss these below
+# export, public, using, import statements are usually here; we discuss these below
 
 include("file1.jl")
 include("file2.jl")
@@ -102,6 +103,10 @@ unlike other languages, Julia has no facilities for truly hiding module internal
 Also, some modules don't export names at all. This is usually done if they use common
 words, such as `derivative`, in their API, which could easily clash with the export lists of other
 modules. We will see how to manage name clashes below.
+
+To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
+one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
+but does not have any namespace implications.
 
 ### Standalone `using` and `import`
 

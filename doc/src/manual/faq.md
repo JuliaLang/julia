@@ -22,11 +22,28 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-Julia `Base` and standard library functionality described in the
-[the documentation](https://docs.julialang.org/) that is not marked as unstable
-(e.g. experimental and internal) is covered by [SemVer](https://semver.org/).
-Functions, types, and constants are not part of the public API if they are not
-included in the documentation, _even if they have docstrings_.
+Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
+documentation of public symbols from `Base` and the standard libraries. Functions,
+types, and constants are not part of the public API if they are not public, even if
+they have docstrings or are described in the documentation. Further, only the documented
+behavior of public symbols is part of the public API. Undocumented behavior of public
+symbols is internal.
+
+Public symbols are those marked with either `public foo` or `export foo`.
+
+In other words:
+
+- Documented behavior of public symbols is part of the public API.
+- Undocumented behavior of public symbols is not part of the public API.
+- Documented behavior of private symbols is not part of the public API.
+- Undocumented behavior of private symbols is not part of the public API.
+
+You can get a complete list of the public symbols from a module with `names(MyModule)`.
+
+Package authors are encouraged to define their public API similarly.
+
+Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
+will not be removed or receive meaningful breaking changes before Julia 2.0.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
