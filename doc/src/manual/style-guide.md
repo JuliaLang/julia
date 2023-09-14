@@ -450,7 +450,8 @@ in order to make it easier to use your code.
 
 ## Options for referencing positional arguments by name
 Named positional arguments are not supported in Julia, however, some users may still wish to use a named positional arguments code-style supported by some languages.
-An example of a function, in a different language, supporting named positional arguments and keyword arguments is `f(x,y;z)`, which could then be called by either `f(a,b,z=c)` or with `f(x=a,b=y,z=c)`.  There are several workarounds that can provide an experience similar to named positionals.
+An example of a function, in a different language, supporting named positional arguments and keyword arguments is `f(x,y;z)`, which could then be called by either `f(a,b,z=c)` or with `f(x=a,b=y,z=c)`.  
+There are several workarounds that can provide an experience similar to named positionals.
 Consider the `mod` method, which a user might call with the variables `a` and `b` in the positional arguments:
 
 ```julia
@@ -487,29 +488,4 @@ function mod(; dividend, divisor )
     return mod( dividend, divisor )
 end
 mod( dividend = a, divisor = b )
-```
-
-A final option is to (re-)assign variable names that are clear within the context of your code.
-For example, instead of
-
-```julia
-a, b, c = get_unit_sale_data()
-d = mod( a, c )
-```
-
-do
-
-```julia
-units_sold, price_per_unit, units_per_package = get_unit_sale_data()
-leftover_units = mod( units_sold, units_per_package )
-```
-
-or
-
-```julia
-a, b, c = get_unit_sale_data()
-units_sold = a
-price_per_unit = b
-units_per_package = c
-leftover_units = mod( units_sold, units_per_package )
 ```
