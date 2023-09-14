@@ -1493,8 +1493,6 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 #endif
 }
 
-JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
-
 // Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
 // julia side. If any of module, group, id, file or line are NULL, these will
 // be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
