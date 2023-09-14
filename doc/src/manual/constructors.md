@@ -121,17 +121,16 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need.
 
-For non-parametric struct declarations (that is, structs without type parameters),
-the default constructor is equivalent to writing one or two of your own inner
+The default constructor is equivalent to writing one or two of your own
 constructor methods that take all of the object's fields as arguments.
-One has no type constraints on its arguments, and passes them to `new`, returning the resulting object.
-The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
-of the corresponding field.
-The other default constructor method is provided only if there are any type constraints on the fields,
-and has the methods's arguments constrained to the corresponding field types.
-This method similarly passes the arguments to `new`.
+One is an inner constructor method that has the methods's arguments constrained to the corresponding field types.
+This method simply passes the arguments to `new` and returns the result.
+The other is an outer constructor method that is provided only if there are any type constraints on fields other than `Any`.
+This methods calls `convert` to convert each argument to the type of the constraint on the corresponding field, and
+calls the inner constructor to compute the returned result.
 
-If the type is parametric, see the section [Parametric Constructors](@ref) for the set of default constructors.
+If the type is parametric, see the section [Parametric Constructors](@ref) for an additional default
+constructor provided.
 
 ```jldoctest
 julia> struct Foo
@@ -152,9 +151,10 @@ julia> struct T1
 
 julia> struct T2
            x::Int64
-           T2(x) = new(x)
            T2(x::Int64) = new(x)
        end
+
+julia> T2(x) = T(convert(Int64, x)::Int64)
 
 julia> T1(1)
 T1(1)
@@ -206,6 +206,8 @@ the unspecified fields uninitialized. The inner constructor method can then use 
 object, finishing its initialization before returning it. Here, for example, is another attempt
 at defining the `SelfReferential` type, this time using a zero-argument inner constructor returning instances
 having `obj` fields pointing to themselves:
+The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
+of the corresponding field.
 
 ```jldoctest selfrefer2
 julia> mutable struct SelfReferential
