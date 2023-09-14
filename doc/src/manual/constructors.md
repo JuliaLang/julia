@@ -121,13 +121,17 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need.
 
-The default constructor is equivalent to writing one or two of your own constructor methods that take
-all of the object's fields as arguments.  One is an inner constructor method without type constraints
-on its arguments that passes the them to `new`, returning the resulting object.  The other
-default constructor method is provided if there are any type constraints on the fields. This method
-is an inner constructor method if the type is not generic and similarly passes the arguments to `new`.
-However, if the type is generic, it is an outer [Parametric Constructor](@ref) method that delegates
-to the inner constructor.
+For non-parametric struct declarations (that is, structs without type parameters),
+the default constructor is equivalent to writing one or two of your own inner
+constructor methods that take all of the object's fields as arguments.
+One has no type constraints on its arguments, and passes them to `new`, returning the resulting object.
+The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
+of the corresponding field.
+The other default constructor method is provided only if there are any type constraints on the fields,
+and has the methods's arguments constrained to the corresponding field types.
+This method similarly passes the arguments to `new`.
+
+If the type is parametric, see the section [Parametric Constructors](@ref) for the set of default constructors.
 
 ```jldoctest
 julia> struct Foo
@@ -335,16 +339,22 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> struct Point{T<:Real}
            x::T
            y::T
-           Point{T}(x,y) where {T<:Real} = new(x,y)
+           Point{T}(x::T, y::T) where {T<:Real} = new(x, y)
        end
+
+julia> Point{T}(x, y) where {T<:Real} = Point{T}(convert(T, x), convert(T, y));
 
 julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
 Notice that each definition looks like the form of constructor call that it handles.
-The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
+The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x::T, y::T)` inside the
 `struct` block.
-The outer constructor declaration, on the other hand, defines a
+
+The first outer constructor declaration handles cases like `Point{Int64}(1.0, 2.0)` by calling
+`convert` to convert the arguments to the types of the fields.
+
+The latter outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
 and `Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the
