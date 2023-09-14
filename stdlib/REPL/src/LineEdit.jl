@@ -382,6 +382,7 @@ function check_for_hint(s::MIState)
         return false
     end
     completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    length(partial) < 2 && return false # Don't complete for single chars, given e.g. `x` completes to `xor`
     if should_complete
         if length(completions) == 1
             hint = only(completions)[sizeof(partial)+1:end]

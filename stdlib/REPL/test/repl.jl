@@ -1700,6 +1700,13 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\t")
     s4 = readuntil(stdout_read, "readavailable") # full completion is reprinted
 
+    write(stdin_write, "\x15")
+    write(stdin_write, "x") # single chars shouldn't hint e.g. `x` shouldn't hint at `xor`
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end

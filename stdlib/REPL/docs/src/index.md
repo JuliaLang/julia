@@ -334,8 +334,8 @@ julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
 
-When a single complete tab-complete result is available at the end of an input line a hint of
-the completion will show in a lighter color.
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
 This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
 
 !!! compat "Julia 1.11"
