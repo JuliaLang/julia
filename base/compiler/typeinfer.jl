@@ -344,10 +344,7 @@ end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
-    toplevel = !isa(def, Method)
-    if toplevel
-        return ci
-    end
+    isa(def, Method) || return ci # don't compress toplevel code
     if may_discard_trees(interp)
         cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
     else
