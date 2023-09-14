@@ -2,7 +2,41 @@
 # =============
 # EA works on post-inlining IR
 
-include(normpath(@__DIR__, "setup.jl"))
+module test_local_EA
+
+include("setup.jl")
+
+using Core.Compiler: alloc_array_ndims
+using .EscapeAnalysis:
+    EscapeInfo, IndexableElements, IndexableFields,
+    array_resize_info, is_array_copy, normalize
+
+isϕ(@nospecialize x) = isa(x, Core.PhiNode)
+function with_normalized_name(@nospecialize(f), @nospecialize(x))
+    if Meta.isexpr(x, :foreigncall)
+        name = x.args[1]
+        nn = normalize(name)
+        return isa(nn, Symbol) && f(nn)
+    end
+    return false
+end
+isarrayalloc(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(alloc_array_ndims(nn)), x)
+isarrayresize(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(array_resize_info(nn)), x)
+isarraycopy(@nospecialize x) =
+    with_normalized_name(nn::Symbol->is_array_copy(nn), x)
+"""
+    is_load_forwardable(x::EscapeInfo) -> Bool
+
+Queries if `x` is elibigle for store-to-load forwarding optimization.
+"""
+function is_load_forwardable(x::EscapeInfo)
+    AliasInfo = x.AliasInfo
+    # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
+    # but we can also do equivalent check during forwarding
+    return isa(AliasInfo, IndexableFields) || isa(AliasInfo, IndexableElements)
+end
 
 @testset "basics" begin
     let # arg return
@@ -53,7 +87,7 @@ include(normpath(@__DIR__, "setup.jl"))
                 return nothing
             end
         end
-        i = findfirst(isT(SafeRef{String}), result.ir.stmts.type) # find allocation statement
+        i = findfirst(==(SafeRef{String}), result.ir.stmts.type) # find allocation statement
         @test !isnothing(i)
         @test has_no_escape(result.state[SSAValue(i)])
     end
@@ -64,7 +98,7 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             return @isdefined(s)
         end
-        i = findfirst(isT(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
+        i = findfirst(==(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
         @test isnothing(i) || has_no_escape(result.state[SSAValue(i)])
     end
     let # ϕ-node
@@ -215,9 +249,9 @@ end
             return r
         end
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(Base.RefValue{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{String}
                 @test has_return_escape(result.state[SSAValue(i)])
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(Base.RefValue{Nothing})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{Nothing}
                 @test has_no_escape(result.state[SSAValue(i)])
             end
         end
@@ -713,9 +747,9 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(SafeRef{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(SafeRef{SafeRef{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{SafeRef{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -728,9 +762,9 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(Tuple{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(Tuple{Tuple{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{Tuple{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -835,7 +869,7 @@ end
         end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         t = only(findall(iscall((result.ir, throw)), result.ir.stmts.stmt))
-        ϕ = only(findall(isT(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
+        ϕ = only(findall(==(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test !has_return_escape(result.state[Argument(4)], r) # y
         @test has_return_escape(result.state[Argument(5)], r) # z
@@ -1384,7 +1418,7 @@ function compute(T, ax, ay, bx, by)
 end
 let result = @code_escapes compute(MPoint, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
+                 inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
                  return (isnew(stmt) || isϕ(stmt)) && inst[:type] <: MPoint
              end
@@ -1400,7 +1434,7 @@ function compute(a, b)
 end
 let result = @code_escapes compute(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
     idxs = findall(1:length(result.ir.stmts)) do idx
-        inst = EscapeAnalysis.getinst(result.ir, idx)
+        inst = result.ir[SSAValue(idx)]
         stmt = inst[:stmt]
         return isnew(stmt) && inst[:type] <: MPoint
     end
@@ -1417,7 +1451,7 @@ function compute!(a, b)
 end
 let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
+                 inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
                  return isnew(stmt) && inst[:type] <: MPoint
              end
@@ -2205,3 +2239,5 @@ end
 #     end
 #     return m
 # end
+
+end # module test_local_EA
