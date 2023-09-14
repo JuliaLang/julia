@@ -340,7 +340,7 @@ mutable struct Semaphore
     sem_size::Int
     curr_cnt::Int
     cond_wait::Threads.Condition
-    Semaphore(sem_size) = sem_size > 0 ? new(sem_size, 0, Threads.Condition()) : throw(ArgumentError("Semaphore size must be > 0"))
+    Semaphore(sem_size) = sem_size >= 0 ? new(sem_size, 0, Threads.Condition()) : throw(ArgumentError("Semaphore size must be >= 0"))
 end
 
 """
