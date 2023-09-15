@@ -379,13 +379,15 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     vnums = [VersionNumber(x) for x in available_folders]
     master_version = maximum(vnums)
     filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
-    rc = maximum(vnums)
-    if !isempty(rc.prerelease) && occursin(r"^(rc|alpha|beta)", rc.prerelease[1])
-        src = "v$(rc)"
-        @assert src ∈ available_folders
-        push!(v.versions, src => src, pop!(v.versions))
+    # Include all release candidates and pre-releases (alphas and betas)
+    prereleases = filter(x -> !isempty(x.prerelease), vnums)
+    for rc in prereleases
+        if occursin(r"^(rc|alpha|beta)", rc.prerelease[1])
+            src = "v$(rc)"
+            @assert src ∈ available_folders
+            push!(v.versions, src => src, pop!(v.versions))
+        end
     end
-
     return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
 end
 
