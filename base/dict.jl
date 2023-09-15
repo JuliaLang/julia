@@ -916,9 +916,13 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
 PersistentDict
 
 PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
-PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT(KV...))
+PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
+PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
 PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
-function PersistentDict(dict::PersistentDict{K,V}, key::K, val::V) where {K,V}
+PersistentDict{K,V}(dict::PersistentDict{K,V}, pair::Pair) where {K,V} = PersistentDict(dict, pair...)
+function PersistentDict(dict::PersistentDict{K,V}, key, val) where {K,V}
+    key = convert(K, key)
+    val = convert(V, val)
     trie = dict.trie
     h = hash(key)
     found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
@@ -975,7 +979,7 @@ function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     throw(KeyError(key))
 end
 
-function get(dict::PersistentDict{K,V}, key::K, default::V) where {K,V}
+function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     trie = dict.trie
     if HAMT.islevel_empty(trie)
         return default
