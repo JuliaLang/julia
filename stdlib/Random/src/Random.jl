@@ -325,7 +325,8 @@ Pick a random element or array of random elements from the set of values specifi
 
   + concrete floating point types sample from `[0, 1)`
 
-  + concrete complex types `Complex{T}` sample from `rand(T) + rand(T) * im`
+  + concrete complex types `<:Complex{T}` if `T` is a sampleable type take their real and imaginary components
+    independently from the set of values corresponding to `T`, but are not supported if `T` is not sampleable.
 
   + all `<:AbstractChar` types sample from the set of valid Unicode scalars
 
