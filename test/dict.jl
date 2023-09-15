@@ -1101,10 +1101,13 @@ import Base.PersistentDict
         @test length(dict) == 0
         @test isempty(dict)
 
+        dict = PersistentDict{Int, Int}(1=>2.0)
+        @test dict[1] == 2
+
         dict = PersistentDict(1=>2)
         @test dict[1] == 2
 
-        dict = PersistentDict(dict, 1=>3)
+        dict = PersistentDict(dict, 1=>3.0)
         @test dict[1] == 3
 
         dict = PersistentDict(dict, 1, 1)
@@ -1119,7 +1122,7 @@ import Base.PersistentDict
         @test haskey(dict, 1)
         @test !haskey(dict, 2)
 
-        dict2 = PersistentDict(dict, 1, 2)
+        dict2 = PersistentDict{Int, Int}(dict, 1=>2)
         @test dict[1] == 1
         @test dict2[1] == 2
 
