@@ -64,7 +64,8 @@ mutable struct HAMT{K, V}
     bitmap::BITMAP
 end
 HAMT{K, V}() where {K, V} = HAMT(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
-function HAMT(k::K, v::V) where {K, V}
+function HAMT{K,V}(k::K, v) where {K, V}
+    v = convert(V, v)
     # For a single element we can't have a hash-collision
     trie = HAMT(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
     trie.data[1] = Leaf{K,V}(k,v)
@@ -72,6 +73,7 @@ function HAMT(k::K, v::V) where {K, V}
     set!(trie, bi)
     return trie
 end
+HAMT(k::K, v::V) where {K, V} = HAMT{K,V}(K, V)
 
 struct HashState{K}
     key::K
