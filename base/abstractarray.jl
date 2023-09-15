@@ -3344,7 +3344,8 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
 
-The order in which the `collection`s are iterated is undefined. If `destination` shares memory with any of the `collection`s, the result might be incorrect.
+The order in which the elements of individual `collection[i]` arguments are iterated is undefined.
+If `destination` shares memory with any of the `collection[i]` arguments, the result is undefined.
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
