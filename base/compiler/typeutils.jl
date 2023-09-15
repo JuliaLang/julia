@@ -291,7 +291,7 @@ end
 unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
 function _unioncomplexity(@nospecialize x)
     if isa(x, DataType)
-        x.name === Tuple.name || isvarargtype(x) || return 0
+        x.name === Tuple.name || return 0
         c = 0
         for ti in x.parameters
             c = max(c, unioncomplexity(ti))
@@ -302,7 +302,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, UnionAll)
         return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
     elseif isa(x, TypeofVararg)
-        return isdefined(x, :T) ? unioncomplexity(x.T) : 0
+        return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
         return 0
     end
