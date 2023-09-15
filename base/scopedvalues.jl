@@ -65,7 +65,7 @@ function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where 
     if parent === nothing
         return Scope(ScopeStorage(key=>val))
     end
-    return Scope(ScopeStorage(parent.values, key=>convert(T, val)))
+    return Scope(ScopeStorage(parent.values, key=>val))
 end
 
 function Scope(scope, pairs::Pair{<:ScopedValue}...)
