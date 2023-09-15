@@ -124,6 +124,9 @@ Returns whether a symbol is marked as public in a module.
 
 Exported symbols are considered public.
 
+!!! compat "Julia 1.11"
+    This function and the notion of publicity were added in Julia 1.11.
+
 See also: [`isexported`](@ref), [`names`](@ref)
 
 ```jldoctest
