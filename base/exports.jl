@@ -1063,3 +1063,84 @@ export
     @view,
     @views,
     @static
+
+# TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
+eval(Expr(:public,
+# Modules
+    :Checked,
+    :Filesystem,
+    :Order,
+    :Sort,
+
+# Types
+    :AbstractLock,
+    :AsyncCondition,
+    :CodeUnits,
+    :Event,
+    :Fix1,
+    :Fix2,
+    :Generator,
+    :ImmutableDict,
+    :OneTo,
+    :UUID,
+
+# Semaphores
+    :Semaphore,
+    :acquire,
+    :release,
+
+# collections
+    :IteratorEltype,
+    :IteratorSize,
+    :to_index,
+    :vect,
+    :isdone,
+    :front,
+    :rest,
+    :split_rest,
+    :tail,
+    :checked_length,
+
+# Loading
+    :DL_LOAD_PATH,
+    :load_path,
+    :active_project,
+
+# Reflection and introspection
+    :isambiguous,
+    :isexpr,
+    :isidentifier,
+    :issingletontype,
+    :identify_package,
+    :locate_package,
+    :moduleroot,
+    :jit_total_bytes,
+    :summarysize,
+    :isexported,
+    :ispublic,
+
+# Opperators
+    :operator_associativity,
+    :operator_precedence,
+    :isbinaryoperator,
+    :isoperator,
+    :isunaryoperator,
+
+# C interface
+    :cconvert,
+    :unsafe_convert,
+
+# Error handling
+    :exit_on_sigint,
+    :windowserror,
+
+# Macros
+    Symbol("@assume_effects"),
+    Symbol("@constprop"),
+    Symbol("@locals"),
+    Symbol("@propagate_inbounds"),
+
+# misc
+    :notnothing,
+    :runtests,
+    :text_colors))

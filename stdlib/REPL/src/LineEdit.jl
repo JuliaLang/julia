@@ -376,7 +376,13 @@ end
 function check_for_hint(s::MIState)
     st = state(s)
     options(st).hint_tab_completes || return false
+    if !eof(buffer(st)) # only generate hints if at the end of the line
+        # TODO: maybe show hints for insertions at other positions
+        # Requires making space for them earlier in refresh_multi_line
+        return false
+    end
     completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    length(partial) < 2 && return false # Don't complete for single chars, given e.g. `x` completes to `xor`
     if should_complete
         if length(completions) == 1
             hint = only(completions)[sizeof(partial)+1:end]

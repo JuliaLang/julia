@@ -2226,7 +2226,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         print(io, head, ' ')
         show_list(io, args, ", ", indent, 0, quote_level)
 
-    elseif head === :export
+    elseif head in (:export, :public)
         print(io, head, ' ')
         show_list(io, mapany(allow_macroname, args), ", ", indent)
 

@@ -1511,6 +1511,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_top_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_module_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_export_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_public_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_import_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_quote_sym;

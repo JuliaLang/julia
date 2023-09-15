@@ -134,6 +134,7 @@ precompile_test_harness(false) do dir
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
+              public foo, Bar
               module Inner
                   import $FooBase_module.hash
                   using ..$Foo_module
@@ -150,6 +151,7 @@ precompile_test_harness(false) do dir
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
+                  public bar
                   include_dependency("bar.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
