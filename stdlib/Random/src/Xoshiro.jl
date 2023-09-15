@@ -51,52 +51,24 @@ mutable struct Xoshiro <: AbstractRNG
     s4::UInt64 # internal splitmix state
 
     Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer, s4::Integer) = new(s0, s1, s2, s3, s4)
-    Xoshiro(s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64) = new(s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3)
+    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = initstate!(new(), map(UInt64, (s0, s1, s2, s3)))
     Xoshiro(seed=nothing) = seed!(new(), seed)
 end
 
-Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = Xoshiro(UInt64(s0), UInt64(s1), UInt64(s2), UInt64(s3))
-
-function setstate!(
-    x::Xoshiro,
-    s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64, # xoshiro256 state
-    s4::UInt64, # internal splitmix state
-)
+@inline function setstate!(x::Xoshiro, (s0, s1, s2, s3, s4))
     x.s0 = s0
     x.s1 = s1
     x.s2 = s2
     x.s3 = s3
-    x.s4 = s4
+    if s4 !== nothing
+        x.s4 = s4
+    end
     x
 end
 
-copy(rng::Xoshiro) = Xoshiro(rng.s0, rng.s1, rng.s2, rng.s3, rng.s4)
-
-function copy!(dst::Xoshiro, src::Xoshiro)
-    dst.s0, dst.s1, dst.s2, dst.s3, dst.s4 = src.s0, src.s1, src.s2, src.s3, src.s4
-    dst
-end
-
-function ==(a::Xoshiro, b::Xoshiro)
-    a.s0 == b.s0 && a.s1 == b.s1 && a.s2 == b.s2 && a.s3 == b.s3 && a.s4 == b.s4
-end
+@inline getstate(x::Xoshiro) = (x.s0, x.s1, x.s2, x.s3, x.s4)
 
 rng_native_52(::Xoshiro) = UInt64
-
-@inline function rand(rng::Xoshiro, ::SamplerType{UInt64})
-    s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
-    tmp = s0 + s3
-    res = ((tmp << 23) | (tmp >> 41)) + s0
-    t = s1 << 17
-    s2 = xor(s2, s0)
-    s3 = xor(s3, s1)
-    s1 = xor(s1, s2)
-    s0 = xor(s0, s3)
-    s2 = xor(s2, t)
-    s3 = s3 << 45 | s3 >> 19
-    rng.s0, rng.s1, rng.s2, rng.s3 = s0, s1, s2, s3
-    res
-end
 
 
 ## Task local RNG
@@ -120,25 +92,58 @@ is undefined behavior: it will work most of the time, and may sometimes fail sil
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
-rng_native_52(::TaskLocalRNG) = UInt64
 
-function setstate!(
-    x::TaskLocalRNG,
-    s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64, # xoshiro256 state
-    s4::UInt64, # internal splitmix state
-)
+@inline function setstate!(x::TaskLocalRNG, (s0, s1, s2, s3, s4))
     t = current_task()
     t.rngState0 = s0
     t.rngState1 = s1
     t.rngState2 = s2
     t.rngState3 = s3
-    t.rngState4 = s4
+    if s4 !== nothing
+        t.rngState4 = s4
+    end
     x
 end
 
-@inline function rand(::TaskLocalRNG, ::SamplerType{UInt64})
-    task = current_task()
-    s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
+@inline function getstate(::TaskLocalRNG)
+    t = current_task()
+    (t.rngState0, t.rngState1, t.rngState2, t.rngState3, t.rngState4)
+end
+
+rng_native_52(::TaskLocalRNG) = UInt64
+
+
+## Shared implementation between Xoshiro and TaskLocalRNG
+
+# this variant of setstate! initializes the internal splitmix state, a.k.a. `s4`
+@inline initstate!(x::Union{TaskLocalRNG, Xoshiro}, (s0, s1, s2, s3)::NTuple{4, UInt64}) =
+    setstate!(x, (s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3))
+
+copy(rng::Union{TaskLocalRNG, Xoshiro}) = Xoshiro(getstate(rng)...)
+copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = setstate!(dst, getstate(src))
+==(x::Union{TaskLocalRNG, Xoshiro}, y::Union{TaskLocalRNG, Xoshiro}) = getstate(x) == getstate(y)
+
+function seed!(rng::Union{TaskLocalRNG, Xoshiro})
+    # as we get good randomness from RandomDevice, we can skip hashing
+    rd = RandomDevice()
+    s0 = rand(rd, UInt64)
+    s1 = rand(rd, UInt64)
+    s2 = rand(rd, UInt64)
+    s3 = rand(rd, UInt64)
+    initstate!(rng, (s0, s1, s2, s3))
+end
+
+function seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Union{Vector{UInt32}, Vector{UInt64}})
+    c = SHA.SHA2_256_CTX()
+    SHA.update!(c, reinterpret(UInt8, seed))
+    s0, s1, s2, s3 = reinterpret(UInt64, SHA.digest!(c))
+    initstate!(rng, (s0, s1, s2, s3))
+end
+
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(seed))
+
+@inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
+    s0, s1, s2, s3 = getstate(x)
     tmp = s0 + s3
     res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
@@ -148,33 +153,9 @@ end
     s0 ⊻= s3
     s2 ⊻= t
     s3 = s3 << 45 | s3 >> 19
-    task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
+    setstate!(x, (s0, s1, s2, s3, nothing))
     res
 end
-
-# Shared implementation between Xoshiro and TaskLocalRNG -- seeding
-
-function seed!(rng::Union{TaskLocalRNG,Xoshiro})
-    # as we get good randomness from RandomDevice, we can skip hashing
-    rd = RandomDevice()
-    s0 = rand(rd, UInt64)
-    s1 = rand(rd, UInt64)
-    s2 = rand(rd, UInt64)
-    s3 = rand(rd, UInt64)
-    s4 = 1s0 + 3s1 + 5s2 + 7s3
-    setstate!(rng, s0, s1, s2, s3, s4)
-end
-
-function seed!(rng::Union{TaskLocalRNG,Xoshiro}, seed::Union{Vector{UInt32}, Vector{UInt64}})
-    c = SHA.SHA2_256_CTX()
-    SHA.update!(c, reinterpret(UInt8, seed))
-    s0, s1, s2, s3 = reinterpret(UInt64, SHA.digest!(c))
-    s4 = 1s0 + 3s1 + 5s2 + 7s3
-    setstate!(rng, s0, s1, s2, s3, s4)
-end
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(seed))
-
 
 @inline function rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt128})
     first = rand(rng, UInt64)
@@ -190,36 +171,6 @@ end
     # use upper bits
     (rand(rng, UInt64) >>> (64 - 8*sizeof(S))) % S
 end
-
-function copy(rng::TaskLocalRNG)
-    t = current_task()
-    Xoshiro(t.rngState0, t.rngState1, t.rngState2, t.rngState3, t.rngState4)
-end
-
-function copy!(dst::TaskLocalRNG, src::Xoshiro)
-    t = current_task()
-    setstate!(dst, src.s0, src.s1, src.s2, src.s3, src.s4)
-    return dst
-end
-
-function copy!(dst::Xoshiro, src::TaskLocalRNG)
-    t = current_task()
-    setstate!(dst, t.rngState0, t.rngState1, t.rngState2, t.rngState3, t.rngState4)
-    return dst
-end
-
-function ==(a::Xoshiro, b::TaskLocalRNG)
-    t = current_task()
-    (
-        a.s0 == t.rngState0 &&
-        a.s1 == t.rngState1 &&
-        a.s2 == t.rngState2 &&
-        a.s3 == t.rngState3 &&
-        a.s4 == t.rngState4
-    )
-end
-
-==(a::TaskLocalRNG, b::Xoshiro) = b == a
 
 # for partial words, use upper bits from Xoshiro
 
