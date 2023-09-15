@@ -4,8 +4,9 @@ Julia v1.11 Release Notes
 New language features
 ---------------------
 * `public` is a new keyword! It behaves analogously to `export` but marks symbols as public
-  without exporting into the namespace of folks who call `using`. Mark your public but
-  non-exported symbols as `public`, please ([#50105]).
+  without exporting into the namespace of folks who call `using`. Please mark your public but
+  non-exported symbols as `public`. To mark public symbols while keeping compatibility with
+  older versions of Julia, use `@public` from Compat.jl. ([#50105])
 
 Language changes
 ----------------
