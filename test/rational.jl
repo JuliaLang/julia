@@ -33,6 +33,11 @@ using Test
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
+    @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
+    @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
+    @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
+    @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
@@ -253,6 +258,10 @@ end
     rational2 = Rational(-4500, 9000)
     @test sprint(show, rational1) == "1465//8593"
     @test sprint(show, rational2) == "-1//2"
+    @test sprint(show, -2//2) == "-1//1"
+    @test sprint(show, [-2//2,]) == "Rational{$Int}[-1]"
+    @test sprint(show, MIME"text/plain"(), Union{Int, Rational{Int}}[7 3//6; 6//3 2]) ==
+        "2×2 Matrix{Union{Rational{$Int}, $Int}}:\n  7    1//2\n 2//1   2"
     let
         io1 = IOBuffer()
         write(io1, rational1)
@@ -264,6 +273,9 @@ end
         io2.ptr = 1
         @test read(io2, typeof(rational2)) == rational2
     end
+end
+@testset "abs overflow for Rational" begin
+    @test_throws OverflowError abs(typemin(Int) // 1)
 end
 @testset "parse" begin
     # Non-negative Int in which parsing is expected to work
@@ -719,4 +731,11 @@ end
     @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
     @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
     @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
+end
+@testset "rationalize(Complex) with tol" begin
+    # test: rationalize(x::Complex; kvs...)
+    precise_next = 7205759403792795//72057594037927936
+    @assert Float64(precise_next) == nextfloat(0.1)
+    @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end

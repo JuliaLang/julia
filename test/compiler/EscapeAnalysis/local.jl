@@ -2,11 +2,46 @@
 # =============
 # EA works on post-inlining IR
 
-include(normpath(@__DIR__, "setup.jl"))
+module test_local_EA
+
+include("setup.jl")
+
+using Core.Compiler: alloc_array_ndims
+using .EscapeAnalysis:
+    EscapeInfo, IndexableElements, IndexableFields,
+    array_resize_info, is_array_copy, normalize
+
+isϕ(@nospecialize x) = isa(x, Core.PhiNode)
+function with_normalized_name(@nospecialize(f), @nospecialize(x))
+    if Meta.isexpr(x, :foreigncall)
+        name = x.args[1]
+        nn = normalize(name)
+        return isa(nn, Symbol) && f(nn)
+    end
+    return false
+end
+isarrayalloc(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(alloc_array_ndims(nn)), x)
+isarrayresize(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(array_resize_info(nn)), x)
+isarraycopy(@nospecialize x) =
+    with_normalized_name(nn::Symbol->is_array_copy(nn), x)
+"""
+    is_load_forwardable(x::EscapeInfo) -> Bool
+
+Queries if `x` is elibigle for store-to-load forwarding optimization.
+"""
+function is_load_forwardable(x::EscapeInfo)
+    AliasInfo = x.AliasInfo
+    # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
+    # but we can also do equivalent check during forwarding
+    return isa(AliasInfo, IndexableFields) || isa(AliasInfo, IndexableElements)
+end
 
 @testset "basics" begin
     let # arg return
         result = code_escapes((Any,)) do a # return to caller
+            Base.donotdelete(1) # TODO #51143
             return nothing
         end
         @test has_arg_escape(result.state[Argument(2)])
@@ -14,7 +49,7 @@ include(normpath(@__DIR__, "setup.jl"))
         result = code_escapes((Any,)) do a
             return a
         end
-        i = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_arg_escape(result.state[Argument(1)]) # self
         @test !has_return_escape(result.state[Argument(1)], i) # self
         @test has_arg_escape(result.state[Argument(2)]) # a
@@ -41,17 +76,18 @@ include(normpath(@__DIR__, "setup.jl"))
             GV = s
             return GV
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
     end
     let # :gc_preserve_begin / :gc_preserve_end
         result = code_escapes((String,)) do s
+            Base.donotdelete(1) # TODO #51143
             m = SafeRef(s)
             GC.@preserve m begin
                 return nothing
             end
         end
-        i = findfirst(isT(SafeRef{String}), result.ir.stmts.type) # find allocation statement
+        i = findfirst(==(SafeRef{String}), result.ir.stmts.type) # find allocation statement
         @test !isnothing(i)
         @test has_no_escape(result.state[SSAValue(i)])
     end
@@ -62,17 +98,16 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             return @isdefined(s)
         end
-        i = findfirst(isT(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
-        @test !isnothing(i)
-        @test has_no_escape(result.state[SSAValue(i)])
+        i = findfirst(==(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
+        @test isnothing(i) || has_no_escape(result.state[SSAValue(i)])
     end
     let # ϕ-node
         result = code_escapes((Bool,Any,Any)) do cond, a, b
             c = cond ? a : b # ϕ(a, b)
             return c
         end
-        @assert any(@nospecialize(x)->isa(x, Core.PhiNode), result.ir.stmts.inst)
-        i = only(findall(isreturn, result.ir.stmts.inst))
+        @assert any(@nospecialize(x)->isa(x, Core.PhiNode), result.ir.stmts.stmt)
+        i = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(3)], i) # a
         @test has_return_escape(result.state[Argument(4)], i) # b
     end
@@ -83,8 +118,8 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             return nothing
         end
-        @assert any(@nospecialize(x)->isa(x, Core.PiNode), result.ir.stmts.inst)
-        @test any(findall(isreturn, result.ir.stmts.inst)) do i
+        @assert any(@nospecialize(x)->isa(x, Core.PiNode), result.ir.stmts.stmt)
+        @test any(findall(isreturn, result.ir.stmts.stmt)) do i
             has_return_escape(result.state[Argument(2)], i)
         end
     end
@@ -98,9 +133,9 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             return x
         end
-        @assert any(@nospecialize(x)->isa(x, Core.PhiCNode), result.ir.stmts.inst)
-        @assert any(@nospecialize(x)->isa(x, Core.UpsilonNode), result.ir.stmts.inst)
-        i = only(findall(isreturn, result.ir.stmts.inst))
+        @assert any(@nospecialize(x)->isa(x, Core.PhiCNode), result.ir.stmts.stmt)
+        @assert any(@nospecialize(x)->isa(x, Core.UpsilonNode), result.ir.stmts.stmt)
+        i = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], i)
         @test has_return_escape(result.state[Argument(3)], i)
     end
@@ -122,7 +157,7 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)])
     end
     let # try/catch
@@ -157,7 +192,7 @@ let # simple allocation
         mm = SafeRef{Bool}(c) # just allocated, never escapes
         return mm[] ? nothing : 1
     end
-    i = only(findall(isnew, result.ir.stmts.inst))
+    i = only(findall(isnew, result.ir.stmts.stmt))
     @test has_no_escape(result.state[SSAValue(i)])
 end
 
@@ -202,7 +237,7 @@ end
             r = ifelse(c, Ref("yes"), Ref("no"))
             return r
         end
-        inds = findall(isnew, result.ir.stmts.inst)
+        inds = findall(isnew, result.ir.stmts.stmt)
         @assert !isempty(inds)
         for i in inds
             @test has_return_escape(result.state[SSAValue(i)])
@@ -214,9 +249,9 @@ end
             return r
         end
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.inst[i]) && isT(Base.RefValue{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{String}
                 @test has_return_escape(result.state[SSAValue(i)])
-            elseif isnew(result.ir.stmts.inst[i]) && isT(Base.RefValue{Nothing})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{Nothing}
                 @test has_no_escape(result.state[SSAValue(i)])
             end
         end
@@ -227,7 +262,7 @@ end
             y = x::String
             return y
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test !has_all_escape(result.state[Argument(2)])
     end
@@ -236,7 +271,7 @@ end
         result = code_escapes((Any,)) do x
             isdefined(x, :foo) ? x : throw("undefined")
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test !has_all_escape(result.state[Argument(2)])
 
@@ -256,8 +291,8 @@ end
             end
             return r
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        rts = findall(isreturn, result.ir.stmts.inst)
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        rts = findall(isreturn, result.ir.stmts.stmt)
         @assert length(rts) == 2
         @test count(rt->has_return_escape(result.state[SSAValue(i)], rt), rts) == 1
     end
@@ -271,8 +306,8 @@ end
             rand(Bool) && return r
             return cnt
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        rts = findall(isreturn, result.ir.stmts.inst) # return statement
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        rts = findall(isreturn, result.ir.stmts.stmt) # return statement
         @assert length(rts) == 3
         @test count(rt->has_return_escape(result.state[SSAValue(i)], rt), rts) == 2
     end
@@ -308,7 +343,7 @@ end
             end
             return ret
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)])
     end
 
@@ -324,7 +359,7 @@ end
             end
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
 
@@ -341,7 +376,7 @@ end
                 GR[] = err2
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
     let # account for possible escapes via `rethrow`
@@ -357,7 +392,7 @@ end
                 GR[] = err2
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
     let # account for possible escapes via `rethrow`
@@ -369,7 +404,7 @@ end
                 escape_rethrow!()
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
     let # account for possible escapes via `rethrow`
@@ -384,7 +419,7 @@ end
             end
             return t
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
     let # account for possible escapes via `Base.current_exceptions`
@@ -396,7 +431,7 @@ end
                 GR[] = Base.current_exceptions()
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
     let # account for possible escapes via `Base.current_exceptions`
@@ -408,7 +443,7 @@ end
                 escape_current_exceptions!()
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
     end
 
@@ -426,10 +461,10 @@ end
             s2 = unsafeget(r2)
             return s2, r2
         end
-        is = findall(isnew, result.ir.stmts.inst)
+        is = findall(isnew, result.ir.stmts.stmt)
         @test length(is) == 2
         i1, i2 = is
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i1)])
         @test !has_all_escape(result.state[SSAValue(i2)])
         @test has_return_escape(result.state[SSAValue(i2)], r)
@@ -449,8 +484,8 @@ end
             end
             return ret
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[SSAValue(i)], r)
     end
     let # sequential: escape information imposed on `err1` and `err2 should propagate separately
@@ -472,10 +507,10 @@ end
             end
             return ret
         end
-        is = findall(isnew, result.ir.stmts.inst)
+        is = findall(isnew, result.ir.stmts.stmt)
         @test length(is) == 2
         i1, i2 = is
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i1)])
         @test has_return_escape(result.state[SSAValue(i2)], r)
         @test_broken !has_all_escape(result.state[SSAValue(i2)])
@@ -496,7 +531,7 @@ end
             end
             return ret
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[SSAValue(i)])
     end
     let # merge: escape information imposed on `err1` and `err2 should be merged
@@ -517,8 +552,8 @@ end
             end
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        rs = findall(isreturn, result.ir.stmts.inst)
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        rs = findall(isreturn, result.ir.stmts.stmt)
         @test_broken !has_all_escape(result.state[SSAValue(i)])
         for r in rs
             @test has_return_escape(result.state[SSAValue(i)], r)
@@ -538,8 +573,8 @@ end
             end
             return ret
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[SSAValue(i)], r)
     end
 end
@@ -553,7 +588,7 @@ end
             global GV = SafeRef{Any}(a)
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
         @test has_all_escape(result.state[Argument(2)])
     end
@@ -561,7 +596,7 @@ end
             global GV = (a,)
             nothing
         end
-        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.inst))
+        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
         @test has_all_escape(result.state[Argument(2)])
     end
@@ -570,7 +605,7 @@ end
             global GV = SafeRef(o0)
             nothing
         end
-        is = findall(isnew, result.ir.stmts.inst)
+        is = findall(isnew, result.ir.stmts.stmt)
         @test length(is) == 2
         i0, i1 = is
         @test has_all_escape(result.state[SSAValue(i0)])
@@ -582,7 +617,7 @@ end
             global GV = (t0,)
             nothing
         end
-        inds = findall(iscall((result.ir, tuple)), result.ir.stmts.inst)
+        inds = findall(iscall((result.ir, tuple)), result.ir.stmts.stmt)
         @assert length(inds) == 2
         for i in inds; @test has_all_escape(result.state[SSAValue(i)]); end
         @test has_all_escape(result.state[Argument(2)])
@@ -594,7 +629,7 @@ end
             r[] = a
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
         @test has_all_escape(result.state[Argument(2)])
     end
@@ -604,7 +639,7 @@ end
             r[] = b
             nothing
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i)])
         @test has_all_escape(result.state[Argument(2)]) # a
         @test has_all_escape(result.state[Argument(3)]) # b
@@ -651,8 +686,8 @@ end
             f = o[]
             return f
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -661,8 +696,8 @@ end
             f = t[][1]
             return f
         end
-        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
         result.state[SSAValue(i)].AliasInfo
@@ -673,8 +708,8 @@ end
             fld2 = obj[2]
             return (fld1, fld2)
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test has_return_escape(result.state[Argument(3)], r) # b
         @test is_load_forwardable(result.state[SSAValue(i)])
@@ -687,8 +722,8 @@ end
             f = o[]
             return f
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -697,8 +732,8 @@ end
             obj = SafeRef("foo")
             return (obj[] = a)
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -709,12 +744,12 @@ end
             o2 = SafeRef(o1)
             return o2[]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.inst[i]) && isT(SafeRef{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.inst[i]) && isT(SafeRef{SafeRef{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{SafeRef{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -724,12 +759,12 @@ end
             o2 = (o1,)
             return o2[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.inst[i]) && isT(Tuple{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.inst[i]) && isT(Tuple{Tuple{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{Tuple{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -741,9 +776,9 @@ end
             a′  = o1′[]
             return a′
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -752,8 +787,8 @@ end
             o2 = SafeRef(o1)
             return o2
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        for i in findall(isnew, result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test has_return_escape(result.state[SSAValue(i)], r)
         end
     end
@@ -764,9 +799,9 @@ end
             o2[] = o1
             return o2
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         findall(1:length(result.ir.stmts)) do i
-            if isnew(result.ir.stmts[i][:inst])
+            if isnew(result.ir.stmts[i][:stmt])
                 t = result.ir.stmts[i][:type]
                 return t === SafeRef{String}  || # o1
                        t === SafeRef{SafeRef}    # o2
@@ -779,8 +814,8 @@ end
     let result = code_escapes((String,)) do x
             broadcast(identity, Ref(x))
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -794,12 +829,12 @@ end
             end
             return ϕ[]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test has_return_escape(result.state[Argument(4)], r) # y
-        i = only(findall(isϕ, result.ir.stmts.inst))
+        i = only(findall(isϕ, result.ir.stmts.stmt))
         @test is_load_forwardable(result.state[SSAValue(i)])
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -811,13 +846,13 @@ end
             end
             return ϕ1[], ϕ2[]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test has_return_escape(result.state[Argument(4)], r) # y
-        for i in findall(isϕ, result.ir.stmts.inst)
+        for i in findall(isϕ, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -832,9 +867,9 @@ end
             end
             return @isdefined(out) ? out : throw(ϕ)
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        t = only(findall(iscall((result.ir, throw)), result.ir.stmts.inst))
-        ϕ = only(findall(isT(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        t = only(findall(iscall((result.ir, throw)), result.ir.stmts.stmt))
+        ϕ = only(findall(==(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test !has_return_escape(result.state[Argument(4)], r) # y
         @test has_return_escape(result.state[Argument(5)], r) # z
@@ -849,9 +884,9 @@ end
             r = SafeRef(s)
             return r[]
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test isaliased(Argument(2), val, result.state)
         @test !isaliased(Argument(2), SSAValue(i), result.state)
     end
@@ -860,9 +895,9 @@ end
             r2 = SafeRef(r1)
             return r2[]
         end
-        i1, i2 = findall(isnew, result.ir.stmts.inst)
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        i1, i2 = findall(isnew, result.ir.stmts.stmt)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test !isaliased(SSAValue(i1), SSAValue(i2), result.state)
         @test isaliased(SSAValue(i1), val, result.state)
         @test !isaliased(SSAValue(i2), val, result.state)
@@ -872,10 +907,10 @@ end
             r2 = SafeRef(r1)
             return r2[][]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test isaliased(Argument(2), val, result.state)
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test !isaliased(SSAValue(i), val, result.state)
         end
     end
@@ -888,7 +923,7 @@ end
                 nothing
             end
         end
-        i = findfirst(isnew, result.ir.stmts.inst)
+        i = findfirst(isnew, result.ir.stmts.stmt)
         @test has_all_escape(result.state[Argument(2)])
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -898,9 +933,9 @@ end
             r[] = s
             return r[]
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test isaliased(Argument(2), val, result.state)
         @test !isaliased(Argument(2), SSAValue(i), result.state)
     end
@@ -910,9 +945,9 @@ end
             r2[] = r1
             return r2[]
         end
-        i1, i2 = findall(isnew, result.ir.stmts.inst)
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        i1, i2 = findall(isnew, result.ir.stmts.stmt)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test !isaliased(SSAValue(i1), SSAValue(i2), result.state)
         @test isaliased(SSAValue(i1), val, result.state)
         @test !isaliased(SSAValue(i2), val, result.state)
@@ -924,10 +959,10 @@ end
             r1[] = s
             return r2[][]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test isaliased(Argument(2), val, result.state)
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test !isaliased(SSAValue(i), val, result.state)
         end
         result = code_escapes((String,)) do s
@@ -937,10 +972,10 @@ end
             r2[] = r1
             return r2[][]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test isaliased(Argument(2), val, result.state)
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test !isaliased(SSAValue(i), val, result.state)
         end
     end
@@ -954,7 +989,7 @@ end
                 nothing
             end
         end
-        i = findfirst(isnew, result.ir.stmts.inst)
+        i = findfirst(isnew, result.ir.stmts.stmt)
         @test has_all_escape(result.state[Argument(3)])
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -963,8 +998,8 @@ end
             r = a::String
             return r
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test isaliased(Argument(2), val, result.state)       # a <-> r
     end
@@ -980,8 +1015,8 @@ end
             r = ifelse(c, a, b)
             return r
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test has_return_escape(result.state[Argument(3)], r) # a
         @test has_return_escape(result.state[Argument(4)], r) # b
         @test !isaliased(Argument(2), val, result.state)      # c <!-> r
@@ -1008,14 +1043,14 @@ end
             ϕ2[] = x
             return ϕ1[]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test isaliased(Argument(3), val, result.state) # x
-        for i in findall(isϕ, result.ir.stmts.inst)
+        for i in findall(isϕ, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -1028,14 +1063,14 @@ end
             cond2 && (ϕ2[] = x)
             return ϕ1[]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        val = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        val = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test has_return_escape(result.state[Argument(4)], r) # x
         @test isaliased(Argument(4), val, result.state) # x
-        for i in findall(isϕ, result.ir.stmts.inst)
+        for i in findall(isϕ, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -1046,8 +1081,8 @@ end
             end
             throw("error!")
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        rval = (result.ir.stmts.inst[r]::ReturnNode).val::SSAValue
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        rval = (result.ir.stmts.stmt[r]::ReturnNode).val::SSAValue
         @test has_return_escape(result.state[Argument(2)], r) # x
         @test isaliased(Argument(2), rval, result.state)
     end
@@ -1067,8 +1102,8 @@ end
             x[] = x
             return x[]
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
     end
     let result = @eval Module() begin
@@ -1079,8 +1114,8 @@ end
                 return r[]
             end
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        for i in findall(iscall((result.ir, getfield)), result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        for i in findall(iscall((result.ir, getfield)), result.ir.stmts.stmt)
             @test has_return_escape(result.state[SSAValue(i)], r)
         end
     end
@@ -1095,8 +1130,8 @@ end
                 return x[]
             end
         end
-        i = only(findall(isinvoke(:genr), result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isinvoke(:genr), result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
     end
 
@@ -1107,7 +1142,7 @@ end
     let result = @eval code_escapes((Any,Any,)) do T, x
             obj = $(Expr(:new, :T, :x))
         end
-        t = only(findall(isnew, result.ir.stmts.inst))
+        t = only(findall(isnew, result.ir.stmts.stmt))
         @test #=T=# has_thrown_escape(result.state[Argument(2)], t) # T
         @test #=x=# has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1115,8 +1150,8 @@ end
             obj = $(Expr(:new, :T, :x, :y))
             return getfield(obj, :x)
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test #=x=# has_return_escape(result.state[Argument(3)], r)
         @test #=y=# has_return_escape(result.state[Argument(4)], r)
         @test #=z=# !has_return_escape(result.state[Argument(5)], r)
@@ -1126,8 +1161,8 @@ end
             setfield!(obj, :x, y)
             return getfield(obj, :x)
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test #=x=# has_return_escape(result.state[Argument(3)], r)
         @test #=y=# has_return_escape(result.state[Argument(4)], r)
         @test #=z=# !has_return_escape(result.state[Argument(5)], r)
@@ -1139,8 +1174,8 @@ end
             obj = SafeRef(a)
             return getfield(obj, fld)
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
     end
@@ -1148,8 +1183,8 @@ end
             obj = SafeRefs(a, b)
             return getfield(obj, fld) # should escape both `a` and `b`
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test has_return_escape(result.state[Argument(3)], r) # b
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
@@ -1158,8 +1193,8 @@ end
             obj = SafeRefs(a, b)
             return obj[idx] # should escape both `a` and `b`
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test has_return_escape(result.state[Argument(3)], r) # b
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
@@ -1169,8 +1204,8 @@ end
             setfield!(obj, fld, a)
             return obj[2] # should escape `a`
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test !has_return_escape(result.state[Argument(3)], r) # b
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
@@ -1180,8 +1215,8 @@ end
             setfield!(obj, fld, a)
             return obj[1] # this should escape `a`
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
     end
@@ -1190,8 +1225,8 @@ end
             obj[idx] = a
             return obj[2] # should escape `a`
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # a
         @test !has_return_escape(result.state[Argument(3)], r) # b
         @test !is_load_forwardable(result.state[SSAValue(i)]) # obj
@@ -1208,8 +1243,8 @@ end
                 return fld
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         # NOTE we can't scalar replace `obj`, but still we may want to stack allocate it
         @test_broken is_load_forwardable(result.state[SSAValue(i)])
@@ -1233,8 +1268,8 @@ end
                 return x
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
         @test has_return_escape(result.state[Argument(2)], r) # y
     end
@@ -1247,8 +1282,8 @@ end
                 return x1
             end
         end
-        i1, i2 = findall(isnew, result.ir.stmts.inst)
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i1, i2 = findall(isnew, result.ir.stmts.stmt)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i1)], r)
         @test !has_return_escape(result.state[SSAValue(i2)], r)
         @test has_return_escape(result.state[Argument(2)], r) # y
@@ -1271,8 +1306,8 @@ end
             r[] = b
             return r[]
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[Argument(2)], r) # a
         @test has_return_escape(result.state[Argument(3)], r) # b
         @test is_load_forwardable(result.state[SSAValue(i)])
@@ -1283,8 +1318,8 @@ end
             r[] = b
             return r[]
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[Argument(2)], r) # a
         @test has_return_escape(result.state[Argument(3)], r) # b
         @test is_load_forwardable(result.state[SSAValue(i)])
@@ -1299,9 +1334,9 @@ end
                 return nothing
             end
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test is_load_forwardable(result.state[SSAValue(i)])
-        r = only(findall(result.ir.stmts.inst) do @nospecialize x
+        r = only(findall(result.ir.stmts.stmt) do @nospecialize x
             isreturn(x) && isa(x.val, Core.SSAValue)
         end)
         @test has_return_escape(result.state[Argument(2)], r) # a
@@ -1323,10 +1358,10 @@ end
             end
             r
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(3)], r) # baz
         @test has_return_escape(result.state[Argument(4)], r) # qux
-        for new in findall(isnew, result.ir.stmts.inst)
+        for new in findall(isnew, result.ir.stmts.stmt)
             @test is_load_forwardable(result.state[SSAValue(new)])
         end
     end
@@ -1343,7 +1378,7 @@ end
             end
             r
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(3)], r) # baz
         @test has_return_escape(result.state[Argument(4)], r) # qux
     end
@@ -1359,7 +1394,7 @@ end
                 t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
             return mt, has_ambig[]
         end
-        for i in findall(isnew, result.ir.stmts.inst)
+        for i in findall(isnew, result.ir.stmts.stmt)
             @test !is_load_forwardable(result.state[SSAValue(i)])
         end
     end
@@ -1383,8 +1418,8 @@ function compute(T, ax, ay, bx, by)
 end
 let result = @code_escapes compute(MPoint, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
-                 stmt = inst[:inst]
+                 inst = result.ir[SSAValue(idx)]
+                 stmt = inst[:stmt]
                  return (isnew(stmt) || isϕ(stmt)) && inst[:type] <: MPoint
              end
         @test is_load_forwardable(result.state[SSAValue(i)])
@@ -1399,8 +1434,8 @@ function compute(a, b)
 end
 let result = @code_escapes compute(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
     idxs = findall(1:length(result.ir.stmts)) do idx
-        inst = EscapeAnalysis.getinst(result.ir, idx)
-        stmt = inst[:inst]
+        inst = result.ir[SSAValue(idx)]
+        stmt = inst[:stmt]
         return isnew(stmt) && inst[:type] <: MPoint
     end
     @assert length(idxs) == 2
@@ -1416,8 +1451,8 @@ function compute!(a, b)
 end
 let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
-                 stmt = inst[:inst]
+                 inst = result.ir[SSAValue(idx)]
+                 stmt = inst[:stmt]
                  return isnew(stmt) && inst[:type] <: MPoint
              end
         @test is_load_forwardable(result.state[SSAValue(i)])
@@ -1432,7 +1467,7 @@ end
             s = Base.arrayref(true, xs, i)
             return s
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)   # xs
         @test has_thrown_escape(result.state[Argument(2)])      # xs
         @test !has_return_escape(result.state[Argument(3)], r)  # i
@@ -1441,7 +1476,7 @@ end
             s = Base.arrayref(false, xs, i)
             return s
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)   # xs
         @test !has_thrown_escape(result.state[Argument(2)])     # xs
         @test !has_return_escape(result.state[Argument(3)], r)  # i
@@ -1450,7 +1485,7 @@ end
             s = @inbounds xs[i]
             return s
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)   # xs
         @test !has_thrown_escape(result.state[Argument(2)])     # xs
         @test !has_return_escape(result.state[Argument(3)], r)  # i
@@ -1459,28 +1494,28 @@ end
             c = Base.arrayref(true, xs, i) # TypeError will happen here
             return c
         end
-        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
     let result = code_escapes((String,Int)) do xs, i
             c = Base.arrayref(true, xs, i) # TypeError will happen here
             return c
         end
-        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
     let result = code_escapes((AbstractVector{String},Int)) do xs, i
             c = Base.arrayref(true, xs, i) # TypeError may happen here
             return c
         end
-        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
     let result = code_escapes((Vector{String},Any)) do xs, i
             c = Base.arrayref(true, xs, i) # TypeError may happen here
             return c
         end
-        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
 
@@ -1489,7 +1524,7 @@ end
             Base.arrayset(true, xs, x, i)
             return xs
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # xs
         @test has_thrown_escape(result.state[Argument(2)])    # xs
         @test has_return_escape(result.state[Argument(3)], r) # x
@@ -1498,7 +1533,7 @@ end
             Base.arrayset(false, xs, x, i)
             return xs
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # xs
         @test !has_thrown_escape(result.state[Argument(2)])    # xs
         @test has_return_escape(result.state[Argument(3)], r) # x
@@ -1507,7 +1542,7 @@ end
             @inbounds xs[i] = x
             return xs
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r) # xs
         @test !has_thrown_escape(result.state[Argument(2)])    # xs
         @test has_return_escape(result.state[Argument(3)], r) # x
@@ -1519,8 +1554,8 @@ end
             Base.arrayset(true, xs, u, 3)
             return xs
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
         for i in 2:result.state.nargs
             @test has_return_escape(result.state[Argument(i)], r)
@@ -1530,7 +1565,7 @@ end
             Base.arrayset(true, xs, x, i) # TypeError will happen here
             return xs
         end
-        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
         @test has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1538,7 +1573,7 @@ end
             Base.arrayset(true, xs, x, i) # TypeError will happen here
             return xs
         end
-        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs::String
         @test has_thrown_escape(result.state[Argument(3)], t) # x::String
     end
@@ -1546,7 +1581,7 @@ end
             Base.arrayset(true, xs, x, i) # TypeError may happen here
             return xs
         end
-        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
         @test has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1554,7 +1589,7 @@ end
             Base.arrayset(true, xs, x, i) # TypeError may happen here
             return xs
         end
-        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arrayset)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
         @test has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1566,11 +1601,11 @@ end
             a[1] = b
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        ai = only(findall(result.ir.stmts.inst) do @nospecialize x
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        ai = only(findall(result.ir.stmts.stmt) do @nospecialize x
             isarrayalloc(x) && x.args[2] === Vector{Vector{Any}}
         end)
-        bi = only(findall(result.ir.stmts.inst) do @nospecialize x
+        bi = only(findall(result.ir.stmts.stmt) do @nospecialize x
             isarrayalloc(x) && x.args[2] === Vector{Any}
         end)
         @test !has_return_escape(result.state[SSAValue(ai)], r)
@@ -1582,11 +1617,11 @@ end
             a[1] = b
             return a
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        ai = only(findall(result.ir.stmts.inst) do @nospecialize x
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        ai = only(findall(result.ir.stmts.stmt) do @nospecialize x
             isarrayalloc(x) && x.args[2] === Vector{Vector{Any}}
         end)
-        bi = only(findall(result.ir.stmts.inst) do @nospecialize x
+        bi = only(findall(result.ir.stmts.stmt) do @nospecialize x
             isarrayalloc(x) && x.args[2] === Vector{Any}
         end)
         @test has_return_escape(result.state[SSAValue(ai)], r)
@@ -1597,8 +1632,8 @@ end
             xs[i] = x
             xs[j] # potential error
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        t = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(3)], t) # s
         @test has_thrown_escape(result.state[SSAValue(i)], t) # x
     end
@@ -1607,19 +1642,19 @@ end
     let result = code_escapes((Vector{Any},)) do xs
             Core.arraysize(xs, 1)
         end
-        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.stmt))
         @test !has_thrown_escape(result.state[Argument(2)], t)
     end
     let result = code_escapes((Vector{Any},Int,)) do xs, dim
             Core.arraysize(xs, dim)
         end
-        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.stmt))
         @test !has_thrown_escape(result.state[Argument(2)], t)
     end
     let result = code_escapes((Any,)) do xs
             Core.arraysize(xs, 1)
         end
-        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Core.arraysize)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t)
     end
 
@@ -1627,19 +1662,19 @@ end
     let result = code_escapes((Vector{Any},)) do xs
             Base.arraylen(xs)
         end
-        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.stmt))
         @test !has_thrown_escape(result.state[Argument(2)], t) # xs
     end
     let result = code_escapes((String,)) do xs
             Base.arraylen(xs)
         end
-        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
     let result = code_escapes((Vector{Any},)) do xs
             Base.arraylen(xs, 1)
         end
-        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.inst))
+        t = only(findall(iscall((result.ir, Base.arraylen)), result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[Argument(2)], t) # xs
     end
 
@@ -1650,7 +1685,7 @@ end
             xs[1] = x
             xs
         end
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test !has_thrown_escape(result.state[Argument(2)], t) # xs
         @test !has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1659,7 +1694,7 @@ end
             xs[1] = x
             xs
         end
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test !has_thrown_escape(result.state[Argument(2)], t) # xs
         @test !has_thrown_escape(result.state[Argument(3)], t) # x
     end
@@ -1670,8 +1705,8 @@ end
             @ccall jl_array_del_beg(xs::Any, 2::UInt)::Cvoid # can potentially throw
             xs
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
         @test has_thrown_escape(result.state[Argument(2)], t) # x
     end
@@ -1681,8 +1716,8 @@ end
             @ccall jl_array_del_end(xs::Any, 2::UInt)::Cvoid # can potentially throw
             xs
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
         @test has_thrown_escape(result.state[Argument(2)], t) # x
     end
@@ -1690,8 +1725,8 @@ end
             xs = Any[x]
             @ccall jl_array_grow_at(xs::Any, 1::UInt, 2::UInt)::Cvoid # can potentially throw
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
         @test has_thrown_escape(result.state[Argument(2)], t) # x
     end
@@ -1699,8 +1734,8 @@ end
             xs = Any[x]
             @ccall jl_array_del_at(xs::Any, 1::UInt, 2::UInt)::Cvoid # can potentially throw
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
         @test has_thrown_escape(result.state[Argument(2)], t) # x
     end
@@ -1708,8 +1743,8 @@ end
             xs = @inbounds Any[x]
             @ccall jl_array_del_at(xs::Any, 1::UInt, 2::UInt)::Cvoid # can potentially throw
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        t = only(findall(isarrayresize, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        t = only(findall(isarrayresize, result.ir.stmts.stmt))
         @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
         @test has_thrown_escape(result.state[Argument(2)], t) # x
     end
@@ -1718,8 +1753,8 @@ end
     let result = code_escapes((Vector{Any},)) do xs
             return copy(xs)
         end
-        i = only(findall(isarraycopy, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarraycopy, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
         @test_broken !has_return_escape(result.state[Argument(2)], r)
     end
@@ -1728,9 +1763,9 @@ end
             xs′ = copy(xs)
             return xs′[1]
         end
-        i1 = only(findall(isarrayalloc, result.ir.stmts.inst))
-        i2 = only(findall(isarraycopy, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i1 = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        i2 = only(findall(isarraycopy, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i1)])
         @test !has_return_escape(result.state[SSAValue(i2)])
         @test has_return_escape(result.state[Argument(2)], r) # s
@@ -1739,9 +1774,9 @@ end
             xs′ = copy(xs)
             return xs′[1] # may potentially throw BoundsError, should escape `xs` conservatively (i.e. escape its elements)
         end
-        i = only(findall(isarraycopy, result.ir.stmts.inst))
-        ref = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.inst))
-        ret = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarraycopy, result.ir.stmts.stmt))
+        ref = only(findall(iscall((result.ir, Base.arrayref)), result.ir.stmts.stmt))
+        ret = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_thrown_escape(result.state[SSAValue(i)], ref)
         @test_broken !has_return_escape(result.state[SSAValue(i)], ret)
         @test has_thrown_escape(result.state[Argument(2)], ref)
@@ -1754,10 +1789,10 @@ end
             length(xs′) > 2 && throw(xs′)
             return xs′
         end
-        i1 = only(findall(isarrayalloc, result.ir.stmts.inst))
-        i2 = only(findall(isarraycopy, result.ir.stmts.inst))
-        t = only(findall(iscall((result.ir, throw)), result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i1 = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        i2 = only(findall(isarraycopy, result.ir.stmts.stmt))
+        t = only(findall(iscall((result.ir, throw)), result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test_broken !has_thrown_escape(result.state[SSAValue(i1)], t)
         @test_broken !has_return_escape(result.state[SSAValue(i1)], r)
         @test has_thrown_escape(result.state[SSAValue(i2)], t)
@@ -1770,7 +1805,7 @@ end
     let result = code_escapes((Vector{Any},Int)) do xs, i
             return isassigned(xs, i)
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[Argument(2)], r)
         @test !has_thrown_escape(result.state[Argument(2)])
     end
@@ -1785,8 +1820,8 @@ end
             a[2] = t
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
         @test has_return_escape(result.state[Argument(2)], r) # s
@@ -1798,8 +1833,8 @@ end
             a[1, 2] = t
             return a[1, 1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test is_load_forwardable(result.state[SSAValue(i)])
         @test has_return_escape(result.state[Argument(2)], r) # s
@@ -1816,8 +1851,8 @@ end
             end
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test is_load_forwardable(result.state[SSAValue(i)])
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test has_return_escape(result.state[Argument(3)], r) # s
@@ -1835,8 +1870,8 @@ end
             end
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test_broken is_load_forwardable(result.state[SSAValue(i)])
         @test has_return_escape(result.state[Argument(3)], r) # s
@@ -1849,8 +1884,8 @@ end
             a[1] = b
             return a[1][1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        is = findall(isarrayalloc, result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        is = findall(isarrayalloc, result.ir.stmts.stmt)
         @assert length(is) == 2
         ia, ib = is
         @test !has_return_escape(result.state[SSAValue(ia)], r)
@@ -1871,8 +1906,8 @@ end
             end
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        for i in findall(isarrayalloc, result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        for i in findall(isarrayalloc, result.ir.stmts.stmt)
             @test !has_return_escape(result.state[SSAValue(i)], r)
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
@@ -1886,8 +1921,8 @@ end
             push!(a, t)
             return a[2]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test_broken is_load_forwardable(result.state[SSAValue(i)])
         @test_broken !has_return_escape(result.state[Argument(2)], r) # s
@@ -1900,8 +1935,8 @@ end
             a[2] = t
             return a[i]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test !is_load_forwardable(result.state[SSAValue(i)])
         @test has_return_escape(result.state[Argument(2)], r) # s
@@ -1913,8 +1948,8 @@ end
             a[i] = t
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test !is_load_forwardable(result.state[SSAValue(i)])
         @test has_return_escape(result.state[Argument(2)], r) # s
@@ -1926,8 +1961,8 @@ end
             a[1] = t
             return a[1]
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
         @test !is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -1940,8 +1975,8 @@ end
                 return a[2]
             end
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test_broken !has_return_escape(result.state[SSAValue(i)], r)
         @test !is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -1952,8 +1987,8 @@ end
             xs[1] = xs
             return xs[1]
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
     end
     let result = @eval Module() begin
@@ -1964,8 +1999,8 @@ end
                 return xs[1]
             end
         end
-        r = only(findall(isreturn, result.ir.stmts.inst))
-        for i in findall(iscall((result.ir, Core.arrayref)), result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        for i in findall(iscall((result.ir, Core.arrayref)), result.ir.stmts.stmt)
             @test has_return_escape(result.state[SSAValue(i)], r)
         end
     end
@@ -1980,8 +2015,8 @@ end
                 return xs[1]
             end
         end
-        i = only(findall(isinvoke(:genxs), result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isinvoke(:genxs), result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[SSAValue(i)], r)
     end
 end
@@ -1994,12 +2029,12 @@ let result = code_escapes((Int,String,)) do n,s
         end
         xs
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[SSAValue(i)], r)
-    Base.JLOptions().check_bounds ≠ 0 && @test has_thrown_escape(result.state[SSAValue(i)])
+    @test !has_thrown_escape(result.state[SSAValue(i)])
     @test has_return_escape(result.state[Argument(3)], r) # s
-    Base.JLOptions().check_bounds ≠ 0 && @test has_thrown_escape(result.state[Argument(3)])    # s
+    @test !has_thrown_escape(result.state[Argument(3)])    # s
 end
 let result = code_escapes((Int,String,)) do n,s
         xs = String[]
@@ -2008,12 +2043,12 @@ let result = code_escapes((Int,String,)) do n,s
         end
         xs
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[SSAValue(i)], r) # xs
-    @test has_thrown_escape(result.state[SSAValue(i)])    # xs
+    @test !has_thrown_escape(result.state[SSAValue(i)])    # xs
     @test has_return_escape(result.state[Argument(3)], r) # s
-    @test has_thrown_escape(result.state[Argument(3)])    # s
+    @test !has_thrown_escape(result.state[Argument(3)])    # s
 end
 let result = code_escapes((String,String,String)) do s, t, u
         xs = String[]
@@ -2023,8 +2058,8 @@ let result = code_escapes((String,String,String)) do s, t, u
         xs[1] = u
         xs
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
-    r = only(findall(isreturn, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
     @test has_return_escape(result.state[SSAValue(i)], r)
     @test has_thrown_escape(result.state[SSAValue(i)])    # xs
     @test has_return_escape(result.state[Argument(2)], r) # s
@@ -2062,7 +2097,7 @@ import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
             xs = Any[]
             arrayfreeze(xs)
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test has_no_escape(result.state[SSAValue(1)])
     end
 
@@ -2091,7 +2126,7 @@ import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
             xs = Any[]
             mutating_arrayfreeze(xs)
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test has_no_escape(result.state[SSAValue(1)])
     end
 
@@ -2120,7 +2155,7 @@ import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
             xs = ImmutableArray(Any[])
             arraythaw(xs)
         end
-        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
         @test has_no_escape(result.state[SSAValue(1)])
     end
 end
@@ -2131,14 +2166,14 @@ let result = code_escapes((Int,)) do n
         xs = collect(1:n)
         ImmutableArray(xs)
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
     @test !has_return_escape(result.state[SSAValue(i)])
 end
 let result = code_escapes((Vector{Float64},)) do xs
         ys = sin.(xs)
         ImmutableArray(ys)
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
     @test !has_return_escape(result.state[SSAValue(i)])
 end
 let result = code_escapes((Vector{Pair{Int,String}},)) do xs
@@ -2149,7 +2184,7 @@ let result = code_escapes((Vector{Pair{Int,String}},)) do xs
         end
         ImmutableArray(xs)
     end
-    i = only(findall(isarrayalloc, result.ir.stmts.inst))
+    i = only(findall(isarrayalloc, result.ir.stmts.stmt))
     @test !has_return_escape(result.state[SSAValue(i)])
 end
 
@@ -2169,8 +2204,8 @@ end # @static if isdefined(Core, :ImmutableArray)
             f = o[]
             return f
         end
-        i = only(findall(isnew, result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isnew, result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[SSAValue(i)], r)
     end
 
@@ -2179,8 +2214,8 @@ end # @static if isdefined(Core, :ImmutableArray)
             t = tuple(a, b)
             return t
         end
-        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.inst))
-        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(iscall((result.ir, tuple)), result.ir.stmts.stmt))
+        r = only(findall(isreturn, result.ir.stmts.stmt))
         @test !has_return_escape(result.state[Argument(2)], r)
         @test has_return_escape(result.state[Argument(3)], r)
     end
@@ -2204,3 +2239,5 @@ end
 #     end
 #     return m
 # end
+
+end # module test_local_EA

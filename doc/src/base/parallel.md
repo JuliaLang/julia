@@ -26,8 +26,6 @@ Base.schedule
 
 ## [Synchronization](@id lib-task-sync)
 
-## Synchronization
-
 ```@docs
 Base.errormonitor
 Base.@sync
@@ -52,6 +50,7 @@ Base.unlock
 Base.trylock
 Base.islocked
 Base.ReentrantLock
+Base.@lock
 ```
 
 ## Channels

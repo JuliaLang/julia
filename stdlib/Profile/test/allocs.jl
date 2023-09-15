@@ -64,7 +64,8 @@ end
 @testset "alloc profiler start stop fetch clear" begin
     function do_work()
         # Compiling allocates a lot
-        for f in (gensym() for _ in 1:10)
+        nsyms = @static Sys.WORD_SIZE == 32 ? 1 : 10
+        for f in (gensym() for _ in 1:nsyms)
             @eval begin
                 $f() = 10
                 $f()
@@ -119,4 +120,35 @@ end
 
     @test length(prof.allocs) >= 1
     @test length([a for a in prof.allocs if a.type == String]) >= 1
+end
+
+@testset "alloc profiler catches allocs from codegen" begin
+    @eval begin
+        struct MyType x::Int; y::Int end
+        Base.:(+)(n::Number, x::MyType) = n + x.x + x.y
+        foo(a, x) = a[1] + x
+        wrapper(a) = foo(a, MyType(0,1))
+    end
+    a = Any[1,2,3]
+    # warmup
+    wrapper(a)
+
+    @eval Allocs.@profile sample_rate=1 wrapper($a)
+
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test length(prof.allocs) >= 1
+    @test length([a for a in prof.allocs if a.type == MyType]) >= 1
+end
+
+@testset "alloc profiler catches allocs from buffer resize" begin
+    a = Int[]
+    Allocs.@profile sample_rate=1 for _ in 1:100; push!(a, 1); end
+
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test length(prof.allocs) >= 1
+    @test length([a for a in prof.allocs if a.type == Profile.Allocs.BufferType]) >= 1
 end

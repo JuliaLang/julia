@@ -103,6 +103,18 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)
 
 eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
 
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
 function process_events()
     return ccall(:jl_process_events, Int32, ())
 end

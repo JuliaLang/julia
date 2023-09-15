@@ -12,7 +12,7 @@ extern "C" {
 
 #define PROFILE_JL_THREADING            0
 
-extern jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED; /* thread local storage */
+extern _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED; /* thread local storage */
 
 typedef struct _jl_threadarg_t {
     int16_t tid;
@@ -21,10 +21,12 @@ typedef struct _jl_threadarg_t {
 } jl_threadarg_t;
 
 // each thread must initialize its TLS
-jl_ptls_t jl_init_threadtls(int16_t tid);
+jl_ptls_t jl_init_threadtls(int16_t tid) JL_NOTSAFEPOINT;
 
 // provided by a threading infrastructure
 void jl_init_threadinginfra(void);
+void jl_gc_mark_threadfun(void *arg);
+void jl_gc_sweep_threadfun(void *arg);
 void jl_threadfun(void *arg);
 
 #ifdef __cplusplus

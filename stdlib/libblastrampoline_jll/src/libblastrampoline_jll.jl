@@ -14,16 +14,17 @@ export libblastrampoline
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libblastrampoline_handle = C_NULL
-libblastrampoline_path = ""
+artifact_dir::String = ""
+libblastrampoline_handle::Ptr{Cvoid} = C_NULL
+libblastrampoline_path::String = ""
 
+# NOTE: keep in sync with `Base.libblas_name` and `Base.liblapack_name`.
 const libblastrampoline = if Sys.iswindows()
-    "libblastrampoline.dll"
+    "libblastrampoline-5.dll"
 elseif Sys.isapple()
-    "@rpath/libblastrampoline.dylib"
+    "@rpath/libblastrampoline.5.dylib"
 else
-    "libblastrampoline.so"
+    "libblastrampoline.so.5"
 end
 
 function __init__()

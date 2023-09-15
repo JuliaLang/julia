@@ -21,6 +21,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -61,6 +62,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -98,6 +100,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -107,18 +110,16 @@ let m = Meta.@lower 1 + 1
     @test :b === @eval $m
 end
 
-@testset "many basic blocks" begin
-    n = 1000
+# https://github.com/JuliaLang/julia/issues/47065
+# `Core.Compiler.sort!` should be able to handle a big list
+let n = 1000
     ex = :(return 1)
     for _ in 1:n
-        ex = :(if rand()<.1
-            $(ex) end)
+        ex = :(rand() < .1 && $(ex))
     end
-    @eval begin
-        function f_1000()
-            $ex
-            return 0
-         end
+    @eval global function f_1000_blocks()
+        $ex
+        return 0
     end
-    @test f_1000()===0
 end
+@test f_1000_blocks() == 0

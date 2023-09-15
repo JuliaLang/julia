@@ -162,6 +162,12 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock}, is_post_dominator::Bool)
 
             # Push children to the stack
             for succ_bb in edges
+                if succ_bb == 0
+                    # Edge 0 indicates an error entry, but shouldn't affect
+                    # the post-dominator tree.
+                    @assert is_post_dominator
+                    continue
+                end
                 push!(to_visit, (succ_bb, pre_num, false))
             end
 
@@ -590,7 +596,7 @@ dominates(domtree::DomTree, bb1::BBNumber, bb2::BBNumber) =
     _dominates(domtree, bb1, bb2)
 
 """
-    postdominates(domtree::DomTree, bb1::Int, bb2::Int) -> Bool
+    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int) -> Bool
 
 Checks if `bb1` post-dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.

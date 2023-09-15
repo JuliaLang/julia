@@ -15,23 +15,22 @@ const _TOP_MOD = ccall(:jl_base_relative_to, Any, (Any,), EscapeAnalysis)::Modul
 # imports
 import ._TOP_MOD: ==, getindex, setindex!
 # usings
-import Core:
-    MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
-    ReturnNode, GotoNode, GotoIfNot, SimpleVector, MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize
-import ._TOP_MOD:     # Base definitions
-    @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
-    @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
-    Vector, BitSet, IdDict, IdSet, UnitRange, Csize_t, Callable, ∪, ⊆, ∩, :, ∈, ∉, =>,
-    in, length, get, first, last, haskey, keys, get!, isempty, isassigned,
-    pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
-    ismutabletype
-import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, InferenceResult, IRCode, IR_FLAG_NOTHROW,
-    isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
-    fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
-    intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
-    setfield!_nothrow, alloc_array_ndims, stmt_effect_free, check_effect_free!
+using Core:
+    MethodMatch, SimpleVector,
+    arrayref, arrayset, arraysize, ifelse, sizeof
+using Core.IR
+using ._TOP_MOD:     # Base definitions
+    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline,
+    @nospecialize, @specialize, BitSet, Callable, Csize_t, IdDict, IdSet, UnitRange, Vector,
+    copy, delete!, empty!, enumerate, error, first, get, get!, haskey, in, isassigned,
+    isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
+    unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
+using Core.Compiler: # Core.Compiler specific definitions
+    Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
+    alloc_array_ndims, argextype, array_builtin_common_typecheck, arrayset_typecheck,
+    check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
+    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
+    try_compute_field, try_compute_fieldidx, widenconst, ⊑
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -42,6 +41,7 @@ end
 
 const AInfo = IdSet{Any}
 const LivenessSet = BitSet
+const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
@@ -96,16 +96,14 @@ struct EscapeInfo
         ReturnEscape::Bool,
         ThrownEscape::LivenessSet,
         AliasInfo#=::Union{IndexableFields,IndexableElements,Unindexable,Bool}=#,
-        Liveness::LivenessSet,
-        )
+        Liveness::LivenessSet)
         @nospecialize AliasInfo
         return new(
             Analyzed,
             ReturnEscape,
             ThrownEscape,
             AliasInfo,
-            Liveness,
-            )
+            Liveness)
     end
     function EscapeInfo(
         x::EscapeInfo,
@@ -115,16 +113,14 @@ struct EscapeInfo
         Analyzed::Bool = x.Analyzed,
         ReturnEscape::Bool = x.ReturnEscape,
         ThrownEscape::LivenessSet = x.ThrownEscape,
-        Liveness::LivenessSet = x.Liveness,
-        )
+        Liveness::LivenessSet = x.Liveness)
         @nospecialize AliasInfo
         return new(
             Analyzed,
             ReturnEscape,
             ThrownEscape,
             AliasInfo,
-            Liveness,
-            )
+            Liveness)
     end
 end
 
@@ -637,15 +633,6 @@ struct AnalysisState{T<:Callable}
     get_escape_cache::T
 end
 
-function getinst(ir::IRCode, idx::Int)
-    nstmts = length(ir.stmts)
-    if idx ≤ nstmts
-        return ir.stmts[idx]
-    else
-        return ir.new_nodes.stmts[idx - nstmts]
-    end
-end
-
 """
     analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape_cache::Callable)
         -> estate::EscapeState
@@ -670,7 +657,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
         local anyupdate = false
 
         for pc in nstmts:-1:1
-            stmt = getinst(ir, pc)[:inst]
+            stmt = ir[SSAValue(pc)][:stmt]
 
             # collect escape information
             if isa(stmt, Expr)
@@ -706,7 +693,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
                     continue
                 elseif head === :static_parameter ||  # this exists statically, not interested in its escape
                        head === :copyast ||           # XXX can this account for some escapes?
-                       head === :undefcheck ||        # XXX can this account for some escapes?
                        head === :isdefined ||         # just returns `Bool`, nothing accounts for any escapes
                        head === :gc_preserve_begin || # `GC.@preserve` expressions themselves won't be used anywhere
                        head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
@@ -783,13 +769,14 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
         callinfo = nothing
     end
     for idx in 1:nstmts+nnewnodes
-        inst = getinst(ir, idx)
-        stmt = inst[:inst]
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
-            check_effect_free!(ir, idx, stmt, inst[:type])
+            check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
         end
         if callinfo !== nothing && isexpr(stmt, :call)
+            # TODO: pass effects here
             callinfo[idx] = resolve_call(ir, stmt, inst[:info])
         elseif isexpr(stmt, :enter)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
@@ -1078,7 +1065,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = getinst(ir, pc)[:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1596,12 +1583,16 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    argtypes = Any[]
-    for i = 2:length(args)
-        push!(argtypes, argextype(args[i], ir))
+    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
+        return true
+    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir))
+        return true
+    else
+        add_thrown_escapes!(astate, pc, args, 2)
+        return true
     end
-    setfield!_nothrow(argtypes) || add_thrown_escapes!(astate, pc, args, 2)
-    return true
 end
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1877,7 +1868,7 @@ function array_isassigned_nothrow(args::Vector{Any}, src::IRCode)
 end
 
 # # COMBAK do we want to enable this (and also backport this to Base for array allocations?)
-# import Core.Compiler: Cint, svec
+# using Core.Compiler: Cint, svec
 # function validate_foreigncall_args(args::Vector{Any},
 #     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convention::Symbol)
 #     length(args) ≥ 5 || return false
@@ -1888,30 +1879,19 @@ end
 #     normalize(args[5]) === convention || return false
 #     return true
 # end
-
-if isdefined(Core, :ImmutableArray)
-
-import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
-
-escape_builtin!(::typeof(arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(Array, astate, args)
-escape_builtin!(::typeof(mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(Array, astate, args)
-escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(ImmutableArray, astate, args)
-function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, args::Vector{Any})
-    length(args) == 2 || return false
-    argextype(args[2], astate.ir) ⊑ arytype || return false
-    return true
-end
-
-end # if isdefined(Core, :ImmutableArray)
-
-if _TOP_MOD !== Core.Compiler
-    # NOTE define fancy package utilities when developing EA as an external package
-    include("EAUtils.jl")
-    using .EAUtils
-    export code_escapes, @code_escapes, __clear_cache!
-end
+#
+# using Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
+#
+# escape_builtin!(::typeof(arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+#     is_safe_immutable_array_op(Array, astate, args)
+# escape_builtin!(::typeof(mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+#     is_safe_immutable_array_op(Array, astate, args)
+# escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+#     is_safe_immutable_array_op(ImmutableArray, astate, args)
+# function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, args::Vector{Any})
+#     length(args) == 2 || return false
+#     argextype(args[2], astate.ir) ⊑ arytype || return false
+#     return true
+# end
 
 end # baremodule EscapeAnalysis

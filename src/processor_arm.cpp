@@ -1561,7 +1561,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
 #endif
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -1573,7 +1573,9 @@ static uint32_t sysimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if (match.best_idx == -1)
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -1583,6 +1585,19 @@ static uint32_t sysimg_init_cb(const void *id)
 #endif
     }
     jit_targets.push_back(std::move(target));
+    return match.best_idx;
+}
+
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason JL_REQUIRE_ROOTED_SLOT)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
@@ -1602,12 +1617,19 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        auto &features0 = jit_targets[t.base].en.features;
         // Always clone when code checks CPU features
         t.en.flags |= JL_TARGET_CLONE_CPU;
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
 #ifdef _CPU_ARM_
-        auto &features0 = jit_targets[t.base].en.features;
         static constexpr uint32_t clone_math[] = {Feature::vfp3, Feature::vfp4, Feature::neon};
         for (auto fe: clone_math) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
@@ -1781,11 +1803,36 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
+jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
+}
+
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
+{
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

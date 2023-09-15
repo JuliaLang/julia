@@ -99,7 +99,7 @@ StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
     ensure_initialized()
-    ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
+    ccall((:git_strarray_free, libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -126,7 +126,7 @@ Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
     ensure_initialized()
-    ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
+    ccall((:git_buf_free, libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
 """
@@ -904,12 +904,13 @@ end
 
 Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
-@kwdef struct ConfigEntry
-    name::Cstring       = Cstring(C_NULL)
-    value::Cstring      = Cstring(C_NULL)
-    level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Cvoid}    = C_NULL
-    payload::Any        = nothing
+struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    include_depth::Cuint
+    level::GIT_CONFIG
+    free::Ptr{Cvoid}
+    payload::Ptr{Cvoid} # User is not permitted to read or write this field
 end
 @assert Base.allocatedinline(ConfigEntry)
 
@@ -1063,11 +1064,11 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
-                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+                ccall((:git_libgit2_shutdown, libgit2), Cint, ())
             end
         end
     end
@@ -1097,7 +1098,7 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
         obj.ptr = C_NULL
     end
 end
@@ -1196,7 +1197,7 @@ Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
 function Consts.OBJECT(ptr::Ptr{Cvoid})
     ensure_initialized()
-    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
+    ccall((:git_object_type, libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
 end
 
 """
@@ -1389,7 +1390,8 @@ CredentialPayload(p::CredentialPayload) = p
 function Base.shred!(p::CredentialPayload)
     # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
     # and it is not our responsibility to shred them.
-    p.credential !== nothing && Base.shred!(p.credential)
+    credential = p.credential
+    credential !== nothing && Base.shred!(credential)
     p.credential = nothing
 end
 
@@ -1430,8 +1432,9 @@ function approve(p::CredentialPayload; shred::Bool=true)
 
     # Each `approve` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent approve calls.
-    if p.cache !== nothing
-        approve(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        approve(cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
@@ -1460,8 +1463,9 @@ function reject(p::CredentialPayload; shred::Bool=true)
 
     # Note: each `reject` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent reject calls.
-    if p.cache !== nothing
-        reject(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        reject(cache, cred, p.url)
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)

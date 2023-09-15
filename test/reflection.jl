@@ -84,7 +84,6 @@ end # module ReflectionTest
 @test isconcretetype(DataType)
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
-@test isconcretetype(Tuple{Union{}})
 @test !isconcretetype(Complex)
 @test !isconcretetype(Complex.body)
 @test !isconcretetype(AbstractArray{Int,1})
@@ -193,6 +192,8 @@ let
     @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
     @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
+    @test parentmodule(first(methods(foo9475))) == TestMod7648.TestModSub9475
+    @test parentmodule(first(methods(foo7648))) == TestMod7648
     @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == which(foo7648, (Int,))
@@ -210,15 +211,21 @@ include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
+public this_is_public
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(Main, :this_is_not_defined)
 @test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(Main, :this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
+@test !isexported(@__MODULE__, :this_is_public)
 const a_value = 1
 @test which(@__MODULE__, :a_value) === @__MODULE__
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
 @test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
+@test !Base.ispublic(@__MODULE__, :a_value)
+@test Base.ispublic(@__MODULE__, :this_is_not_defined)
+@test Base.ispublic(@__MODULE__, :this_is_public)
+@test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
 # PR 13825
@@ -530,7 +537,7 @@ let
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test !isempty(m.specializations) # uncached, but creates the specializations entry
+    @test m.specializations !== Core.svec() # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
     @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
@@ -546,7 +553,7 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -646,7 +653,7 @@ let
     world = Core.Compiler.get_world_counter()
     match = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(match)
-    cinfo_generated = Core.Compiler.get_staged(instance)
+    cinfo_generated = Core.Compiler.get_staged(instance, world)
     @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
@@ -723,6 +730,31 @@ Base.delete_method(m)
 @test foo4(1.0) == 1
 @test faz4(1) == 1
 @test faz4(1.0) == 1
+
+# Deletion & invoke (issue #48802)
+function f48802!(log, x::Integer)
+    log[] = "default"
+    return x + 1
+end
+function addmethod_48802()
+    @eval function f48802!(log, x::Int)
+        ret = invoke(f48802!, Tuple{Any, Integer}, log, x)
+        log[] = "specialized"
+        return ret
+    end
+end
+log = Ref{String}()
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+Base.delete_method(which(f48802!, Tuple{Any, Int}))
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
 
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
@@ -883,10 +915,9 @@ _test_at_locals2(1,1,0.5f0)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
-                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
-                   #=binary=#false,
-                   params)
+                   #=binary=#false)
 end
 
 @test nameof(Any) === :Any
@@ -970,7 +1001,7 @@ end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -1005,10 +1036,43 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
     @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
     # builtins
-    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
-    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+@test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.DefaultArrayStyle{1}, Any, Vararg})) >=
+      10
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test !Base.ismutationfree(Vector{Any})
+@test !Base.ismutationfree(Vector{Symbol})
+@test !Base.ismutationfree(Vector{UInt8})
+@test !Base.ismutationfree(Vector{Int32})
+@test !Base.ismutationfree(Vector{UInt64})
+
+@test Base.ismutationfree(Type{Union{}})
+
+module TestNames
+
+public publicized
+export exported
+
+publicized() = 1
+exported() = 1
+private() = 1
+
+end
+
+@test names(TestNames) == [:TestNames, :exported, :publicized]
