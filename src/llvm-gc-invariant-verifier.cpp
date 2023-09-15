@@ -14,7 +14,6 @@
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -192,38 +191,4 @@ PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisMana
         abort();
     }
     return PreservedAnalyses::all();
-}
-
-struct GCInvariantVerifierLegacy : public FunctionPass {
-    static char ID;
-    bool Strong;
-    GCInvariantVerifierLegacy(bool Strong=false) : FunctionPass(ID), Strong(Strong) {}
-
-public:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.setPreservesAll();
-    }
-
-    bool runOnFunction(Function &F) override {
-        GCInvariantVerifier GIV(Strong);
-        GIV.visit(F);
-        if (GIV.Broken) {
-            abort();
-        }
-        return false;
-    }
-};
-
-char GCInvariantVerifierLegacy::ID = 0;
-static RegisterPass<GCInvariantVerifierLegacy> X("GCInvariantVerifier", "GC Invariant Verification Pass", false, false);
-
-Pass *createGCInvariantVerifierPass(bool Strong) {
-    return new GCInvariantVerifierLegacy(Strong);
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
-{
-    unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

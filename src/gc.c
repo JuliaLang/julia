@@ -2237,7 +2237,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
         }
         default: {
             // `empty-chunk` should be checked by caller
-            jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c->cid);
+            jl_safe_printf("GC internal error: chunk mismatch\n");
             abort();
         }
     }
@@ -3650,7 +3650,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    if (pgcstack != NULL && ct->world_age) {
+    void *data = malloc(sz);
+    if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         jl_atomic_store_relaxed(&ptls->gc_num.allocd,
@@ -3665,14 +3666,15 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
             jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
         }
     }
-    return malloc(sz);
+    return data;
 }
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    if (pgcstack != NULL && ct->world_age) {
+    void *data = calloc(nm, sz);
+    if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         jl_atomic_store_relaxed(&ptls->gc_num.allocd,
@@ -3687,7 +3689,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
             jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
         }
     }
-    return calloc(nm, sz);
+    return data;
 }
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
@@ -3711,7 +3713,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    if (pgcstack != NULL && ct->world_age) {
+    void *data = realloc(p, sz);
+    if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         if (!(sz < old))
@@ -3741,7 +3744,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
             }
         }
     }
-    return realloc(p, sz);
+    return data;
 }
 
 // allocation wrappers that save the size of allocations, to allow using
@@ -3810,6 +3813,15 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
+
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *b = malloc_cache_align(allocsz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+
     jl_atomic_store_relaxed(&ptls->gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + allocsz);
     jl_atomic_store_relaxed(&ptls->gc_num.malloc,
@@ -3821,13 +3833,6 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, alloc_acc + allocsz);
         jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
     }
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    void *b = malloc_cache_align(allocsz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
@@ -3842,12 +3847,28 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 {
     if (can_collect)
         maybe_collect(ptls);
-
+    int is_old_marked = jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED;
     size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
-    if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *b;
+    if (isaligned)
+        b = realloc_cache_align(d, allocsz, oldsz);
+    else
+        b = realloc(d, allocsz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    // gc_managed_realloc_ is currently used exclusively for resizing array buffers.
+    if (is_old_marked) {
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         inc_live_bytes(allocsz - oldsz);
     }
@@ -3877,23 +3898,6 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
             jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
         }
     }
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    void *b;
-    if (isaligned)
-        b = realloc_cache_align(d, allocsz, oldsz);
-    else
-        b = realloc(d, allocsz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-#ifdef _OS_WINDOWS_
-    SetLastError(last_error);
-#endif
-    errno = last_errno;
-    // gc_managed_realloc_ is currently used exclusively for resizing array buffers.
     if (allocsz > oldsz) {
         maybe_record_alloc_to_profile((jl_value_t*)b, allocsz - oldsz, (jl_datatype_t*)jl_buff_tag);
     }

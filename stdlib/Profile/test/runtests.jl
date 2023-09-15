@@ -200,7 +200,6 @@ if Sys.isbsd() || Sys.islinux()
             script = """
                 print(stderr, "started\n")
                 eof(stdin)
-                close(t)
                 """
             iob = Base.BufferStream()
             notify_exit = Base.PipeEndpoint()
@@ -232,6 +231,7 @@ if Sys.isbsd() || Sys.islinux()
                 close(notify_exit) # notify test finished
                 s = read(iob, String) # consume test output
                 wait(p) # wait for test completion
+                @test success(p)
                 close(t)
             catch
                 close(notify_exit)

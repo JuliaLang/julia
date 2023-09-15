@@ -3877,7 +3877,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else if (fld.typ == (jl_value_t*)jl_symbol_type) { // Known type but unknown symbol
             if (jl_is_datatype(utt) && (utt != jl_module_type) && jl_struct_try_layout(utt)) {
-                if ((jl_datatype_nfields(utt) == 1 && !jl_is_namedtuple_type(utt))) {
+                if ((jl_datatype_nfields(utt) == 1 && !jl_is_namedtuple_type(utt) && !jl_is_tuple_type(utt))) {
                     jl_svec_t *fn = jl_field_names(utt);
                     assert(jl_svec_len(fn) == 1);
                     Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
@@ -9333,12 +9333,10 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("enable-tail-merge"); // NOO TOUCHIE; NO TOUCH! See #922
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "0", 1);
-#ifdef JL_USE_NEW_PM
     // For parity with LoopUnswitch
     clopt = llvmopts.lookup("unswitch-threshold");
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "100", 1);
-#endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
@@ -9433,6 +9431,8 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
     if (jl_ExecutionEngine)
         jl_ExecutionEngine->printTimers();
     PrintStatistics();
+    JL_LOCK(&jl_codegen_lock); // TODO: If this lock gets removed reconsider
+                                    // LLVM global state/destructors (maybe a rwlock)
 }
 
 // the rest of this file are convenience functions

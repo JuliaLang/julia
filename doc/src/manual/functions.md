@@ -1162,6 +1162,8 @@ julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
  true
 ```
 
+All functions in the fused broadcast are always called for every element of the result. Thus `X .+ σ .* randn.()` will add a mask of independent and identically sampled random values to each element of the array `X`, but `X .+ σ .* randn()` will add the *same* random sample to each element. In cases where the fused computation is constant along one or more axes of the broadcast iteration, it may be possible to leverage a space-time tradeoff and allocate intermediate values to reduce the number of computations. See more at [performance tips](@ref man-performance-unfuse).
+
 ## Further Reading
 
 We should mention here that this is far from a complete picture of defining functions. Julia has

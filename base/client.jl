@@ -228,8 +228,11 @@ incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
+    quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
-    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
+    history_file          = (opts.historyfile != 0)
+    color_set             = (opts.color != 0) # --color!=auto
+    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -320,8 +323,15 @@ function exec_options(opts)
             end
         end
     end
-
-    return repl
+    if repl || is_interactive::Bool
+        b = opts.banner
+        auto = b == -1
+        banner = b == 0 || (auto && !interactiveinput) ? :no  :
+                 b == 1 || (auto && interactiveinput)  ? :yes :
+                 :short # b == 2
+        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+    end
+    nothing
 end
 
 function _global_julia_startup_file()
@@ -538,28 +548,13 @@ function _start()
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
-    local ret = 0
     try
-        repl_was_requested = exec_options(JLOptions())
-        if isdefined(Main, :main) && !is_interactive
-            if Core.Compiler.generating_sysimg()
-                precompile(Main.main, (typeof(ARGS),))
-            else
-                ret = invokelatest(Main.main, ARGS)
-            end
-        elseif (repl_was_requested || is_interactive)
-            if isassigned(REPL_MODULE_REF)
-                ret = REPL_MODULE_REF[].main(ARGS)
-            end
-        end
-        ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        exec_options(JLOptions())
     catch
-        ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        exit(1)
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
-    return ret
 end

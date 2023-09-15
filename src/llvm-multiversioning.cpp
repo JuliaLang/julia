@@ -16,7 +16,6 @@
 #include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -24,7 +23,6 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/Verifier.h>
@@ -1110,28 +1108,6 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     return true;
 }
 
-struct MultiVersioningLegacy: public ModulePass {
-    static char ID;
-    MultiVersioningLegacy(bool allow_bad_fvars=false)
-        : ModulePass(ID), allow_bad_fvars(allow_bad_fvars)
-    {}
-
-private:
-    bool runOnModule(Module &M) override;
-    bool allow_bad_fvars;
-};
-
-bool MultiVersioningLegacy::runOnModule(Module &M)
-{
-    return runMultiVersioning(M, allow_bad_fvars);
-}
-
-
-char MultiVersioningLegacy::ID = 0;
-static RegisterPass<MultiVersioningLegacy> X("JuliaMultiVersioning", "JuliaMultiVersioning Pass",
-                                       false /* Only looks at CFG */,
-                                       false /* Analysis Pass */);
-
 } // anonymous namespace
 
 void multiversioning_preannotate(Module &M)
@@ -1148,15 +1124,4 @@ PreservedAnalyses MultiVersioningPass::run(Module &M, ModuleAnalysisManager &AM)
         return preserved;
     }
     return PreservedAnalyses::all();
-}
-
-Pass *createMultiVersioningPass(bool allow_bad_fvars)
-{
-    return new MultiVersioningLegacy(allow_bad_fvars);
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createMultiVersioningPass(false));
 }

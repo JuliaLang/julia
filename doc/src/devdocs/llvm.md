@@ -11,7 +11,7 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 
 | File                             | Description                                                        |
 |:-------------------------------- |:------------------------------------------------------------------ |
-| `aotcompile.cpp`                 | Legacy pass manager pipeline, compiler C-interface entry           |
+| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission           |
 | `builtins.c`                     | Builtin functions                                                  |
 | `ccall.cpp`                      | Lowering [`ccall`](@ref)                                           |
 | `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
@@ -136,7 +136,7 @@ environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
 image with the old pass manager, one could do:
 ```
-opt -enable-new-pm=0 -load libjulia-codegen.so -julia -o opt.bc unopt.bc
+
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```

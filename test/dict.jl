@@ -1084,6 +1084,132 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     GC.@preserve A B C D nothing
 end
 
+mutable struct CollidingHash
+end
+Base.hash(::CollidingHash, h::UInt) = hash(UInt(0), h)
+
+struct PredictableHash
+    x::UInt
+end
+Base.hash(x::PredictableHash, h::UInt) = x.x
+
+import Base.PersistentDict
+@testset "PersistentDict" begin
+    @testset "basics" begin
+        dict = PersistentDict{Int, Int}()
+        @test_throws KeyError dict[1]
+        @test length(dict) == 0
+        @test isempty(dict)
+
+        dict = PersistentDict(1=>2)
+        @test dict[1] == 2
+
+        dict = PersistentDict(dict, 1=>3)
+        @test dict[1] == 3
+
+        dict = PersistentDict(dict, 1, 1)
+        @test dict[1] == 1
+        @test get(dict, 2, 1) == 1
+        @test get(()->1, dict, 2) == 1
+
+        @test (1 => 1) ∈ dict
+        @test (1 => 2) ∉ dict
+        @test (2 => 1) ∉ dict
+
+        @test haskey(dict, 1)
+        @test !haskey(dict, 2)
+
+        dict2 = PersistentDict(dict, 1, 2)
+        @test dict[1] == 1
+        @test dict2[1] == 2
+
+        dict3 = Base.delete(dict2, 1)
+        @test_throws KeyError dict3[1]
+        @test dict3 == Base.delete(dict3, 1)
+        @test dict3.trie != Base.delete(dict3, 1).trie
+
+        dict = PersistentDict(dict, 1, 3)
+        @test dict[1] == 3
+        @test dict2[1] == 2
+
+        @test length(dict) == 1
+        @test length(dict2) == 1
+
+        dict = PersistentDict(1=>2, 2=>3, 4=>1)
+        @test eltype(dict) == Pair{Int, Int}
+        @test dict[1] == 2
+        @test dict[2] == 3
+        @test dict[4] == 1
+    end
+
+    @testset "stress" begin
+        N = 2^14
+        dict = PersistentDict{Int, Int}()
+        for i in 1:N
+            dict = PersistentDict(dict, i, i)
+        end
+        @test length(dict) == N
+        length(collect(dict)) == N
+        values = sort!(collect(dict))
+        @test values[1] == (1=>1)
+        @test values[end] == (N=>N)
+
+        dict = Base.delete(dict, 16384)
+        @test !haskey(dict, 16384)
+        for i in 1:N
+            dict = Base.delete(dict, i)
+        end
+        @test isempty(dict)
+    end
+
+    @testset "CollidingHash" begin
+        dict = PersistentDict{CollidingHash, Nothing}()
+        dict = PersistentDict(dict, CollidingHash(), nothing)
+        @test_throws ErrorException PersistentDict(dict, CollidingHash(), nothing)
+    end
+
+    # Test the internal implementation
+    @testset "PredictableHash" begin
+        dict = PersistentDict{PredictableHash, Nothing}()
+        for i in 1:Base.HashArrayMappedTries.ENTRY_COUNT
+            key = PredictableHash(UInt(i-1)) # Level 0
+            dict = PersistentDict(dict, key, nothing)
+        end
+        @test length(dict.trie.data) == Base.HashArrayMappedTries.ENTRY_COUNT
+        @test dict.trie.bitmap == typemax(Base.HashArrayMappedTries.BITMAP)
+        for entry in dict.trie.data
+            @test entry isa Base.HashArrayMappedTries.Leaf
+        end
+
+        dict = PersistentDict{PredictableHash, Nothing}()
+        for i in 1:Base.HashArrayMappedTries.ENTRY_COUNT
+            key = PredictableHash(UInt(i-1) << Base.HashArrayMappedTries.BITS_PER_LEVEL) # Level 1
+            dict = PersistentDict(dict, key, nothing)
+        end
+        @test length(dict.trie.data) == 1
+        @test length(dict.trie.data[1].data) == 32
+
+        max_level = (Base.HashArrayMappedTries.NBITS ÷ Base.HashArrayMappedTries.BITS_PER_LEVEL)
+        dict = PersistentDict{PredictableHash, Nothing}()
+        for i in 1:Base.Base.HashArrayMappedTries.ENTRY_COUNT
+            key = PredictableHash(UInt(i-1) << (max_level * Base.HashArrayMappedTries.BITS_PER_LEVEL)) # Level 12
+            dict = PersistentDict(dict, key, nothing)
+        end
+        data = dict.trie.data
+        for level in 1:max_level
+            @test length(data) == 1
+            data = only(data).data
+        end
+        last_level_nbits = Base.HashArrayMappedTries.NBITS - (max_level * Base.HashArrayMappedTries.BITS_PER_LEVEL)
+        if Base.HashArrayMappedTries.NBITS == 64
+            @test last_level_nbits == 4
+        elseif Base.HashArrayMappedTries.NBITS == 32
+            @test last_level_nbits == 2
+        end
+        @test length(data) == 2^last_level_nbits
+    end
+end
+
 @testset "issue #19995, hash of dicts" begin
     @test hash(Dict(Dict(1=>2) => 3, Dict(4=>5) => 6)) != hash(Dict(Dict(4=>5) => 3, Dict(1=>2) => 6))
     a = Dict(Dict(3 => 4, 2 => 3) => 2, Dict(1 => 2, 5 => 6) => 1)

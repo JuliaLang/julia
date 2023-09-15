@@ -1,0 +1,37 @@
+diff -ur gmp-6.2.1.orig/mpz/n_pow_ui.c gmp-6.2.1/mpz/n_pow_ui.c
+--- gmp-6.2.1.orig/mpz/n_pow_ui.c	2023-09-08 11:41:16.620551175 +0200
++++ gmp-6.2.1/mpz/n_pow_ui.c	2023-09-08 12:49:29.650492180 +0200
+@@ -220,8 +220,7 @@
+   umul_ppmm (ovfl, rtwos_bits, e, btwos);
+   if (ovfl)
+     {
+-      fprintf (stderr, "gmp: overflow in mpz type\n");
+-      abort ();
++      __GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+
+   rtwos_limbs += rtwos_bits / GMP_NUMB_BITS;
+@@ -382,8 +381,7 @@
+   umul_ppmm (ovfl, ralloc, (bsize*GMP_NUMB_BITS - cnt + GMP_NAIL_BITS), e);
+   if (ovfl)
+     {
+-      fprintf (stderr, "gmp: overflow in mpz type\n");
+-      abort ();
++      __GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+   ralloc = ralloc / GMP_NUMB_BITS + 5;
+
+diff -ur gmp-6.2.1.orig/tal-reent.c gmp-6.2.1/tal-reent.c
+--- gmp-6.2.1.orig/tal-reent.c	2020-11-14 19:45:09.000000000 +0100
++++ gmp-6.2.1/tal-reent.c	2023-09-08 12:10:34.061357613 +0200
+@@ -61,6 +61,11 @@
+
+   total_size = size + HSIZ;
+   p = __GMP_ALLOCATE_FUNC_TYPE (total_size, char);
++  if (!p)
++    {
++      __GMP_ALLOC_OVERFLOW_FUNC ();
++    }
+   P->size = total_size;
+   P->next = *markp;
+   *markp = P;

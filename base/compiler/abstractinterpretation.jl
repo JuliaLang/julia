@@ -2197,32 +2197,6 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
     nothing
 end
 
-function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    head = e.head
-    if head === :static_parameter
-        n = e.args[1]::Int
-        nothrow = false
-        if 1 <= n <= length(sv.sptypes)
-            sp = sv.sptypes[n]
-            rt = sp.typ
-            nothrow = !sp.undef
-        else
-            rt = Any
-        end
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
-        return rt
-    elseif head === :boundscheck
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent = ALWAYS_FALSE))
-        return Bool
-    elseif head === :inbounds
-        @assert false "Expected `:inbounds` expression to have been moved into SSA flags"
-    elseif head === :the_exception
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
-        return Any
-    end
-    return Any
-end
-
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, QuoteNode)
         return Const(e.value)
@@ -2252,6 +2226,34 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     return Const(e)
 end
 
+function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+    head = e.head
+    if head === :static_parameter
+        n = e.args[1]::Int
+        nothrow = false
+        if 1 <= n <= length(sv.sptypes)
+            sp = sv.sptypes[n]
+            rt = sp.typ
+            nothrow = !sp.undef
+        else
+            rt = Any
+        end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
+        return rt
+    elseif head === :call
+        # TODO: We still have non-linearized cglobal
+        @assert e.args[1] === Core.tuple ||
+                e.args[1] === GlobalRef(Core, :tuple)
+    else
+        # Some of our tests expect us to handle invalid IR here and error later
+        # - permit that for now.
+        # @assert false "Unexpected EXPR head in value position"
+        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
+    end
+    return Any
+end
+
+
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, Expr)
         return abstract_eval_value_expr(interp, e, vtypes, sv)
@@ -2280,38 +2282,12 @@ struct RTEffects
     RTEffects(@nospecialize(rt), effects::Effects) = new(rt, effects)
 end
 
-function mark_curr_effect_flags!(sv::AbsIntState, effects::Effects)
-    if isa(sv, InferenceState)
-        if is_effect_free(effects)
-            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-        else
-            sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
-        end
-        if is_nothrow(effects)
-            add_curr_ssaflag!(sv, IR_FLAG_NOTHROW)
-        else
-            sub_curr_ssaflag!(sv, IR_FLAG_NOTHROW)
-        end
-        if is_consistent(effects)
-            add_curr_ssaflag!(sv, IR_FLAG_CONSISTENT)
-        else
-            sub_curr_ssaflag!(sv, IR_FLAG_CONSISTENT)
-        end
-        if is_noub(effects, false)
-            add_curr_ssaflag!(sv, IR_FLAG_NOUB)
-        else
-            sub_curr_ssaflag!(sv, IR_FLAG_NOUB)
-        end
-    end
-end
-
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
     si = StmtInfo(!call_result_unused(sv, sv.currpc))
     (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
     sv.stmt_info[sv.currpc] = info
     # mark this call statement as DCE-elgible
     # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
-    mark_curr_effect_flags!(sv, effects)
     return RTEffects(rt, effects)
 end
 
@@ -2451,7 +2427,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :foreigncall
         (; rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv)
         t = rt
-        mark_curr_effect_flags!(sv, effects)
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
         t = e.args[1]
@@ -2485,12 +2460,16 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = Const(true)
             elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
+            else
+                effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
             elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
+            else
+                effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
             end
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
@@ -2502,6 +2481,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                     t = Const(false)
                 end
             end
+        else
+            effects = EFFECTS_UNKNOWN
         end
     elseif ehead === :throw_undef_if_not
         condt = argextype(stmt.args[2], ir)
@@ -2517,12 +2498,44 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif !hasintersect(windenconst(condt), Bool)
             t = Union{}
         end
+    elseif ehead === :boundscheck
+        t = Bool
+        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+    elseif ehead === :the_exception
+        t = Any
+        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+    elseif ehead === :static_parameter
+        n = e.args[1]::Int
+        nothrow = false
+        if 1 <= n <= length(sv.sptypes)
+            sp = sv.sptypes[n]
+            t = sp.typ
+            nothrow = !sp.undef
+        else
+            t = Any
+        end
+        effects = Effects(EFFECTS_TOTAL; nothrow)
+    elseif ehead === :gc_preserve_begin || ehead === :aliasscope
+        t = Any
+        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=EFFECT_FREE_GLOBALLY)
+    elseif ehead === :gc_preserve_end || ehead === :leave || ehead === :pop_exception || ehead === :global || ehead === :popaliasscope
+        t = Nothing
+        effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
+    elseif ehead === :method
+        t = Method
+        effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
+    elseif ehead === :thunk
+        t = Any
+        effects = EFFECTS_UNKNOWN
     elseif false
         @label always_throw
         t = Bottom
         effects = EFFECTS_THROWS
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
+        # N.B.: abstract_eval_value_expr can modify the global effects, but
+        # we move out any arguments with effects during SSA construction later
+        # and recompute the effects.
         effects = EFFECTS_TOTAL
     end
     return RTEffects(t, effects)
@@ -2542,7 +2555,6 @@ function refine_partial_type(@nospecialize t)
 end
 
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    abstract_eval_value(interp, e.args[1], vtypes, sv)
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
     for i = 3:length(e.args)
@@ -2601,6 +2613,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             effects = Effects(effects; noub=ALWAYS_TRUE)
         end
     end
+    # N.B.: This only applies to the effects of the statement itself.
+    # It is possible for arguments (GlobalRef/:static_parameter) to throw,
+    # but these will be recomputed during SSA construction later.
+    set_curr_ssaflag!(sv, flags_for_effects(effects), IR_FLAGS_EFFECTS)
     merge_effects!(interp, sv, effects)
     e = e::Expr
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
