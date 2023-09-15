@@ -3356,6 +3356,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
     scanned_bytes = 0;
     // 6. start sweeping
+    pool_live_bytes = 0;
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     sweep_weak_refs();
