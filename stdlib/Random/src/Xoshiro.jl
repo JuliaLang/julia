@@ -51,9 +51,11 @@ mutable struct Xoshiro <: AbstractRNG
     s4::UInt64 # internal splitmix state
 
     Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer, s4::Integer) = new(s0, s1, s2, s3, s4)
-    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = new(s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3)
+    Xoshiro(s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64) = new(s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3)
     Xoshiro(seed=nothing) = seed!(new(), seed)
 end
+
+Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = Xoshiro(UInt64(s0), UInt64(s1), UInt64(s2), UInt64(s3))
 
 function setstate!(
     x::Xoshiro,
