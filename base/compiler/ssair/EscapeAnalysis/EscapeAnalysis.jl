@@ -40,7 +40,6 @@ else
 end
 
 const AInfo = IdSet{Any}
-const LivenessSet = BitSet
 const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
@@ -87,16 +86,16 @@ An abstract state will be initialized with the bottom(-like) elements:
 struct EscapeInfo
     Analyzed::Bool
     ReturnEscape::Bool
-    ThrownEscape::LivenessSet
+    ThrownEscape::BitSet
     AliasInfo #::Union{IndexableFields,IndexableElements,Unindexable,Bool}
-    Liveness::LivenessSet
+    Liveness::BitSet
 
     function EscapeInfo(
         Analyzed::Bool,
         ReturnEscape::Bool,
-        ThrownEscape::LivenessSet,
+        ThrownEscape::BitSet,
         AliasInfo#=::Union{IndexableFields,IndexableElements,Unindexable,Bool}=#,
-        Liveness::LivenessSet)
+        Liveness::BitSet)
         @nospecialize AliasInfo
         return new(
             Analyzed,
@@ -112,8 +111,8 @@ struct EscapeInfo
         AliasInfo#=::Union{IndexableFields,IndexableElements,Unindexable,Bool}=# = x.AliasInfo;
         Analyzed::Bool = x.Analyzed,
         ReturnEscape::Bool = x.ReturnEscape,
-        ThrownEscape::LivenessSet = x.ThrownEscape,
-        Liveness::LivenessSet = x.Liveness)
+        ThrownEscape::BitSet = x.ThrownEscape,
+        Liveness::BitSet = x.Liveness)
         @nospecialize AliasInfo
         return new(
             Analyzed,
@@ -126,24 +125,24 @@ end
 
 # precomputed default values in order to eliminate computations at each callsite
 
-const BOT_THROWN_ESCAPE = LivenessSet()
+const BOT_THROWN_ESCAPE = BitSet()
 # NOTE the lattice operations should try to avoid actual set computations on this top value,
-# and e.g. LivenessSet(0:1000000) should also work without incurring excessive computations
-const TOP_THROWN_ESCAPE = LivenessSet(-1)
+# and e.g. BitSet(0:1000000) should also work without incurring excessive computations
+const TOP_THROWN_ESCAPE = BitSet(-1)
 
-const BOT_LIVENESS = LivenessSet()
+const BOT_LIVENESS = BitSet()
 # NOTE the lattice operations should try to avoid actual set computations on this top value,
-# and e.g. LivenessSet(0:1000000) should also work without incurring excessive computations
-const TOP_LIVENESS = LivenessSet(-1:0)
-const ARG_LIVENESS = LivenessSet(0)
+# and e.g. BitSet(0:1000000) should also work without incurring excessive computations
+const TOP_LIVENESS = BitSet(-1:0)
+const ARG_LIVENESS = BitSet(0)
 
 # the constructors
 NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS) # not formally part of the lattice
 NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS)
 ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, ARG_LIVENESS)
-ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, LivenessSet(pc))
+ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, BitSet(pc))
 AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, TOP_LIVENESS)
-ThrownEscape(pc::Int) = EscapeInfo(true, false, LivenessSet(pc), false, BOT_LIVENESS)
+ThrownEscape(pc::Int) = EscapeInfo(true, false, BitSet(pc), false, BOT_LIVENESS)
 AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, true, TOP_LIVENESS)
 
 const ⊥, ⊤ = NotAnalyzed(), AllEscape()
@@ -626,7 +625,7 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-struct AnalysisState{T<:Callable}
+struct AnalysisState{T}
     ir::IRCode
     estate::EscapeState
     changes::Changes
@@ -634,20 +633,18 @@ struct AnalysisState{T<:Callable}
 end
 
 """
-    analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape_cache::Callable)
-        -> estate::EscapeState
+    analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache) -> estate::EscapeState
 
 Analyzes escape information in `ir`:
 - `nargs`: the number of actual arguments of the analyzed call
-- `call_resolved`: if interprocedural calls are already resolved by `ssa_inlining_pass!`
-- `get_escape_cache(::Union{InferenceResult,MethodInstance}) -> Union{Nothing,ArgEscapeCache}`:
+- `get_escape_cache(::MethodInstance) -> Union{Nothing,ArgEscapeCache}`:
   retrieves cached argument escape information
 """
-function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape_cache::T) where T<:Callable
+function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
-    tryregions, arrayinfo, callinfo = compute_frameinfo(ir, call_resolved)
+    tryregions, arrayinfo = compute_frameinfo(ir)
     estate = EscapeState(nargs, nstmts, arrayinfo)
     changes = Changes() # keeps changes that happen at current statement
     astate = AnalysisState(ir, estate, changes, get_escape_cache)
@@ -663,11 +660,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
             if isa(stmt, Expr)
                 head = stmt.head
                 if head === :call
-                    if callinfo !== nothing
-                        escape_call!(astate, pc, stmt.args, callinfo)
-                    else
-                        escape_call!(astate, pc, stmt.args)
-                    end
+                    escape_call!(astate, pc, stmt.args)
                 elseif head === :invoke
                     escape_invoke!(astate, pc, stmt.args)
                 elseif head === :new || head === :splatnew
@@ -744,15 +737,11 @@ function analyze_escapes(ir::IRCode, nargs::Int, call_resolved::Bool, get_escape
 end
 
 """
-    compute_frameinfo(ir::IRCode, call_resolved::Bool) -> (tryregions, arrayinfo, callinfo)
+    compute_frameinfo(ir::IRCode) -> (tryregions, arrayinfo)
 
 A preparatory linear scan before the escape analysis on `ir` to find:
 - `tryregions::Union{Nothing,Vector{UnitRange{Int}}}`: regions in which potential `throw`s can be caught (used by `escape_exception!`)
 - `arrayinfo::Union{Nothing,IdDict{Int,Vector{Int}}}`: array allocations whose dimensions are known precisely (with some very simple local analysis)
-- `callinfo::`: when `!call_resolved`, `compute_frameinfo` additionally returns `callinfo::Vector{Union{MethodInstance,InferenceResult}}`,
-  which contains information about statically resolved callsites.
-  The inliner will use essentially equivalent interprocedural information to inline callees as well as resolve static callsites,
-  this additional information won't be required when analyzing post-inlining IR.
 
 !!! note
     This array dimension analysis to compute `arrayinfo` is very local and doesn't account
@@ -760,25 +749,13 @@ A preparatory linear scan before the escape analysis on `ir` to find:
     Ideally this dimension analysis should be done as a part of type inference that
     propagates array dimensions in a flow sensitive way.
 """
-function compute_frameinfo(ir::IRCode, call_resolved::Bool)
+function compute_frameinfo(ir::IRCode)
     nstmts, nnewnodes = length(ir.stmts), length(ir.new_nodes.stmts)
     tryregions, arrayinfo = nothing, nothing
-    if !call_resolved
-        callinfo = Vector{Any}(undef, nstmts+nnewnodes)
-    else
-        callinfo = nothing
-    end
     for idx in 1:nstmts+nnewnodes
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if !call_resolved
-            # TODO don't call `check_effect_free!` in the inlinear
-            check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
-        end
-        if callinfo !== nothing && isexpr(stmt, :call)
-            # TODO: pass effects here
-            callinfo[idx] = resolve_call(ir, stmt, inst[:info])
-        elseif isexpr(stmt, :enter)
+        if isexpr(stmt, :enter)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
             tryregions === nothing && (tryregions = UnitRange{Int}[])
             leave_block = stmt.args[1]::Int
@@ -851,14 +828,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
         end
         @label next_stmt
     end
-    return tryregions, arrayinfo, callinfo
-end
-
-# define resolve_call
-if _TOP_MOD === Core.Compiler
-    include("compiler/ssair/EscapeAnalysis/interprocedural.jl")
-else
-    include("interprocedural.jl")
+    return tryregions, arrayinfo
 end
 
 # propagate changes, and check convergence
@@ -906,7 +876,7 @@ end
     return false
 end
 
-# propagate Liveness changes separately in order to avoid constructing too many LivenessSet
+# propagate Liveness changes separately in order to avoid constructing too many BitSet
 @inline function propagate_liveness_change!(estate::EscapeState, change::LivenessChange)
     (; xidx, livepc) = change
     info = estate.escapes[xidx]
@@ -1149,13 +1119,9 @@ escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any}) =
     escape_invoke!(astate, pc, args, first(args)::MethodInstance, 2)
 
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
-    linfo::Linfo, first_idx::Int, last_idx::Int = length(args))
-    if isa(linfo, InferenceResult)
-        cache = astate.get_escape_cache(linfo)
-        linfo = linfo.linfo
-    else
-        cache = astate.get_escape_cache(linfo)
-    end
+                        mi::MethodInstance, first_idx::Int, last_idx::Int = length(args))
+    # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
+    cache = astate.get_escape_cache(mi)
     if cache === nothing
         return add_conservative_changes!(astate, pc, args, 2)
     else
@@ -1163,7 +1129,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
     end
     ret = SSAValue(pc)
     retinfo = astate.estate[ret] # escape information imposed on the call statement
-    method = linfo.def::Method
+    method = mi.def::Method
     nargs = Int(method.nargs)
     for (i, argidx) in enumerate(first_idx:last_idx)
         arg = args[argidx]
@@ -1172,18 +1138,14 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
             # COMBAK will this be invalid once we take alias information into account?
             i = nargs
         end
-        arginfo = cache.argescapes[i]
-        info = from_interprocedural(arginfo, pc)
-        if has_return_escape(arginfo)
-            # if this argument can be "returned", in addition to propagating
-            # the escape information imposed on this call argument within the callee,
-            # we should also account for possible aliasing of this argument and the returned value
-            add_escape_change!(astate, arg, info)
+        argescape = cache.argescapes[i]
+        info = from_interprocedural(argescape, pc)
+        # propagate the escape information imposed on this call argument by the callee
+        add_escape_change!(astate, arg, info)
+        if has_return_escape(argescape)
+            # if this argument can be "returned", we should also account for possible
+            # aliasing between this argument and the returned value
             add_alias_change!(astate, ret, arg)
-        else
-            # if this is simply passed as the call argument, we can just propagate
-            # the escape information imposed on this call argument within the callee
-            add_escape_change!(astate, arg, info)
         end
     end
     for (; aidx, bidx) in cache.argaliases
@@ -1194,24 +1156,22 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
 end
 
 """
-    from_interprocedural(arginfo::ArgEscapeInfo, pc::Int) -> x::EscapeInfo
+    from_interprocedural(argescape::ArgEscapeInfo, pc::Int) -> x::EscapeInfo
 
-Reinterprets the escape information imposed on the call argument which is cached as `arginfo`
+Reinterprets the escape information imposed on the call argument which is cached as `argescape`
 in the context of the caller frame, where `pc` is the SSA statement number of the return value.
 """
-function from_interprocedural(arginfo::ArgEscapeInfo, pc::Int)
-    has_all_escape(arginfo) && return ⊤
-
-    ThrownEscape = has_thrown_escape(arginfo) ? LivenessSet(pc) : BOT_THROWN_ESCAPE
-
-    return EscapeInfo(
-        #=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape,
-        # FIXME implement interprocedural memory effect-analysis
-        # currently, this essentially disables the entire field analysis
-        # it might be okay from the SROA point of view, since we can't remove the allocation
-        # as far as it's passed to a callee anyway, but still we may want some field analysis
-        # for e.g. stack allocation or some other IPO optimizations
-        #=AliasInfo=#true, #=Liveness=#LivenessSet(pc))
+function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
+    has_all_escape(argescape) && return ⊤
+    ThrownEscape = has_thrown_escape(argescape) ? BitSet(pc) : BOT_THROWN_ESCAPE
+    # TODO implement interprocedural memory effect-analysis:
+    # currently, this essentially disables the entire field analysis–it might be okay from
+    # the SROA point of view, since we can't remove the allocation as far as it's passed to
+    # a callee anyway, but still we may want some field analysis for e.g. stack allocation
+    # or some other IPO optimizations
+    AliasInfo = true
+    Liveness = BitSet(pc)
+    return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
 end
 
 # escape every argument `(args[6:length(args[3])])` and the name `args[1]`
@@ -1270,27 +1230,6 @@ end
 
 normalize(@nospecialize x) = isa(x, QuoteNode) ? x.value : x
 
-function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any}, callinfo::Vector{Any})
-    info = callinfo[pc]
-    if isa(info, Bool)
-        info && return # known to be no escape
-        # now cascade to the builtin handling
-        escape_call!(astate, pc, args)
-        return
-    elseif isa(info, EACallInfo)
-        for linfo in info.linfos
-            escape_invoke!(astate, pc, args, linfo, 1)
-        end
-        # accounts for a potential escape via MethodError
-        info.nothrow || add_thrown_escapes!(astate, pc, args)
-        return
-    else
-        @assert info === missing
-        # if this call couldn't be analyzed, escape it conservatively
-        add_conservative_changes!(astate, pc, args)
-    end
-end
-
 function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     ir = astate.ir
     ft = argextype(first(args), ir, ir.sptypes, ir.argtypes)
@@ -1331,16 +1270,17 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
-escape_builtin!(@nospecialize(f), _...) = return missing
+escape_builtin!(@nospecialize(f), _...) = missing
 
 # safe builtins
-escape_builtin!(::typeof(isa), _...) = return false
-escape_builtin!(::typeof(typeof), _...) = return false
-escape_builtin!(::typeof(sizeof), _...) = return false
-escape_builtin!(::typeof(===), _...) = return false
+escape_builtin!(::typeof(isa), _...) = false
+escape_builtin!(::typeof(typeof), _...) = false
+escape_builtin!(::typeof(sizeof), _...) = false
+escape_builtin!(::typeof(===), _...) = false
+escape_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
-escape_builtin!(::typeof(isdefined), _...) = return false
-escape_builtin!(::typeof(throw), _...) = return false
+escape_builtin!(::typeof(isdefined), _...) = false
+escape_builtin!(::typeof(throw), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false

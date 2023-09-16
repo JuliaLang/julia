@@ -9,7 +9,7 @@ const EA = EscapeAnalysis
 # entries
 # -------
 
-using Base: unwrap_unionall, rewrap_unionall
+using Base: IdSet, unwrap_unionall, rewrap_unionall
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
 """
@@ -39,13 +39,12 @@ Runs the escape analysis on optimized IR of a generic function call with the giv
 """
 function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       world::UInt = get_world_counter(),
-                      debuginfo::Symbol = :none,
-                      optimize::Bool = true)
+                      debuginfo::Symbol = :none)
     tt = Base.signature_type(f, types)
-    interp = EscapeAnalyzer(world, tt, optimize)
+    interp = EscapeAnalyzer(world, tt)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.state, interp.mi, debuginfo === :source)
+    return EscapeResult(interp.ir, interp.estate, interp.mi, debuginfo === :source, interp)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -67,80 +66,95 @@ using .CC:
     adce_pass!, JLOptions, verify_ir, verify_linetable
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState, is_ipo_profitable
 
+struct CodeCache
+    cache::IdDict{MethodInstance,CodeInstance}
+end
+CodeCache() = CodeCache(IdDict{MethodInstance,CodeInstance}())
+const GLOBAL_CODE_CACHE = CodeCache()
+
 # when working outside of Core.Compiler,
 # cache entire escape state for later inspection and debugging
-struct EscapeCache
-    cache::ArgEscapeCache
+struct EscapeCacheInfo
+    argescapes::ArgEscapeCache
     state::EscapeState # preserved just for debugging purpose
     ir::IRCode         # preserved just for debugging purpose
 end
+
+struct EscapeCache
+    cache::IdDict{MethodInstance,EscapeCacheInfo}
+end
+EscapeCache() = EscapeCache(IdDict{MethodInstance,EscapeCacheInfo}())
+const GLOBAL_ESCAPE_CACHE = EscapeCache()
 
 mutable struct EscapeAnalyzer <: AbstractInterpreter
     const world::UInt
     const inf_params::InferenceParams
     const opt_params::OptimizationParams
     const inf_cache::Vector{InferenceResult}
-    const cache::IdDict{InferenceResult,EscapeCache}
+    const code_cache::CodeCache
+    const escape_cache::EscapeCache
     const entry_tt
-    const optimize::Bool
     ir::IRCode
-    state::EscapeState
+    estate::EscapeState
     mi::MethodInstance
-    function EscapeAnalyzer(world::UInt, @nospecialize(tt), optimize::Bool)
+    function EscapeAnalyzer(world::UInt, @nospecialize(tt),
+                            code_cache::CodeCache=GLOBAL_CODE_CACHE,
+                            escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, IdDict{InferenceResult,EscapeCache}(), tt, optimize)
+        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, tt)
     end
 end
 
-CC.InferenceParams(interp::EscapeAnalyzer)     = interp.inf_params
-CC.OptimizationParams(interp::EscapeAnalyzer)  = interp.opt_params
-CC.get_world_counter(interp::EscapeAnalyzer)   = interp.world
+CC.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
+CC.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
+CC.get_world_counter(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
 
-const GLOBAL_EA_CODE_CACHE = IdDict{MethodInstance,CodeInstance}()
+struct EscapeAnalyzerCacheView
+    code_cache::CodeCache
+    escape_cache::EscapeCache
+end
 
 function CC.code_cache(interp::EscapeAnalyzer)
     worlds = WorldRange(get_world_counter(interp))
-    return WorldView(GlobalCache(), worlds)
+    return WorldView(EscapeAnalyzerCacheView(interp.code_cache, interp.escape_cache), worlds)
 end
-
-struct GlobalCache end
-
-CC.haskey(wvc::WorldView{GlobalCache}, mi::MethodInstance) = haskey(GLOBAL_EA_CODE_CACHE, mi)
-
-CC.get(wvc::WorldView{GlobalCache}, mi::MethodInstance, default) = get(GLOBAL_EA_CODE_CACHE, mi, default)
-
-CC.getindex(wvc::WorldView{GlobalCache}, mi::MethodInstance) = getindex(GLOBAL_EA_CODE_CACHE, mi)
-
-function CC.setindex!(wvc::WorldView{GlobalCache}, ci::CodeInstance, mi::MethodInstance)
-    GLOBAL_EA_CODE_CACHE[mi] = ci
-    add_callback!(mi) # register the callback on invalidation
+CC.haskey(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = haskey(wvc.cache.code_cache.cache, mi)
+CC.get(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance, default) = get(wvc.cache.code_cache.cache, mi, default)
+CC.getindex(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = getindex(wvc.cache.code_cache.cache, mi)
+function CC.setindex!(wvc::WorldView{EscapeAnalyzerCacheView}, ci::CodeInstance, mi::MethodInstance)
+    wvc.cache.code_cache.cache[mi] = ci
+    add_invalidation_callback!(wvc.cache.code_cache, wvc.cache.escape_cache, mi) # register the callback on invalidation
     return nothing
 end
-
-function add_callback!(mi)
+function add_invalidation_callback!(code_cache::CodeCache, escape_cache::EscapeCache, mi)
+    callback = InvalidationCallback(code_cache, escape_cache)
     if !isdefined(mi, :callbacks)
-        mi.callbacks = Any[invalidate_cache!]
+        mi.callbacks = Any[callback]
     else
-        if !any(@nospecialize(cb)->cb===invalidate_cache!, mi.callbacks)
-            push!(mi.callbacks, invalidate_cache!)
+        if !any(@nospecialize(cb)->cb===callback, mi.callbacks)
+            push!(mi.callbacks, callback)
         end
     end
     return nothing
 end
-
-function invalidate_cache!(replaced, max_world, depth = 0)
-    delete!(GLOBAL_EA_CODE_CACHE, replaced)
-
+struct InvalidationCallback
+    code_cache::CodeCache
+    escape_cache::EscapeCache
+end
+function (callback::InvalidationCallback)(replaced::MethodInstance, max_world,
+                                          seen::IdSet{MethodInstance}=IdSet{MethodInstance}())
+    (; code_cache, escape_cache) = callback
+    push!(seen, replaced)
+    delete!(code_cache.cache, replaced)
+    delete!(escape_cache.cache, replaced)
     if isdefined(replaced, :backedges)
         for mi in replaced.backedges
-            mi = mi::MethodInstance
-            if !haskey(GLOBAL_EA_CODE_CACHE, mi)
-                continue # otherwise fall into infinite loop
-            end
-            invalidate_cache!(mi, max_world, depth+1)
+            isa(mi, MethodInstance) || continue # might be `Type` object representing an `invoke` signature
+            mi in seen && continue # otherwise fall into infinite loop
+            callback(mi, max_world, seen)
         end
     end
     return nothing
@@ -152,38 +166,26 @@ function CC.optimize(interp::EscapeAnalyzer, opt::OptimizationState, caller::Inf
     return CC.finish(interp, opt, ir, caller)
 end
 
-function CC.cache_result!(interp::EscapeAnalyzer, caller::InferenceResult)
-    if haskey(interp.cache, caller)
-        GLOBAL_ESCAPE_CACHE[caller.linfo] = interp.cache[caller]
-    end
-    return @invoke CC.cache_result!(interp::AbstractInterpreter, caller::InferenceResult)
-end
-
-const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,EscapeCache}()
-
-"""
-    cache_escapes!(caller::InferenceResult, estate::EscapeState, cacheir::IRCode)
-
-Transforms escape information of call arguments of `caller`,
-and then caches it into a global cache for later interprocedural propagation.
-"""
-function cache_escapes!(interp::EscapeAnalyzer,
+function record_escapes!(interp::EscapeAnalyzer,
     caller::InferenceResult, estate::EscapeState, cacheir::IRCode)
     cache = ArgEscapeCache(estate)
-    ecache = EscapeCache(cache, estate, cacheir)
-    interp.cache[caller] = ecache
-    return cache
+    ecache = EscapeCacheInfo(cache, estate, cacheir)
+    return caller.argescapes = ecache
 end
 
-function get_escape_cache(interp::EscapeAnalyzer)
-    return function (mi::Union{InferenceResult,MethodInstance})
-        if isa(mi, InferenceResult)
-            ecache = get(interp.cache, mi, nothing)
-        else
-            ecache = get(GLOBAL_ESCAPE_CACHE, mi, nothing)
-        end
-        return ecache !== nothing ? ecache.cache : nothing
-    end
+struct GetEscapeCache
+    escape_cache::EscapeCache
+    GetEscapeCache(interp::EscapeAnalyzer) = new(interp.escape_cache)
+end
+function ((; escape_cache)::GetEscapeCache)(mi::MethodInstance)
+    cached = get(escape_cache.cache, mi, nothing)
+    return cached === nothing ? nothing : cached.argescapes
+end
+
+struct FailedAnalysis
+    ir::IRCode
+    nargs::Int
+    get_escape_cache::GetEscapeCache
 end
 
 function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
@@ -192,49 +194,41 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
-    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
-    local state
-    if is_ipo_profitable(ir, nargs) || caller.linfo.specTypes === interp.entry_tt
-        try
-            @timeit "[IPO EA]" begin
-                state = analyze_escapes(ir, nargs, false, get_escape_cache(interp))
-                cache_escapes!(interp, caller, state, cccopy(ir))
-            end
-        catch err
-            @error "error happened within [IPO EA], inspect `Main.ir` and `Main.nargs`"
-            @eval Main (ir = $ir; nargs = $nargs)
-            rethrow(err)
-        end
-    end
-    if caller.linfo.specTypes === interp.entry_tt && !interp.optimize
-        # return back the result
-        interp.ir = cccopy(ir)
-        interp.state = state
-        interp.mi = sv.linfo
-    end
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    if caller.linfo.specTypes === interp.entry_tt && interp.optimize
-        try
-            @timeit "[Local EA]" state = analyze_escapes(ir, nargs, true, get_escape_cache(interp))
-        catch err
-            @error "error happened within [Local EA], inspect `Main.ir` and `Main.nargs`"
-            @eval Main (ir = $ir; nargs = $nargs)
-            rethrow(err)
-        end
-        # return back the result
-        interp.ir = cccopy(ir)
-        interp.state = state
-        interp.mi = sv.linfo
-    end
     @timeit "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @timeit "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @timeit "compact 3" ir = compact!(ir, true)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
+    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    get_escape_cache = GetEscapeCache(interp)
+    local estate::EscapeState
+    try
+        @timeit "EA" estate = analyze_escapes(ir, nargs, get_escape_cache)
+    catch err
+        @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
+        @eval Main failed_escapeanalysis = $(FailedAnalysis(ir, nargs, get_escape_cache))
+        rethrow(err)
+    end
+    if caller.linfo.specTypes === interp.entry_tt
+        # return back the result
+        interp.ir = cccopy(ir)
+        interp.estate = estate
+        interp.mi = sv.linfo
+    end
+    record_escapes!(interp, caller, estate, ir)
     return ir
+end
+
+function CC.cache_result!(interp::EscapeAnalyzer, result::InferenceResult)
+    argescapes = result.argescapes
+    if argescapes isa EscapeCacheInfo
+        interp.escape_cache.cache[result.linfo] = argescapes
+    end
+    return @invoke CC.cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 end
 
 # printing
@@ -288,17 +282,19 @@ struct EscapeResult
     state::EscapeState
     mi::Union{Nothing,MethodInstance}
     source::Bool
+    interp::Union{Nothing,EscapeAnalyzer}
     function EscapeResult(ir::IRCode, state::EscapeState,
-                          mi::Union{Nothing,MethodInstance} = nothing,
-                          source::Bool=false)
-        return new(ir, state, mi, source)
+                          mi::Union{Nothing,MethodInstance}=nothing,
+                          source::Bool=false,
+                          interp::Union{Nothing,EscapeAnalyzer}=nothing)
+        return new(ir, state, mi, source, interp)
     end
 end
 Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
 @eval Base.iterate(res::EscapeResult, state=1) =
     return state > $(fieldcount(EscapeResult)) ? nothing : (getfield(res, state), state+1)
 
-Base.show(io::IO, cached::EscapeCache) = show(io, EscapeResult(cached.ir, cached.state, nothing))
+Base.show(io::IO, cached::EscapeCacheInfo) = show(io, EscapeResult(cached.ir, cached.state))
 
 # adapted from https://github.com/JuliaDebug/LoweredCodeUtils.jl/blob/4612349432447e868cf9285f647108f43bd0a11c/src/codeedges.jl#L881-L897
 function print_with_info(io::IO, (; ir, state, mi, source)::EscapeResult)
