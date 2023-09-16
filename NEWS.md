@@ -61,6 +61,9 @@ Standard library changes
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
 
