@@ -1531,4 +1531,8 @@ end
 
 import .Numbered.numbered_prompt!
 
+if Base.generating_output()
+    include("precompile.jl")
+end
+
 end # module

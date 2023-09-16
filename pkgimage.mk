@@ -11,6 +11,8 @@ export JULIA_LOAD_PATH := @stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
+export JULIA_FALLBACK_REPL := true
+
 default: release
 release: all-release
 debug: all-debug
@@ -82,6 +84,7 @@ $(eval $(call stdlib_builder,Zlib_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,dSFMT_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,libLLVM_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,libblastrampoline_jll,Artifacts Libdl))
+$(eval $(call stdlib_builder,p7zip_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,OpenBLAS_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,Markdown,Base64))
 $(eval $(call stdlib_builder,Printf,Unicode))
@@ -97,8 +100,8 @@ $(eval $(call stdlib_builder,LinearAlgebra,Libdl libblastrampoline_jll OpenBLAS_
 $(eval $(call stdlib_builder,Dates,Printf))
 $(eval $(call stdlib_builder,Distributed,Random Serialization Sockets))
 $(eval $(call stdlib_builder,Future,Random))
-$(eval $(call stdlib_builder,InteractiveUtils,Markdown))
 $(eval $(call stdlib_builder,UUIDs,Random SHA))
+$(eval $(call stdlib_builder,InteractiveUtils,Markdown))
 
  # 3-depth packages
 $(eval $(call stdlib_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
@@ -116,7 +119,9 @@ $(eval $(call stdlib_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
 $(eval $(call stdlib_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
 
 # 6-depth packages
-$(eval $(call stdlib_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
+$(eval $(call stdlib_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2 Libdl\
+								  Logging Markdown Printf REPL Random SHA Serialization\
+								  TOML Tar UUIDs p7zip_jll))
 
 # 7-depth packages
 $(eval $(call stdlib_builder,LazyArtifacts,Artifacts Pkg))
