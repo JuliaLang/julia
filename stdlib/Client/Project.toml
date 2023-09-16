@@ -1,0 +1,9 @@
+name = "Client"
+uuid = "22d9f1f7-1f08-4fdd-a466-30825a29bd37"
+version = "1.11.0"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"

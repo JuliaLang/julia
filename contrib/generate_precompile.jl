@@ -127,8 +127,7 @@ precompile_script = """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
-have_repl =  haskey(Base.loaded_modules,
-                    Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+have_repl = false
 if have_repl
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
@@ -153,9 +152,7 @@ if Artifacts !== nothing
     """
 end
 
-Pkg = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
-          nothing)
+Pkg = nothing
 
 if Pkg !== nothing
     # TODO: Split Pkg precompile script into REPL and script part
@@ -182,9 +179,7 @@ if Libdl !== nothing
     """
 end
 
-InteractiveUtils = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
-          nothing)
+InteractiveUtils = nothing
 if InteractiveUtils !== nothing
     repl_script *= """
     @time_imports using Random
@@ -240,7 +235,8 @@ procenv = Dict{String,Any}(
         "JULIA_PROJECT" => nothing, # remove from environment
         "JULIA_LOAD_PATH" => "@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
-        "TERM" => "")
+        "TERM" => "",
+        "JULIA_MINIMAL_CLIENT" => "true")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()

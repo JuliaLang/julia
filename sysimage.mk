@@ -53,6 +53,7 @@ COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
+# TODO: Avoid recompilation of base upon changes to pkgimage sources
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl) \
                     $(wildcard $(build_prefix)/manifest/$(VERSDIR)/*)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash

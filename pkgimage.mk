@@ -11,6 +11,8 @@ export JULIA_LOAD_PATH := @stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
+export JULIA_MINIMAL_CLIENT := true
+
 default: release
 release: all-release
 debug: all-debug
@@ -22,7 +24,7 @@ $(JULIA_DEPOT_PATH):
 print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
-STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
+STDLIBS := ArgTools Artifacts Base64 Client CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
 		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll MbedTLS_jll OpenLibm_jll PCRE2_jll \
 		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
 		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
@@ -129,6 +131,7 @@ $(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA U
 
 # 7-depth packages
 $(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
+$(eval $(call pkgimg_builder,Client,Distributed REPL InteractiveUtils Pkg))
 
 $(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
 $(eval $(call pkgimg_builder,Statistics,LinearAlgebra SparseArrays))
