@@ -384,3 +384,12 @@ macro pure(ex)
 end
 
 # END 1.10 deprecations
+
+# BEGIN 1.11 deprecations
+
+# these were never a part of the public API and so they can be removed without deprecation
+# in a minor release but we're being nice and trying to avoid transient breakage.
+@deprecate permute!!(a, p::AbstractVector{<:Integer}) permute!(a, p) false
+@deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
+
+# END 1.11 deprecations
