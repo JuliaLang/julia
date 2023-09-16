@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 _Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
-jl_datatype_t *small_typeof[(jl_max_tags << 4) / sizeof(*small_typeof)]; // 16-bit aligned, like the GC
+jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(*ijl_small_typeof)]; // 16-bit aligned, like the GC
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
@@ -2495,6 +2495,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 
     for (j = 0; j < jl_array_len(partial); j++) {
         jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+        if (ndt == NULL)
+            continue;
         assert(jl_unwrap_unionall(ndt->name->wrapper) == (jl_value_t*)t);
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
@@ -2506,6 +2508,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     if (t->types != jl_emptysvec) {
         for (j = 0; j < jl_array_len(partial); j++) {
             jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+            if (ndt == NULL)
+                continue;
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
@@ -2514,7 +2518,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
+            jl_array_ptr_set(partial, j, NULL);
         }
+        t->name->partial = NULL;
     }
     else {
         assert(jl_field_names(t) == jl_emptysvec);
@@ -2529,19 +2535,13 @@ static jl_tvar_t *tvar(const char *name)
                           (jl_value_t*)jl_any_type);
 }
 
-void export_small_typeof(void)
+void export_jl_small_typeof(void)
 {
-    void *copy;
-#ifdef _OS_WINDOWS_
-    jl_dlsym(jl_libjulia_handle, "small_typeof", &copy, 1);
-#else
-    jl_dlsym(jl_libjulia_internal_handle, "small_typeof", &copy, 1);
-#endif
-    memcpy(copy, &small_typeof, sizeof(small_typeof));
+    memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
 #define XX(name) \
-    small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type; \
+    ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
@@ -2616,7 +2616,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "hash", "n_uninitialized",
                                                     "flags", // "abstract", "mutable", "mayinlinealloc",
                                                     "max_methods");
-    const static uint32_t typename_constfields[1] = { 0x00003a3f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<9)|(1<<11)|(1<<12)|(1<<13)
+    const static uint32_t typename_constfields[1] = { 0x00003a27 }; // (1<<0)|(1<<1)|(1<<2)|(1<<5)|(1<<9)|(1<<11)|(1<<12)|(1<<13) ; TODO: put back (1<<3)|(1<<4) in this list
     const static uint32_t typename_atomicfields[1] = { 0x00000180 }; // (1<<7)|(1<<8)
     jl_typename_type->name->constfields = typename_constfields;
     jl_typename_type->name->atomicfields = typename_atomicfields;
@@ -3233,7 +3233,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "storage",
                                         "donenotify",
                                         "result",
-                                        "logstate",
+                                        "scope",
                                         "code",
                                         "rngState0",
                                         "rngState1",
@@ -3363,7 +3363,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
-    export_small_typeof();
+
+    export_jl_small_typeof();
 }
 
 static jl_value_t *core(const char *name)
@@ -3444,7 +3445,8 @@ void post_boot_hooks(void)
             }
         }
     }
-    export_small_typeof();
+
+    export_jl_small_typeof();
 }
 
 void post_image_load_hooks(void) {

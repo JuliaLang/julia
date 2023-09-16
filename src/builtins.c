@@ -222,7 +222,7 @@ JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const j
 JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
     if (dtag < jl_max_tags << 4) {
-        switch ((enum jlsmall_typeof_tags)(dtag >> 4)) {
+        switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
             return *(uint8_t*)a == *(uint8_t*)b;
@@ -1939,7 +1939,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_const(inm, sym, i);
-    jl_module_export(inm, sym);
+    jl_module_public(inm, sym, 1);
 }
 
 void jl_init_intrinsic_properties(void) JL_GC_DISABLED

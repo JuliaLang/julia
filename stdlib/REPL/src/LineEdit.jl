@@ -97,6 +97,7 @@ mutable struct PromptState <: ModeState
     p::Prompt
     input_buffer::IOBuffer
     region_active::Symbol # :shift or :mark or :off
+    hint::Union{String,Nothing}
     undo_buffers::Vector{IOBuffer}
     undo_idx::Int
     ias::InputAreaState
@@ -361,7 +362,7 @@ function show_completions(s::PromptState, completions::Vector{String})
     end
 end
 
-# Prompt Completions
+# Prompt Completions & Hints
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
     if complete_line(state(s), s.key_repeats, s.active_module)
@@ -369,6 +370,42 @@ function complete_line(s::MIState)
     else
         beep(s)
         return :ignore
+    end
+end
+
+function check_for_hint(s::MIState)
+    st = state(s)
+    options(st).hint_tab_completes || return false
+    if !eof(buffer(st)) # only generate hints if at the end of the line
+        # TODO: maybe show hints for insertions at other positions
+        # Requires making space for them earlier in refresh_multi_line
+        return false
+    end
+    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    length(partial) < 2 && return false # Don't complete for single chars, given e.g. `x` completes to `xor`
+    if should_complete
+        if length(completions) == 1
+            hint = only(completions)[sizeof(partial)+1:end]
+            if !isempty(hint) # completion on a complete name returns itself so check that there's something to hint
+                st.hint = hint
+                return true
+            end
+        elseif length(completions) > 1
+            p = common_prefix(completions)
+            if p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
+                hint = p[sizeof(partial)+1:end]
+                if !isempty(hint)
+                    st.hint = hint
+                    return true
+                end
+            end
+        end
+    end
+    if !isnothing(st.hint)
+        st.hint = "" # don't set to nothing here. That will be done in `maybe_show_hint`
+        return true
+    else
+        return false
     end
 end
 
@@ -432,12 +469,29 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
+function maybe_show_hint(s::PromptState)
+    isa(s.hint, String) || return nothing
+    # The hint being "" then nothing is used to first clear a previous hint, then skip printing the hint
+    # the clear line cannot be printed each time because it breaks column movement
+    if isempty(s.hint)
+        print(terminal(s), "\e[0K") # clear remainder of line which had a hint
+        s.hint = nothing
+    else
+        Base.printstyled(terminal(s), s.hint, color=:light_black)
+        cmove_left(terminal(s), textwidth(s.hint))
+        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time if still empty
+    end
+    return nothing
+end
+
 function refresh_multi_line(s::PromptState; kw...)
     if s.refresh_wait !== nothing
         close(s.refresh_wait)
         s.refresh_wait = nothing
     end
-    refresh_multi_line(terminal(s), s; kw...)
+    r = refresh_multi_line(terminal(s), s; kw...)
+    maybe_show_hint(s)
+    return r
 end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
@@ -2424,8 +2478,8 @@ AnyDict(
     "\e\n" => "\e\r",
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
-    # Simply insert it into the buffer by default
-    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c)),
+    # Show hints at what tab complete would do by default
+    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_for_hint(s) && refresh_line(s)),
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),
@@ -2634,7 +2688,7 @@ end
 run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
-    PromptState(terminal, prompt, IOBuffer(), :off, IOBuffer[], 1, InputAreaState(1, 1),
+    PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)

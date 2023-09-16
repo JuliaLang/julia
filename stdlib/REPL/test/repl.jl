@@ -1164,7 +1164,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line))
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1249,6 +1249,7 @@ let emptyH1 = Markdown.parse("# "),
 end
 
 module BriefExtended
+public f, f_plain
 """
     f()
 
@@ -1669,4 +1670,57 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     wait(repltask)
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
+end
+
+# Hints for tab completes
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    s2 = readuntil(stdout_read, "vailable") # partial hint
+
+    write(stdin_write, "x") # "readax" doesn't tab complete so no hint
+    # we can't use readuntil given this doesn't print, so just wait for the hint state to be reset
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\b") # only tab complete while typing forward
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "v")
+    s3 = readuntil(stdout_read, "ailable") # partial hint
+
+    write(stdin_write, "\t")
+    s4 = readuntil(stdout_read, "readavailable") # full completion is reprinted
+
+    write(stdin_write, "\x15")
+    write(stdin_write, "x") # single chars shouldn't hint e.g. `x` shouldn't hint at `xor`
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+end
+## hints disabled
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false)) do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+    @test !occursin("vailable", String(readavailable(stdout_read)))
 end

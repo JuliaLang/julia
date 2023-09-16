@@ -1887,3 +1887,12 @@ let s = "union_some_ref(1, 1.0)."
     @test res
     @test "value" in c && "x" in c
 end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end

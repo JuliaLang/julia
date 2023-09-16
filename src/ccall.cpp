@@ -2077,6 +2077,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
+    else if (!ctx.params->use_jlplt) {
+        if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
+              (symarg.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+              (symarg.f_lib == JL_LIBJULIA_DL_LIBNAME))) || symarg.lib_expr) {
+            emit_error(ctx, "ccall: Had library expression, but symbol lookup was disabled");
+        }
+        llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
+    }
     else {
         assert(symarg.f_name != NULL);
         PointerType *funcptype = PointerType::get(functype, 0);

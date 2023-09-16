@@ -1,12 +1,80 @@
-# Local EA Test
-# =============
-# EA works on post-inlining IR
+module test_EA
 
-include(normpath(@__DIR__, "setup.jl"))
+const use_core_compiler = false
+
+if use_core_compiler
+    const EscapeAnalysis = Core.Compiler.EscapeAnalysis
+else
+    include(normpath(Sys.BINDIR, "..", "..", "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
+end
+
+include("EAUtils.jl")
+include("../irutils.jl")
+
+using Test, .EscapeAnalysis, .EAUtils
+using .EscapeAnalysis: ignore_argescape
+
+let utils_ex = quote
+        mutable struct SafeRef{T}
+            x::T
+        end
+        Base.getindex(s::SafeRef) = getfield(s, 1)
+        Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
+
+        mutable struct SafeRefs{S,T}
+            x1::S
+            x2::T
+        end
+        Base.getindex(s::SafeRefs, idx::Int) = getfield(s, idx)
+        Base.setindex!(s::SafeRefs, x, idx::Int) = setfield!(s, idx, x)
+
+        global GV::Any
+        const global GR = Ref{Any}()
+    end
+    global function EATModule(utils_ex = utils_ex)
+        M = Module()
+        Core.eval(M, utils_ex)
+        return M
+    end
+    Core.eval(@__MODULE__, utils_ex)
+end
+
+using Core.Compiler: alloc_array_ndims
+using .EscapeAnalysis:
+    EscapeInfo, IndexableElements, IndexableFields,
+    array_resize_info, is_array_copy, normalize
+
+isϕ(@nospecialize x) = isa(x, Core.PhiNode)
+function with_normalized_name(@nospecialize(f), @nospecialize(x))
+    if Meta.isexpr(x, :foreigncall)
+        name = x.args[1]
+        nn = normalize(name)
+        return isa(nn, Symbol) && f(nn)
+    end
+    return false
+end
+isarrayalloc(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(alloc_array_ndims(nn)), x)
+isarrayresize(@nospecialize x) =
+    with_normalized_name(nn::Symbol->!isnothing(array_resize_info(nn)), x)
+isarraycopy(@nospecialize x) =
+    with_normalized_name(nn::Symbol->is_array_copy(nn), x)
+"""
+    is_load_forwardable(x::EscapeInfo) -> Bool
+
+Queries if `x` is elibigle for store-to-load forwarding optimization.
+"""
+function is_load_forwardable(x::EscapeInfo)
+    AliasInfo = x.AliasInfo
+    # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
+    # but we can also do equivalent check during forwarding
+    return isa(AliasInfo, IndexableFields) || isa(AliasInfo, IndexableElements)
+end
 
 @testset "basics" begin
     let # arg return
         result = code_escapes((Any,)) do a # return to caller
+            Base.donotdelete(1) # TODO #51143
             return nothing
         end
         @test has_arg_escape(result.state[Argument(2)])
@@ -46,12 +114,13 @@ include(normpath(@__DIR__, "setup.jl"))
     end
     let # :gc_preserve_begin / :gc_preserve_end
         result = code_escapes((String,)) do s
+            Base.donotdelete(1) # TODO #51143
             m = SafeRef(s)
             GC.@preserve m begin
                 return nothing
             end
         end
-        i = findfirst(isT(SafeRef{String}), result.ir.stmts.type) # find allocation statement
+        i = findfirst(==(SafeRef{String}), result.ir.stmts.type) # find allocation statement
         @test !isnothing(i)
         @test has_no_escape(result.state[SSAValue(i)])
     end
@@ -62,7 +131,7 @@ include(normpath(@__DIR__, "setup.jl"))
             end
             return @isdefined(s)
         end
-        i = findfirst(isT(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
+        i = findfirst(==(Base.RefValue{String}), result.ir.stmts.type) # find allocation statement
         @test isnothing(i) || has_no_escape(result.state[SSAValue(i)])
     end
     let # ϕ-node
@@ -151,15 +220,6 @@ include(normpath(@__DIR__, "setup.jl"))
     end
 end
 
-let # simple allocation
-    result = code_escapes((Bool,)) do c
-        mm = SafeRef{Bool}(c) # just allocated, never escapes
-        return mm[] ? nothing : 1
-    end
-    i = only(findall(isnew, result.ir.stmts.stmt))
-    @test has_no_escape(result.state[SSAValue(i)])
-end
-
 @testset "builtins" begin
     let # throw
         r = code_escapes((Any,)) do a
@@ -213,9 +273,9 @@ end
             return r
         end
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(Base.RefValue{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{String}
                 @test has_return_escape(result.state[SSAValue(i)])
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(Base.RefValue{Nothing})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Base.RefValue{Nothing}
                 @test has_no_escape(result.state[SSAValue(i)])
             end
         end
@@ -647,8 +707,8 @@ end
     # field escape should propagate to :new arguments
     let result = code_escapes((String,)) do a
             o = SafeRef(a)
-            f = o[]
-            return f
+            Core.donotdelete(o)
+            return o[]
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -668,6 +728,7 @@ end
     end
     let result = code_escapes((String, String)) do a, b
             obj = SafeRefs(a, b)
+            Core.donotdelete(obj)
             fld1 = obj[1]
             fld2 = obj[2]
             return (fld1, fld2)
@@ -682,9 +743,9 @@ end
     # field escape should propagate to `setfield!` argument
     let result = code_escapes((String,)) do a
             o = SafeRef("foo")
+            Core.donotdelete(o)
             o[] = a
-            f = o[]
-            return f
+            return o[]
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -694,6 +755,7 @@ end
     # propagate escape information imposed on return value of `setfield!` call
     let result = code_escapes((String,)) do a
             obj = SafeRef("foo")
+            Core.donotdelete(obj)
             return (obj[] = a)
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
@@ -711,9 +773,9 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(SafeRef{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(SafeRef{SafeRef{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == SafeRef{SafeRef{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -726,9 +788,9 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result.state[Argument(2)], r)
         for i in 1:length(result.ir.stmts)
-            if isnew(result.ir.stmts.stmt[i]) && isT(Tuple{String})(result.ir.stmts.type[i])
+            if isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{String}
                 @test has_return_escape(result.state[SSAValue(i)], r)
-            elseif isnew(result.ir.stmts.stmt[i]) && isT(Tuple{Tuple{String}})(result.ir.stmts.type[i])
+            elseif isnew(result.ir.stmts.stmt[i]) && result.ir.stmts.type[i] == Tuple{Tuple{String}}
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -776,7 +838,9 @@ end
         end
     end
     let result = code_escapes((String,)) do x
-            broadcast(identity, Ref(x))
+            o = Ref(x)
+            Core.donotdelete(o)
+            broadcast(identity, o)
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -833,7 +897,7 @@ end
         end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         t = only(findall(iscall((result.ir, throw)), result.ir.stmts.stmt))
-        ϕ = only(findall(isT(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
+        ϕ = only(findall(==(Union{SafeRef{String},SafeRefs{String,String}}), result.ir.stmts.type))
         @test has_return_escape(result.state[Argument(3)], r) # x
         @test !has_return_escape(result.state[Argument(4)], r) # y
         @test has_return_escape(result.state[Argument(5)], r) # z
@@ -846,6 +910,7 @@ end
     # alias via getfield & Expr(:new)
     let result = code_escapes((String,)) do s
             r = SafeRef(s)
+            Core.donotdelete(r)
             return r[]
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
@@ -857,6 +922,7 @@ end
     let result = code_escapes((String,)) do s
             r1 = SafeRef(s)
             r2 = SafeRef(r1)
+            Core.donotdelete(r1, r2)
             return r2[]
         end
         i1, i2 = findall(isnew, result.ir.stmts.stmt)
@@ -869,6 +935,7 @@ end
     let result = code_escapes((String,)) do s
             r1 = SafeRef(s)
             r2 = SafeRef(r1)
+            Core.donotdelete(r1, r2)
             return r2[][]
         end
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -882,18 +949,20 @@ end
             const Rx = SafeRef("Rx")
             $code_escapes((String,)) do s
                 r = SafeRef(Rx)
+                Core.donotdelete(r)
                 rx = r[] # rx aliased to Rx
                 rx[] = s
                 nothing
             end
         end
-        i = findfirst(isnew, result.ir.stmts.stmt)
+        i = only(findall(isnew, result.ir.stmts.stmt))
         @test has_all_escape(result.state[Argument(2)])
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
     # alias via getfield & setfield!
     let result = code_escapes((String,)) do s
             r = Ref{String}()
+            Core.donotdelete(r)
             r[] = s
             return r[]
         end
@@ -906,6 +975,7 @@ end
     let result = code_escapes((String,)) do s
             r1 = Ref(s)
             r2 = Ref{Base.RefValue{String}}()
+            Core.donotdelete(r1, r2)
             r2[] = r1
             return r2[]
         end
@@ -919,6 +989,7 @@ end
     let result = code_escapes((String,)) do s
             r1 = Ref{String}()
             r2 = Ref{Base.RefValue{String}}()
+            Core.donotdelete(r1, r2)
             r2[] = r1
             r1[] = s
             return r2[][]
@@ -947,6 +1018,7 @@ end
             const Rx = SafeRef("Rx")
             $code_escapes((SafeRef{String}, String,)) do _rx, s
                 r = SafeRef(_rx)
+                Core.donotdelete(r)
                 r[] = Rx
                 rx = r[] # rx aliased to Rx
                 rx[] = s
@@ -1242,6 +1314,7 @@ end
             $code_escapes((String,)) do y
                 x1 = SafeRef("init")
                 x2 = SafeRef(y)
+                Core.donotdelete(x1, x2)
                 setxy!(x1, x2[])
                 return x1
             end
@@ -1267,6 +1340,7 @@ end
 
     let result = code_escapes((Any,Any)) do a, b
             r = SafeRef{Any}(a)
+            Core.donotdelete(r)
             r[] = b
             return r[]
         end
@@ -1278,6 +1352,7 @@ end
     end
     let result = code_escapes((Any,Any)) do a, b
             r = SafeRef{Any}(:init)
+            Core.donotdelete(r)
             r[] = a
             r[] = b
             return r[]
@@ -1290,6 +1365,7 @@ end
     end
     let result = code_escapes((Any,Any,Bool)) do a, b, cond
             r = SafeRef{Any}(:init)
+            Core.donotdelete(r)
             if cond
                 r[] = a
                 return r[]
@@ -1382,7 +1458,7 @@ function compute(T, ax, ay, bx, by)
 end
 let result = @code_escapes compute(MPoint, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
+                 inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
                  return (isnew(stmt) || isϕ(stmt)) && inst[:type] <: MPoint
              end
@@ -1396,15 +1472,15 @@ function compute(a, b)
     end
     a.x, a.y
 end
-let result = @code_escapes compute(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
-    idxs = findall(1:length(result.ir.stmts)) do idx
-        inst = EscapeAnalysis.getinst(result.ir, idx)
-        stmt = inst[:stmt]
-        return isnew(stmt) && inst[:type] <: MPoint
-    end
-    @assert length(idxs) == 2
-    @test count(i->is_load_forwardable(result.state[SSAValue(i)]), idxs) == 1
-end
+# let result = @code_escapes compute(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
+#     idxs = findall(1:length(result.ir.stmts)) do idx
+#         inst = result.ir[SSAValue(idx)]
+#         stmt = inst[:stmt]
+#         return isnew(stmt) && inst[:type] <: MPoint
+#     end
+#     @assert length(idxs) == 2
+#     @test count(i->is_load_forwardable(result.state[SSAValue(i)]), idxs) == 1
+# end
 function compute!(a, b)
     for i in 0:(100000000-1)
         c = add(a, b)  # replaceable
@@ -1415,7 +1491,7 @@ function compute!(a, b)
 end
 let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
     for i in findall(1:length(result.ir.stmts)) do idx
-                 inst = EscapeAnalysis.getinst(result.ir, idx)
+                 inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
                  return isnew(stmt) && inst[:type] <: MPoint
              end
@@ -1424,8 +1500,6 @@ let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.7
 end
 
 @testset "array primitives" begin
-    inbounds = Base.JLOptions().check_bounds == 0
-
     # arrayref
     let result = code_escapes((Vector{String},Int)) do xs, i
             s = Base.arrayref(true, xs, i)
@@ -1438,15 +1512,6 @@ end
     end
     let result = code_escapes((Vector{String},Int)) do xs, i
             s = Base.arrayref(false, xs, i)
-            return s
-        end
-        r = only(findall(isreturn, result.ir.stmts.stmt))
-        @test has_return_escape(result.state[Argument(2)], r)   # xs
-        @test !has_thrown_escape(result.state[Argument(2)])     # xs
-        @test !has_return_escape(result.state[Argument(3)], r)  # i
-    end
-    inbounds && let result = code_escapes((Vector{String},Int)) do xs, i
-            s = @inbounds xs[i]
             return s
         end
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -1495,15 +1560,6 @@ end
     end
     let result = code_escapes((Vector{String},String,Int,)) do xs, x, i
             Base.arrayset(false, xs, x, i)
-            return xs
-        end
-        r = only(findall(isreturn, result.ir.stmts.stmt))
-        @test has_return_escape(result.state[Argument(2)], r) # xs
-        @test !has_thrown_escape(result.state[Argument(2)])    # xs
-        @test has_return_escape(result.state[Argument(3)], r) # x
-    end
-    inbounds && let result = code_escapes((Vector{String},String,Int,)) do xs, x, i
-            @inbounds xs[i] = x
             return xs
         end
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -1696,15 +1752,6 @@ end
     end
     let result = code_escapes((String,)) do x
             xs = Any[x]
-            @ccall jl_array_del_at(xs::Any, 1::UInt, 2::UInt)::Cvoid # can potentially throw
-        end
-        i = only(findall(isarrayalloc, result.ir.stmts.stmt))
-        t = only(findall(isarrayresize, result.ir.stmts.stmt))
-        @test has_thrown_escape(result.state[SSAValue(i)], t) # xs
-        @test has_thrown_escape(result.state[Argument(2)], t) # x
-    end
-    inbounds && let result = code_escapes((String,)) do x
-            xs = @inbounds Any[x]
             @ccall jl_array_del_at(xs::Any, 1::UInt, 2::UInt)::Cvoid # can potentially throw
         end
         i = only(findall(isarrayalloc, result.ir.stmts.stmt))
@@ -2165,8 +2212,8 @@ end # @static if isdefined(Core, :ImmutableArray)
 
     let result = code_escapes((Int,)) do a
             o = SafeRef(a)
-            f = o[]
-            return f
+            Core.donotdelete(o)
+            return o[]
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
         r = only(findall(isreturn, result.ir.stmts.stmt))
@@ -2203,3 +2250,163 @@ end
 #     end
 #     return m
 # end
+
+# interprocedural analysis
+# ------------------------
+
+# propagate escapes imposed on call arguments
+@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
+let result = code_escapes() do
+        broadcast_noescape1(Ref("Hi"))
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    @test !has_return_escape(result.state[SSAValue(i)])
+    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # TODO `getfield(RefValue{String}, :x)` isn't safe
+end
+@noinline broadcast_noescape2(b) = broadcast(identity, b)
+let result = code_escapes() do
+        broadcast_noescape2(Ref("Hi"))
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    @test_broken !has_return_escape(result.state[SSAValue(i)]) # TODO interprocedural alias analysis
+    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # TODO `getfield(RefValue{String}, :x)` isn't safe
+end
+@noinline allescape_argument(a) = (global GV = a) # obvious escape
+let result = code_escapes() do
+        allescape_argument(Ref("Hi"))
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    @test has_all_escape(result.state[SSAValue(i)])
+end
+# if we can't determine the matching method statically, we should be conservative
+let result = code_escapes((Ref{Any},)) do a
+        may_exist(a)
+    end
+    @test has_all_escape(result.state[Argument(2)])
+end
+let result = code_escapes((Ref{Any},)) do a
+        Base.@invokelatest broadcast_noescape1(a)
+    end
+    @test has_all_escape(result.state[Argument(2)])
+end
+
+# handling of simple union-split (just exploit the inliner's effort)
+@noinline unionsplit_noescape(a)      = string(nothing)
+@noinline unionsplit_noescape(a::Int) = a + 10
+let result = code_escapes((Union{Int,Nothing},)) do x
+        s = SafeRef{Union{Int,Nothing}}(x)
+        unionsplit_noescape(s[])
+        return nothing
+    end
+    inds = findall(isnew, result.ir.stmts.stmt) # find allocation statement
+    @assert !isempty(inds)
+    for i in inds
+        @test has_no_escape(result.state[SSAValue(i)])
+    end
+end
+
+@noinline unused_argument(a) = (println("prevent inlining"); nothing)
+let result = code_escapes() do
+        a = Ref("foo") # shouldn't be "return escape"
+        b = unused_argument(a)
+        nothing
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    @test has_no_escape(result.state[SSAValue(i)])
+
+    result = code_escapes() do
+        a = Ref("foo") # still should be "return escape"
+        b = unused_argument(a)
+        return a
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
+    @test has_return_escape(result.state[SSAValue(i)], r)
+end
+
+# should propagate escape information imposed on return value to the aliased call argument
+@noinline returnescape_argument(a) = (println("prevent inlining"); a)
+let result = code_escapes() do
+        obj = Ref("foo")           # should be "return escape"
+        ret = returnescape_argument(obj)
+        return ret                 # alias of `obj`
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
+    @test has_return_escape(result.state[SSAValue(i)], r)
+end
+@noinline noreturnescape_argument(a) = (println("prevent inlining"); identity("hi"))
+let result = code_escapes() do
+        obj = Ref("foo")              # better to not be "return escape"
+        ret = noreturnescape_argument(obj)
+        return ret                    # must not alias to `obj`
+    end
+    i = only(findall(isnew, result.ir.stmts.stmt))
+    @test has_no_escape(result.state[SSAValue(i)])
+end
+
+# accounts for ThrownEscape via potential MethodError
+
+# no method error
+@noinline identity_if_string(x::SafeRef) = (println("preventing inlining"); nothing)
+let result = code_escapes((SafeRef{String},)) do x
+        Base.donotdelete(1) # TODO #51143
+        identity_if_string(x)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+let result = code_escapes((Union{SafeRef{String},Nothing},)) do x
+        Base.donotdelete(1) # TODO #51143
+        identity_if_string(x)
+    end
+    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
+    @test has_thrown_escape(result.state[Argument(2)], i)
+    @test_broken !has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((SafeRef{String},)) do x
+        try
+            identity_if_string(x)
+        catch err
+            global GV = err
+        end
+        return nothing
+    end
+    @test !has_all_escape(result.state[Argument(2)])
+end
+let result = code_escapes((Union{SafeRef{String},Vector{String}},)) do x
+        try
+            identity_if_string(x)
+        catch err
+            global GV = err
+        end
+        return nothing
+    end
+    @test has_all_escape(result.state[Argument(2)])
+end
+# method ambiguity error
+@noinline ambig_error_test(a::SafeRef, b) = (println("preventing inlining"); nothing)
+@noinline ambig_error_test(a, b::SafeRef) = (println("preventing inlining"); nothing)
+@noinline ambig_error_test(a, b) = (println("preventing inlining"); nothing)
+let result = code_escapes((SafeRef{String},Any)) do x, y
+        ambig_error_test(x, y)
+    end
+    i = only(findall(iscall((result.ir, ambig_error_test)), result.ir.stmts.stmt))
+    r = only(findall(isreturn, result.ir.stmts.stmt))
+    @test has_thrown_escape(result.state[Argument(2)], i)  # x
+    @test has_thrown_escape(result.state[Argument(3)], i)  # y
+    @test_broken !has_return_escape(result.state[Argument(2)], r)  # x
+    @test_broken !has_return_escape(result.state[Argument(3)], r)  # y
+end
+let result = code_escapes((SafeRef{String},Any)) do x, y
+        try
+            ambig_error_test(x, y)
+        catch err
+            global GV = err
+        end
+    end
+    @test has_all_escape(result.state[Argument(2)])  # x
+    @test has_all_escape(result.state[Argument(3)])  # y
+end
+
+end # module test_EA

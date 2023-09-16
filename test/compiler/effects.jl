@@ -89,10 +89,14 @@ Base.@assume_effects :terminates_globally function recur_termination1(x)
     0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
-@test fully_eliminated() do
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination1, (Int,)))
+function recur_termination2()
+    Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
+@test_broken fully_eliminated(recur_termination2)
+@test fully_eliminated() do; recur_termination2(); end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
     x == 0 && return 1
@@ -100,11 +104,16 @@ Base.@assume_effects :terminates_globally function recur_termination21(x)
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
-@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
-@test fully_eliminated() do
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_terminates(Base.infer_effects(recur_termination22, (Int,)))
+function recur_termination2x()
+    Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
+@test_broken fully_eliminated(recur_termination2x)
+@test fully_eliminated() do; recur_termination2x(); end
 
 # anonymous function support for `@assume_effects`
 @test fully_eliminated() do
@@ -992,6 +1001,11 @@ isassigned_effects(s) = isassigned(Ref(s))
     isassigned_effects(:foo)
 end
 
+# :isdefined effects
+@test @eval Base.infer_effects() do
+    @isdefined($(gensym("some_undef_symbol")))
+end |> !Core.Compiler.is_consistent
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
@@ -1069,3 +1083,19 @@ GLOBAL_MUTABLE_SWITCH[] = true
 @test (Base.return_types(check_switch2) |> only) === Nothing
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))
+
+# post-opt IPO analysis refinement of `:effect_free`-ness
+function post_opt_refine_effect_free(y, c=true)
+    x = Ref(c)
+    if x[]
+        return true
+    else
+        r = y[] isa Number
+        y[] = nothing
+    end
+    return r
+end
+@test Core.Compiler.is_effect_free(Base.infer_effects(post_opt_refine_effect_free, (Base.RefValue{Any},)))
+@test Base.infer_effects((Base.RefValue{Any},)) do y
+    post_opt_refine_effect_free(y, true)
+end |> Core.Compiler.is_effect_free

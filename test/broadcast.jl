@@ -1159,3 +1159,6 @@ end
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
     Core.Compiler.is_foldable
+
+f51129(v, x) = (1 .- (v ./ x) .^ 2)
+@test @inferred(f51129([13.0], 6.5)) == [-3.0]

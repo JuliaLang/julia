@@ -222,7 +222,6 @@ include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
 include("rawbigints.jl")
 include("float.jl")
@@ -331,10 +330,6 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
 const liblapack_name = libblas_name
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
 # Concurrency (part 2)
 # Note that `atomics.jl` here should be deprecated
 Core.eval(Threads, :(include("atomics.jl")))
@@ -343,6 +338,14 @@ include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# ScopedValues
+include("scopedvalues.jl")
+using .ScopedValues
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
@@ -496,7 +499,7 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, "JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 

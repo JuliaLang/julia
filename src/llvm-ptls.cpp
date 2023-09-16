@@ -11,7 +11,6 @@
 #include <llvm/Pass.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -343,31 +342,6 @@ bool LowerPTLS::run(bool *CFGModified)
     };
     return runOnGetter(false) + runOnGetter(true);
 }
-
-struct LowerPTLSLegacy: public ModulePass {
-    static char ID;
-    LowerPTLSLegacy(bool imaging_mode=false)
-        : ModulePass(ID),
-          imaging_mode(imaging_mode)
-    {}
-
-    bool imaging_mode;
-    bool runOnModule(Module &M) override {
-        LowerPTLS lower(M, imaging_mode);
-        bool modified = lower.run(nullptr);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyLLVMIR(M));
-#endif
-        return modified;
-    }
-};
-
-char LowerPTLSLegacy::ID = 0;
-
-static RegisterPass<LowerPTLSLegacy> X("LowerPTLS", "LowerPTLS Pass",
-                                 false /* Only looks at CFG */,
-                                 false /* Analysis Pass */);
-
 } // anonymous namespace
 
 PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -385,15 +359,4 @@ PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
         }
     }
     return PreservedAnalyses::all();
-}
-
-Pass *createLowerPTLSPass(bool imaging_mode)
-{
-    return new LowerPTLSLegacy(imaging_mode);
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)
-{
-    unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

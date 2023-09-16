@@ -1493,8 +1493,6 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 #endif
 }
 
-JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
-
 // Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
 // julia side. If any of module, group, id, file or line are NULL, these will
 // be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
@@ -1513,6 +1511,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_top_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_module_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_export_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_public_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_import_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_quote_sym;
@@ -1645,6 +1644,17 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
 
+#ifdef _OS_WINDOWS_
+// On Windows, weak symbols do not default to 0 due to a GCC bug
+// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
+// aliases with a known value instead.
+#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
+#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
+#else
+#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
+#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
+#endif
+
 JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
@@ -1684,7 +1694,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_m
 JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache, size_t world);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, ios_t *s);
+        ios_t *z, ios_t *s, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
