@@ -13,6 +13,13 @@ import Pkg
 import REPL
 import InteractiveUtils
 
+function __init__()
+    # Why is this necessary? Should have been handled by __require_prelocked
+    if !isassigned(Base.REPL_MODULE_REF)
+        Base.REPL_MODULE_REF[] = REPL
+    end
+end
+
 md_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)
@@ -194,6 +201,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     else
         # otherwise provide a simple fallback
+        # This hangs after Banner
         if interactive && !quiet
             @warn "REPL provider not available: using basic fallback"
         end
@@ -201,16 +209,16 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
-                ex = parse_input_line(read(input, String))
+                ex = Base.parse_input_line(read(input, String))
                 if Meta.isexpr(ex, :toplevel)
                     # if we get back a list of statements, eval them sequentially
                     # as if we had parsed them sequentially
                     for stmt in ex.args
-                        eval_user_input(stderr, stmt, true)
+                        Base.eval_user_input(stderr, stmt, true)
                     end
                     body = ex.args
                 else
-                    eval_user_input(stderr, ex, true)
+                    Base.eval_user_input(stderr, ex, true)
                 end
             else
                 while isopen(input) || !eof(input)
@@ -223,12 +231,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                         ex = nothing
                         while !eof(input)
                             line *= readline(input, keep=true)
-                            ex = parse_input_line(line)
+                            ex = Base.parse_input_line(line)
                             if !(isa(ex, Expr) && ex.head === :incomplete)
                                 break
                             end
                         end
-                        eval_user_input(stderr, ex, true)
+                        Base.eval_user_input(stderr, ex, true)
                     catch err
                         isa(err, InterruptException) ? print("\n\n") : rethrow()
                     end
