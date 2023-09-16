@@ -1059,7 +1059,7 @@ others wait. The precompilation process will indicate when the process is precom
 precompiling. If non-interactive the messages are via `@debug`.
 
 However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
-[`JULIA_CPU_TARGET`](@ref) environment variable appropriately to get a single cache that is usable throughout the HPC
+`[JULIA_CPU_TARGET](@ref)` environment variable appropriately to get a single cache that is usable throughout the HPC
 environment.
 
 ## Julia Releases
