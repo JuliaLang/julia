@@ -3,6 +3,7 @@
 module Client
 
 import Base: PkgId, UUID
+using Base.Filesystem
 
 # We are losing delay loading of these anyway,
 # we depend on them during precompile and for consistencies sake
