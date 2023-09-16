@@ -643,8 +643,9 @@ function fielddoc(binding::Binding, field::Symbol)
             end
         end
     end
-    fields = join(["`$f`" for f in fieldnames(resolve(binding))], ", ", ", and ")
-    fields = isempty(fields) ? "no fields" : "fields $fields"
+    fs = fieldnames(resolve(binding))
+    fields = isempty(fs) ? "no fields" : (length(fs) == 1 ? "field " : "fields ") *
+                                          join(("`$f`" for f in fs), ", ", ", and ")
     Markdown.parse("`$(resolve(binding))` has $fields.")
 end
 
