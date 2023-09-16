@@ -26,7 +26,7 @@ function exec_options(opts)
     repl = !arg_is_program
     cmds = Base.unsafe_load_commands(opts.commands)
     for (cmd, arg) in cmds
-        if cmd_suppresses_program(cmd)
+        if Base.cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
@@ -73,9 +73,9 @@ function exec_options(opts)
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg))
+            Core.eval(Main, Base.parse_input_line(arg))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg)))
+            invokelatest(show, Core.eval(Main, Base.parse_input_line(arg)))
             println()
         elseif cmd == 'L'
             # load file immediately on all processors

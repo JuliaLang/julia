@@ -1,20 +1,32 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Precompile
+# Can't use this during incremental: `@eval Module() begin``
 
 import ..Client
 import Pkg
 import REPL
 import InteractiveUtils
 
-# Can't use this during incremental: `@eval Module() begin``
+# Since we are not Base we need to import names,
+# would be better if we had FQDN
+import Pkg: TOML
+import Pkg.PlatformEngines: Downloads, SHA, Tar
+import Pkg.GitTools: LibGit2, Printf
+import Pkg.Types: FileWatching
+import Pkg.API: Logging, Dates
+import Pkg.PlatformEngines: p7zip_jll
+import Pkg.Artifacts: Artifacts
+import REPL: Markdown
 
-# using PrecompileTools
-include("invalidations.jl")
 
 Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
+
+## Debugging options
+# Disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
 
 # View the code sent to the repl by setting this to `stdout`
 const debug_output = devnull # or stdout
@@ -71,10 +83,7 @@ procenv = Dict{String,Any}(
         "TERM" => "",
         "JULIA_MINIMAL_CLIENT" => "0") # Turn Client.jl on
 
-generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
-    start_time = time_ns()
-    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
-
+generate_precompile_statements() = try
     # Extract the precompile statements from the precompile file
     statements_step = Channel{String}(Inf)
 
@@ -83,7 +92,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         touch(precompile_file)
         pts, ptm = open_fake_pty()
         cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
                 --cpu-target=native --startup-file=no --compiled-modules=existing --color=yes -i $cmdargs```, procenv),
                 "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
             pts, pts, pts; wait=false)
@@ -166,6 +175,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         close(statements_step)
         return :ok
     end
+    !PARALLEL_PRECOMPILATION && wait(step)
 
     # Make statements unique
     statements = Set{String}()
@@ -174,23 +184,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
-    end
-
-    fetch(step) == :ok || throw("Collecting precompiles failed.")
-    return statements
-finally
-    GC.gc(true); GC.gc(false); # reduce memory footprint
-end
-
-statements = generate_precompile_statements()
-
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
-
-@compile_workload begin
-    precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
-    for statement in statements
         try
             ps = Meta.parse(statement)
             if !isexpr(ps, :call)
@@ -211,5 +204,18 @@ Base.Filesystem.temp_cleanup_purge(force=true)
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
     end
-end # @compile_workload
+
+    fetch(step) == :ok || throw("Collecting precompiles failed.")
+    return nothing
+finally
+    GC.gc(true); GC.gc(false); # reduce memory footprint
+end
+
+generate_precompile_statements()
+
+# As a last step in system image generation,
+# remove some references to build time environment for a more reproducible build.
+Base.Filesystem.temp_cleanup_purge(force=true)
+
+precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
 end # Precompile
