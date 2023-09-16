@@ -298,7 +298,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 to control whether additional optimizations, such as inlining, are also applied.
 
-See also: [`code_typed`](@ref), [`@code_native`](@ref), [`@code_llvm`](@ref), [`@code_lowered`](@ref), [`@code_warntype`](@ref).
+See also: [`code_typed`](@ref), [`@code_warntype`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_typed
 
@@ -308,7 +308,7 @@ See also: [`code_typed`](@ref), [`@code_native`](@ref), [`@code_llvm`](@ref), [`
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_lowered`](@ref) on the resulting expression.
 
-See also: [`code_lowered`](@ref), [`@code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref).
+See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_lowered
 
@@ -318,7 +318,7 @@ See also: [`code_lowered`](@ref), [`@code_native`](@ref), [`@code_llvm`](@ref), 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_warntype`](@ref) on the resulting expression.
 
-See also: [`code_warntype`](@ref), [`@code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref).
+See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_warntype
 
@@ -338,7 +338,7 @@ by putting them and their value before the function call, like this:
 `debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
 
-See also: [`code_llvm`](@ref), [`@code_native`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_warntype`](@ref).
+See also: [`code_llvm`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_native`](@ref).
 """
 :@code_llvm
 
@@ -358,7 +358,7 @@ by putting it before the function call, like this:
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
-See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_warntype`](@ref).
+See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
 """
 :@code_native
 
