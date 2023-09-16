@@ -33,6 +33,10 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
+# loading.jl
+precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
+precompile(Base._require, (Base.PkgId, Nothing))
+
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
 precompile(Base.read_dependency_src, (String, String))
