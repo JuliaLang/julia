@@ -182,6 +182,12 @@ function ((; escape_cache)::GetEscapeCache)(mi::MethodInstance)
     return cached === nothing ? nothing : cached.argescapes
 end
 
+struct FailedAnalysis
+    ir::IRCode
+    nargs::Int
+    get_escape_cache::GetEscapeCache
+end
+
 function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
     ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
@@ -203,8 +209,8 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
     try
         @timeit "EA" estate = analyze_escapes(ir, nargs, get_escape_cache)
     catch err
-        @error "error happened within EA, inspect `Main.ir` and `Main.nargs`"
-        @eval Main (ir = $ir; nargs = $nargs)
+        @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
+        @eval Main failed_escapeanalysis = $(FailedAnalysis(ir, nargs, get_escape_cache))
         rethrow(err)
     end
     if caller.linfo.specTypes === interp.entry_tt
