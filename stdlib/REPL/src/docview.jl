@@ -166,7 +166,7 @@ struct Logged{F}
     collection::Set{Pair{Module,Symbol}}
 end
 function (la::Logged)(m::Module, s::Symbol)
-    m !== la.mod && !Base.ispublic(m, s) && push!(la.collection, m => s)
+    m !== la.mod && Base.isdefined(m, s) && !Base.ispublic(m, s) && push!(la.collection, m => s)
     la.f(m, s)
 end
 (la::Logged)(args...) = la.f(args...)

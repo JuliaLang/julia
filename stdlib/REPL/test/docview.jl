@@ -132,3 +132,6 @@ module InternalWarningsTests
         @test docstring("A.B3") == "No docstring or readme file found for public module `$(@__MODULE__).A.B3`.\n\nModule does not have any public names.\n"
     end
 end
+
+# Issue #51344, don't print "internal binding" warning for non-existent bindings.
+@test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"
