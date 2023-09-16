@@ -374,6 +374,36 @@ julia> twothreearr()
  3
 ```
 
+### [Can I pass positional arguments by name?](@id faq-positional-args-by-name)
+
+No; if you have e.g. a function with signature `lognormal(median, g)`,
+then calling it as `lognormal(median = 4, g = 1)` will not work.
+
+Instead, you can explain argument names in other ways:
+```julia
+lognormal(
+    4,  # Median
+    1,  # Geometric standard deviation, g
+)
+```
+or, using inline comments:
+```julia
+lognormal(#=median=# 4, #=g=# 1)
+```
+or, simply:
+```julia
+median = 4
+g      = 1  # Geometric standard deviation
+lognormal(median, g)
+```
+
+You can also define a wrapper method that takes keyword arguments:
+```julia
+lognormal(; median, g) = lognormal(median, g)
+```
+which can then be called as `lognormal(median = 4, g = 1)`.
+
+
 ## Types, type declarations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)

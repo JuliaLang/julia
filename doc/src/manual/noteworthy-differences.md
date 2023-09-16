@@ -158,6 +158,13 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, values are not copied when assigned or passed to a function. If a function modifies an array, the changes
     will be visible in the caller. This is very different from R and allows new functions to operate
     on large data structures much more efficiently.
+  * In Julia, a function argument is either positional, or a keyword
+    argument. Unlike in R -- where any argument can be passed either
+    positionally or by name -- in Julia, positional arguments cannot be
+    passed by name, and keyword arguments cannot be passed positionally.
+    E.g. a function with signature `work(x; T)` must be called
+    as `work(4, T = 5)`, and not `work(4, 5)` or `work(x = 4, T = 5)`.
+    (See also [this FAQ entry](faq-positional-args-by-name)).
   * In Julia, vectors and matrices are concatenated using [`hcat`](@ref), [`vcat`](@ref) and
     [`hvcat`](@ref), not `c`, `rbind` and `cbind` like in R.
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
@@ -237,16 +244,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, keyword arguments must be passed using keywords, unlike Python in which it is usually possible
     to pass them positionally. Attempting to pass a keyword argument positionally alters the method
     signature leading to a `MethodError` or calling of the wrong method.
-  * Conversely, positional arguments cannot be given by name in Julia.
-    If a function's signature is e.g. `lognormal(median, g)`,
-    then calling it as `lognormal(median = 4, g = 1)` will not work.
-    Instead, you can explain arguments by name on separate lines:
-    ```
-    median = 4
-    g      = 1  # Geometric standard deviation
-    lognormal(median, g)
-    ```
-    ..or use inline comments: `lognormal( #=median=# 4, #=g=# 1)`.
+  * Conversely, positional arguments cannot be given by name in Julia. If a function's signature is e.g. `lognormal(median, g)`, then calling it as `lognormal(median = 4, g = 1)` will not work. Instead, positional arguments can be documented [in other ways](@ref faq-positional-args-by-name).
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
   * In Julia, the commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`), unlike in Python, where `int` is an arbitrary length integer.
     This means in Julia the `Int` type will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
