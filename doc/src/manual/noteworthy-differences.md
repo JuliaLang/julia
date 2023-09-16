@@ -159,11 +159,11 @@ For users coming to Julia from R, these are some noteworthy differences:
     will be visible in the caller. This is very different from R and allows new functions to operate
     on large data structures much more efficiently.
   * In Julia, a function argument is either positional, or a keyword
-    argument. Unlike in R -- where any argument can be passed either
-    positionally or by name -- in Julia, positional arguments cannot be
+    argument. Unlike in R---where any argument can be passed either 
+    positionally or by name---positional arguments cannot be
     passed by name, and keyword arguments cannot be passed positionally.
     E.g. a function with signature `work(x; T)` must be called
-    as `work(4, T = 5)`, and not `work(4, 5)` or `work(x = 4, T = 5)`.
+    as `work(4; T = 5)`, and not `work(4, 5)` or `work(x = 4, T = 5)`.
     (See also [this FAQ entry](faq-positional-args-by-name)).
   * In Julia, vectors and matrices are concatenated using [`hcat`](@ref), [`vcat`](@ref) and
     [`hvcat`](@ref), not `c`, `rbind` and `cbind` like in R.
