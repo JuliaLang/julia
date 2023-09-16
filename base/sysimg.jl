@@ -32,9 +32,9 @@ let
     stdlibs = [
         # No dependencies
         :FileWatching, # used by loading.jl -- implicit assumption that init runs
-        :Libdl # Transitive through LinAlg
-        :Artifacts # Transitive through LinAlg
-        :SHA # transitive through Random
+        :Libdl, # Transitive through LinAlg
+        :Artifacts, # Transitive through LinAlg
+        :SHA, # transitive through Random
 
         # 1-depth packages
         :LinearAlgebra, # Commits type-piracy and GEMM
