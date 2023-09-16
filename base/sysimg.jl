@@ -31,19 +31,10 @@ let
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
+        :FileWatching, # used by loading.jl -- implicit assumption that init runs
+        :Libdl # Transitive through LinAlg
+        :Artifacts # Transitive through LinAlg
+        :SHA # transitive through Random
 
         # 1-depth packages
         :LinearAlgebra, # Commits type-piracy and GEMM
