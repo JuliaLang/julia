@@ -71,6 +71,8 @@ Small unions of concrete types are usually not a concern, so these are highlight
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
+
+See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
@@ -273,6 +275,8 @@ If the `optimize` keyword is unset, the code will be shown before LLVM optimizat
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+
+See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
@@ -298,7 +302,7 @@ generic function and type signature to `io`.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 * If `raw` is `false`, uninteresting instructions (like the safepoint function prologue) are elided.
 
-See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
+See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
