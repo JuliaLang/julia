@@ -135,7 +135,7 @@ end
 @test map(round, (x=UInt, y=Int), (x=3.1, y=2//3)) == (x=UInt(3), y=1)
 
 @testset "filter" begin
-    @test filter(isodd, (a=1,b=2,b=3)) === (a=1, c=3)
+    @test filter(isodd, (a=1,b=2,c=3)) === (a=1, c=3)
     @test filter(i -> true, (;)) === (;)
     longnt = NamedTuple{ntuple(i -> Symbol(:a, i), 20)}(ntuple(identity, 20))
     @test filter(iseven, longnt) === NamedTuple{ntuple(i -> Symbol(:a, 2i), 10)}(ntuple(i -> 2i, 10))
