@@ -1896,3 +1896,17 @@ let s = "Issue49892(fal"
         @test n in c
     end
 end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
+end
