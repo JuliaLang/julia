@@ -145,7 +145,8 @@ end
 # Test for bug caused by renaming blocks improperly, related to PR #32145
 let ci = make_ci([
         # block 1
-        Core.Compiler.GotoIfNot(Expr(:boundscheck), 6),
+        Expr(:boundscheck),
+        Core.Compiler.GotoIfNot(SSAValue(1), 6),
         # block 2
         Expr(:call, GlobalRef(Base, :size), Core.Compiler.Argument(3)),
         Core.Compiler.ReturnNode(),
@@ -155,12 +156,12 @@ let ci = make_ci([
         # block 4
         GlobalRef(Main, :something),
         GlobalRef(Main, :somethingelse),
-        Expr(:call, Core.SSAValue(6), Core.SSAValue(7)),
-        Core.Compiler.GotoIfNot(Core.SSAValue(8), 11),
+        Expr(:call, Core.SSAValue(7), Core.SSAValue(8)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(9), 12),
         # block 5
-        Core.Compiler.ReturnNode(Core.SSAValue(8)),
+        Core.Compiler.ReturnNode(Core.SSAValue(9)),
         # block 6
-        Core.Compiler.ReturnNode(Core.SSAValue(8))
+        Core.Compiler.ReturnNode(Core.SSAValue(9))
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
@@ -569,19 +570,20 @@ end
 # Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
 let ci = make_ci([
         # block 1
-        #= %1: =# Core.Compiler.GotoIfNot(Expr(:boundscheck), 3),
+        #= %1: =# Expr(:boundscheck),
+        #= %2: =# Core.Compiler.GotoIfNot(SSAValue(1), 4),
         # block 2
-        #= %2: =# Expr(:call, println, Argument(1)),
+        #= %3: =# Expr(:call, println, Argument(1)),
         # block 3
-        #= %3: =# Core.PhiNode(),
-        #= %4: =# Core.Compiler.ReturnNode(),
+        #= %4: =# Core.PhiNode(),
+        #= %5: =# Core.Compiler.ReturnNode(),
     ])
     ir = Core.Compiler.inflate_ir(ci)
 
     # Insert another call at end of "block 2"
     compact = Core.Compiler.IncrementalCompact(ir)
     new_inst = NewInstruction(Expr(:call, println, Argument(1)), Nothing)
-    insert_node!(compact, SSAValue(2), new_inst, #= attach_after =# true)
+    insert_node!(compact, SSAValue(3), new_inst, #= attach_after =# true)
 
     # Complete iteration
     x = Core.Compiler.iterate(compact)
@@ -650,5 +652,37 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
             iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
         end
         @test new_call_idx === nothing # should be deleted during the compaction
+    end
+end
+
+@testset "GotoIfNot folding" begin
+    # After IRCode conversion, following the targets of a GotoIfNot should never lead to
+    # statically unreachable code.
+    function f_with_maybe_nonbool_cond(a::Int, r::Bool)
+        a = r ? true : a
+        if a
+            # The following conditional can be resolved statically, since `a === true`
+            # This test checks that it becomes a static `goto` despite its wide slottype.
+            x = a ? 1 : 2.
+        else
+            x = a ? 1 : 2.
+        end
+        return x
+    end
+    let
+        # At least some statements should have been found to be statically unreachable and wrapped in Const(...)::Union{}
+        unopt = code_typed1(f_with_maybe_nonbool_cond, (Int, Bool); optimize=false)
+        @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
+
+        # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
+        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="convert")))
+        for i = 1:length(ircode.stmts)
+            expr = ircode.stmts[i][:stmt]
+            if isa(expr, GotoIfNot)
+                # If this statement is Core.Const(...)::Union{}, that means this code was not reached
+                @test !(isa(ircode.stmts[i+1][:stmt], Core.Const) && (unopt.ssavaluetypes[i+1] === Union{}))
+                @test !(isa(ircode.stmts[expr.dest][:stmt], Core.Const) && (unopt.ssavaluetypes[expr.dest] === Union{}))
+            end
+        end
     end
 end

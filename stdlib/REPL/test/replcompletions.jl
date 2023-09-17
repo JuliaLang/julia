@@ -1887,3 +1887,26 @@ let s = "union_some_ref(1, 1.0)."
     @test res
     @test "value" in c && "x" in c
 end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
+end

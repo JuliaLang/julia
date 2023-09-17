@@ -4,7 +4,6 @@
 #include "passes.h"
 
 #include <llvm/ADT/Statistic.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
@@ -276,29 +275,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
     return true;
 }
 
-struct FinalLowerGCLegacy: public FunctionPass {
-    static char ID;
-    FinalLowerGCLegacy() : FunctionPass(ID), finalLowerGC(FinalLowerGC()) {}
-
-protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-    }
-
-private:
-    bool runOnFunction(Function &F) override;
-
-    FinalLowerGC finalLowerGC;
-};
-
-bool FinalLowerGCLegacy::runOnFunction(Function &F) {
-    auto modified = finalLowerGC.runOnFunction(F);
-#ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(F));
-#endif
-    return modified;
-}
-
 PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (FinalLowerGC().runOnFunction(F)) {
@@ -308,18 +284,4 @@ PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-char FinalLowerGCLegacy::ID = 0;
-static RegisterPass<FinalLowerGCLegacy> X("FinalLowerGC", "Final GC intrinsic lowering pass", false, false);
-
-Pass *createFinalLowerGCPass()
-{
-    return new FinalLowerGCLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createFinalLowerGCPass());
 }

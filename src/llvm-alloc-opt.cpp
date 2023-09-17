@@ -13,7 +13,6 @@
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -1252,39 +1251,8 @@ bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
     return modified;
 }
 
-struct AllocOptLegacy : public FunctionPass {
-    static char ID;
-    AllocOpt opt;
-    AllocOptLegacy() : FunctionPass(ID) {
-        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-    }
-    bool doInitialization(Module &m) override {
-        return opt.doInitialization(m);
-    }
-    bool runOnFunction(Function &F) override {
-        return opt.runOnFunction(F, [this]() -> DominatorTree & {return getAnalysis<DominatorTreeWrapperPass>().getDomTree();});
-    }
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
-};
 
-char AllocOptLegacy::ID = 0;
-static RegisterPass<AllocOptLegacy> X("AllocOpt", "Promote heap allocation to stack",
-                                false /* Only looks at CFG */,
-                                false /* Analysis Pass */);
-
-}
-
-Pass *createAllocOptPass()
-{
-    return new AllocOptLegacy();
-}
-
+} // anonymous namespace
 PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     AllocOpt opt;
     bool modified = opt.doInitialization(*F.getParent());
@@ -1298,10 +1266,4 @@ PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     } else {
         return PreservedAnalyses::all();
     }
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createAllocOptPass());
 }

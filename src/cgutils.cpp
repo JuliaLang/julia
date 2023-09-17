@@ -410,7 +410,7 @@ static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         if (addr->smalltag) {
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), addr->smalltag << 4);
-            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jlsmall_typeof_var), tag);
+            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jl_small_typeof_var), tag);
             return ConstantExpr::getBitCast(smallp, ctx.types().T_ppjlvalue);
         }
         // DataTypes are prefixed with a +
@@ -1086,7 +1086,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         if (jl_has_intersect_type_not_kind(typ))
             return false;
         for (size_t i = 0; i < jl_tags_count; i++) {
-            jl_datatype_t *dt = small_typeof[(i << 4) / sizeof(*small_typeof)];
+            jl_datatype_t *dt = jl_small_typeof[(i << 4) / sizeof(*jl_small_typeof)];
             if (dt && !jl_has_empty_intersection((jl_value_t*)dt, typ))
                 return false;
         }
@@ -1439,7 +1439,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
             // we lied a bit: this wasn't really an object (though it was valid for GC rooting)
             // and we need to use it as an index to get the real object now
             Module *M = jl_Module;
-            Value *smallp = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), prepare_global_in(M, jlsmall_typeof_var), tag);
+            Value *smallp = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
             smallp = ctx.builder.CreateBitCast(smallp, typetag->getType()->getPointerTo(0));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             auto small = ctx.builder.CreateAlignedLoad(typetag->getType(), smallp, M->getDataLayout().getPointerABIAlignment(0));
@@ -2487,27 +2487,6 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
     return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
 }
 
-static const char *get_fieldname(jl_datatype_t *jt, unsigned idx)
-{
-    if (jl_is_namedtuple_type(jt)) {
-        auto names = jl_tparam0(jt);
-        assert(jl_is_tuple(names));
-        if (idx < jl_nfields(names)) {
-            auto name = jl_fieldref(names, idx);
-            assert(jl_is_symbol(name));
-            return jl_symbol_name((jl_sym_t*)name);
-        }
-    } else {
-        auto flds = jl_field_names(jt);
-        if (idx < jl_svec_len(flds)) {
-            auto name = jl_svec_ref(flds, idx);
-            assert(jl_is_symbol(name));
-            return jl_symbol_name((jl_sym_t*)name);
-        }
-    }
-    return "<unknown field>";
-}
-
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
@@ -2571,13 +2550,13 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else
                 addr = ctx.builder.CreateConstInBoundsGEP2_32(lt, staddr, 0, idx);
             if (addr != staddr) {
-                setName(ctx.emission_context, addr, [&]() { return (get_objname() + "." + get_fieldname(jt, idx) + "_ptr").str(); });
+                setNameWithField(ctx.emission_context, addr, get_objname, jt, idx, Twine("_ptr"));
             }
         }
         if (jl_field_isptr(jt, idx)) {
-            setName(ctx.emission_context, addr, [&]() { return (get_objname() + "." + get_fieldname(jt, idx) + "_ptr").str(); });
+            setNameWithField(ctx.emission_context, addr, get_objname, jt, idx, Twine("_ptr"));
             LoadInst *Load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, maybe_bitcast(ctx, addr, ctx.types().T_pprjlvalue), Align(sizeof(void*)));
-            setName(ctx.emission_context, Load, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+            setNameWithField(ctx.emission_context, Load, get_objname, jt, idx, Twine());
             Load->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
             maybe_mark_load_dereferenceable(Load, maybe_null, jl_field_type(jt, idx));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
@@ -2601,7 +2580,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             }
             auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, ctx.tbaa().tbaa_unionselbyte);
             if (val.V && val.V != addr) {
-                setName(ctx.emission_context, val.V, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+                setNameWithField(ctx.emission_context, val.V, get_objname, jt, idx, Twine());
             }
             return val;
         }
@@ -2618,7 +2597,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 needlock ? AtomicOrdering::NotAtomic : get_llvm_atomic_order(order),
                 maybe_null, align, nullcheck);
         if (ret.V) {
-            setName(ctx.emission_context, ret.V, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+            setNameWithField(ctx.emission_context, ret.V, get_objname, jt, idx, Twine());
         }
         if (needlock)
             emit_lockstate_value(ctx, strct, false);
@@ -2637,7 +2616,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else if (isa<VectorType>(T)) {
             fldv = ctx.builder.CreateExtractElement(obj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), idx));
-            setName(ctx.emission_context, fldv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+            setNameWithField(ctx.emission_context, fldv, get_objname, jt, idx, Twine());
         }
         else if (!jl_field_isptr(jt, idx) && jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx) - 1;
@@ -2667,11 +2646,11 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                         ctx.builder.CreateAlignedStore(fldv, fldp, Align(1));
                     }
                 }
-                setName(ctx.emission_context, lv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+                setNameWithField(ctx.emission_context, lv, get_objname, jt, idx, Twine());
             }
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, makeArrayRef(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
-            setName(ctx.emission_context, tindex, [&]() { return (get_objname() + "." + get_fieldname(jt, idx) + ".tindex").str(); });
+            setNameWithField(ctx.emission_context, tindex, get_objname, jt, idx, Twine(".tindex"));
             return mark_julia_slot(lv, jfty, tindex, ctx.tbaa().tbaa_stack);
         }
         else {
@@ -2683,7 +2662,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else
                 llvm_unreachable("encountered incompatible type for a struct");
             fldv = ctx.builder.CreateExtractValue(obj, makeArrayRef(st_idx));
-            setName(ctx.emission_context, fldv, [&]() { return (get_objname() + "." + get_fieldname(jt, idx)).str(); });
+            setNameWithField(ctx.emission_context, fldv, get_objname, jt, idx, Twine());
         }
         if (maybe_null) {
             Value *first_ptr = jl_field_isptr(jt, idx) ? fldv : extract_first_ptr(ctx, fldv);
@@ -3792,7 +3771,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 getInt8Ty(ctx.builder.getContext()),
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(ctx.types().T_size, byte_offset)); // TODO: use emit_struct_gep
-        setName(ctx.emission_context, addr, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0) + "_ptr").str(); });
+        setNameWithField(ctx.emission_context, addr, get_objname, sty, idx0, Twine("_ptr"));
     }
     jl_value_t *jfty = jl_field_type(sty, idx0);
     if (!jl_field_isptr(sty, idx0) && jl_is_uniontype(jfty)) {
@@ -3807,7 +3786,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()),
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(ctx.types().T_size, fsz));
-        setName(ctx.emission_context, ptindex, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0) + ".tindex_ptr").str(); });
+        setNameWithField(ctx.emission_context, ptindex, get_objname, sty, idx0, Twine(".tindex_ptr"));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
         BasicBlock *ModifyBB = NULL;
@@ -3869,7 +3848,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             jl_datatype_t *rettyp = jl_apply_cmpswap_type(jfty);
             oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
             if (oldval.V) {
-                setName(ctx.emission_context, oldval.V, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+                setNameWithField(ctx.emission_context, oldval.V, get_objname, sty, idx0, Twine());
             }
         }
         else if (ismodifyfield) {
@@ -3877,7 +3856,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             jl_datatype_t *rettyp = jl_apply_modify_type(jfty);
             oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
             if (oldval.V) {
-                setName(ctx.emission_context, oldval.V, [&](){ return (get_objname() + "." + get_fieldname(sty, idx0)).str(); });
+                setNameWithField(ctx.emission_context, oldval.V, get_objname, sty, idx0, Twine());
             }
         }
         return oldval;
@@ -4167,8 +4146,10 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->prefer_specsig == b->prefer_specsig) &&
            (a->gnu_pubnames == b->gnu_pubnames) &&
            (a->debug_info_kind == b->debug_info_kind) &&
-           (a->lookup == b->lookup) &&
-           (a->generic_context == b->generic_context);
+           (a->safepoint_on_entry == b->safepoint_on_entry) &&
+           (a->gcstack_arg == b->gcstack_arg) &&
+           (a->use_jlplt == b->use_jlplt) &&
+           (a->lookup == b->lookup);
 }
 #endif
 

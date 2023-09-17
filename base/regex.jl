@@ -431,7 +431,8 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
 
 # TODO: return only start index and update deprecation
-function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, match_data::Ptr{Cvoid})
+# duck-type str so that external UTF-8 string packages like StringViews can hook in
+function _findnext_re(re::Regex, str, idx::Integer, match_data::Ptr{Cvoid})
     if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end

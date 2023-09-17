@@ -1190,11 +1190,7 @@ namespace {
 
 namespace {
 
-#ifndef JL_USE_NEW_PM
-    typedef legacy::PassManager PassManager;
-#else
     typedef NewPM PassManager;
-#endif
 
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
@@ -1217,37 +1213,6 @@ namespace {
         }
     };
 
-#ifndef JL_USE_NEW_PM
-    struct PMCreator {
-        std::unique_ptr<TargetMachine> TM;
-        int optlevel;
-        PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
-        // overload for newpm compatibility
-        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &) JL_NOTSAFEPOINT
-            : PMCreator(TM, optlevel) {}
-        PMCreator(const PMCreator &other) JL_NOTSAFEPOINT
-            : PMCreator(*other.TM, other.optlevel) {}
-        PMCreator(PMCreator &&other) JL_NOTSAFEPOINT
-            : TM(std::move(other.TM)), optlevel(other.optlevel) {}
-        friend void swap(PMCreator &self, PMCreator &other) JL_NOTSAFEPOINT {
-            using std::swap;
-            swap(self.TM, other.TM);
-            swap(self.optlevel, other.optlevel);
-        }
-        PMCreator &operator=(PMCreator other) JL_NOTSAFEPOINT {
-            swap(*this, other);
-            return *this;
-        }
-        auto operator()() JL_NOTSAFEPOINT {
-            auto PM = std::make_unique<legacy::PassManager>();
-            addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
-            addOptimizationPasses(PM.get(), optlevel);
-            addMachinePasses(PM.get(), optlevel);
-            return PM;
-        }
-    };
-#else
     struct PMCreator {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
@@ -1264,7 +1229,6 @@ namespace {
             return NPM;
         }
     };
-#endif
 
     template<size_t N>
     struct OptimizerT {
@@ -1588,9 +1552,15 @@ struct JuliaOJIT::DLSymOptimizer {
                     assert(++++CI->use_begin() == CI->use_end());
                     void *addr;
                     if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
+                        // Can happen if the library is the empty string, just give up when that happens
+                        if (isa<ConstantAggregateZero>(GV->getInitializer()))
+                            continue;
                         auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
                         addr = lookup(libname.data(), fname.data());
                     } else {
+                        // Can happen if we fail the compile time dlfind i.e when we try a symbol that doesn't exist in libc
+                        if (dyn_cast<ConstantPointerNull>(libarg))
+                            continue;
                         assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
                         libarg = cast<ConstantExpr>(libarg)->getOperand(0);
                         auto libidx = cast<ConstantInt>(libarg)->getZExtValue();
@@ -2017,11 +1987,9 @@ size_t JuliaOJIT::getTotalBytes() const
 
 void JuliaOJIT::printTimers()
 {
-#ifdef JL_USE_NEW_PM
     for (auto &printer : PrintLLVMTimers) {
         printer();
     }
-#endif
     reportAndResetTimings();
 }
 

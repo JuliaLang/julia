@@ -150,19 +150,6 @@ round(::Type{T}, x::Real, r::RoundingMode=RoundNearest) where {T>:Missing} = rou
 round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 
-# Handle ceil, floor, and trunc separately as they have no RoundingMode argument
-for f in (:(ceil), :(floor), :(trunc))
-    @eval begin
-        ($f)(::Missing; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
-        ($f)(::Type{>:Missing}, ::Missing) = missing
-        ($f)(::Type{T}, ::Missing) where {T} = throw(MissingException(missing_conversion_msg(T)))
-        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
-        # to fix ambiguities
-        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
-        ($f)(::Type{T}, x::Real) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
-    end
-end
-
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing
 

@@ -268,6 +268,7 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_terminates_locally  : 1;
         uint8_t ipo_notaskstate         : 1;
         uint8_t ipo_inaccessiblememonly : 1;
+        uint8_t ipo_noub                : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -594,11 +595,12 @@ typedef struct _jl_binding_t {
     _Atomic(struct _jl_binding_t*) owner;  // for individual imported bindings (NULL until 'resolved')
     _Atomic(jl_value_t*) ty;  // binding type
     uint8_t constp:1;
-    uint8_t exportp:1;
+    uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
+    uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t imported:1;
     uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:2;
+    uint8_t padding:1;
 } jl_binding_t;
 
 typedef struct {
@@ -740,7 +742,7 @@ typedef struct {
     /* XX(slotnumber) */ \
     /* XX(ssavalue) */ \
     /* end of JL_SMALL_TYPEOF */
-enum jlsmall_typeof_tags {
+enum jl_small_typeof_tags {
     jl_null_tag = 0,
 #define XX(name) jl_##name##_tag,
     JL_SMALL_TYPEOF(XX)
@@ -749,13 +751,23 @@ enum jlsmall_typeof_tags {
     jl_bitstags_first = jl_char_tag, // n.b. bool is not considered a bitstype, since it can be compared by pointer
     jl_max_tags = 64
 };
-extern jl_datatype_t *small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+extern JL_DLLIMPORT jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+#ifndef JL_LIBRARY_EXPORTS_INTERNAL
 static inline jl_value_t *jl_to_typeof(uintptr_t t)
 {
     if (t < (jl_max_tags << 4))
-        return (jl_value_t*)small_typeof[t / sizeof(*small_typeof)];
+        return (jl_value_t*)jl_small_typeof[t / sizeof(*jl_small_typeof)];
     return (jl_value_t*)t;
 }
+#else
+extern JL_HIDDEN jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+static inline jl_value_t *jl_to_typeof(uintptr_t t)
+{
+    if (t < (jl_max_tags << 4))
+        return (jl_value_t*)ijl_small_typeof[t / sizeof(*ijl_small_typeof)];
+    return (jl_value_t*)t;
+}
+#endif
 
 
 // kinds
@@ -857,6 +869,7 @@ extern JL_DLLIMPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_array_uint32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_binding_type JL_GLOBALLY_ROOTED;
@@ -1129,6 +1142,18 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
     assert(i < jl_array_len(a));
     assert(jl_typetagis(a, jl_array_uint8_type));
     ((uint8_t*)(jl_array_data(a)))[i] = x;
+}
+STATIC_INLINE uint8_t jl_array_uint32_ref(void *a, size_t i) JL_NOTSAFEPOINT
+{
+    assert(i < jl_array_len(a));
+    assert(jl_typetagis(a, jl_array_uint32_type));
+    return ((uint32_t*)(jl_array_data(a)))[i];
+}
+STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPOINT
+{
+    assert(i < jl_array_len(a));
+    assert(jl_typetagis(a, jl_array_uint32_type));
+    ((uint32_t*)(jl_array_data(a)))[i] = x;
 }
 
 #define jl_exprarg(e,n) jl_array_ptr_ref(((jl_expr_t*)(e))->args, n)
@@ -1739,7 +1764,7 @@ JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
@@ -1839,7 +1864,7 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 typedef enum {
     JL_IMAGE_CWD = 0,
     JL_IMAGE_JULIA_HOME = 1,
-    //JL_IMAGE_LIBJULIA = 2,
+    JL_IMAGE_IN_MEMORY = 2
 } JL_IMAGE_SEARCH;
 
 JL_DLLIMPORT const char *jl_get_libdir(void);
@@ -2012,7 +2037,7 @@ typedef struct _jl_task_t {
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
-    jl_value_t *logstate;
+    jl_value_t *scope;
     jl_function_t *start;
     // 4 byte padding on 32-bit systems
     // uint32_t padding0;
@@ -2353,14 +2378,16 @@ typedef struct {
     int safepoint_on_entry; // Emit a safepoint on entry to each function
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
+    int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
+
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
-
-    // If not `nothing`, rewrite all generic calls to call
-    // generic_context(f, args...) instead of f(args...).
-    jl_value_t *generic_context;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
+
+typedef struct {
+    int emit_metadata;
+} jl_emission_params_t;
 
 #ifdef __cplusplus
 }
