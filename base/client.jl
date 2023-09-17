@@ -4,6 +4,7 @@
 ##             and REPL
 
 have_color = nothing
+have_truecolor = nothing
 const default_color_warn = :yellow
 const default_color_error = :light_red
 const default_color_info = :cyan
@@ -103,8 +104,8 @@ scrub_repl_backtrace(stack::ExceptionStack) =
     ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
-    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
-    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace; MethodError see #50803
 
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
@@ -225,6 +226,7 @@ function incomplete_tag(ex::Expr)
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
@@ -238,10 +240,7 @@ function exec_options(opts)
     repl = !arg_is_program
     cmds = unsafe_load_commands(opts.commands)
     for (cmd, arg) in cmds
-        if cmd == 'e'
-            arg_is_program = false
-            repl = false
-        elseif cmd == 'E'
+        if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
@@ -325,11 +324,11 @@ function exec_options(opts)
         end
     end
     if repl || is_interactive::Bool
-        if interactiveinput
-            banner = (opts.banner != 0) # --banner!=no
-        else
-            banner = (opts.banner == 1) # --banner=yes
-        end
+        b = opts.banner
+        auto = b == -1
+        banner = b == 0 || (auto && !interactiveinput) ? :no  :
+                 b == 1 || (auto && interactiveinput)  ? :yes :
+                 :short # b == 2
         run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
     end
     nothing
@@ -409,14 +408,15 @@ end
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
     load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner && Base.banner(term)
+            banner == :no || Base.banner(term, short=banner==:short)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -436,7 +436,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         if interactive && !quiet
             @warn "REPL provider not available: using basic fallback"
         end
-        banner && Base.banner()
+        banner == :no || Base.banner(short=banner==:short)
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once

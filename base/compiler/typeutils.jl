@@ -291,7 +291,7 @@ end
 unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
 function _unioncomplexity(@nospecialize x)
     if isa(x, DataType)
-        x.name === Tuple.name || isvarargtype(x) || return 0
+        x.name === Tuple.name || return 0
         c = 0
         for ti in x.parameters
             c = max(c, unioncomplexity(ti))
@@ -302,7 +302,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, UnionAll)
         return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
     elseif isa(x, TypeofVararg)
-        return isdefined(x, :T) ? unioncomplexity(x.T) : 0
+        return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
         return 0
     end
@@ -315,42 +315,6 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
         ua = ua.body
     end
     return depth
-end
-
-# convert a Union of same `UnionAll` types to the `UnionAll` type whose parameter is the Unions
-function unswitchtypeunion(u::Union, typename::Union{Nothing,Core.TypeName}=nothing)
-    ts = uniontypes(u)
-    n = -1
-    for t in ts
-        t isa DataType || return u
-        if typename === nothing
-            typename = t.name
-        elseif typename !== t.name
-            return u
-        end
-        params = t.parameters
-        np = length(params)
-        if np == 0 || isvarargtype(params[end])
-            return u
-        end
-        if n == -1
-            n = np
-        elseif n ≠ np
-            return u
-        end
-    end
-    Head = (typename::Core.TypeName).wrapper
-    hparams = Any[]
-    for i = 1:n
-        uparams = Any[]
-        for t in ts
-            tpᵢ = (t::DataType).parameters[i]
-            tpᵢ isa Type || return u
-            push!(uparams, tpᵢ)
-        end
-        push!(hparams, Union{uparams...})
-    end
-    return Head{hparams...}
 end
 
 function unwraptv_ub(@nospecialize t)

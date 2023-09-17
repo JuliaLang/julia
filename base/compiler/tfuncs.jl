@@ -198,11 +198,33 @@ add_tfunc(div_float_fast, 2, 2, math_tfunc, 2)
 # bitwise operators
 # -----------------
 
+@nospecs and_int_tfunc(𝕃::AbstractLattice, x, y) = and_int_tfunc(widenlattice(𝕃), x, y)
+@nospecs function and_int_tfunc(𝕃::ConstsLattice, x, y)
+    if isa(x, Const) && x.val === false && widenconst(y) === Bool
+        return Const(false)
+    elseif isa(y, Const) && y.val === false && widenconst(x) === Bool
+        return Const(false)
+    end
+    return and_int_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs and_int_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+
+@nospecs or_int_tfunc(𝕃::AbstractLattice, x, y) = or_int_tfunc(widenlattice(𝕃), x, y)
+@nospecs function or_int_tfunc(𝕃::ConstsLattice, x, y)
+    if isa(x, Const) && x.val === true && widenconst(y) === Bool
+        return Const(true)
+    elseif isa(y, Const) && y.val === true && widenconst(x) === Bool
+        return Const(true)
+    end
+    return or_int_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs or_int_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+
 @nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
 @nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
 
-add_tfunc(and_int, 2, 2, math_tfunc, 1)
-add_tfunc(or_int, 2, 2, math_tfunc, 1)
+add_tfunc(and_int, 2, 2, and_int_tfunc, 1)
+add_tfunc(or_int, 2, 2, or_int_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
 add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
 add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
@@ -731,8 +753,12 @@ function typeof_concrete_vararg(t::DataType)
     for i = 1:np
         p = t.parameters[i]
         if i == np && isvarargtype(p)
-            if isdefined(p, :T) && !isdefined(p, :N) && isconcretetype(p.T)
-                return Type{Tuple{t.parameters[1:np-1]..., Vararg{p.T, N}}} where N
+            if isdefined(p, :T) && isconcretetype(p.T)
+                t = Type{Tuple{t.parameters[1:np-1]..., Vararg{p.T, N}}} where N
+                if isdefined(p, :N)
+                    return t{p.N}
+                end
+                return t
             end
         elseif !isconcretetype(p)
             break
@@ -877,13 +903,10 @@ function fieldcount_noerror(@nospecialize t)
         if t === nothing
             return nothing
         end
-        t = t::DataType
     elseif t === Union{}
         return 0
     end
-    if !(t isa DataType)
-        return nothing
-    end
+    t isa DataType || return nothing
     if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters
         if names isa Tuple
@@ -892,17 +915,16 @@ function fieldcount_noerror(@nospecialize t)
         if types isa DataType && types <: Tuple
             return fieldcount_noerror(types)
         end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
         return nothing
     end
     return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
 
-function try_compute_fieldidx(typ::DataType, @nospecialize(field))
+function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
+    typ = argument_datatype(typ)
+    typ === nothing && return nothing
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
@@ -948,7 +970,6 @@ end
 
 function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
     (;argtypes) = arginfo
-    boundscheck === :unknown && return false
     ordering = Const(:not_atomic)
     if length(argtypes) == 4
         isvarargtype(argtypes[4]) && return false
@@ -2307,33 +2328,42 @@ end
 
 function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize(rt))
     (;argtypes) = arginfo
-    # consistent if the argtype is immutable
     length(argtypes) < 3 && return EFFECTS_THROWS
     obj = argtypes[2]
-    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+    if isvarargtype(obj)
+        return Effects(EFFECTS_TOTAL;
+            consistent=CONSISTENT_IF_INACCESSIBLEMEMONLY,
+            nothrow=false,
+            inaccessiblememonly=ALWAYS_FALSE,
+            noub=ALWAYS_FALSE)
+    end
+    # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
-    # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
-    # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
-    # throws `UndefRefError` so doesn't need to taint it
+    # taint `:consistent` if accessing `isbitstype`-type object field that may be initialized
+    # with undefined value: note that we don't need to taint `:consistent` if accessing
+    # uninitialized non-`isbitstype` field since it will simply throw `UndefRefError`
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
-    # with undefined value so that we don't taint `:consistent`-cy too aggressively here
+    # with undefined value to avoid tainting `:consistent` too aggressively
+    # TODO this should probably taint `:noub`, however, it would hinder concrete eval for
+    # `REPLInterpreter` that can ignore `:consistent-cy`, causing worse completions
     if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
+    noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(arginfo)
     nothrow = getfield_nothrow(𝕃, arginfo, bcheck)
     if !nothrow
-        if !(bcheck === :on || bcheck === :boundscheck)
-            # If we cannot independently prove inboundsness, taint consistency.
-            # The inbounds-ness assertion requires dynamic reachability, while
-            # :consistent needs to be true for all input values.
+        if bcheck !== :on
+            # If we cannot independently prove inboundsness, taint `:noub`.
+            # The inbounds-ness assertion requires dynamic reachability,
+            # while `:noub` needs to be true for all input values.
             # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:consistent`-cy will be tainted in any caller using `@inbounds` based
-            # on the `:noinbounds` effect.
-            # N.B. We do not taint for `--check-bounds=no` here. That is handled
-            # in concrete evaluation.
-            consistent = ALWAYS_FALSE
+            # `:noub` will be tainted in any caller using `@inbounds`
+            # based on the `:noinbounds` effect.
+            # N.B. We do not taint for `--check-bounds=no` here.
+            # That is handled in concrete evaluation.
+            noub = ALWAYS_FALSE
         end
     end
     if hasintersect(widenconst(obj), Module)
@@ -2343,23 +2373,22 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
     else
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
-    if length(argtypes) ≥ 2
-        M, s = argtypes[1], argtypes[2]
-        if getglobal_nothrow(M, s)
-            nothrow = true
-            # typeasserts below are already checked in `getglobal_nothrow`
-            Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
-            if isconst(Mval, sval)
-                consistent = ALWAYS_TRUE
-                if is_mutation_free_argtype(rt)
-                    inaccessiblememonly = ALWAYS_TRUE
-                end
+    M, s = argtypes[1], argtypes[2]
+    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
+        nothrow = true
+        # typeasserts below are already checked in `getglobal_nothrow`
+        Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
+        if isconst(Mval, sval)
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
             end
         end
     end
@@ -2376,8 +2405,15 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     if f === getfield
         return getfield_effects(𝕃, arginfo, rt)
     end
-    argtypes = arginfo.argtypes[2:end]
 
+    # TODO taint `:noub` for `arrayref` and `arrayset` here
+
+    # if this builtin call deterministically throws,
+    # don't bother to taint the other effects other than :nothrow:
+    # note this is safe only if we accounted for :noub already
+    rt === Bottom && return EFFECTS_THROWS
+
+    argtypes = arginfo.argtypes[2:end]
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
     elseif f === getglobal
@@ -2386,6 +2422,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         length(argtypes) == 2 || return EFFECTS_THROWS
         effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
         return Effects(EFFECTS_TOTAL; effect_free)
+    elseif f === compilerbarrier
+        length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+        setting = argtypes[1]
+        return Effects(EFFECTS_TOTAL;
+            consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            nothrow = compilerbarrier_nothrow(setting, nothing))
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2433,11 +2475,12 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             try
                 return Const(f(argvals...))
             catch
+                return Bottom
             end
         end
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
-            # invalid intrinsic
+            # unknown intrinsic
             return Any
         end
         tf = T_IFUNC[iidx]
@@ -2621,13 +2664,15 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 
     if length(argtypes) == 3
         aft = widenslotwrapper(argtypes[2])
-        if !isa(aft, Const) && !(isType(aft) && !has_free_typevars(aft)) &&
-                !(isconcretetype(aft) && !(aft <: Builtin))
-            return UNKNOWN
-        end
         argtypes_vec = Any[aft, af_argtype.parameters...]
     else
         argtypes_vec = Any[af_argtype.parameters...]
+        isempty(argtypes_vec) && push!(argtypes_vec, Union{})
+        aft = argtypes_vec[1]
+    end
+    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
+        return UNKNOWN
     end
 
     if contains_is(argtypes_vec, Union{})
@@ -2660,8 +2705,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
         return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-    elseif (isa(tt, Const) || isconstType(tt)) &&
-        (isa(aft, Const) || isconstType(aft))
+    elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
         return CallMeta(Const(rt), EFFECTS_TOTAL, info)
@@ -2745,7 +2789,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if !isa(mt, MethodTable)
         return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
     end
-    match, valid_worlds, overlayed = findsup(types, method_table(interp))
+    match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
@@ -2757,7 +2801,6 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     end
     return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
 end
-
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))

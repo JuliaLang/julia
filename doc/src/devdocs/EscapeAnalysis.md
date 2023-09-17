@@ -20,7 +20,14 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 define the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
-include(normpath(Sys.BINDIR, "..", "share", "julia", "test", "compiler", "EscapeAnalysis", "EAUtils.jl")); using .EAUtils
+let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
+    # load `EscapeAnalysis` module to define the core analysis code
+    include(normpath(JULIA_DIR, "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
+    using .EscapeAnalysis
+    # load `EAUtils` module to define the utilities
+    include(normpath(JULIA_DIR, "test", "compiler", "EscapeAnalysis", "EAUtils.jl"))
+    using .EAUtils
+end
 
 mutable struct SafeRef{T}
     x::T

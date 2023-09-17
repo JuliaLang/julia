@@ -70,7 +70,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
 {
-    if (tpid < 0 || tpid >= jl_n_threadpools)
+    if (tpid < -1 || tpid >= jl_n_threadpools)
         return 0;
     task->threadpoolid = tpid;
     return 1;
@@ -83,11 +83,10 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    // one-extend unbias back to 64-bits
-    return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
+    return cong(max, &ptls->rngseed);
 }
 
 // initialize the threading infrastructure

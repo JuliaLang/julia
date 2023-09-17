@@ -160,8 +160,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(METHOD_LOOKUP_SLOW)    \
         X(METHOD_LOOKUP_FAST)    \
         X(CODEINST_COMPILE)      \
-        X(LLVM_OPT)              \
-        X(LLVM_ORC)              \
+        X(LLVM_JIT)              \
         X(METHOD_MATCH)          \
         X(TYPE_CACHE_LOOKUP)     \
         X(TYPE_CACHE_INSERT)     \
@@ -175,6 +174,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(LOAD_MODULE)           \
         X(LOAD_IMAGE)            \
         X(VERIFY_IMAGE)          \
+        X(VERIFY_IR)             \
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
