@@ -1256,6 +1256,11 @@ end
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be,
 for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+
+When `inds` selects multiple elements, this function returns a newly
+allocated array. To index multiple elements without making a copy,
+use [`view`](@ref) instead.
+
 See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
