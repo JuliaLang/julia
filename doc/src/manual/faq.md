@@ -1052,17 +1052,15 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 
 ### How do I manage precompilation caches in distributed file systems?
 
-When using `julia` in high-performance computing (HPC) facilities, invoking
-_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
-precompilation cache files. If this is an issue (slow and/or small distributed
-file system), you may:
+When using Julia in high-performance computing (HPC) facilities with shared filesystems, it is recommended to use a shared
+depot (via the `JULIA_DEPOT_PATH` environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
+workers and using the same depot will coordinate via pidfile locks to only spend effort precompiling on one process while the
+others wait. The precompilation process will indicate when the process is precompiling or waiting for another that is
+precompiling. If non-interactive the messages are via `@debug`.
 
-1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
-2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
-   where `private_path` is a path unique to this `julia` process.  This
-   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
-   `$private_path:$HOME/.julia`.
-3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
+`[JULIA_CPU_TARGET](@ref)` environment variable appropriately to get a single cache that is usable throughout the HPC
+environment.
 
 ## Julia Releases
 
