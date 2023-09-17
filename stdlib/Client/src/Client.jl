@@ -5,21 +5,6 @@ module Client
 import Base: PkgId, UUID
 using Base.Filesystem
 
-# We are losing delay loading of these anyway,
-# we depend on them during precompile and for consistencies sake
-# Julia will automatically load them for us.
-
-import Pkg
-import REPL
-import InteractiveUtils
-
-function __init__()
-    # Why is this necessary? Should have been handled by __require_prelocked
-    if !isassigned(Base.REPL_MODULE_REF)
-        Base.REPL_MODULE_REF[] = REPL
-    end
-end
-
 md_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     quiet                 = (opts.quiet != 0)
@@ -179,6 +164,13 @@ end
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
     load_InteractiveUtils()
 
+    if interactive
+        let REPL = Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+            Core.eval(Main, :(const REPL = $REPL))
+            Core.eval(Main, :(using .REPL))
+        end
+    end
+
     if interactive && isassigned(Base.REPL_MODULE_REF)
         invokelatest(Base.REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
@@ -247,8 +239,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     nothing
 end
 
-if Base.generating_output()
-    include("precompile.jl")
-end
+precompile(Tuple{typeof(Client.exec_options), Base.JLOptions})
 
 end # module Driver

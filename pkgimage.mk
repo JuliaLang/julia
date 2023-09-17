@@ -79,6 +79,7 @@ $(eval $(call pkgimg_builder,Serialization,))
 $(eval $(call pkgimg_builder,Sockets,))
 $(eval $(call pkgimg_builder,Unicode,))
 $(eval $(call pkgimg_builder,Profile,))
+$(eval $(call pkgimg_builder,Client,))
 
 # 1-depth packages
 $(eval $(call pkgimg_builder,GMP_jll,Artifacts Libdl))
@@ -115,7 +116,7 @@ $(eval $(call pkgimg_builder,InteractiveUtils,Markdown))
  # 3-depth packages
 $(eval $(call pkgimg_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
 $(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
-$(eval $(call pkgimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
+$(eval $(call pkgimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode Client))
 $(eval $(call pkgimg_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call pkgimg_builder,TOML,Dates))
 $(eval $(call pkgimg_builder,Test,Logging Random Serialization InteractiveUtils))
@@ -134,7 +135,6 @@ $(eval $(call pkgimg_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2
 
 # 7-depth packages
 $(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
-$(eval $(call pkgimg_builder,Client,Distributed REPL InteractiveUtils Pkg))
 
 $(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
 $(eval $(call pkgimg_builder,Statistics,LinearAlgebra SparseArrays))

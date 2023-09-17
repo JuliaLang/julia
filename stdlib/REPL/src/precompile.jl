@@ -3,26 +3,14 @@
 module Precompile
 # Can't use this during incremental: `@eval Module() begin``
 
-import ..Client
-import Pkg
-import REPL
-import InteractiveUtils
-
-# Since we are not Base we need to import names,
-# would be better if we had FQDN
-import Pkg: TOML
-import Pkg.PlatformEngines: Downloads, SHA, Tar
-import Pkg.GitTools: LibGit2, Printf
-import Pkg.Types: FileWatching
-import Pkg.API: Logging, Dates
-import Pkg.PlatformEngines: p7zip_jll
-import Pkg.Artifacts: Artifacts
-import REPL: Markdown
-
+import ..REPL
 
 Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
+
+import Markdown
+import Client
 
 ## Debugging options
 # Disable parallel precompiles generation by setting `false`
@@ -61,13 +49,6 @@ cd("complet_path\t\t$CTRL_C
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
-
-
-repl_script = Pkg.precompile_script * repl_script # do larger workloads first for better parallelization
-
-repl_script *= """
-    @time_imports using Random
-    """
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
