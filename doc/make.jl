@@ -382,7 +382,7 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     # Include all release candidates and pre-releases (alphas and betas)
     prereleases = filter(x -> !isempty(x.prerelease), vnums)
     for rc in prereleases
-        if occursin(r"^(rc|alpha|beta)", rc.prerelease[1])
+        if occursin(r"^(rc|beta)", rc.prerelease[1])
             src = "v$(rc)"
             @assert src ∈ available_folders
             push!(v.versions, src => src, pop!(v.versions))
