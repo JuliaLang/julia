@@ -211,10 +211,9 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     return nothing
 end
 
-function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
-                                (; fully_covered, #=atype,=# cases, bbs)::UnionSplit,
-                                state::CFGInliningState,
-                                params::OptimizationParams)
+function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
+                                state::CFGInliningState, params::OptimizationParams)
+    (; fully_covered, #=atype,=# cases, bbs) = union_split
     inline_into_block!(state, block_for_inst(ir, idx))
     from_bbs = Int[]
     delete!(state.split_targets, length(state.new_cfg_blocks))
@@ -234,9 +233,7 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
             end
         end
         push!(from_bbs, length(state.new_cfg_blocks))
-        # TODO: Right now we unconditionally generate a fallback block
-        # in case of subtyping errors - This is probably unnecessary.
-        if i != length(cases) || (!fully_covered)
+        if !(i == length(cases) && fully_covered)
             # This block will have the next condition or the final else case
             push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
             push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
@@ -582,7 +579,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         cond = true
         nparams = fieldcount(atype)
         @assert nparams == fieldcount(mtype)
-        if i != ncases || !fully_covered
+        if !(i == ncases && fully_covered)
             for i = 1:nparams
                 a, m = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
@@ -1475,7 +1472,7 @@ function handle_match!(cases::Vector{InliningCase},
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
-    !allow_typevars && _any(case->case.sig === spec_types, cases) && return true
+    !allow_typevars && any(case::InliningCase->case.sig === spec_types, cases) && return true
     item = analyze_method!(match, argtypes, info, flag, state; allow_typevars)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
