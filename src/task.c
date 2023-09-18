@@ -907,7 +907,7 @@ to its coordinates, which doesn't affect the task's dot product value, while the
 child appends a one, which does produce a new dot product. In this manner a
 binary pedigree vector uniquely identifies each task and since the coordinates
 are binary, the difference between coordinates is always invertible: 1 and -1
-are their own multiplicative inverses regardless of the modulus. 
+are their own multiplicative inverses regardless of the modulus.
 
 How does our assignment of pedigree coordinates to tasks differ from DotMix and
 SplitMix? In DotMix and SplitMix, each task has a fixed pedigree vector that
