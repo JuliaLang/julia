@@ -319,7 +319,7 @@ void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     record_node_to_gc_snapshot(root);
 
-    auto &internal_root = g_snapshot->nodes.front();
+    auto &internal_root = g_snapshot->nodes.back();
     auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
     auto edge_label = g_snapshot->names.find_or_create_string_id(name);
 
