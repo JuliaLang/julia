@@ -257,7 +257,7 @@ hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 (<)(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) < Tuple(b)
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
 
-same_names(::NamedTuple{names}...) where {names} = true
+same_names(::T, ::T...) where {names, T<:NamedTuple{names}} = true
 same_names(::NamedTuple...) = false
 
 # NOTE: this method signature makes sure we don't define map(f)
