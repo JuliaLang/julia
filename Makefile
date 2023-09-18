@@ -112,7 +112,9 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
                                       julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest julia-base-cache
 
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
+ifneq ($(JULIA_PRECOMPILE), 0)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk all-$*
+endif
 
 debug release : % : julia-% stdlibs-cache-%
 
