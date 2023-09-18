@@ -391,6 +391,7 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
 end
 
 if "deploy" in ARGS
+    @info "deploydocs" pwd() get(ENV, "DOCUMENTER_ARCHIVE", nothing)
     deploydocs(
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         deploy_config = BuildBotConfig(),
