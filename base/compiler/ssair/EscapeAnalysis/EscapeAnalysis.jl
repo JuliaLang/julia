@@ -1096,6 +1096,7 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
     # NOTE if `:the_exception` is the only way to access the exception, we can do:
     # exc = SSAValue(pc)
     # excinfo = estate[exc]
+    # TODO? set up a special effect bit that checks the existence of `rethrow` and `current_exceptions` and use it here
     excinfo = ⊤
     escapes = estate.escapes
     for i in 1:length(escapes)

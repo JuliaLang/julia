@@ -41,9 +41,10 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       world::UInt = get_world_counter(),
                       debuginfo::Symbol = :none)
     tt = Base.signature_type(f, types)
-    interp = EscapeAnalyzer(world, tt)
-    results = Base.code_typed_by_type(tt; optimize=true, world, interp)
-    isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
+    match = Base._which(tt; world, raise=true)
+    mi = Core.Compiler.specialize_method(match)::MethodInstance
+    interp = EscapeAnalyzer(world, mi)
+    Core.Compiler.typeinf_ext(interp, mi)
     return EscapeResult(interp.ir, interp.estate, interp.mi, debuginfo === :source, interp)
 end
 
@@ -93,17 +94,17 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const inf_cache::Vector{InferenceResult}
     const code_cache::CodeCache
     const escape_cache::EscapeCache
-    const entry_tt
+    const entry_mi::MethodInstance
     ir::IRCode
     estate::EscapeState
     mi::MethodInstance
-    function EscapeAnalyzer(world::UInt, @nospecialize(tt),
+    function EscapeAnalyzer(world::UInt, entry_mi::MethodInstance,
                             code_cache::CodeCache=GLOBAL_CODE_CACHE,
                             escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, tt)
+        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, entry_mi)
     end
 end
 
@@ -210,10 +211,10 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
         @timeit "EA" estate = analyze_escapes(ir, nargs, get_escape_cache)
     catch err
         @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
-        @eval Main failed_escapeanalysis = $(FailedAnalysis(ir, nargs, get_escape_cache))
+        Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
         rethrow(err)
     end
-    if caller.linfo.specTypes === interp.entry_tt
+    if caller.linfo === interp.entry_mi
         # return back the result
         interp.ir = cccopy(ir)
         interp.estate = estate
