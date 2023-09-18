@@ -26,4 +26,3 @@ julia> loaded_packages
 1-element Vector{Base.PkgId}:
  Example [7876af07-990d-54b4-ab0e-23690620f79a]
 ```
-
