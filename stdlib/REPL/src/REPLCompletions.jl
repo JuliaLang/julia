@@ -136,6 +136,7 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]

@@ -27,7 +27,7 @@ STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SH
 		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
 		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
 		   SharedArrays TOML Test LibCURL Downloads Pkg Dates LazyArtifacts Sockets Unicode Markdown \
-		   InteractiveUtils REPL DelimitedFiles
+		   InteractiveUtils REPL DelimitedFiles Statistics
 
 all-release: $(addprefix cache-release-, $(STDLIBS))
 all-debug:   $(addprefix cache-debug-, $(STDLIBS))
@@ -131,5 +131,5 @@ $(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA U
 $(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
 
 $(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
+$(eval $(call pkgimg_builder,Statistics,LinearAlgebra SparseArrays))
 # SuiteSparse_jll
-# Statistics
