@@ -2,7 +2,7 @@
 
 using Base: something
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG, GIT_OID_TYPE
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -346,6 +346,9 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
     end
+    @static if LibGit2.VERSION >= v"1.7.0"
+        depth::Cuint                   = Cuint(Consts.FETCH_DEPTH_FULL)
+    end
     @static if LibGit2.VERSION >= v"1.4.0"
         follow_redirects::Cuint        = Cuint(0)
     end
@@ -439,6 +442,9 @@ The fields represent:
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
     interhunk_lines::UInt32                  = UInt32(0)
+    @static if LibGit2.VERSION >= v"1.7.0"
+        oid_type::GIT_OID_TYPE               = Consts.OID_DEFAULT
+    end
     id_abbrev::UInt16                        = UInt16(7)
     max_size::Int64                          = Int64(512*1024*1024) #512Mb
     old_prefix::Cstring                      = Cstring(C_NULL)
@@ -1004,7 +1010,7 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
-    (:GitRemote,         :GitRepo,                :AbstractGitObject, :git_remote),
+    (:GitRemote,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_remote),
     (:GitRevWalker,      :GitRepo,                :AbstractGitObject, :git_revwalk),
     (:GitReference,      :GitRepo,                :AbstractGitObject, :git_reference),
     (:GitDescribeResult, :GitRepo,                :AbstractGitObject, :git_describe_result),
@@ -1480,3 +1486,26 @@ end
 
 # Useful for functions which can handle various kinds of credentials
 const Creds = Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}
+
+struct _GitRemoteHead
+    available_local::Cint
+    oid::GitHash
+    loid::GitHash
+    name::Cstring
+    symref_target::Cstring
+end
+
+struct GitRemoteHead
+    available_local::Bool
+    oid::GitHash
+    loid::GitHash
+    name::String
+    symref_target::Union{Nothing,String}
+    function GitRemoteHead(head::_GitRemoteHead)
+        name = unsafe_string(head.name)
+        symref_target = (head.symref_target != C_NULL ?
+            unsafe_string(head.symref_target) : nothing)
+        return new(head.available_local != 0,
+                   head.oid, head.loid, name, symref_target)
+    end
+end

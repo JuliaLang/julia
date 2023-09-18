@@ -929,6 +929,14 @@ mktempdir() do dir
                     @test cmtr.email == test_sig.email
                     @test LibGit2.message(cmt) == commit_msg1
 
+                    # test that the parent is correct
+                    @test LibGit2.parentcount(cmt) == 0
+                    LibGit2.with(LibGit2.GitCommit(repo, commit_oid3)) do cmt3
+                        @test LibGit2.parentcount(cmt3) == 1
+                        @test LibGit2.parent_id(cmt3, 1) == commit_oid1
+                        @test LibGit2.GitHash(LibGit2.parent(cmt3, 1)) == commit_oid1
+                    end
+
                     # test showing the commit
                     showstr = split(sprint(show, cmt), "\n")
                     # the time of the commit will vary so just test the first two parts
