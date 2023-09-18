@@ -7431,7 +7431,7 @@ static jl_llvm_functions_t
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
-        if (ctx.emission_context.debug_level > 0) {
+        if (ctx.emission_context.debug_level >= 2) {
             auto arg_typename = [&](size_t i) JL_NOTSAFEPOINT {
                 auto tp = jl_tparam(lam->specTypes, i);
                 return jl_is_datatype(tp) ? jl_symbol_name(((jl_datatype_t*)tp)->name->name) : "<unknown type>";
