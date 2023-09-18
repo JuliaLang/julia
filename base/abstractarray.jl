@@ -499,7 +499,7 @@ Bool[]
 first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
-    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
     v[range(begin, length=min(n, checked_length(v)))]
 end
 
@@ -549,7 +549,7 @@ Float64[]
 last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), n)))
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
-    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
     v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
@@ -993,7 +993,7 @@ end
 # this method must be separate from the above since src might not have a length
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::Integer)
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",n,
-        ", elements, but n should be nonnegative")))
+        ", elements, but n should be non-negative")))
     n == 0 && return dest
     dmax = dstart + n - 1
     inds = LinearIndices(dest)
@@ -1124,7 +1124,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
                n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
-        n," elements, but n should be nonnegative")))
+        n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
@@ -2292,13 +2292,13 @@ _typed_hvncat_0d_only_one() =
 
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 end
 
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
@@ -2310,7 +2310,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, Val(N - 1))..., length(as), 1), false, as...)
@@ -2343,7 +2343,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     nd = N
     Ndim = 0
     for i ∈ eachindex(as)
