@@ -411,7 +411,9 @@ global active_repl
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
     load_InteractiveUtils()
 
-    if interactive && isassigned(REPL_MODULE_REF)
+    fallback_repl = get_bool_env("JULIA_FALLBACK_REPL", false)
+
+    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             global current_terminfo = load_terminfo(term_env)
