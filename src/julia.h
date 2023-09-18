@@ -2052,9 +2052,6 @@ typedef struct _jl_task_t {
 
 // hidden state:
 
-#ifdef USE_TRACY
-    const char *name;
-#endif
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id
@@ -2072,6 +2069,9 @@ typedef struct _jl_task_t {
     size_t world_age;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
+#ifdef USE_TRACY
+    const char *name;
+#endif
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler
