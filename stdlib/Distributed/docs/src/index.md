@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Distributed/docs/src/index.md"
+```
+
 # [Distributed Computing](@id man-distributed)
 Tools for distributed parallel processing.
 

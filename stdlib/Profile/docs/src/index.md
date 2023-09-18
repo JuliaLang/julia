@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Profile/docs/src/index.md"
+```
+
 # [Profiling](@id lib-profiling)
 
 ## CPU Profiling

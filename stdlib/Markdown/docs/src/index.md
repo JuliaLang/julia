@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Markdown/docs/src/index.md"
+```
+
 # [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the

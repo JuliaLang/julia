@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Sockets/docs/src/index.md"
+```
+
 # Sockets
 
 ```@docs

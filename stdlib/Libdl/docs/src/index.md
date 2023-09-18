@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Libdl/docs/src/index.md"
+```
+
 # Dynamic Linker
 
 ```@docs
