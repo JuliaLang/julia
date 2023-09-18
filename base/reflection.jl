@@ -75,24 +75,100 @@ end
 """
     names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the names exported by a `Module`, excluding deprecated names.
-If `all` is true, then the list also includes non-exported names defined in the module,
+Get an array of the public names of a `Module`, excluding deprecated names.
+If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
 
-As a special case, all names defined in `Main` are considered \"exported\",
-since it is not idiomatic to explicitly export names from `Main`.
+As a special case, all names defined in `Main` are considered \"public\",
+since it is not idiomatic to explicitly mark names from `Main` as public.
 
-See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(unsorted_names(m; all, imported))
 unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
+"""
+    isexported(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is exported from a module.
+
+See also: [`ispublic`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Mod
+
+julia> Base.isexported(Mod, :foo)
+true
+
+julia> Base.isexported(Mod, :bar)
+false
+
+julia> Base.isexported(Mod, :baz)
+false
+```
+"""
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
+
+"""
+    ispublic(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is marked as public in a module.
+
+Exported symbols are considered public.
+
+See also: [`isexported`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Mod
+
+julia> Base.ispublic(Mod, :foo)
+true
+
+julia> Base.ispublic(Mod, :bar)
+true
+
+julia> Base.ispublic(Mod, :baz)
+false
+```
+"""
+ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
+
+# TODO: this is vaguely broken because it only works for explicit calls to
+# `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
+
+"""
+    isbindingresolved(m::Module, s::Symbol) -> Bool
+
+Returns whether the binding of a symbol in a module is resolved.
+
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+
+```jldoctest
+julia> module Mod
+           foo() = 17
+       end
+Mod
+
+julia> Base.isbindingresolved(Mod, :foo)
+true
+
+julia> Base.isbindingresolved(Mod, :bar)
+false
+```
+"""
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 function binding_module(m::Module, s::Symbol)
@@ -2351,9 +2427,10 @@ end
     Base.generating_output([incremental::Bool])::Bool
 
 Return `true` if the current process is being used to pre-generate a
-code cache via any of the `--output-*` command line arguments. The
-optional argument `incremental` controls whether to only return `true`
-for that specific mode of compilation.
+code cache via any of the `--output-*` command line arguments. The optional
+`incremental` argument further specifies the precompilation mode: when set
+to `true`, the function will return `true` only for package precompilation;
+when set to `false`, it will return `true` only for system image generation.
 
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.

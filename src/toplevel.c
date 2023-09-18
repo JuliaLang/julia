@@ -560,6 +560,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_import_sym ||
          ((jl_expr_t*)e)->head == jl_using_sym ||
          ((jl_expr_t*)e)->head == jl_export_sym ||
+         ((jl_expr_t*)e)->head == jl_public_sym ||
          ((jl_expr_t*)e)->head == jl_thunk_sym ||
          ((jl_expr_t*)e)->head == jl_global_sym ||
          ((jl_expr_t*)e)->head == jl_const_sym ||
@@ -575,8 +576,9 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_import_sym || head == jl_using_sym ||
-        head == jl_export_sym || head == jl_thunk_sym || head == jl_toplevel_sym ||
-        head == jl_error_sym || head == jl_incomplete_sym || head == jl_method_sym) {
+        head == jl_export_sym || head == jl_public_sym || head == jl_thunk_sym ||
+        head == jl_toplevel_sym || head == jl_error_sym || head == jl_incomplete_sym ||
+        head == jl_method_sym) {
         return 0;
     }
     if (head == jl_global_sym || head == jl_const_sym) {
@@ -837,12 +839,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         JL_GC_POP();
         return jl_nothing;
     }
-    else if (head == jl_export_sym) {
+    else if (head == jl_export_sym || head == jl_public_sym) {
+        int exp = (head == jl_export_sym);
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
-                jl_eval_errorf(m, "syntax: malformed \"export\" statement");
-            jl_module_export(m, name);
+                jl_eval_errorf(m, exp ? "syntax: malformed \"export\" statement" :
+                                        "syntax: malformed \"public\" statement");
+            jl_module_public(m, name, exp);
         }
         JL_GC_POP();
         return jl_nothing;

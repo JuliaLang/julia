@@ -124,10 +124,8 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
+void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -135,8 +133,9 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!jl_get_safe_restore()) {
+    if (ct && !jl_get_safe_restore()) {
         assert(excpt != NULL);
+        jl_ptls_t ptls = ct->ptls;
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
             ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
@@ -193,7 +192,8 @@ static void jl_try_deliver_sigint(void)
             jl_safe_printf("error: GetThreadContext failed\n");
             return;
         }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread);
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+        jl_throw_in_ctx(ct, jl_interrupt_exception, &ctxThread);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread, &ctxThread)) {
             jl_safe_printf("error: SetThreadContext failed\n");
@@ -237,14 +237,14 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         case EXCEPTION_INT_DIVIDE_BY_ZERO:
             if (ct->eh != NULL) {
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_diverror_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             break;
         case EXCEPTION_STACK_OVERFLOW:
             if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             break;
@@ -259,17 +259,17 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 }
                 else if (jl_safepoint_consume_sigint()) {
                     jl_clear_force_sigint();
-                    jl_throw_in_ctx(jl_interrupt_exception, ExceptionInfo->ContextRecord);
+                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
                 }
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             if (jl_get_safe_restore()) {
-                jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             if (ct->eh != NULL) {
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
+                    jl_throw_in_ctx(ct, jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
             }

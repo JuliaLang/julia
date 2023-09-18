@@ -390,11 +390,12 @@ function block_for_inst(ir::IRCode, inst::Int)
     block_for_inst(ir.cfg, inst)
 end
 
-function getindex(x::IRCode, s::SSAValue)
-    if s.id <= length(x.stmts)
-        return x.stmts[s.id]
+function getindex(ir::IRCode, s::SSAValue)
+    nstmts = length(ir.stmts)
+    if s.id <= nstmts
+        return ir.stmts[s.id]
     else
-        return x.new_nodes.stmts[s.id - length(x.stmts)]
+        return ir.new_nodes.stmts[s.id - nstmts]
     end
 end
 
