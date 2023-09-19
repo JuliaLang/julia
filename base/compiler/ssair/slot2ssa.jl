@@ -583,16 +583,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
     end
 
-    exc_handlers = IdDict{Int, TryCatchRegion}()
-    # Record the correct exception handler for all cricitcal sections
-    for catch_entry_block in catch_entry_blocks
-        (; enter_block, leave_block) = catch_entry_block
-        exc_handlers[enter_block+1] = catch_entry_block
-        # TODO: Cut off here if the terminator is a leave corresponding to this enter
-        for block in dominated(domtree, enter_block+1)
-            exc_handlers[block] = catch_entry_block
-        end
-    end
+    # Record the correct exception handler for all critical sections
+    handler_at = compute_trycatch(code, BitSet())
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     new_phi_nodes = Vector{NewPhiNode2}[NewPhiNode2[] for _ = 1:length(cfg.blocks)]
@@ -814,9 +806,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         end
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
-                        enter_block = item
-                        while haskey(exc_handlers, enter_block)
-                            (; enter_block, leave_block) = exc_handlers[enter_block]
+                        enter_idx = idx
+                        while handler_at[enter_idx] != 0
+                            enter_idx = handler_at[enter_idx]
+                            leave_block = block_for_inst(cfg, code[enter_idx].args[1]::Int)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()

@@ -11,6 +11,11 @@ ee = typemax(Int64)
     @test BigInt <: Signed
     @test big(1) isa Signed
 
+    if sizeof(Culong) >= 8
+        @test_throws OutOfMemoryError big(96608869069402268615522366320733234710)^16374500563449903721
+        @test_throws OutOfMemoryError 555555555555555555555555555555555555555555555555555^55555555555555555
+    end
+
     let x = big(1)
         @test signed(x) === x
         @test convert(Signed, x) === x

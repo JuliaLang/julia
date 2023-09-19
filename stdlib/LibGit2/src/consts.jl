@@ -10,12 +10,15 @@ const REMOTE_ORIGIN = "origin"
 
 # objs
 @enum(OBJECT,
-      OBJ_ANY    = -2,
-      OBJ_BAD    = -1,
-      OBJ_COMMIT = 1,
-      OBJ_TREE   = 2,
-      OBJ_BLOB   = 3,
-      OBJ_TAG    = 4)
+      OBJ_ANY       = -2,
+      OBJ_BAD       = -1,
+      OBJ_COMMIT    = 1,
+      OBJ_TREE      = 2,
+      OBJ_BLOB      = 3,
+      OBJ_TAG       = 4,
+      OBJ_OFS_DELTA = 6,
+      OBJ_REF_DELTA = 7)
+const OBJ_INVALID = OBJ_BAD
 
 #revwalk
 const SORT_NONE        = Cint(0)
@@ -26,8 +29,10 @@ const SORT_REVERSE     = Cint(1 << 2)
 # refs
 const REF_INVALID  = Cint(0)
 const REF_OID      = Cint(1)
+const REF_DIRECT   = REF_OID
 const REF_SYMBOLIC = Cint(2)
 const REF_LISTALL  = REF_OID | REF_SYMBOLIC
+const REF_ALL      = REF_LISTALL
 
 # blame
 const BLAME_NORMAL                          = Cuint(0)
@@ -36,6 +41,8 @@ const BLAME_TRACK_COPIES_SAME_COMMIT_MOVES  = Cuint(1 << 1)
 const BLAME_TRACK_COPIES_SAME_COMMIT_COPIES = Cuint(1 << 2)
 const BLAME_TRACK_COPIES_ANY_COMMIT_COPIES  = Cuint(1 << 3)
 const BLAME_FIRST_PARENT                    = Cuint(1 << 4)
+const BLAME_USE_MAILMAP                     = Cuint(1 << 5)
+const BLAME_IGNORE_WHITESPACE               = Cuint(1 << 6)
 
 # checkout
 const CHECKOUT_NONE                    = Cuint(0)
@@ -57,6 +64,9 @@ const CHECKOUT_DONT_OVERWRITE_IGNORED  = Cuint(1 << 19)
 const CHECKOUT_CONFLICT_STYLE_MERGE    = Cuint(1 << 20)
 const CHECKOUT_CONFLICT_STYLE_DIFF3    = Cuint(1 << 21)
 const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
+const CHECKOUT_DONT_WRITE_INDEX        = Cuint(1 << 23)
+const CHECKOUT_DRY_RUN                 = Cuint(1 << 24)
+const CHECKOUT_CONFLICT_STYLE_ZDIFF3   = Cuint(1 << 25)
 
 const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
 const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
@@ -87,6 +97,11 @@ const DIFF_IGNORE_CASE                = Cuint(1 << 10)
 const DIFF_DISABLE_PATHSPEC_MATCH     = Cuint(1 << 12)
 const DIFF_SKIP_BINARY_CHECK          = Cuint(1 << 13)
 const DIFF_ENABLE_FAST_UNTRACKED_DIRS = Cuint(1 << 14)
+const DIFF_UPDATE_INDEX               = Cuint(1 << 15)
+const DIFF_INCLUDE_UNREADABLE         = Cuint(1 << 16)
+const DIFF_INCLUDE_UNREADABLE_AS_UNTRACKED = Cuint(1 << 17)
+const DIFF_INDENT_HEURISTIC           = Cuint(1 << 18)
+const DIFF_IGNORE_BLANK_LINES         = Cuint(1 << 19)
 
 const DIFF_FORCE_TEXT               = Cuint(1 << 20)
 const DIFF_FORCE_BINARY             = Cuint(1 << 21)
@@ -97,16 +112,20 @@ const DIFF_SHOW_UNTRACKED_CONTENT   = Cuint(1 << 25)
 const DIFF_SHOW_UNMODIFIED          = Cuint(1 << 26)
 const DIFF_PATIENCE                 = Cuint(1 << 28)
 const DIFF_MINIMAL                  = Cuint(1 << 29)
+const DIFF_SHOW_BINARY              = Cuint(1 << 30)
 
 const DIFF_FLAG_BINARY     = Cuint(1 << 0)
 const DIFF_FLAG_NOT_BINARY = Cuint(1 << 1)
 const DIFF_FLAG_VALID_OID  = Cuint(1 << 2)
+const DIFF_FLAG_EXISTS     = Cuint(1 << 3)
+const DIFF_FLAG_VALID_SIZE = Cuint(1 << 4)
 
 const DIFF_FORMAT_PATCH        = Cuint(1)
 const DIFF_FORMAT_PATCH_HEADER = Cuint(2)
 const DIFF_FORMAT_RAW          = Cuint(3)
 const DIFF_FORMAT_NAME_ONLY    = Cuint(4)
 const DIFF_FORMAT_NAME_STATUS  = Cuint(5)
+const DIFF_FORMAT_PATCH_ID     = Cuint(6)
 
 @enum(DELTA_STATUS, DELTA_UNMODIFIED = Cint(0),
                     DELTA_ADDED      = Cint(1),
@@ -116,7 +135,9 @@ const DIFF_FORMAT_NAME_STATUS  = Cuint(5)
                     DELTA_COPIED     = Cint(5),
                     DELTA_IGNORED    = Cint(6),
                     DELTA_UNTRACKED  = Cint(7),
-                    DELTA_TYPECHANGE = Cint(8))
+                    DELTA_TYPECHANGE = Cint(8),
+                    DELTA_UNREADABLE = Cint(9),
+                    DELTA_CONFLICTED = Cint(10))
 
 # index
 const IDXENTRY_NAMEMASK   = (0x0fff)
@@ -165,7 +186,8 @@ const INDEX_STAGE_ANY = Cint(-1)
 @enum(GIT_MERGE, MERGE_FIND_RENAMES     = 1 << 0,
                  MERGE_FAIL_ON_CONFLICT = 1 << 1,
                  MERGE_SKIP_REUC        = 1 << 2,
-                 MERGE_NO_RECURSIVE     = 1 << 3)
+                 MERGE_NO_RECURSIVE     = 1 << 3,
+                 MERGE_VIRTUAL_BASE     = 1 << 4)
 
 @enum(GIT_MERGE_FILE, MERGE_FILE_DEFAULT                  = 0,       # Defaults
                       MERGE_FILE_STYLE_MERGE              = 1 << 0,  # Create standard conflicted merge files
@@ -175,7 +197,13 @@ const INDEX_STAGE_ANY = Cint(-1)
                       MERGE_FILE_IGNORE_WHITESPACE_CHANGE = 1 << 4,  # Ignore changes in amount of whitespace
                       MERGE_FILE_IGNORE_WHITESPACE_EOL    = 1 << 5,  # Ignore whitespace at end of line
                       MERGE_FILE_DIFF_PATIENCE            = 1 << 6,  # Use the "patience diff" algorithm
-                      MERGE_FILE_DIFF_MINIMAL             = 1 << 7)  # Take extra time to find minimal diff
+                      MERGE_FILE_DIFF_MINIMAL             = 1 << 7,  # Take extra time to find minimal diff
+                      MERGE_FILE_STYLE_ZDIFF3             = 1 << 8,  # Create zdiff3 ("zealous diff3")-style files
+
+                      # Do not produce file conflicts when common regions have
+                      # changed; keep the conflict markers in the file and accept
+                      # that as the merge result.
+                      MERGE_FILE_ACCEPT_CONFLICTS         = 1 << 9)
 """ Option flags for git merge file favoritism.
   * `MERGE_FILE_FAVOR_NORMAL`: if both sides of the merge have changes to a section,
     make a note of the conflict in the index which `git checkout` will use to create
@@ -316,6 +344,7 @@ const STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = Cuint(1 << 15)
 # certificate types from `enum git_cert_t` in `cert.h`.
 const CERT_TYPE_TLS = 1 # GIT_CERT_X509
 const CERT_TYPE_SSH = 2 # GIT_CERT_HOSTKEY_LIBSSH2
+const CERT_TYPE_STRARRAY = 3 # GIT_CERT_STRARRAY
 
 # certificate callback return values
 const PASSTHROUGH = -30
@@ -326,6 +355,7 @@ const CERT_ACCEPT =  0
 const CERT_SSH_MD5    = 1 << 0
 const CERT_SSH_SHA1   = 1 << 1
 const CERT_SSH_SHA256 = 1 << 2
+const CERT_SSH_RAW    = 1 << 3
 
 # libssh2 known host constants
 const LIBSSH2_KNOWNHOST_TYPE_PLAIN  = 1
@@ -340,6 +370,10 @@ const LIBSSH2_KNOWNHOST_CHECK_MATCH    = 0
 const LIBSSH2_KNOWNHOST_CHECK_MISMATCH = 1
 const LIBSSH2_KNOWNHOST_CHECK_NOTFOUND = 2
 const LIBSSH2_KNOWNHOST_CHECK_FAILURE  = 3
+
+# Constants for fetch depth (shallowness of fetch).
+const FETCH_DEPTH_FULL = 0
+const FETCH_DEPTH_UNSHALLOW = 2147483647
 
 @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                             SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
@@ -357,9 +391,11 @@ Option flags for `GitRepo`.
 @enum(GIT_REPOSITORY_OPEN, REPOSITORY_OPEN_DEFAULT   = 0,
                            REPOSITORY_OPEN_NO_SEARCH = 1<<0,
                            REPOSITORY_OPEN_CROSS_FS  = 1<<1,
-                           REPOSITORY_OPEN_BARE      = 1<<2)
+                           REPOSITORY_OPEN_BARE      = 1<<2,
+                           REPOSITORY_OPEN_NO_DOTGIT = 1<<3,
+                           REPOSITORY_OPEN_FROM_ENV  = 1<<4)
 
-@enum(GIT_BRANCH, BRANCH_LOCAL = 1, BRANCH_REMOTE = 2)
+@enum(GIT_BRANCH, BRANCH_LOCAL = 1, BRANCH_REMOTE = 2, BRANCH_ALL = 1 | 2)
 
 @enum(GIT_FILEMODE, FILEMODE_UNREADABLE          = 0o000000,
                     FILEMODE_TREE                = 0o040000,
@@ -432,19 +468,49 @@ Global library options.
 
 These are used to select which global option to set or get and are used in `git_libgit2_opts()`.
 """
-@enum(GIT_OPT, GET_MWINDOW_SIZE         = 0,
-               SET_MWINDOW_SIZE         = 1,
-               GET_MWINDOW_MAPPED_LIMIT = 2,
-               SET_MWINDOW_MAPPED_LIMIT = 3,
-               GET_SEARCH_PATH          = 4,
-               SET_SEARCH_PATH          = 5,
-               SET_CACHE_OBJECT_LIMIT   = 6,
-               SET_CACHE_MAX_SIZE       = 7,
-               ENABLE_CACHING           = 8,
-               GET_CACHED_MEMORY        = 9,
-               GET_TEMPLATE_PATH        = 10,
-               SET_TEMPLATE_PATH        = 11,
-               SET_SSL_CERT_LOCATIONS   = 12)
+@enum(GIT_OPT, GET_MWINDOW_SIZE = 0,
+               SET_MWINDOW_SIZE,
+               GET_MWINDOW_MAPPED_LIMIT,
+               SET_MWINDOW_MAPPED_LIMIT,
+               GET_SEARCH_PATH,
+               SET_SEARCH_PATH,
+               SET_CACHE_OBJECT_LIMIT,
+               SET_CACHE_MAX_SIZE,
+               ENABLE_CACHING,
+               GET_CACHED_MEMORY,
+               GET_TEMPLATE_PATH,
+               SET_TEMPLATE_PATH,
+               SET_SSL_CERT_LOCATIONS,
+               SET_USER_AGENT,
+               ENABLE_STRICT_OBJECT_CREATION,
+               ENABLE_STRICT_SYMBOLIC_REF_CREATION,
+               SET_SSL_CIPHERS,
+               GET_USER_AGENT,
+               ENABLE_OFS_DELTA,
+               ENABLE_FSYNC_GITDIR,
+               GET_WINDOWS_SHAREMODE,
+               SET_WINDOWS_SHAREMODE,
+               ENABLE_STRICT_HASH_VERIFICATION,
+               SET_ALLOCATOR,
+               ENABLE_UNSAVED_INDEX_SAFETY,
+               GET_PACK_MAX_OBJECTS,
+               SET_PACK_MAX_OBJECTS,
+               DISABLE_PACK_KEEP_FILE_CHECKS,
+               ENABLE_HTTP_EXPECT_CONTINUE,
+               GET_MWINDOW_FILE_LIMIT,
+               SET_MWINDOW_FILE_LIMIT,
+               SET_ODB_PACKED_PRIORITY,
+               SET_ODB_LOOSE_PRIORITY,
+               GET_EXTENSIONS,
+               SET_EXTENSIONS,
+               GET_OWNER_VALIDATION,
+               SET_OWNER_VALIDATION,
+               GET_HOMEDIR,
+               SET_HOMEDIR,
+               SET_SERVER_CONNECT_TIMEOUT,
+               GET_SERVER_CONNECT_TIMEOUT,
+               SET_SERVER_TIMEOUT,
+               GET_SERVER_TIMEOUT)
 
 """
 Option flags for `GitProxy`.
@@ -467,5 +533,15 @@ Option flags for `GitProxy`.
     TRACE_DEBUG
     TRACE_TRACE
 end
+
+# The type of object id
+@enum(GIT_OID_TYPE,
+      OID_DEFAULT = 0,
+      OID_SHA1 = 1)
+
+# Direction of the connection.
+@enum(GIT_DIRECTION,
+      DIRECTION_FETCH = 0,
+      DIRECTION_PUSH = 1)
 
 end

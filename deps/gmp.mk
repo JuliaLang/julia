@@ -57,7 +57,12 @@ $(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied: $(SRCCACHE)/gmp-$(G
 		patch -p1 < $(SRCDIR)/patches/gmp-CVE-2021-43618.patch
 	echo 1 > $@
 
-$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-more_alloc_overflow.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp-more_alloc_overflow.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-more_alloc_overflow.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-patched

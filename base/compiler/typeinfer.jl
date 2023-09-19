@@ -344,10 +344,7 @@ end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
-    toplevel = !isa(def, Method)
-    if toplevel
-        return ci
-    end
+    isa(def, Method) || return ci # don't compress toplevel code
     if may_discard_trees(interp)
         cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
     else
@@ -464,7 +461,6 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     return ipo_effects
 end
 
-
 function adjust_effects(sv::InferenceState)
     ipo_effects = sv.ipo_effects
 
@@ -553,7 +549,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
     me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
-
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -807,8 +802,6 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
     return false
 end
 
-generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 struct EdgeCallResult
@@ -842,7 +835,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     else
         cache = :global # cache edge targets by default
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
@@ -1013,7 +1006,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             return inf
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         return retrieve_code_info(mi, get_world_counter(interp))
     end
     lock_mi_inference(interp, mi)

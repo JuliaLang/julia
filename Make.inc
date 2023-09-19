@@ -898,8 +898,8 @@ ISX86:=0
 endif
 
 
-#If nothing is set default to native
-ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+#If nothing is set default to native unless we are cross-compiling
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
 ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
 MCPU=native
 else

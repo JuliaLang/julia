@@ -1182,4 +1182,5 @@ end
 
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
 end

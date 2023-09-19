@@ -1256,6 +1256,11 @@ end
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be,
 for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+
+When `inds` selects multiple elements, this function returns a newly
+allocated array. To index multiple elements without making a copy,
+use [`view`](@ref) instead.
+
 See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
@@ -1288,7 +1293,7 @@ end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
 @propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
-unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
+@inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
 struct CanonicalIndexError <: Exception
     func::String
