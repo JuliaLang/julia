@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <iostream>
 
 using std::vector;
 using std::string;
@@ -107,7 +108,9 @@ struct StringTable {
 
 struct HeapSnapshot {
     vector<Node> nodes;
-    // edges are stored on each from_node
+    // forward edges are stored on each from_node
+    // back edges are stored here:
+    DenseMap<size_t, size_t> node_parents;
 
     StringTable names;
     StringTable node_types;
@@ -124,6 +127,7 @@ HeapSnapshot *g_snapshot = nullptr;
 extern jl_mutex_t heapsnapshot_lock;
 
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
+void downsample_heap_snapshot(HeapSnapshot &snapshot);
 static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
 void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
@@ -149,6 +153,9 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one)
     g_snapshot = nullptr;
 
     jl_mutex_unlock(&heapsnapshot_lock);
+
+    // Prune snapshot down via sampling
+    downsample_heap_snapshot(snapshot);
 
     // When we return, the snapshot is full
     // Dump the snapshot
@@ -465,7 +472,67 @@ void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx,
         to_idx // to
     });
 
+    g_snapshot->node_parents.insert(make_pair(to_idx, g_snapshot->node_ptr_to_index_map[(void*)from_node.id]));
+
     g_snapshot->num_edges += 1;
+}
+
+void downsample_heap_snapshot(HeapSnapshot &snapshot) {
+    // Downsample the heap snapshot by randomly sampling 1/1000th of the nodes, and then
+    // keeping all the edges and nodes from those nodes up to the roots. This is a
+    // simple way to get a representative sample of the heap.
+
+    // We ignore whether or not a node is reachable from the root. Even if it isn't, we can
+    // still take the node, and we'll just keep all nodes going up from it until we reach
+    // a dead end.
+
+    std::cout << snapshot.nodes.size() << " original nodes\n";
+
+    //HeapSnapshot &snapshot
+
+    // First, sample nodes
+    vector<size_t> sampled_node_idxs;
+    size_t num_nodes = snapshot.nodes.size();
+    for (size_t i = 0; i < num_nodes; i++) {
+        if (rand() % 100 == 0) {
+            sampled_node_idxs.push_back(i);
+        }
+    }
+
+    std::cout << sampled_node_idxs.size() << " sampled nodes\n";
+
+    // Then, find all the parent nodes and edges reachable from those sampled nodes
+    DenseMap<size_t, Node> node_id_to_node_map;
+    for (auto node_idx : sampled_node_idxs) {
+        while (true) {
+            auto &node = snapshot.nodes[node_idx];
+            auto parent_node_pair = snapshot.node_parents.find(node_idx);
+            if (parent_node_pair == snapshot.node_parents.end()) {
+                break;
+            }
+            auto parent_idx = parent_node_pair->second;
+            auto &parent = snapshot.nodes[parent_idx];
+            node_id_to_node_map.insert(make_pair(node.id, node));
+            auto &new_node = node_id_to_node_map[node.id];
+            node_id_to_node_map.insert(make_pair(parent.id, parent));
+            auto &new_parent = node_id_to_node_map[parent.id];
+            for (auto &edge : node.edges) {
+                if (edge.to_node == node_idx) {
+                    new_node.edges.push_back(edge);
+                }
+            }
+            node_idx = parent_idx;
+        }
+    }
+    std::cout << node_id_to_node_map.size() << " nodes in downsampled snapshot\n";
+
+    // Now replace the snapshot's nodes with the values from node_id_to_node_map.
+    snapshot.nodes.clear();
+    for (auto &iter : node_id_to_node_map) {
+        snapshot.nodes.push_back(iter.second);
+    }
+    std::cout << snapshot.nodes.size() << " nodes in downsampled snapshot\n";
+
 }
 
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one)
