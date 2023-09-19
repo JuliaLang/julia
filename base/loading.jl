@@ -1000,7 +1000,7 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
-function cache_file_entry(pkg::PkgId) 
+function cache_file_entry(pkg::PkgId)
     uuid = pkg.uuid
     return joinpath(
         "compiled",
