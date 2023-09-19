@@ -583,29 +583,6 @@ function ArgEscapeCache(estate::EscapeState)
     return ArgEscapeCache(argescapes, argaliases)
 end
 
-"""
-    is_ipo_profitable(ir::IRCode, nargs::Int) -> Bool
-
-Heuristically checks if there is any profitability to run the escape analysis on `ir`
-and generate IPO escape information cache. Specifically, this function examines
-if any call argument is "interesting" in terms of their escapability.
-"""
-function is_ipo_profitable(ir::IRCode, nargs::Int)
-    for i = 1:nargs
-        t = unwrap_unionall(widenconst(ir.argtypes[i]))
-        t <: IO && return false # bail out IO-related functions
-        is_ipo_profitable_type(t) && return true
-    end
-    return false
-end
-function is_ipo_profitable_type(@nospecialize t)
-    if isa(t, Union)
-        return is_ipo_profitable_type(t.a) && is_ipo_profitable_type(t.b)
-    end
-    (t === String || t === Symbol || t === Module || t === SimpleVector) && return false
-    return ismutabletype(t)
-end
-
 abstract type Change end
 struct EscapeChange <: Change
     xidx::Int

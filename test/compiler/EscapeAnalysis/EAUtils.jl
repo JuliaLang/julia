@@ -65,7 +65,7 @@ using .CC:
     InferenceResult, OptimizationState, IRCode, copy as cccopy,
     @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, sroa_pass!,
     adce_pass!, JLOptions, verify_ir, verify_linetable
-using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState, is_ipo_profitable
+using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
 struct CodeCache
     cache::IdDict{MethodInstance,CodeInstance}
