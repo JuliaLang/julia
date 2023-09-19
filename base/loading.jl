@@ -1007,7 +1007,6 @@ function cache_file_entry(pkg::PkgId)
         "v$(VERSION.major).$(VERSION.minor)",
         uuid === nothing ? ""       : pkg.name),
         uuid === nothing ? pkg.name : package_slug(uuid)
-    )
 end
 
 function find_all_in_cache_path(pkg::PkgId)
