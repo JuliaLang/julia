@@ -323,13 +323,6 @@ seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
 
 ### Global RNG
 
-struct _GLOBAL_RNG <: AbstractRNG
-    global const GLOBAL_RNG = _GLOBAL_RNG.instance
-end
-
-# GLOBAL_RNG currently uses TaskLocalRNG
-typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
-
 """
     default_rng() -> rng
 
@@ -346,48 +339,31 @@ Return the default global random number generator (RNG).
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()
 
-copy!(dst::Xoshiro, ::_GLOBAL_RNG) = copy!(dst, default_rng())
-copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
-copy(::_GLOBAL_RNG) = copy(default_rng())
+# defined only for backward compatibility with pre-v1.3 code when `default_rng()` didn't exist;
+# `GLOBAL_RNG` was never really documented, but was appearing in the docstring of `rand`
+const GLOBAL_RNG = default_rng()
 
+# In v1.0, the GLOBAL_RNG was storing the seed which was used to initialize it; this seed was used to implement
+# the following feature of `@testset`:
+# > Before the execution of the body of a `@testset`, there is an implicit
+# > call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
+# But the global RNG is now TaskLocalRNG() and doesn't store its seed; in order to not break `@testset`, we now
+# store the seed used in a call like `seed!(seed)` *without* an explicit RNG in `GLOBAL_SEED`; the wording of the
+# feature above was sufficiently unprecise (e.g. what exactly is the "global RNG"?) that this solution seems fine
 GLOBAL_SEED = 0
+# only the Test module is allowed to use this function!
 set_global_seed!(seed) = global GLOBAL_SEED = seed
 
-function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
-    global GLOBAL_SEED = seed
+# seed the "global" RNG
+function seed!(seed=nothing)
+    # the seed is not left as `nothing`, as storing `nothing` as the global seed wouldn't lead to reproducible streams
+    seed = @something seed rand(RandomDevice(), UInt128)
+    set_global_seed!(seed)
     seed!(default_rng(), seed)
 end
 
-seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
-
-seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
-    seed!(GLOBAL_RNG, seed)
-
-rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
-rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
-for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
-          :(SamplerTrivial{UInt2x52Raw{UInt128}}),
-          :(SamplerTrivial{UInt104Raw{UInt128}}),
-          :(SamplerTrivial{CloseOpen01_64}),
-          :(SamplerTrivial{CloseOpen12_64}),
-          :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
-          :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),
-         )
-    @eval rand(::_GLOBAL_RNG, x::$T) = rand(default_rng(), x)
-end
-
-rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
-rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
-for T in (Float16, Float32)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
-end
-for T in BitInteger_types
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
-end
-
 function __init__()
-    seed!(GLOBAL_RNG)
+    seed!()
     ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
