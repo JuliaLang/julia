@@ -454,7 +454,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                     eval_user_input(stderr, ex, true)
                 end
             else
-                while isopen(input) || !eof(input)
+                while !eof(input)
                     if interactive
                         print("julia> ")
                         flush(stdout)
