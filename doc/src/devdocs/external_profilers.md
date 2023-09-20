@@ -13,7 +13,7 @@ you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
 
 ### Dynamically Enabling and Disabling Zones
 
-The `JULIA_TIMING_SUBSYSTEMS` environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
+The [`JULIA_TIMING_SUBSYSTEMS`](@ref JULIA_TIMING_SUBSYSTEMS) environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
 zones.
 
 ## Tracy Profiler

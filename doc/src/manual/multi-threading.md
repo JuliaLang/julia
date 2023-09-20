@@ -27,7 +27,7 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
@@ -76,7 +76,7 @@ julia> Threads.threadid()
 
 The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
 of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
-[`JULIA_NUM_GC_THREADS`](@ref env-gc-threads) environment variable.
+[`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
@@ -102,7 +102,7 @@ Julia may be started with one or more threads reserved to run interactive tasks:
 $ julia --threads 3,1
 ```
 
-The environment variable `JULIA_NUM_THREADS` can also be used similarly:
+The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
 ```bash
 export JULIA_NUM_THREADS=3,1
 ```
