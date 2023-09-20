@@ -22,11 +22,6 @@ else
     global running_under_rr() = false
 end
 
-# HACK
-if running_under_rr()
-    ENV["JULIA_PKG_TEST_QUIET"] = "false"
-end
-
 if use_revise
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
