@@ -523,10 +523,20 @@ new_as_memoryref(self::Type{GenericMemoryRef{isatomic,T,addrspace}}, m::Int) whe
 
 # checked-multiply intrinsic function for dimensions
 _checked_mul_dims() = 1, false
-function _checked_mul_dims(a::Int, d::Int...)
+_checked_mul_dims(m::Int) = m, Intrinsics.ule_int(typemax_Int, m) # equivalently: (m + 1) < 1
+function _checked_mul_dims(m::Int, n::Int)
+    b = Intrinsics.checked_smul_int(m, n)
+    a = getfield(b, 1)
+    ovflw = getfield(b, 2)
+    ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, m))
+    ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, n))
+    return a, ovflw
+end
+function _checked_mul_dims(m::Int, d::Int...)
    @_foldable_meta # the compiler needs to know this loop terminates
+   a = m
    i = 1
-   ovflw = Intrinsics.ule_int(typemax_Int, a)
+   ovflw = false
    while Intrinsics.sle_int(i, nfields(d))
      di = getfield(d, i)
      b = Intrinsics.checked_smul_int(a, di)
@@ -553,16 +563,28 @@ eval(Core, :(function (self::Type{Array{T,1}})(::UndefInitializer, m::Int) where
     mem = fieldtype(fieldtype(self, :ref), :mem)(undef, m)
     return $(Expr(:new, :self, :(memoryref(mem)), :((m,))))
 end))
+eval(Core, :(function (self::Type{Array{T,2}})(::UndefInitializer, m::Int, n::Int) where {T}
+    @noinline
+    return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n))), :((m, n))))
+end))
+eval(Core, :(function (self::Type{Array{T,3}})(::UndefInitializer, m::Int, n::Int, o::Int) where {T}
+    @noinline
+    return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n, o))), :((m, n, o))))
+end))
 eval(Core, :(function (self::Type{Array{T, N}})(::UndefInitializer, d::Vararg{Int, N}) where {T, N}
     @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(d...))), :d))
 end))
 # type and dimensionality specified, accepting dims as tuples of Ints
+(self::Type{Array{T,1}})(::UndefInitializer, d::NTuple{1, Int}) where {T} = self(undef, getfield(d, 1))
+(self::Type{Array{T,2}})(::UndefInitializer, d::NTuple{2, Int}) where {T} = self(undef, getfield(d, 1), getfield(d, 2))
+(self::Type{Array{T,3}})(::UndefInitializer, d::NTuple{3, Int}) where {T} = self(undef, getfield(d, 1), getfield(d, 2), getfield(d, 3))
 (self::Type{Array{T,N}})(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = self(undef, d...)
-Array{T}(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = Array{T, N}(undef, d)
 # type but not dimensionality specified
 Array{T}(::UndefInitializer, m::Int) where {T} = Array{T, 1}(undef, m)
-Array{T}(::UndefInitializer, d::Vararg{Int, N}) where {T, N} = Array{T, N}(undef, d...)
+Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T, 2}(undef, m, n)
+Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T, 3}(undef, m, n, o)
+Array{T}(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = Array{T, N}(undef, d)
 # empty vector constructor
 (self::Type{Array{T, 1}})() where {T} = self(undef, 0)
 
