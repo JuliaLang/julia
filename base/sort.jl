@@ -378,7 +378,7 @@ Return the index of the last value in `v` that is not ordered after `x`.
 If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
-`insert!`ing `x` at the returned index will maintain the sorted order.
+`insert!`ing `x` immediately after the returned index will maintain the sorted order.
 Refer to [`sort!`](@ref) for the meaning and use of the keywords.
 Note that the `by` function is applied to the searched value `x` as well as the
 values in `v`.
