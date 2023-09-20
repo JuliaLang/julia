@@ -44,9 +44,13 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     match = Base._which(tt; world, raise=true)
     mi = Core.Compiler.specialize_method(match)::MethodInstance
     interp = EscapeAnalyzer(world, mi)
-    Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
+    frame = Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
     isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
-    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi, debuginfo === :source, interp)
+    slotnames = let src = frame.src
+        src isa CodeInfo ? src.slotnames : nothing
+    end
+    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi,
+                        slotnames, debuginfo === :source, interp)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -285,13 +289,15 @@ struct EscapeResult
     ir::IRCode
     state::EscapeState
     mi::Union{Nothing,MethodInstance}
+    slotnames::Union{Nothing,Vector{Symbol}}
     source::Bool
     interp::Union{Nothing,EscapeAnalyzer}
     function EscapeResult(ir::IRCode, state::EscapeState,
                           mi::Union{Nothing,MethodInstance}=nothing,
+                          slotnames::Union{Nothing,Vector{Symbol}}=nothing,
                           source::Bool=false,
                           interp::Union{Nothing,EscapeAnalyzer}=nothing)
-        return new(ir, state, mi, source, interp)
+        return new(ir, state, mi, slotnames, source, interp)
     end
 end
 Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
@@ -301,7 +307,8 @@ Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
 Base.show(io::IO, cached::EscapeCacheInfo) = show(io, EscapeResult(cached.ir, cached.state))
 
 # adapted from https://github.com/JuliaDebug/LoweredCodeUtils.jl/blob/4612349432447e868cf9285f647108f43bd0a11c/src/codeedges.jl#L881-L897
-function print_with_info(io::IO, (; ir, state, mi, source)::EscapeResult)
+function print_with_info(io::IO, result::EscapeResult)
+    (; ir, state, mi, slotnames, source) = result
     # print escape information on SSA values
     function preprint(io::IO)
         ft = ir.argtypes[1]
@@ -314,7 +321,8 @@ function print_with_info(io::IO, (; ir, state, mi, source)::EscapeResult)
             arg = state[Argument(i)]
             i == 1 && continue
             c, color = get_name_color(arg, true)
-            printstyled(io, c, ' ', '_', i, "::", ir.argtypes[i]; color)
+            slot = isnothing(slotnames) ? "_$i" : slotnames[i]
+            printstyled(io, c, ' ', slot, "::", ir.argtypes[i]; color)
             i ≠ state.nargs && print(io, ", ")
         end
         print(io, ')')
