@@ -170,7 +170,7 @@ end
 
 
 # Allow us to easily serialize Platform objects
-function Base.show(io::IO, p::Platform; context=nothing)
+function Base.show(io::IO, p::Platform)
     print(io, "Platform(")
     show(io, arch(p))
     print(io, ", ")
