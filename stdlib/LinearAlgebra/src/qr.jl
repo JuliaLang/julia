@@ -368,8 +368,8 @@ The individual components of the decomposition `F` can be retrieved via property
 
 !!! note
     Each reference to the upper triangular factor via `F.R` allocates a new array.
-    It is therefore advisable to cache that array before subsequent repeated (elementwise)
-    access, for instance.
+    It is therefore advisable to cache that array, say, by `R = F.R` and continue working
+    with `R`.
 
 Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
