@@ -26,15 +26,19 @@ program completed successfully. In an interactive session, `exit()` can be calle
 the keyboard shortcut `^D`.
 """
 function exit(n)
-    generating_output() && wait_for_known_tasks()
+    if generating_output()
+        # wait for any known tasks that might be slow to stop and cause spurious warnings during
+        # precompilation
+        wait_for_known_tasks()
+    end
     return ccall(:jl_exit, Cvoid, (Int32,), n)
 end
 exit() = exit(0)
 
+
 function wait_for_known_tasks()
-    if isdefined(Base, :profile_peek_task) && isa(profile_peek_task, Task)
-        _wait(profile_peek_task) # prevent this causing a noisy warning if slow to stop
-    end
+    isdefined(Base, profile_peek_task) && _wait(profile_peek_task)
+    return nothing
 end
 
 const roottask = current_task()

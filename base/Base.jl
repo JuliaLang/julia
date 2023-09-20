@@ -567,7 +567,7 @@ if is_primary_base_module
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-profile_peek_task::Union{Nothing,Task} = nothing
+global profile_peek_task::Task
 function profile_printing_listener()
     profile = nothing
     try
