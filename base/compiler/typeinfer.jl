@@ -969,6 +969,9 @@ end
 # compute an inferred frame
 function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
+    return typeinf_frame(interp, mi, run_optimizer)
+end
+function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)

@@ -73,6 +73,8 @@ end
 
 @testset "EAUtils" begin
     @test_throws "everything has been constant folded" code_escapes() do; sin(42); end
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
 end
 
 @testset "basics" begin

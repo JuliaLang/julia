@@ -44,7 +44,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     match = Base._which(tt; world, raise=true)
     mi = Core.Compiler.specialize_method(match)::MethodInstance
     interp = EscapeAnalyzer(world, mi)
-    Core.Compiler.typeinf_ext(interp, mi)
+    Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
     isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
     return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi, debuginfo === :source, interp)
 end
