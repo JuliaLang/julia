@@ -76,6 +76,10 @@ static void free_stack(void *stkbuf, size_t bufsz)
 }
 #endif
 
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void)
+{
+    return jl_atomic_load_relaxed(&num_stack_mappings);
+}
 
 const unsigned pool_sizes[] = {
     128 * 1024,
