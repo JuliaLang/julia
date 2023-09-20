@@ -3316,7 +3316,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
     double min_interval = default_collect_interval;
-    double tuning_factor = 7e-10;
+    double tuning_factor = 3e-9;
     if (collection == JL_GC_AUTO) {
         uint64_t alloc_diff = before_free_heap_size - old_heap_size;
         double alloc_smooth_factor = 0.95;
@@ -3345,7 +3345,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
-        target_allocs = 2*sqrt((double)heap_size / tuning_factor);
+        target_allocs = sqrt((double)heap_size / tuning_factor);
     uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
     if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
         target_heap = max_total_memory;
