@@ -567,6 +567,7 @@ if is_primary_base_module
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
+profile_peek_task::Union{Nothing,Task} = nothing
 function profile_printing_listener()
     profile = nothing
     try
@@ -607,7 +608,8 @@ function __init__()
         Base.uv_unref(cond.handle)
         PROFILE_PRINT_COND[] = cond
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+        global profile_peek_task = Threads.@spawn(profile_printing_listener())
+        errormonitor(profile_peek_task)
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
