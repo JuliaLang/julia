@@ -26,7 +26,7 @@ program completed successfully. In an interactive session, `exit()` can be calle
 the keyboard shortcut `^D`.
 """
 function exit(n)
-    wait_for_known_tasks()
+    generating_output() && wait_for_known_tasks()
     return ccall(:jl_exit, Cvoid, (Int32,), n)
 end
 exit() = exit(0)
