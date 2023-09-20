@@ -98,6 +98,8 @@ JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
+JL_DLLEXPORT jl_sym_t *jl_eval_sym;
+JL_DLLEXPORT jl_sym_t *jl_include_sym;
 JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 JL_DLLEXPORT jl_sym_t *jl_all_sym;
@@ -365,6 +367,8 @@ void jl_init_common_symbols(void)
     jl_aliasscope_sym = jl_symbol("aliasscope");
     jl_popaliasscope_sym = jl_symbol("popaliasscope");
     jl_thismodule_sym = jl_symbol("thismodule");
+    jl_eval_sym = jl_symbol("eval");
+    jl_include_sym = jl_symbol("include");
     jl_block_sym = jl_symbol("block");
     jl_atom_sym = jl_symbol("atom");
     jl_statement_sym = jl_symbol("statement");
