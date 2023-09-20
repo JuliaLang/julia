@@ -367,7 +367,7 @@ The individual components of the decomposition `F` can be retrieved via property
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
 !!! note
-    Each reference to the upper triangular factor via `F.R` necessarily allocates a new array.
+    Each reference to the upper triangular factor via `F.R` allocates a new array.
     It is therefore advisable to cache that array before subsequent repeated (elementwise)
     access, for instance.
 
