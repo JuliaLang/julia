@@ -326,7 +326,7 @@ end
             # line meta
             if d < 0
                 # line meta
-                error(\"dimension size must be nonnegative (got \$d)\")
+                error(\"dimension size must be non-negative (got \$d)\")
             end
             # line meta
             n *= d

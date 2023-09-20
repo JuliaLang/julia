@@ -1006,7 +1006,7 @@ end
 
 ## Computing the cost of a function body
 
-# saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
+# saturating sum (inputs are non-negative), prevents overflow with typemax(Int) below
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
