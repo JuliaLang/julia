@@ -1874,7 +1874,12 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
         a2 = argtypes[2]
         a3 = argtypes[3]
         ⊑ᵢ = ⊑(typeinf_lattice(interp))
-        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
+        if isvarargtype(a3)
+            a3 = unwrapva(a3)
+            nothrow = false
+        else
+            nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
+        end
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
