@@ -5,7 +5,7 @@ import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
-using InteractiveUtils: code_llvm
+using InteractiveUtils
 
 include("irutils.jl")
 
@@ -5230,3 +5230,8 @@ end |> only == Val{false}
 @test Base.return_types((Bool,)) do b
     Val(Core.Intrinsics.or_int(true, b))
 end |> only == Val{true}
+
+# https://github.com/JuliaLang/julia/issues/51310
+@test code_typed() do
+    b{c} = d...
+end |> only |> first isa Core.CodeInfo

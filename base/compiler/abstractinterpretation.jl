@@ -1858,7 +1858,12 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
         a2 = argtypes[2]
         a3 = argtypes[3]
         ⊑ᵢ = ⊑(typeinf_lattice(interp))
-        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
+        if isvarargtype(a3)
+            a3 = unwrapva(a3)
+            nothrow = false
+        else
+            nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
+        end
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
@@ -2252,7 +2257,6 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
     end
     return Any
 end
-
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, Expr)
