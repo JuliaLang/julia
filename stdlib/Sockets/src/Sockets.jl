@@ -603,9 +603,9 @@ end
 """
     keepalive(sock::Union{TCPServer, TCPSocket}, enable::Bool, delay::Int)
 
-Enable / disable TCP keep-alive. `delay` is the initial delay in seconds, ignored when `enable`` is false.
+Enable / disable TCP keep-alive. `delay` is the initial delay in seconds, ignored when `enable` is false.
 After delay has been reached, 10 successive probes, each spaced 1 second from the previous one, will still happen.
-If the connection is still lost at the end of this procedure, then the handle is destroyed with a UV_ETIMEDOUT error passed to the corresponding callback.
+If the connection is still lost at the end of this procedure, then the handle is destroyed and pending operations are failed with an ETIMEDOUT error.
 
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
@@ -615,7 +615,7 @@ function keepalive(sock::Union{TCPServer, TCPSocket}, enable::Bool, delay::Int)
     check_open(sock)
     err = ccall(:uv_tcp_keepalive, Cint, (Ptr{Nothing}, Cint, Cuint), sock.handle, Cint(enable), Cint(delay))
     iolock_end()
-    err == 0 || error("cannot $(enable ? "enable" : "disable") keepalive")
+    err == 0 || uv_error("uv_tcp_keepalive: failed to set keepalive on tcp socket", err)
     nothing
 end
 
