@@ -1961,7 +1961,7 @@ function _require(pkg::PkgId, env=nothing)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
                     finally
                         lock(require_lock)
                     end
