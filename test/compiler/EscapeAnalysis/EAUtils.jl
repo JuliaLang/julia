@@ -45,7 +45,8 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     mi = Core.Compiler.specialize_method(match)::MethodInstance
     interp = EscapeAnalyzer(world, mi)
     Core.Compiler.typeinf_ext(interp, mi)
-    return EscapeResult(interp.ir, interp.estate, interp.mi, debuginfo === :source, interp)
+    isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
+    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi, debuginfo === :source, interp)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -87,6 +88,12 @@ end
 EscapeCache() = EscapeCache(IdDict{MethodInstance,EscapeCacheInfo}())
 const GLOBAL_ESCAPE_CACHE = EscapeCache()
 
+struct EscapeResultForEntry
+    ir::IRCode
+    estate::EscapeState
+    mi::MethodInstance
+end
+
 mutable struct EscapeAnalyzer <: AbstractInterpreter
     const world::UInt
     const inf_params::InferenceParams
@@ -95,9 +102,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const code_cache::CodeCache
     const escape_cache::EscapeCache
     const entry_mi::MethodInstance
-    ir::IRCode
-    estate::EscapeState
-    mi::MethodInstance
+    result::EscapeResultForEntry
     function EscapeAnalyzer(world::UInt, entry_mi::MethodInstance,
                             code_cache::CodeCache=GLOBAL_CODE_CACHE,
                             escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
@@ -216,9 +221,7 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
     end
     if caller.linfo === interp.entry_mi
         # return back the result
-        interp.ir = cccopy(ir)
-        interp.estate = estate
-        interp.mi = sv.linfo
+        interp.result = EscapeResultForEntry(cccopy(ir), estate, sv.linfo)
     end
     record_escapes!(interp, caller, estate, ir)
     return ir

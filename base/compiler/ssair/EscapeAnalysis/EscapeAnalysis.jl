@@ -537,14 +537,14 @@ isaliased(xidx::Int, yidx::Int, estate::EscapeState) =
     in_same_set(estate.aliasset, xidx, yidx)
 
 struct ArgEscapeInfo
-    EscapeBits::UInt8
+    escape_bits::UInt8
 end
 function ArgEscapeInfo(x::EscapeInfo)
     x === ⊤ && return ArgEscapeInfo(ARG_ALL_ESCAPE)
-    EscapeBits = 0x00
-    has_return_escape(x) && (EscapeBits |= ARG_RETURN_ESCAPE)
-    has_thrown_escape(x) && (EscapeBits |= ARG_THROWN_ESCAPE)
-    return ArgEscapeInfo(EscapeBits)
+    escape_bits = 0x00
+    has_return_escape(x) && (escape_bits |= ARG_RETURN_ESCAPE)
+    has_thrown_escape(x) && (escape_bits |= ARG_THROWN_ESCAPE)
+    return ArgEscapeInfo(escape_bits)
 end
 
 const ARG_ALL_ESCAPE    = 0x01 << 0
@@ -552,9 +552,9 @@ const ARG_RETURN_ESCAPE = 0x01 << 1
 const ARG_THROWN_ESCAPE = 0x01 << 2
 
 has_no_escape(x::ArgEscapeInfo)     = !has_all_escape(x) && !has_return_escape(x) && !has_thrown_escape(x)
-has_all_escape(x::ArgEscapeInfo)    = x.EscapeBits & ARG_ALL_ESCAPE    ≠ 0
-has_return_escape(x::ArgEscapeInfo) = x.EscapeBits & ARG_RETURN_ESCAPE ≠ 0
-has_thrown_escape(x::ArgEscapeInfo) = x.EscapeBits & ARG_THROWN_ESCAPE ≠ 0
+has_all_escape(x::ArgEscapeInfo)    = x.escape_bits & ARG_ALL_ESCAPE    ≠ 0
+has_return_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_RETURN_ESCAPE ≠ 0
+has_thrown_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_THROWN_ESCAPE ≠ 0
 
 struct ArgAliasing
     aidx::Int
