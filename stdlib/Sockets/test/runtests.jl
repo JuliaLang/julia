@@ -555,6 +555,22 @@ end
     end
 end
 
+@testset "keepalive" begin
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4443)
+        srv = listen(addr)
+        let s = Sockets.TCPSocket()
+            Sockets.connect!(s, addr)
+            @test try
+                Sockets.keepalive(s, true, 120)
+                true
+            catch;
+                false
+            end
+            close(s)
+        end
+    end
+end
+
 @testset "iswritable" begin
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
         srv = listen(addr)
