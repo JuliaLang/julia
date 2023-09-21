@@ -564,23 +564,22 @@ end
 struct ArgEscapeCache
     argescapes::Vector{ArgEscapeInfo}
     argaliases::Vector{ArgAliasing}
-end
-
-function ArgEscapeCache(estate::EscapeState)
-    nargs = estate.nargs
-    argescapes = Vector{ArgEscapeInfo}(undef, nargs)
-    argaliases = ArgAliasing[]
-    for i = 1:nargs
-        info = estate.escapes[i]
-        @assert info.AliasInfo === true
-        argescapes[i] = ArgEscapeInfo(info)
-        for j = (i+1):nargs
-            if isaliased(i, j, estate)
-                push!(argaliases, ArgAliasing(i, j))
+    function ArgEscapeCache(estate::EscapeState)
+        nargs = estate.nargs
+        argescapes = Vector{ArgEscapeInfo}(undef, nargs)
+        argaliases = ArgAliasing[]
+        for i = 1:nargs
+            info = estate.escapes[i]
+            @assert info.AliasInfo === true
+            argescapes[i] = ArgEscapeInfo(info)
+            for j = (i+1):nargs
+                if isaliased(i, j, estate)
+                    push!(argaliases, ArgAliasing(i, j))
+                end
             end
         end
+        return new(argescapes, argaliases)
     end
-    return ArgEscapeCache(argescapes, argaliases)
 end
 
 abstract type Change end
@@ -1093,11 +1092,9 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
 end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
-escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    escape_invoke!(astate, pc, args, first(args)::MethodInstance, 2)
-
-function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
-                        mi::MethodInstance, first_idx::Int, last_idx::Int = length(args))
+function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    mi = first(args)::MethodInstance
+    first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
     if cache === nothing
@@ -1127,7 +1124,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
         end
     end
     for (; aidx, bidx) in cache.argaliases
-        add_alias_change!(astate, args[aidx-(first_idx-1)], args[bidx-(first_idx-1)])
+        add_alias_change!(astate, args[aidx+(first_idx-1)], args[bidx+(first_idx-1)])
     end
     # we should disable the alias analysis on this newly introduced object
     add_escape_change!(astate, ret, EscapeInfo(retinfo, true))
