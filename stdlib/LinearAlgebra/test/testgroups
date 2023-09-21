@@ -1,11 +1,11 @@
-addmul
 triangular
+addmul
+bidiag
 matmul
 dense
 symmetric
 diagonal
 special
-bidiag
 qr
 cholesky
 blas
@@ -27,3 +27,4 @@ pinv
 factorization
 abstractq
 ldlt
+symmetriceigen

@@ -107,6 +107,14 @@ for op in (:+, :-)
     end
 end
 
+# disambiguation between triangular and banded matrices, banded ones "dominate"
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)
@@ -322,27 +330,11 @@ end
 ==(A::Bidiagonal, B::SymTridiagonal) = iszero(_evview(B)) && iszero(A.ev) && A.dv == B.dv
 ==(B::SymTridiagonal, A::Bidiagonal) = A == B
 
-# concatenation
-const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
-const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
-const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
-const _Triangular_DenseArrays{T,A<:Matrix} = AbstractTriangular{T,A}
-const _Annotated_DenseArrays = Union{_SpecialArrays, _Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
-const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+# TODO: remove these deprecations (used by SparseArrays in the past)
+const _DenseConcatGroup = Union{}
+const _SpecialArrays = Union{}
 
-promote_to_array_type(::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
-
-Base._cat(dims, xs::_DenseConcatGroup...) = Base._cat_t(dims, promote_eltype(xs...), xs...)
-vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
-# For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base._cat_t(dims, T, xs...)
-vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
-hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
+promote_to_array_type(::Tuple) = Matrix
 
 # factorizations
 function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)

@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 1)
 function include(mod::Module, path::String)
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
     Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
@@ -125,7 +125,7 @@ include("options.jl")
 
 # define invoke(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to invoke
-function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
     # prepend kwargs and f to the invoked from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
@@ -136,7 +136,7 @@ setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
-function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
+function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
     @inline
     return applicable(Core.kwcall, kwargs, args...)
 end
@@ -163,6 +163,7 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+include("cmem.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
@@ -221,8 +222,8 @@ include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
+include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -313,30 +314,38 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
 const liblapack_name = libblas_name
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
-# Concurrency
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# ScopedValues
+include("scopedvalues.jl")
+using .ScopedValues
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
@@ -353,7 +362,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -488,6 +497,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+
 end_base_include = time_ns()
 
 const _sysimage_modules = PkgId[]
@@ -559,7 +572,8 @@ function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(Base, :Profile))
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
+
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -595,6 +609,12 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    _require_world_age[] = get_world_counter()
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+        JuliaSyntax.enable_in_core!()
+    end
     nothing
 end
 
@@ -603,5 +623,8 @@ end
 
 end
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))
 
 end # baremodule Base

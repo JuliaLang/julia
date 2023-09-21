@@ -320,7 +320,7 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64})
+function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
     isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
@@ -606,9 +606,9 @@ Number of ones in the binary representation of abs(x).
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 function top_set_bit(x::BigInt)
-    x < 0 && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
-    x == 0 && return 0
-    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+    isneg(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
+    iszero(x) && return 0
+    x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
@@ -628,11 +628,11 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
+    x == 1 && return x
+    x == -1 && return isodd(y) ? x : -x
     if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
     @noinline throw1(y) =
         throw(OverflowError("exponent $y is too large and computation will overflow"))
-    if x== 1; return x; end
-    if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
        x==0 && return x
 
@@ -843,8 +843,8 @@ Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), st
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
-if Limb === UInt
-    # this condition is true most (all?) of the time, and in this case we can define
+if Limb === UInt64 === UInt
+    # On 64 bit systems we can define
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
@@ -854,7 +854,7 @@ if Limb === UInt
         GC.@preserve n begin
             s = n.size
             s == 0 && return hash_integer(0, h)
-            p = convert(Ptr{UInt}, n.d)
+            p = convert(Ptr{UInt64}, n.d)
             b = unsafe_load(p)
             h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
             for k = 2:abs(s)
@@ -864,14 +864,11 @@ if Limb === UInt
         end
     end
 
-    _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
-    _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
-
     function hash(x::BigInt, h::UInt)
         GC.@preserve x begin
             sz = x.size
             sz == 0 && return hash(0, h)
-            ptr = Ptr{UInt}(x.d)
+            ptr = Ptr{UInt64}(x.d)
             if sz == 1
                 return hash(unsafe_load(ptr), h)
             elseif sz == -1
@@ -880,8 +877,8 @@ if Limb === UInt
             end
             pow = trailing_zeros(x)
             nd = Base.ndigits0z(x, 2)
-            idx = _divLimb(pow) + 1
-            shift = _modLimb(pow) % UInt
+            idx = (pow >>> 6) + 1
+            shift = (pow & 63) % UInt
             upshift = BITS_PER_LIMB - shift
             asz = abs(sz)
             if shift == 0
@@ -894,7 +891,6 @@ if Limb === UInt
             if nd <= 1024 && nd - pow <= 53
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
-            h = hash_integer(1, h)
             h = hash_integer(pow, h)
             h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
             for idx = idx+1:asz

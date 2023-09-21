@@ -54,7 +54,9 @@ Random.seed!(1)
     end
 
     @testset "Basic properties" begin
-        @test_throws ArgumentError size(D,0)
+        @test_throws BoundsError size(D,0)
+        @test size(D,1) == size(D,2) == length(dd)
+        @test size(D,3) == 1
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
@@ -78,6 +80,9 @@ Random.seed!(1)
         @test !istril(D, -1)
         @test istril(D, 1)
         @test istril(Diagonal(zero(diag(D))), -1)
+        @test Base.isstored(D,1,1)
+        @test !Base.isstored(D,1,2)
+        @test_throws BoundsError Base.isstored(D, n + 1, 1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -381,9 +386,17 @@ Random.seed!(1)
 
     @testset "conj and transpose" begin
         @test transpose(D) == D
-        if elty <: BlasComplex
+        if elty <: Real
+            @test transpose(D) === D
+            @test adjoint(D) === D
+        elseif elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
             @test adjoint(D) == conj(D)
+            local D2 = copy(D)
+            local D2adj = adjoint(D2)
+            D2adj[1,1] = rand(eltype(D2adj))
+            @test D2[1,1] == adjoint(D2adj[1,1])
+            @test D2adj' === D2
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
@@ -447,6 +460,12 @@ Random.seed!(1)
         @test vals isa AbstractVector{<:Furlong{1}}
         @test vecs isa AbstractMatrix{<:Furlong{0}}
     end
+end
+
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
 end
 
 @testset "rdiv! (#40887)" begin
@@ -747,6 +766,12 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    M = [1 2; 3 4]
+    for n in 0:1
+        D = Diagonal(fill(M, n))
+        @test D == Matrix{eltype(D)}(D)
+    end
 end
 
 @testset "linear solve for block diagonal matrices" begin

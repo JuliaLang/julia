@@ -653,6 +653,13 @@ julia> setprecision(40) do
 1.1000000000004
 ```
 
+!!! warning
+    The relation between [`setprecision`](@ref) or [`setrounding`](@ref) and
+    [`@big_str`](@ref), the macro used for `big` string literals (such as
+    `big"0.3"`), might not be intuitive, as a consequence of the fact that
+    `@big_str` is a macro. See the [`@big_str`](@ref) documentation for
+    details.
+
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 
 To make common numeric formulae and expressions clearer, Julia allows variables to be immediately

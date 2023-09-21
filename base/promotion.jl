@@ -18,10 +18,11 @@ Number
 ```
 """
 typejoin() = Bottom
-typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_foldable_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
+    @_nospecializeinfer_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -90,9 +91,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    while b !== Any
+    while !(b === Any)
         if a <: b.name.wrapper
-            while a.name !== b.name
+            while !(a.name === b.name)
                 a = supertype(a)::DataType
             end
             if a.name === Type.body.name
@@ -139,6 +140,7 @@ end
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
+    @_nospecializeinfer_meta
     if a <: b
         return Bottom
     end
@@ -239,7 +241,8 @@ function full_va_len(p::Core.SimpleVector)
 end
 
 # reduce typejoin over A[i:end]
-function tailjoin(A, i)
+function tailjoin(A::SimpleVector, i::Int)
+    @_foldable_meta
     if i > length(A)
         return unwrapva(A[end])
     end
@@ -323,6 +326,12 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type, ::Type) = Bottom
+# Define some methods to avoid needing to enumerate unrelated possibilities when presented
+# with Type{<:T}, and return a value in general accordance with the result given by promote_type
+promote_rule(::Type{Bottom}, slurp...) = Bottom
+promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
+promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
+promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that

@@ -491,6 +491,15 @@ invocation of `filter`. Calls to `flt` will be made when iterating over the
 returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
 
+!!! warning
+    Subsequent *lazy* transformations on the iterator returned from `filter`, such
+    as those performed by `Iterators.reverse` or `cycle`, will also delay calls to `flt`
+    until collecting or iterating over the returned iterable object. If the filter
+    predicate is nondeterministic or its return values depend on the order of iteration
+    over the elements of `itr`, composition with lazy transformations may result in
+    surprising behavior. If this is undesirable, either ensure that `flt` is a pure
+    function or collect intermediate `filter` iterators before further transformations.
+
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 
 # Examples
@@ -705,7 +714,7 @@ struct Take{I}
     xs::I
     n::Int
     function Take(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Take length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -764,7 +773,7 @@ struct Drop{I}
     xs::I
     n::Int
     function Drop(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Drop length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -1170,6 +1179,7 @@ IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
@@ -1181,6 +1191,7 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
+flatten_length(f, T::Type{Union{}}, slurp...) = 0
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     return N * length(f.it)
 end

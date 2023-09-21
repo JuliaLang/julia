@@ -810,6 +810,12 @@ end
     @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
     @test replace((1, missing), missing=>0) === (1, 0)
+
+    # test that MethodError is thrown for pairs
+    @test_throws MethodError replace(identity, 1=>2)
+    @test_throws MethodError replace(identity, 1=>2, 3=>4)
+    @test_throws MethodError replace!(identity, 1=>2)
+    @test_throws MethodError replace!(identity, 1=>2, 3=>4)
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

@@ -326,7 +326,7 @@ end
             # line meta
             if d < 0
                 # line meta
-                error(\"dimension size must be nonnegative (got \$d)\")
+                error(\"dimension size must be non-negative (got \$d)\")
             end
             # line meta
             n *= d
@@ -523,6 +523,13 @@ end
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
 
+# Test that public expressions are rendered nicely
+# though they are hard to create with quotes because public is not a context dependant keyword
+@test sprint(show, Expr(:public, Symbol("@foo"))) == ":(public @foo)"
+@test sprint(show, Expr(:public, :f,:o,:o)) == ":(public f, o, o)"
+s = sprint(show, :(module A; public x; end))
+@test match(r"^:\(module A\n  #= .* =#\n  #= .* =#\n  public x\n  end\)$", s) !== nothing
+
 # PR #38418
 module M1 var"#foo#"() = 2 end
 @test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
@@ -633,7 +640,7 @@ end
 @test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
-@test_repr "let @m(x), y=z; end"
+test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
@@ -789,6 +796,14 @@ let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
     @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+end
+
+function f49475(a=12.0; b) end
+let ms = methods(f49475)
+    @test length(ms) == 2
+    repr1 = sprint(show, "text/plain", ms[1])
+    repr2 = sprint(show, "text/plain", ms[2])
+    @test occursin("f49475(; ...)", repr1) || occursin("f49475(; ...)", repr2)
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -1001,6 +1016,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Printing of :(function (x...) end)
+@test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
@@ -1358,6 +1376,8 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 
+# Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -2046,8 +2066,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
@@ -2083,7 +2103,7 @@ end
 # with as unnamed "!" BB.
 let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    push!(ir.stmts.inst, Core.Compiler.ReturnNode())
+    push!(ir.stmts.stmt, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test all(isspace, pop!(lines))
     @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
@@ -2445,9 +2465,9 @@ end
 
     # replace an instruction
     add_stmt = ir.stmts[1]
-    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
     node = Core.Compiler.insert_node!(ir, 1, inst)
-    Core.Compiler.setindex!(add_stmt, node, :inst)
+    Core.Compiler.setindex!(add_stmt, node, :stmt)
 
     # the new node should be colored green (as it's uncompacted IR),
     # and its uses shouldn't be colored at all (since they're just plain valid references)
@@ -2458,7 +2478,7 @@ end
     @test contains(str, "%1 = %6")
 
     # if we insert an invalid node, it should be colored appropriately
-    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :stmt)
     str = sprint(; context=:color=>true) do io
         show(io, ir)
     end
@@ -2616,4 +2636,9 @@ end
 
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
+end
+
+let buf = IOBuffer()
+    Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
+    @test String(take!(buf)) == "(::Function)(::Any)"
 end

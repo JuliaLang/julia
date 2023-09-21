@@ -46,6 +46,11 @@ end
 
 # non-type specific math functions
 
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
+
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
         xy = x*y
@@ -1566,7 +1571,7 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
           :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
-          :exponent, :sqrt, :cbrt)
+          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
         x === xf && throw(MethodError($f, (x,)))

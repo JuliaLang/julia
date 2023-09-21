@@ -127,7 +127,11 @@ end
 
 _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}) = _memcmp(a, b, min(sizeof(a), sizeof(b)))
 function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len::Int)
-    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+    GC.@preserve a b begin
+        pa = unsafe_convert(Ptr{UInt8}, a)
+        pb = unsafe_convert(Ptr{UInt8}, b)
+        memcmp(pa, pb, len % Csize_t) % Int
+    end
 end
 
 function cmp(a::String, b::String)
@@ -400,7 +404,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return iterate_continued(s, i, u)
 end
 
-function iterate_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function iterate_continued(s, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -429,7 +434,8 @@ end
     return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function getindex_continued(s, i::Int, u::UInt32)
     if u < 0xc0000000
         # called from `getindex` which checks bounds
         @inbounds isvalid(s, i) && @goto ret
@@ -542,7 +548,7 @@ function repeat(c::AbstractChar, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        memset(p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

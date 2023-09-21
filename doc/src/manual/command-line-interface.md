@@ -1,4 +1,4 @@
-# Command-line Interface
+# [Command-line Interface](@id cli)
 
 ## Using arguments inside scripts
 
@@ -69,7 +69,7 @@ Note that although you should have a `~/.julia` directory once you've run Julia 
 first time, you may need to create the `~/.julia/config` folder and the
 `~/.julia/config/startup.jl` file if you use it.
 
-To have startup code run only in [The Julia REPL] (and not when `julia` is *e.g.* run
+To have startup code run only in [The Julia REPL](@ref) (and not when `julia` is *e.g.* run
 on a script), use [`atreplinit`](@ref) in `startup.jl`:
 
 ```julia
@@ -95,18 +95,19 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message).|
 |`--help-hidden`                        |Uncommon options not shown by `-h`|
-|`--project[={<dir>\|@.}]`              |Set `<dir>` as the home project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`--project[={<dir>\|@.}]`              |Set `<dir>` as the active project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
-|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH` environment variable is unset, load `~/.julia/config/startup.jl`|
+|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
-|`--compiled-modules={yes*\|no}`        |Enable or disable incremental precompilation of modules|
+|`--compiled-modules={yes*\|no\|existing}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files.|
 |`--pkgimages={yes*\|no}`               |Enable or disable usage of native code caching in the form of pkgimages|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
+| `--gcthreads {N}`                     |Enable N GC threads; If unspecified is set to half of the compute worker threads.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|

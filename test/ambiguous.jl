@@ -177,12 +177,10 @@ ambs = detect_ambiguities(Ambig48312)
         @test good
     end
 
-    # some ambiguities involving Union{} type parameters are expected, but not required
+    # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        m1 = which(Core.Compiler.convert, Tuple{Type{<:Core.IntrinsicFunction}, Any})
-        m2 = which(Core.Compiler.convert, Tuple{Type{<:Nothing}, Any})
-        pop!(ambig, (m1, m2))
         @test !isempty(ambig)
+        @test length(ambig) < 30
     end
 
     STDLIB_DIR = Sys.STDLIB
@@ -290,6 +288,30 @@ for f in (Ambig8.f, Ambig8.g)
     @test f(Int8(0)) == 4
     @test_throws MethodError f(0)
     @test_throws MethodError f(pi)
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
 end
 
 module Ambig9
@@ -378,6 +400,17 @@ let ambig = Ref{Int32}(0)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 1
+end
+
+fnoambig(::Int,::Int) = 1
+fnoambig(::Int,::Any) = 2
+fnoambig(::Any,::Int) = 3
+fnoambig(::Any,::Any) = 4
+let has_ambig = Ref(Int32(0))
+    ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
+    @test ms isa Vector
+    @test length(ms) == 4
+    @test has_ambig[] == 0
 end
 
 # issue #11407

@@ -9,7 +9,7 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::String
+    msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
 
@@ -253,6 +253,14 @@ function bitsunionsize(u::Union)
 end
 
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+function elsize(::Type{Ptr{T}}) where T
+    # this only must return something valid for values which satisfy is_valid_intrinsic_elptr(T),
+    # which includes Any and most concrete datatypes
+    T === Any && return sizeof(Ptr{Any})
+    T isa DataType || sizeof(Any) # throws
+    return LLT_ALIGN(Core.sizeof(T), datatype_alignment(T))
+end
+elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -277,8 +285,7 @@ segfault your program, in the same manner as C.
 function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
-    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-          dest, src, n * aligned_sizeof(T))
+    memmove(dest, src, n * aligned_sizeof(T))
     return dest
 end
 
@@ -325,13 +332,11 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
         ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, destp, src, srcp, n)
     elseif isbitstype(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-              destp, srcp, n * aligned_sizeof(T))
+        memmove(destp, srcp, n * aligned_sizeof(T))
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-              destp, srcp, n * aligned_sizeof(T))
+        memmove(destp, srcp, n * aligned_sizeof(T))
         # copy selector bytes
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+        memmove(
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
@@ -363,7 +368,7 @@ end
 
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be nonnegative.")
+    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
@@ -464,7 +469,10 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    t = @_gc_preserve_begin a
+    p = unsafe_convert(Ptr{Cvoid}, a)
+    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    @_gc_preserve_end t
     return a
 end
 
@@ -720,7 +728,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
 [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
@@ -1164,6 +1172,8 @@ See [`sizehint!`](@ref) for notes about the performance model.
 See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
 and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
+function append! end
+
 function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
@@ -1177,18 +1187,21 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
-function _append!(a, ::Union{HasLength,HasShape}, iter)
+function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     n = length(a)
     i = lastindex(a)
     resize!(a, n+Int(length(iter))::Int)
-    @_safeindex for (i, item) in zip(i+1:lastindex(a), iter)
-        a[i] = item
+    for (i, item) in zip(i+1:lastindex(a), iter)
+        if isa(a, Vector) # give better effects for builtin vectors
+            @_safeindex a[i] = item
+        else
+            a[i] = item
+        end
     end
     a
 end
-
-function _append!(a, ::IteratorSize, iter)
+function _append!(a::AbstractVector, ::IteratorSize, iter)
     for item in iter
         push!(a, item)
     end
@@ -1243,7 +1256,7 @@ pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
 
-function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     require_one_based_indexing(a)
     n = length(iter)
@@ -1254,7 +1267,7 @@ function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     end
     a
 end
-function _prepend!(a, ::IteratorSize, iter)
+function _prepend!(a::Vector, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
@@ -1744,7 +1757,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     if m == 0
         _deleteat!(a, i, 1)
     elseif m == 1
-        a[i] = ins[1]
+        a[i] = only(ins)
     else
         _growat!(a, i, m-1)
         k = 1
@@ -1826,23 +1839,50 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
-
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
-    c = _memcmp(a, b, min(length(a),length(b)))
+    ta = @_gc_preserve_begin a
+    tb = @_gc_preserve_begin b
+    pa = unsafe_convert(Ptr{Cvoid}, a)
+    pb = unsafe_convert(Ptr{Cvoid}, b)
+    c = memcmp(pa, pb, min(length(a),length(b)))
+    @_gc_preserve_end ta
+    @_gc_preserve_end tb
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
 const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-==(a::Arr, b::Arr) where {Arr <: BitIntegerArray} =
-    size(a) == size(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * length(a))
+function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
+    if size(a) == size(b)
+        ta = @_gc_preserve_begin a
+        tb = @_gc_preserve_begin b
+        pa = unsafe_convert(Ptr{Cvoid}, a)
+        pb = unsafe_convert(Ptr{Cvoid}, b)
+        c = memcmp(pa, pb, sizeof(eltype(Arr)) * length(a))
+        @_gc_preserve_end ta
+        @_gc_preserve_end tb
+        return c == 0
+    else
+        return false
+    end
+end
 
-# this is ~20% faster than the generic implementation above for very small arrays
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
-    len == length(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * len)
+    if len == length(b)
+        ta = @_gc_preserve_begin a
+        tb = @_gc_preserve_begin b
+        T = eltype(Arr)
+        pa = unsafe_convert(Ptr{T}, a)
+        pb = unsafe_convert(Ptr{T}, b)
+        c = memcmp(pa, pb, sizeof(T) * len)
+        @_gc_preserve_end ta
+        @_gc_preserve_end tb
+        return c == 0
+    else
+        return false
+    end
 end
 
 """
@@ -2000,18 +2040,6 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
-
-# disambiguation with LinAlg/special.jl
-# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
-# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
-hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
-hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
-vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
-vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
-    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
-    typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2405,9 +2433,8 @@ julia> findall(x -> x >= 0, d)
 ```
 """
 function findall(testf::Function, A)
-    T = eltype(keys(A))
     gen = (first(p) for p in pairs(A) if testf(last(p)))
-    isconcretetype(T) ? collect(T, gen) : collect(gen)
+    @default_eltype(gen) === Union{} ? collect(@default_eltype(keys(A)), gen) : collect(gen)
 end
 
 # Broadcasting is much faster for small testf, and computing
@@ -2459,41 +2486,18 @@ function findall(A)
 end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
-function _findall(f::Function, A::AbstractArray{Bool})
-    n = count(f, A)
+function findall(A::AbstractArray{Bool})
+    n = count(A)
     I = Vector{eltype(keys(A))}(undef, n)
-    isempty(I) && return I
-    _findall(f, I, A)
-end
-
-function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
-    len = length(I)
-    for (k, v) in pairs(A)
-        @inbounds I[cnt] = k
-        cnt += f(v)
-        cnt > len && return I
+    for (i,a) in pairs(A)
+        if a
+            I[cnt] = i
+            cnt += 1
+        end
     end
-    # In case of impure f, this line could potentially be hit. In that case,
-    # we can't assume I is the correct length.
-    resize!(I, cnt - 1)
+    I
 end
-
-function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
-    i = firstindex(A)
-    cnt = 1
-    len = length(I)
-    while cnt ≤ len
-        @inbounds I[cnt] = i
-        cnt += f(@inbounds A[i])
-        i = nextind(A, i)
-    end
-    cnt - 1 == len ? I : resize!(I, cnt - 1)
-end
-
-findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
-findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
-findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
@@ -2855,3 +2859,12 @@ function intersect(v::AbstractVector, r::AbstractRange)
     return vectorfilter(T, _shrink_filter!(seen), common)
 end
 intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
+
+# Here instead of range.jl for bootstrapping because `@propagate_inbounds` depends on Vectors.
+@propagate_inbounds function getindex(v::AbstractRange, i::Integer)
+    if i isa Bool # Not via dispatch to avoid ambiguities
+        throw(ArgumentError("invalid index: $i of type Bool"))
+    else
+        _getindex(v, i)
+    end
+end

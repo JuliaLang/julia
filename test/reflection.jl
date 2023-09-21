@@ -211,15 +211,21 @@ include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
+public this_is_public
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(Main, :this_is_not_defined)
 @test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(Main, :this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
+@test !isexported(@__MODULE__, :this_is_public)
 const a_value = 1
 @test which(@__MODULE__, :a_value) === @__MODULE__
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
 @test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
+@test !Base.ispublic(@__MODULE__, :a_value)
+@test Base.ispublic(@__MODULE__, :this_is_not_defined)
+@test Base.ispublic(@__MODULE__, :this_is_public)
+@test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
 # PR 13825
@@ -547,7 +553,7 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -909,10 +915,9 @@ _test_at_locals2(1,1,0.5f0)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
-                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
-                   #=binary=#false,
-                   params)
+                   #=binary=#false)
 end
 
 @test nameof(Any) === :Any
@@ -996,7 +1001,7 @@ end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -1038,6 +1043,10 @@ ambig_effects_test(a, b) = 1
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+@test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.DefaultArrayStyle{1}, Any, Vararg})) >=
+      10
 
 @testset "specializations" begin
     f(x) = 1
@@ -1054,3 +1063,16 @@ end
 @test !Base.ismutationfree(Vector{UInt64})
 
 @test Base.ismutationfree(Type{Union{}})
+
+module TestNames
+
+public publicized
+export exported
+
+publicized() = 1
+exported() = 1
+private() = 1
+
+end
+
+@test names(TestNames) == [:TestNames, :exported, :publicized]

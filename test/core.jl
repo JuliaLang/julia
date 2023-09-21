@@ -20,7 +20,7 @@ for (T, c) in (
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
     )
@@ -374,8 +374,8 @@ let ft = Base.datatype_fieldtypes
     @test ft(elT2.body)[1].parameters[1] === elT2
     @test Base.isconcretetype(ft(elT2.body)[1])
 end
-#struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
-@test_broken @isdefined S22624
+struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
+@test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
 
 # issue #42297
 mutable struct Node42297{T, V}
@@ -414,6 +414,18 @@ mutable struct FooFoo{A,B} y::FooFoo{A} end
 
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
+# make sure this self-referential struct doesn't crash type layout
+struct SelfTyA{V}
+    a::Base.RefValue{V}
+end
+struct SelfTyB{T}
+    a::T
+    b::SelfTyA{SelfTyB{T}}
+end
+let T = Base.RefValue{SelfTyB{Int}}
+    @test sizeof(T) === sizeof(Int)
+    @test sizeof(T.types[1]) === 2 * sizeof(Int)
+end
 
 let x = (2,3)
     @test +(x...) == 5
@@ -1694,7 +1706,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -4108,7 +4122,29 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
 end
+struct Z14477B
+    fld::Union{Nothing,Z14477B}
+    Z14477B() = new(new(nothing))
+end
+let z1 = Z14477B()
+    @test isa(z1, Z14477B)
+    @test isa(z1.fld, Z14477B)
+    @test isa(z1.fld.fld, Nothing)
+end
+struct Z14477C{T}
+    fld::Z14477C{Int8}
+    Z14477C() = new{Int16}(new{Int8}())
+end
+let z1 = Z14477C()
+    @test isa(z1, Z14477C)
+    @test isa(z1.fld, Z14477C)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
+end
+
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -4518,48 +4554,6 @@ test_shared_array_resize(Int)
 test_shared_array_resize(Any)
 end
 
-module TestArrayNUL
-using Test
-function check_nul(a::Vector{UInt8})
-    b = ccall(:jl_array_cconvert_cstring,
-              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
-    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
-    return b === a
-end
-
-a = UInt8[]
-b = "aaa"
-c = [0x2, 0x1, 0x3]
-
-@test check_nul(a)
-@test check_nul(unsafe_wrap(Vector{UInt8},b))
-@test check_nul(c)
-d = [0x2, 0x1, 0x3]
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
-@test check_nul(d)
-ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-f = unsafe_wrap(Array, pointer(d), length(d))
-@test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
-@test !check_nul(f)
-end
-
 # Copy of `#undef`
 copyto!(Vector{Any}(undef, 10), Vector{Any}(undef, 10))
 function test_copy_alias(::Type{T}) where T
@@ -4916,7 +4910,7 @@ struct f47209
     x::Int
     f47209()::Nothing = new(1)
 end
-@test_throws MethodError f47209()
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
@@ -5400,6 +5394,21 @@ function g37690()
     ()->x
 end
 @test g37690().x === 0
+
+# issue #48889
+function f48889()
+    let j=0, f, i
+        while j < 3
+            i = j + 1
+            if j == 0
+                f = ()->i
+            end
+            j += 1
+        end
+        f
+    end
+end
+@test f48889()() == 3
 
 function _assigns_and_captures_arg(a)
     a = a
@@ -7542,6 +7551,19 @@ end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+struct S36104{K,V}
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
+@test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
+@test !isdefined(S36104.body.body.name, :partial)
+@test hasfield(typeof(S36104.body.body.name), :partial)
+struct S36104{K,V}   # check that redefining it works
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
 # with a gensymmed unionall
 struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
@@ -7985,3 +8007,64 @@ f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 # Module as tparam in unionall
 struct ModTParamUnionAll{A, B}; end
 @test isa(objectid(ModTParamUnionAll{Base}), UInt)
+
+# effects for objectid
+for T in (Int, String, Symbol, Module)
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
+# objectid for datatypes is inconsistant for types that have unbound type parameters.
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
+
+# donotdelete should not taint consistency of the containing function
+f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
+@test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))
+
+# Test conditional UndefRefError (#50250)
+struct Foo50250
+    a::Int
+    x
+    Foo50250(a) = new()
+    Foo50250(a, x) = new(x)
+end
+
+struct Bar50250
+    a::Int
+    x
+    Bar50250(a) = new(a)
+    Bar50250(a, x) = new(a, x)
+end
+
+foo50250(b, y) = (b ? Foo50250(y, y) : Foo50250(y)).x
+bar50250(b, y) = (b ? Bar50250(y, y) : Bar50250(y)).x
+
+@test_throws UndefRefError foo50250(true, 1)
+@test_throws UndefRefError foo50250(false, 1)
+@test bar50250(true, 1) === 1
+@test_throws UndefRefError bar50250(false, 1)
+
+# Test that Type{typeof(Union{})} doesn't get codegen'ed as a constant (#50293)
+baz50293(x::Union{Type, Core.Const}) = Base.issingletontype(x)
+bar50293(@nospecialize(u)) = (Base.issingletontype(u.a), baz50293(u.a))
+let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
+    @test ab[1] == ab[2] == false
+end
+
+# `SimpleVector`-operations should be concrete-eval eligible
+@test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
+
+let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
+    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
+end

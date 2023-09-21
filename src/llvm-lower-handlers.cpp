@@ -8,6 +8,7 @@
 
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -16,7 +17,6 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
@@ -235,43 +235,14 @@ static bool lowerExcHandlers(Function &F) {
 
 } // anonymous namespace
 
-PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     bool modified = lowerExcHandlers(F);
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-
-struct LowerExcHandlersLegacy : public FunctionPass {
-    static char ID;
-    LowerExcHandlersLegacy() : FunctionPass(ID)
-    {}
-    bool runOnFunction(Function &F) {
-        bool modified = lowerExcHandlers(F);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
-#endif
-        return modified;
-    }
-};
-
-char LowerExcHandlersLegacy::ID = 0;
-static RegisterPass<LowerExcHandlersLegacy> X("LowerExcHandlers", "Lower Julia Exception Handlers",
-                                         false /* Only looks at CFG */,
-                                         false /* Analysis Pass */);
-
-Pass *createLowerExcHandlersPass()
-{
-    return new LowerExcHandlersLegacy();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLowerExcHandlersPass());
 }

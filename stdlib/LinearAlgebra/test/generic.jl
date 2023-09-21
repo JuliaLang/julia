@@ -77,6 +77,17 @@ n = 5 # should be odd
         X = fill(x, 1, 1)
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
     end
 
     @testset "det with nonstandard Number type" begin
@@ -558,7 +569,7 @@ end
 end
 
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin

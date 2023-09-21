@@ -3,6 +3,7 @@
 module LibGit2Tests
 
 import LibGit2
+using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
@@ -129,7 +130,7 @@ end
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
 
-    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+    LibGit2.@check @ccall libgit2.git_libgit2_opts(
         LibGit2.Consts.GET_SEARCH_PATH::Cint;
         LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
         buf::Ptr{LibGit2.Buffer})::Cint
@@ -139,7 +140,7 @@ function get_global_dir()
 end
 
 function set_global_dir(dir)
-    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+    LibGit2.@check @ccall libgit2.git_libgit2_opts(
         LibGit2.Consts.SET_SEARCH_PATH::Cint;
         LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
         dir::Cstring)::Cint
@@ -928,6 +929,14 @@ mktempdir() do dir
                     @test cmtr.email == test_sig.email
                     @test LibGit2.message(cmt) == commit_msg1
 
+                    # test that the parent is correct
+                    @test LibGit2.parentcount(cmt) == 0
+                    LibGit2.with(LibGit2.GitCommit(repo, commit_oid3)) do cmt3
+                        @test LibGit2.parentcount(cmt3) == 1
+                        @test LibGit2.parent_id(cmt3, 1) == commit_oid1
+                        @test LibGit2.GitHash(LibGit2.parent(cmt3, 1)) == commit_oid1
+                    end
+
                     # test showing the commit
                     showstr = split(sprint(show, cmt), "\n")
                     # the time of the commit will vary so just test the first two parts
@@ -1163,7 +1172,7 @@ mktempdir() do dir
 
                 # test workaround for git_tree_walk issue
                 # https://github.com/libgit2/libgit2/issues/4693
-                ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring),
+                ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring),
                       Cint(LibGit2.Error.Invalid), "previous error")
                 try
                     # file needs to exist in tree in order to trigger the stop walk condition

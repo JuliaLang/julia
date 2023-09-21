@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 23 # do not make changes without bumping the version #!
+const ser_version = 25 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -418,6 +418,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
+    serialize(s, meth.nospecializeinfer)
     serialize(s, meth.constprop)
     serialize(s, meth.purity)
     if isdefined(meth, :source)
@@ -1026,10 +1027,14 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
+    nospecializeinfer = false
     constprop = purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
+        if format_version(s) >= 24
+            nospecializeinfer = deserialize(s)::Bool
+        end
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
         end
@@ -1054,6 +1059,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
+        meth.nospecializeinfer = nospecializeinfer
         meth.constprop = constprop
         meth.purity = purity
         if template !== nothing
@@ -1154,7 +1160,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if length(ssaflags) ≠ length(code)
         # make sure the length of `ssaflags` matches that of `code`
         # so that the latest inference doesn't throw on IRs serialized from old versions
-        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+        ssaflags = UInt32[0x00 for _ in 1:length(code)]
+    elseif eltype(ssaflags) != UInt32
+        ssaflags = map(UInt32, ssaflags)
     end
     ci.ssaflags = ssaflags
     if pre_12
@@ -1194,6 +1202,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     if format_version(s) >= 20
         ci.has_fcall = deserialize(s)
+    end
+    if format_version(s) >= 24
+        ci.nospecializeinfer = deserialize(s)::Bool
     end
     if format_version(s) >= 21
         ci.inlining = deserialize(s)::UInt8
@@ -1368,7 +1379,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     end
                 else
                     # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs, f::$ty, args...) = $kws(kwargs, f, args...)
+                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
                 end
             end
         end

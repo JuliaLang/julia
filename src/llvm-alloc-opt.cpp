@@ -10,9 +10,9 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -37,7 +37,7 @@
 #include <map>
 #include <set>
 
-#define DEBUG_TYPE "alloc_opt"
+#define DEBUG_TYPE "alloc-opt"
 #include "julia_assert.h"
 
 using namespace llvm;
@@ -98,6 +98,11 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * * Handle jl_box*
  */
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
 struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
@@ -112,6 +117,7 @@ struct AllocOpt : public JuliaPassContext {
 struct Optimizer {
     Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
         : F(F),
+          ORE(&F),
           pass(pass),
           GetDT(std::move(GetDT))
     {}
@@ -139,6 +145,7 @@ private:
     void optimizeTag(CallInst *orig_inst);
 
     Function &F;
+    OptimizationRemarkEmitter ORE;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
     function_ref<DominatorTree &()> GetDT;
@@ -215,17 +222,29 @@ void Optimizer::optimizeAll()
         size_t sz = item.second;
         checkInst(orig);
         if (use_info.escaped) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         if (use_info.haserror || use_info.returned) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
+            REMARK([&]() {
+                return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
+                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+            });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
             // We can just delete all the uses.
@@ -246,16 +265,28 @@ void Optimizer::optimizeAll()
                 }
             }
         }
-        if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
-            // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig);
-            continue;
-        }
         if (has_refaggr) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
+        if (!use_info.hasunknownmem && !use_info.addrescaped) {
+            REMARK([&](){
+                return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+            });
+            // No one actually care about the memory layout of this object, split it.
+            splitOnStack(orig);
+            continue;
+        }
+        REMARK([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+        });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
@@ -324,8 +355,15 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
 
 void Optimizer::checkInst(Instruction *I)
 {
+    LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
-    jl_alloc::runEscapeAnalysis(I, required);
+    jl_alloc::runEscapeAnalysis(I, required, jl_alloc::EscapeAnalysisOptionalArgs().with_optimization_remark_emitter(&ORE));
+    REMARK([&](){
+        std::string suse_info;
+        llvm::raw_string_ostream osuse_info(suse_info);
+        use_info.dump(osuse_info);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+    });
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
@@ -394,36 +432,45 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
         abort();
     }
 #endif
-    // Record extra BBs that contain invisible uses.
+
+    // Record extra BBs that contain invisible uses with gc_preserve_{begin,end}.
+    // We traverse the dominator tree starting at each `gc_preserve_begin` and marking blocks
+    // as users until a corresponding `gc_preserve_end` is found. Blocks containing
+    // the `gc_preserve_end` have already been marked in the previous step.
     SmallSet<BasicBlock*, 8> extra_use;
     SmallVector<DomTreeNodeBase<BasicBlock>*, 8> dominated;
     for (auto preserve: use_info.preserves) {
-        for (auto RN = DT.getNode(preserve->getParent()); RN;
-             RN = dominated.empty() ? nullptr : dominated.pop_back_val()) {
-            for (auto N: *RN) {
-                auto bb = N->getBlock();
-                if (extra_use.count(bb))
-                    continue;
-                bool ended = false;
-                for (auto end: preserve->users()) {
-                    auto end_bb = cast<Instruction>(end)->getParent();
-                    auto end_node = DT.getNode(end_bb);
-                    if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
-                        ended = true;
-                        break;
-                    }
-                }
-                if (ended)
-                    continue;
-                bbs.insert(bb);
-                extra_use.insert(bb);
-                dominated.push_back(N);
-            }
-        }
         assert(dominated.empty());
+        dominated.push_back(DT.getNode(preserve->getParent()));
+        while (!dominated.empty()) {
+            auto N = dominated.pop_back_val();
+            if (!N) {
+                dominated.clear();
+                break;
+            }
+            auto bb = N->getBlock();
+            if (extra_use.count(bb))
+                continue;
+            bool ended = false;
+            for (auto end: preserve->users()) {
+                auto end_bb = cast<Instruction>(end)->getParent();
+                auto end_node = DT.getNode(end_bb);
+                if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
+                    ended = true;
+                    break;
+                }
+            }
+            if (ended)
+                continue;
+            bbs.insert(bb);
+            extra_use.insert(bb);
+            dominated.append(N->begin(), N->end());
+        }
     }
+
     // For each BB, find the first instruction(s) where the allocation is possibly dead.
     // If all successors are live, then there isn't one.
+    // If the BB has "invisible" uses, then there isn't one.
     // If all successors are dead, then it's the first instruction after the last use
     // within the BB.
     // If some successors are live and others are dead, it's the first instruction in
@@ -615,8 +662,10 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         }
         return false;
     };
-    if (simple_replace(orig_inst, new_inst))
+    if (simple_replace(orig_inst, new_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack move\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, new_inst};
     auto finish_cur = [&] () {
@@ -682,6 +731,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
+                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
+                assert(cast_t->getContext().supportsTypedPointers());
                 replace_i = new BitCastInst(replace_i, cast_t, "", user);
                 replace_i->setDebugLoc(user->getDebugLoc());
                 replace_i->takeName(user);
@@ -731,8 +782,10 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_remove(orig_inst))
+    if (simple_remove(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple remove of allocation was successful in removeAlloc\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, nullptr};
     auto finish_cur = [&] () {
@@ -818,6 +871,10 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             auto callee = call->getCalledOperand();
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
+                REMARK([&](){
+                    return OptimizationRemark(DEBUG_TYPE, "typeof", call)
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
                 // return the correct result.
@@ -894,8 +951,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_replace(orig_inst))
+    if (simple_replace(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack split\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, uint32_t(0)};
     auto finish_cur = [&] () {
@@ -1089,9 +1148,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
+#ifndef __clang_analyzer__
+                // FIXME: SA finds "Called C++ object pointer is null" inside the LLVM code.
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 call->replaceAllUsesWith(new_call);
+#endif
                 call->eraseFromParent();
                 return;
             }
@@ -1175,51 +1237,22 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func)
+    if (!alloc_obj_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
         return false;
+    }
     Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();
     bool modified = optimizer.finalize();
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }
 
-struct AllocOptLegacy : public FunctionPass {
-    static char ID;
-    AllocOpt opt;
-    AllocOptLegacy() : FunctionPass(ID) {
-        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-    }
-    bool doInitialization(Module &m) override {
-        return opt.doInitialization(m);
-    }
-    bool runOnFunction(Function &F) override {
-        return opt.runOnFunction(F, [this]() -> DominatorTree & {return getAnalysis<DominatorTreeWrapperPass>().getDomTree();});
-    }
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
-};
 
-char AllocOptLegacy::ID = 0;
-static RegisterPass<AllocOptLegacy> X("AllocOpt", "Promote heap allocation to stack",
-                                false /* Only looks at CFG */,
-                                false /* Analysis Pass */);
-
-}
-
-Pass *createAllocOptPass()
-{
-    return new AllocOptLegacy();
-}
-
+} // anonymous namespace
 PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     AllocOpt opt;
     bool modified = opt.doInitialization(*F.getParent());
@@ -1233,9 +1266,4 @@ PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     } else {
         return PreservedAnalyses::all();
     }
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createAllocOptPass());
 }

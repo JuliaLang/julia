@@ -1070,4 +1070,42 @@ end
     end
 end
 
+# issue #49746, thread safety in `atexit(f)`
+@testset "atexit thread safety" begin
+    f = () -> nothing
+    before_len = length(Base.atexit_hooks)
+    @sync begin
+        for _ in 1:1_000_000
+            Threads.@spawn begin
+                atexit(f)
+            end
+        end
+    end
+    @test length(Base.atexit_hooks) == before_len + 1_000_000
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+
+    # cleanup
+    Base.@lock Base._atexit_hooks_lock begin
+        deleteat!(Base.atexit_hooks, 1:1_000_000)
+    end
+end
+
+#Thread safety of threacall
+function threadcall_threads()
+    Threads.@threads for i = 1:8
+        ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 3)
+        @test unsafe_load(ptr) == 3
+        ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 4, 2)
+        @test unsafe_load(ptr, 1) == 3
+        @test unsafe_load(ptr, 2) == 4
+        @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+    end
+end
+@testset "threadcall + threads" begin
+    threadcall_threads() #Shouldn't crash!
+end
 end # main testset

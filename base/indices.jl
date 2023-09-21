@@ -92,7 +92,7 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -504,6 +504,7 @@ promote_rule(a::Type{IdentityUnitRange{T1}}, b::Type{IdentityUnitRange{T2}}) whe
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
+isassigned(iter::LinearIndices, i::Int) = checkbounds(Bool, iter, i)
 function getindex(iter::LinearIndices, i::Int)
     @inline
     @boundscheck checkbounds(iter, i)

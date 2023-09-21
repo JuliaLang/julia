@@ -199,7 +199,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
     v = transcode(Cwchar_t, String(s))
-    !isempty(v) && v[end] == 0 || push!(v, 0)
+    push!(v, 0)
     return v
 end
 
@@ -211,7 +211,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
+function unsafe_convert(::Type{Cstring}, s::String)
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -640,13 +640,11 @@ end
 
 
 function ccall_macro_lower(convention, func, rettype, types, args, nreq)
-    lowering = []
-    realargs = []
-    gcroots = []
+    statements = []
 
-    # if interpolation was used, ensure  variable is a function pointer at runtime.
+    # if interpolation was used, ensure the value is a function pointer at runtime.
     if Meta.isexpr(func, :$)
-        push!(lowering, Expr(:(=), :func, esc(func.args[1])))
+        push!(statements, Expr(:(=), :func, esc(func.args[1])))
         name = QuoteNode(func.args[1])
         func = :func
         check = quote
@@ -655,31 +653,14 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
                 throw(ArgumentError("interpolated function `$name` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        push!(lowering, check)
+        push!(statements, check)
     else
         func = esc(func)
     end
 
-    for (i, (arg, type)) in enumerate(zip(args, types))
-        sym = Symbol(string("arg", i, "root"))
-        sym2 = Symbol(string("arg", i, ))
-        earg, etype = esc(arg), esc(type)
-        push!(lowering, :(local $sym = $(GlobalRef(Base, :cconvert))($etype, $earg)))
-        push!(lowering, :(local $sym2 = $(GlobalRef(Base, :unsafe_convert))($etype, $sym)))
-        push!(realargs, sym2)
-        push!(gcroots, sym)
-    end
-    etypes = Expr(:call, Expr(:core, :svec), types...)
-    exp = Expr(:foreigncall,
-               func,
-               esc(rettype),
-               esc(etypes),
-               nreq,
-               QuoteNode(convention),
-               realargs..., gcroots...)
-    push!(lowering, exp)
-
-    return Expr(:block, lowering...)
+    return Expr(:block, statements...,
+                Expr(:call, :ccall, func, Expr(:cconv, convention, nreq), esc(rettype),
+                     Expr(:tuple, map(esc, types)...), map(esc, args)...))
 end
 
 """

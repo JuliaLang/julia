@@ -254,11 +254,6 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. It has an
     integer-valued `id` field giving the slot index.
     The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
-    When a slot has different types at different uses and thus requires per-use type annotations,
-    they are converted to temporary `Core.Compiler.TypedSlot` object. This object has an
-    additional `typ` field as well as the `id` field. Note that `Core.Compiler.TypedSlot`
-    only appears in an unoptimized lowered form that is scheduled for optimization,
-    and it never appears elsewhere.
 
   * `Argument`
 
@@ -437,10 +432,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `the_exception`
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
-
-  * `undefcheck`
-
-    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
 
   * `enter`
 
@@ -657,7 +648,7 @@ for important details on how to modify these fields safely.
     The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - Not compiled yet
-      * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 1 - `JL_CALLABLE` `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`

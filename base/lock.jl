@@ -10,8 +10,8 @@ Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required (this is what the "Reentrant" part
 of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
-Calling 'lock' will also inhibit running of finalizers on that thread until the
-corresponding 'unlock'. Use of the standard lock pattern illustrated below
+Calling `lock` will also inhibit running of finalizers on that thread until the
+corresponding `unlock`. Use of the standard lock pattern illustrated below
 should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
@@ -435,10 +435,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    notify::Threads.Condition
-    autoreset::Bool
+    const notify::ThreadSynchronizer
+    const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
+    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
 end
 
 function wait(e::Event)
@@ -481,8 +481,8 @@ end
 """
     reset(::Event)
 
-Reset an Event back into an un-set state. Then any future calls to `wait` will
-block until `notify` is called again.
+Reset an [`Event`](@ref) back into an un-set state. Then any future calls to `wait` will
+block until [`notify`](@ref) is called again.
 """
 function reset(e::Event)
     @atomic e.set = false # full barrier

@@ -267,7 +267,7 @@ end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
-function banner(io::IO = stdout)
+function banner(io::IO = stdout; short = false)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)
@@ -298,27 +298,41 @@ function banner(io::IO = stdout)
         d3 = c[:bold] * c[:green]   # third dot
         d4 = c[:bold] * c[:magenta] # fourth dot
 
-        print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-          $(jl)| | | | | | |/ _` |$(tx)  |
-          $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-         $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
 
-        """)
+            """)
+        end
     else
-        print(io,"""
-                       _
-           _       _ _(_)_     |  Documentation: https://docs.julialang.org
-          (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-          | | | | | | |/ _` |  |
-          | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-         _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |
+        if short
+            print(io,"""
+              o  |  Version $(VERSION)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
 
-        """)
+            """)
+        end
     end
 end

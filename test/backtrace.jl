@@ -196,6 +196,13 @@ end
 
 # Syntax error locations appear in backtraces
 let trace = try
+        eval(Expr(:error, 1))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func === Symbol("top-level scope")
+end
+let trace = try
         include_string(@__MODULE__,
             """
 
@@ -221,7 +228,7 @@ let trace = try
     end
     @test trace[1].func === Symbol("top-level scope")
     @test trace[1].file === :a_filename
-    @test trace[1].line == 2
+    @test trace[1].line == 3
 end
 
 # issue #45171

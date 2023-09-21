@@ -265,8 +265,10 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
-        @test_throws BoundsError map(foo, (), (1,))
-        @test_throws BoundsError map(foo, (1,), ())
+        @test map(foo, longtuple, vlongtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, (), (1,)) === ()
+        @test map(foo, (1,), ()) === ()
     end
 
     @testset "n arguments" begin
@@ -276,8 +278,11 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
         @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
-        @test_throws BoundsError map(foo, (), (1,), (1,))
-        @test_throws BoundsError map(foo, (1,), (1,), ())
+        @test map(foo, vlongtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, vlongtuple) === ntuple(i->3i,20)
+        @test map(foo, (), (1,), (1,)) === ()
+        @test map(foo, (1,), (1,), ()) === ()
     end
 end
 
@@ -791,3 +796,8 @@ namedtup = (;a=1, b=2, c=3)
 @test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
 @test Tuple{} <: Tuple{Vararg{Union{},N}} where N
 @test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+
+@test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
+@test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
+@test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
+@test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}

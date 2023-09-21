@@ -30,8 +30,6 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* Review [Writing Documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/manual/documentation.md#writing-documentation).
-
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
 * Relax and have fun!
@@ -183,20 +181,18 @@ At the moment, this should always be done with the following `compat` admonition
       This method was added in Julia 1.X.
   ```
 
-#### Documenting unstable APIs
-
-Some contributions are intended primarily for internal use or may be part of an API that is still in development. In addition to appropriate documentation, relevant code should be clearly annotated as unstable as follows:
-
-  ```
-  !!! danger "Unstable"
-      This method is unstable and subject to change without notice.
-  ```
-
 ### Contributing to core functionality or base libraries
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
+The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
+
+Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
+i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
+
+You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
+for merging. This will prevent accidental merging of work that is in progress.
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
@@ -336,7 +332,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
- - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 

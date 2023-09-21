@@ -20,7 +20,6 @@
 #include <llvm/Pass.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
@@ -51,8 +50,12 @@ namespace {
 
 static bool have_fp16(Function &caller, const Triple &TT) {
     Attribute FSAttr = caller.getFnAttribute("target-features");
-    StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
+    StringRef FS = "";
+    if (FSAttr.isValid())
+        FS = FSAttr.getValueAsString();
+    else if (jl_ExecutionEngine)
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    // else probably called from opt, just do nothing
     if (TT.isAArch64()) {
         if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
             return true;
@@ -61,6 +64,9 @@ static bool have_fp16(Function &caller, const Triple &TT) {
         if (FS.find("+avx512fp16") != llvm::StringRef::npos){
             return true;
         }
+    }
+    if (caller.hasFnAttribute("julia.hasfp16")) {
+        return true;
     }
     return false;
 }
@@ -177,7 +183,7 @@ static bool demoteFloat16(Function &F)
         for (auto V : erase)
             V->eraseFromParent();
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
+        assert(!verifyLLVMIR(F));
 #endif
         return true;
     }
@@ -187,40 +193,10 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses DemoteFloat16Pass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (demoteFloat16(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-namespace {
-
-struct DemoteFloat16Legacy : public FunctionPass {
-    static char ID;
-    DemoteFloat16Legacy() : FunctionPass(ID){};
-
-private:
-    bool runOnFunction(Function &F) override {
-        return demoteFloat16(F);
-    }
-};
-
-char DemoteFloat16Legacy::ID = 0;
-static RegisterPass<DemoteFloat16Legacy>
-        Y("DemoteFloat16",
-          "Demote Float16 operations to Float32 equivalents.",
-          false,
-          false);
-} // end anonymous namespac
-
-Pass *createDemoteFloat16Pass()
-{
-    return new DemoteFloat16Legacy();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createDemoteFloat16Pass());
 }

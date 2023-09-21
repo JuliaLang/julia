@@ -199,41 +199,31 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
-    if @isdefined(E)
-        return E
-    else
-        # TODO: need to guard against E being miscomputed by subtyping (ref #23017)
-        # and compute the result manually in this case
-        return _compute_eltype(t)
-    end
-end
+# the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
+eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _tuple_unique_fieldtypes(@nospecialize t)
+function _compute_eltype(@nospecialize t)
     @_total_meta
-    types = IdSet()
+    has_free_typevars(t) && return Any
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
     if t´ isa Union
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
-    else
-        for ti in (t´::DataType).parameters
-            push!(types, rewrap_unionall(unwrapva(ti), t))
-        end
+        return promote_typejoin(_compute_eltype(rewrap_unionall(t´.a, t)),
+                                _compute_eltype(rewrap_unionall(t´.b, t)))
     end
-    return Core.svec(types...)
-end
-function _compute_eltype(@nospecialize t)
-    @_total_meta # TODO: the compiler shouldn't need this
-    types = _tuple_unique_fieldtypes(t)
-    return afoldl(types...) do a, b
-        # if we've already reached Any, it can't widen any more
-        a === Any && return Any
-        b === Any && return Any
-        return promote_typejoin(a, b)
+    p = (t´::DataType).parameters
+    length(p) == 0 && return Union{}
+    elt = rewrap_unionall(unwrapva(p[1]), t)
+    elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+    r = elt
+    for i in 2:length(p)
+        r === Any && return r # if we've already reached Any, it can't widen any more
+        elt = rewrap_unionall(unwrapva(p[i]), t)
+        elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+        r = promote_typejoin(elt, r)
     end
+    return r
 end
 
 # We'd like to be able to infer eltype(::Tuple), which needs to be able to
@@ -313,6 +303,8 @@ function map(f, t::Any32)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
+map(f, t::Tuple,          s::Tuple{})        = ()
+map(f, t::Tuple{},        s::Tuple)          = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@inline; (f(t[1],s[1]),))
 map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@inline; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
@@ -320,7 +312,7 @@ function map(f, t::Tuple, s::Tuple)
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any32, s::Any32)
-    n = length(t)
+    n = min(length(t), length(s))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
@@ -331,12 +323,16 @@ end
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
 map(f, ::Tuple{}...) = ()
+anyempty(x::Tuple{}, xs...) = true
+anyempty(x::Tuple, xs...) = anyempty(xs...)
+anyempty() = false
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @inline
+    anyempty(t1, t2, ts...) && return ()
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
 function map(f, t1::Any32, t2::Any32, ts::Any32...)
-    n = length(t1)
+    n = min(length(t1), length(t2), minimum(length, ts))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
