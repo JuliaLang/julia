@@ -5235,3 +5235,11 @@ end |> only == Val{true}
 @test code_typed() do
     b{c} = d...
 end |> only |> first isa Core.CodeInfo
+
+abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)
+@test only(Base.return_types(abstract_call_unionall_vararg)) !== Union{}
+let TV = TypeVar(:T)
+    t = Vector{TV}
+    some = Some{Any}((TV, t))
+    @test abstract_call_unionall_vararg(some) isa UnionAll
+end
