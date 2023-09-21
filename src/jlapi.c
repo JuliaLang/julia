@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <libgen.h>
 #include "julia.h"
 #include "options.h"
 #include "julia_assert.h"
