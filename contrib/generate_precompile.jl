@@ -153,15 +153,6 @@ if Artifacts !== nothing
     """
 end
 
-Pkg = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
-          nothing)
-
-if Pkg !== nothing
-    # TODO: Split Pkg precompile script into REPL and script part
-    repl_script = Pkg.precompile_script * repl_script # do larger workloads first for better parallelization
-end
-
 FileWatching = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
           nothing)
@@ -192,7 +183,6 @@ if InteractiveUtils !== nothing
 end
 
 const JULIA_PROMPT = "julia> "
-const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
 
@@ -366,7 +356,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                     while !eof(output_copy)
                         strbuf *= String(readavailable(output_copy))
                         occursin(JULIA_PROMPT, strbuf) && break
-                        occursin(PKG_PROMPT, strbuf) && break
                         occursin(SHELL_PROMPT, strbuf) && break
                         occursin(HELP_PROMPT, strbuf) && break
                         sleep(0.1)
@@ -455,7 +444,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     println()
     # Seems like a reasonable number right now, adjust as needed
     # comment out if debugging script
-    n_succeeded > (have_repl ? 900 : 90) || @warn "Only $n_succeeded precompile statements"
+    n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
     fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
