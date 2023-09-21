@@ -1,0 +1,59 @@
+.\" To get a preview of the man page as it will actually be displayed, run
+.\"
+.\" > nroff -man juliax.1 | less
+.\"
+.\" at the terminal.
+.\"
+
+.TH JULIAC 1 2023-09-01 JULIA
+
+.\" from the front page of https://julialang.org/
+.SH NAME
+juliax - Experimental driver for the julia programming language
+
+.SH SYNOPSIS
+\fBjulia\fR [OPTIONS...] \fB--\fR PROGRAMMFILE
+
+If a Julia source file is given as a \fIPROGRAMFILE\fP (optionally followed by
+arguments in \fIARGS\fP) Julia will execute the program and exit.
+
+.SH DESCRIPTION
+This is the unstable, experimental driver for the Julia programming language.
+This interface is currently not stable across Julia versions. The behavior of
+this driver matches that of
+.BR julia (1)
+except for the differences noted below.
+
+.SH "COMMAND-LINE OPTIONS"
+
+.TP
+--math-mode=fast
+In juliax, this option is an error. In
+.BR julia (1)
+this options is silently ignored.
+
+.TP
+--cli-mode
+In juliax, this option is an error. In
+.BR julia (1)
+may be used to switch into juliax mode.
+
+.SH FILES AND ENVIRONMENT
+See https://docs.julialang.org/en/v1/manual/environment-variables/
+
+.SH BUGS
+Please report any bugs using the GitHub issue tracker:
+https://github.com/julialang/julia/issues?state=open
+
+.SH AUTHORS
+Contributors: https://github.com/JuliaLang/julia/graphs/contributors
+
+.SH INTERNET RESOURCES
+Website:  https://julialang.org/
+.br
+Documentation:  https://docs.julialang.org/
+.br
+Downloads:  https://julialang.org/downloads/
+
+.SH LICENSING
+Julia is an open-source project. It is made available under the MIT license.

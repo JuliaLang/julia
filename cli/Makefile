@@ -99,7 +99,7 @@ $(build_bindir)/julia$(EXE): $(BUILDDIR)/Info.plist
 $(build_bindir)/julia-debug$(EXE): $(BUILDDIR)/Info.plist
 endif
 
-julia-release: $(build_bindir)/julia$(EXE)
+julia-release: $(build_bindir)/julia$(EXE) $(build_bindir)/juliac$(EXE) $(build_bindir)/juliax$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
@@ -147,6 +147,14 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
+
+ifneq ($(OS), WINNT)
+$(build_bindir)/juliac$(EXE) $(build_bindir)/juliax$(EXE): $(build_bindir)/julia$(EXE)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+else
+$(build_bindir)/juliac$(EXE) $(build_bindir)/juliax$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT) | $(build_bindir)
+	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia)
+endif
 
 $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
 	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'

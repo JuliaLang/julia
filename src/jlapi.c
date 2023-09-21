@@ -26,6 +26,9 @@ extern "C" {
 #include <fenv.h>
 #endif
 
+const char juliax_name[] = "juliax";
+const char juliac_name[] = "juliac";
+
 JL_DLLEXPORT int jl_is_initialized(void)
 {
     return jl_main_module != NULL;
@@ -687,6 +690,18 @@ static void rr_detach_teleport(void) {
 }
 #endif
 
+// We match any basename that is equal to plain `name`, or `name`,
+// followed by a dot and arbitrary suffix (to allow extensions or
+// version numbers).
+static int matches_basename(const char *basename, const char *name, size_t len)
+{
+    if (strncmp(basename, name, len) != 0)
+        return 0;
+    if (!basename[len])
+        return 1;
+    return basename[len] == '.';
+}
+
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
 #ifdef USE_TRACY
@@ -707,8 +722,23 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
         memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
         argc--;
     }
+
+    if (argc > 0) {
+        char *exe_basename = basename(argv[0]);
+        if (matches_basename(exe_basename, juliax_name, sizeof(juliax_name) - 1)) {
+            jl_options.cli_mode = JL_OPTIONS_CLI_MODE_EXPERIMENTAL;
+        }
+        else if (matches_basename(exe_basename, juliac_name, sizeof(juliac_name) - 1)) {
+            jl_options.cli_mode = JL_OPTIONS_CLI_MODE_COMPILER;
+        }
+    }
+
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
+
+    if (jl_options.cli_mode == JL_OPTIONS_CLI_MODE_COMPILER) {
+        jl_error("juliac is currently a placeholder. Check back later!");
+    }
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of

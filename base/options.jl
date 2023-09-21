@@ -2,6 +2,7 @@
 
 # NOTE: This type needs to be kept in sync with jl_options in src/jloptions.h
 struct JLOptions
+    cli_mode::Int8
     quiet::Int8
     banner::Int8
     julia_bindir::Ptr{UInt8}

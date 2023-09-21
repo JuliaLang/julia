@@ -42,6 +42,9 @@ You can get a complete list of the public symbols from a module with `names(MyMo
 
 Package authors are encouraged to define their public API similarly.
 
+In addition, the documented and semantically observable behaviors of the `julia` CLI driver
+(but not the `juliax` and `juliac` drivers) are considered part of the public API.
+
 Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
 will not be removed or receive meaningful breaking changes before Julia 2.0.
 

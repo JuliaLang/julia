@@ -6,6 +6,7 @@
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
 
 typedef struct {
+    int8_t cli_mode;
     int8_t quiet;
     int8_t banner;
     const char *julia_bindir;

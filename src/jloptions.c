@@ -31,7 +31,8 @@ JL_DLLEXPORT void jl_init_options(void)
     if (jl_options_initialized)
         return;
     jl_options =
-        (jl_options_t){ 0,    // quiet
+        (jl_options_t){ JL_OPTIONS_CLI_MODE_TRADITIONAL, // cli_mode
+                        0,    // quiet
                         -1,   // banner
                         NULL, // julia_bindir
                         NULL, // julia_bin
@@ -194,6 +195,8 @@ static const char opts[]  =
 
 static const char opts_hidden[]  =
     "Switches (a '*' marks the default value, if applicable):\n\n"
+    " --cli-mode=julia{|x|c}   Switch CLI driver to experimental or compiler mode.\n"
+
     // code generation options
     " --compile={yes*|no|all|min}\n"
     "                          Enable or disable JIT compiler, or request exhaustive or minimal compilation\n\n"
@@ -259,7 +262,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_cli_mode,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -321,6 +325,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "cli-mode",        required_argument, 0, opt_cli_mode },
         { 0, 0, 0, 0 }
     };
 
@@ -333,16 +338,19 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
+    int nprocessed = 0;
     int pkgimage_explicit = 0;
     int argc = *argcp;
     char **argv = *argvp;
     char *endptr;
     opterr = 0; // suppress getopt warning messages
+
     while (1) {
         int lastind = optind;
         int c = getopt_long(argc, argv, shortopts, longopts, 0);
         if (c == -1) break;
 restart_switch:
+        nprocessed += 1;
         switch (c) {
         case 0:
             break;
@@ -757,8 +765,11 @@ restart_switch:
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
-            else if (!strcmp(optarg,"fast"))
+            else if (!strcmp(optarg,"fast")) {
+                if (jl_options.cli_mode != JL_OPTIONS_CLI_MODE_TRADITIONAL)
+                    jl_errorf("juliax: --math-mode=fast is deprecated. It is non-functional in `julia` mode and disabled in `juliax`.");
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
+            }
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
@@ -854,6 +865,20 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_cli_mode:
+            if (nprocessed != 1)
+                jl_errorf("julia: --cli-mode must be the first argument");
+            if (jl_options.cli_mode != JL_OPTIONS_CLI_MODE_TRADITIONAL)
+                jl_errorf("julia: CLI mode switch is only available in `julia` driver");
+            if (!strcmp(optarg,"julia"))
+                jl_options.cli_mode = JL_OPTIONS_CLI_MODE_TRADITIONAL;
+            else if (!strcmp(optarg,"juliax"))
+                jl_options.cli_mode = JL_OPTIONS_CLI_MODE_EXPERIMENTAL;
+            else if (!strcmp(optarg,"juliac"))
+                jl_options.cli_mode = JL_OPTIONS_CLI_MODE_COMPILER;
+            else
+                jl_errorf("julia: invalid argument to --cli-mode=julia{|x|c} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
