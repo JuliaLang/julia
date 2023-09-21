@@ -926,6 +926,12 @@ end
         m = MersenneTwister(0); rand(m, Int64); rand(m)
         @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
         @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+
+        # negative seeds
+        Random.seed!(m, -3)
+        @test string(m) == "MersenneTwister(-3)"
+        Random.seed!(m, typemin(Int8))
+        @test string(m) == "MersenneTwister(-128)"
     end
 
     @testset "RandomDevice" begin
@@ -1145,6 +1151,36 @@ end
         for T ∈ (Float64, UInt64, Int, Char, Bool)
             @test rand(x1, T, 5) == rand(x2, T, 5)
             @test rand(jump_192!(x1), T, 5) == rand(jump_192!(x2), T, 5)
+        end
+    end
+end
+
+@testset "seed! and make_seed" begin
+    # Test that:
+    # 1) if n == m, then make_seed(n) == make_seed(m)
+    # 2) if n != m, then make_seed(n) != make_seed(m)
+    rngs = (Xoshiro(0), TaskLocalRNG(), MersenneTwister(0))
+    seeds = Any[]
+    for T = Base.BitInteger_types
+        append!(seeds, rand(T, 8))
+        push!(seeds, typemin(T), typemin(T) + T(1), typemin(T) + T(2),
+              typemax(T), typemax(T) - T(1), typemax(T) - T(2))
+        T <: Signed && push!(seeds, T(0), T(1), T(2), T(-1), T(-2))
+    end
+
+    vseeds = Dict{Vector{UInt32}, BigInt}()
+    for seed = seeds
+        bigseed = big(seed)
+        vseed = Random.make_seed(bigseed)
+        # test property 1) above
+        @test Random.make_seed(seed) == vseed
+        # test property 2) above
+        @test bigseed == get!(vseeds, vseed, bigseed)
+        # test that the property 1) is actually inherited by `seed!`
+        for rng = rngs
+            rng2 = copy(Random.seed!(rng, seed))
+            Random.seed!(rng, bigseed)
+            @test rng == rng2
         end
     end
 end

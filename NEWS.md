@@ -51,6 +51,8 @@ Standard library changes
 
 #### Random
 
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+
 #### REPL
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable

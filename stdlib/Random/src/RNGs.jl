@@ -83,12 +83,12 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 Create a `MersenneTwister` RNG object. Different RNG objects can have
 their own seeds, which may be useful for generating different streams
 of random numbers.
-The `seed` may be a non-negative integer or a vector of
-`UInt32` integers. If no seed is provided, a randomly generated one
-is created (using entropy from the system).
-See the [`seed!`](@ref) function for reseeding an already existing
-`MersenneTwister` object.
+The `seed` may be an integer or a vector of `UInt32` integers.
+If no seed is provided, a randomly generated one is created (using entropy from the system).
+See the [`seed!`](@ref) function for reseeding an already existing `MersenneTwister` object.
 
+!!! compat "Julia 1.11"
+    Passing a negative integer seed requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -290,20 +290,51 @@ function make_seed()
     end
 end
 
+"""
+    make_seed(n::Integer) -> Vector{UInt32}
+
+Transform `n` into a bit pattern encoded as a `Vector{UInt32}`, suitable for
+RNG seeding routines.
+
+`make_seed` is "injective" : if `n != m`, then `make_seed(n) != `make_seed(m)`.
+Moreover, if `n == m`, then `make_seed(n) == make_seed(m)`.
+
+This is an internal function, subject to change.
+"""
 function make_seed(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
-    seed = UInt32[]
-    while true
-        push!(seed, n & 0xffffffff)
-        n >>= 32
-        if n == 0
-            return seed
-        end
+    neg = signbit(n)
+    n = abs(n) # n can still be negative, e.g. n == typemin(Int)
+    if n < 0
+        # we assume that `unsigned` can be called on integers `n` for which `abs(n)` is
+        # negative; `unsigned` is necessary for `n & 0xffffffff` below, which would
+        # otherwise propagate the sign bit of `n` for types smaller than UInt32
+        n = unsigned(n)
     end
+    seed = UInt32[]
+    # we directly encode the bit pattern of `abs(n)` into the resulting vector `seed`;
+    # to greatly limit breaking the streams of random numbers, we encode the sign bit
+    # as the upper bit of `seed[end]` (i.e. for most positive seeds, `make_seed` returns
+    # the same vector as when we didn't encode the sign bit)
+    while !iszero(n)
+        push!(seed, n & 0xffffffff)
+        n >>>= 32
+    end
+    if isempty(seed) || !iszero(seed[end] & 0x80000000)
+        push!(seed, zero(UInt32))
+    end
+    if neg
+        seed[end] |= 0x80000000
+    end
+    seed
 end
 
 # inverse of make_seed(::Integer)
-from_seed(a::Vector{UInt32})::BigInt = sum(a[i] * big(2)^(32*(i-1)) for i in 1:length(a))
+function from_seed(a::Vector{UInt32})::BigInt
+    neg = !iszero(a[end] & 0x80000000)
+    seed = sum((i == length(a) ? a[i] & 0x7fffffff : a[i]) * big(2)^(32*(i-1))
+               for i in 1:length(a))
+    neg ? -seed : seed
+end
 
 
 #### seed!()

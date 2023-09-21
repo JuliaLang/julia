@@ -394,6 +394,8 @@ sequence of numbers if and only if a `seed` is provided. Some RNGs
 don't accept a seed, like `RandomDevice`.
 After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
+The types of accepted seeds depend on the type of `rng`, but in general,
+integer seeds should work.
 
 If `rng` is not specified, it defaults to seeding the state of the
 shared task-local generator.
