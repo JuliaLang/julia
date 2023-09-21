@@ -2814,13 +2814,16 @@ JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls)
     gc_drain_own_chunkqueue(ptls, &ptls->mark_queue);
 }
 
-void gc_mark_and_steal(jl_ptls_t ptls)
+int gc_mark_and_steal(jl_ptls_t ptls)
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_gc_markqueue_t *mq_master = NULL;
     int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid != -1)
-        mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    if (master_tid == -1) {
+        return 0;
+    }
+    mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    int marked = 0;
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
@@ -2836,6 +2839,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
         goto steal;
     }
     mark : {
+        marked = 1;
         gc_mark_outrefs(ptls, mq, new_obj, 0);
         goto pop;
     }
@@ -2864,12 +2868,10 @@ void gc_mark_and_steal(jl_ptls_t ptls)
             }
         }
         // Try to steal chunk from master thread
-        if (mq_master != NULL) {
-            c = gc_chunkqueue_steal_from(mq_master);
-            if (c.cid != GC_empty_chunk) {
-                gc_mark_chunk(ptls, mq, &c);
-                goto pop;
-            }
+        c = gc_chunkqueue_steal_from(mq_master);
+        if (c.cid != GC_empty_chunk) {
+            gc_mark_chunk(ptls, mq, &c);
+            goto pop;
         }
         // Try to steal pointer from random GC thread
         for (int i = 0; i < 4 * jl_n_markthreads; i++) {
@@ -2886,37 +2888,113 @@ void gc_mark_and_steal(jl_ptls_t ptls)
             if (new_obj != NULL)
                 goto mark;
         }
-        // Try to steal pointer from master thread
-        if (mq_master != NULL) {
-            new_obj = gc_ptr_queue_steal_from(mq_master);
-            if (new_obj != NULL)
-                goto mark;
+        new_obj = gc_ptr_queue_steal_from(mq_master);
+        if (new_obj != NULL)
+            goto mark;
+    }
+    return marked;
+}
+
+int gc_some_work_left_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
+ {
+    if (jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.bottom) !=
+        jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.top)) {
+        return 1;
+    }
+    if (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) !=
+        jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.top)) {
+        return 1;
+    }
+    return 0;
+ }
+
+ int gc_some_work_left(void) JL_NOTSAFEPOINT
+ {
+    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (gc_some_work_left_in_queue(ptls2)) {
+            return 1;
+        }
+    }
+    int master_tid = jl_atomic_load(&gc_master_tid);
+    if (master_tid != -1) {
+        jl_ptls_t ptls2 = gc_all_tls_states[master_tid];
+        if (gc_some_work_left_in_queue(ptls2)) {
+            return 1;
+        }
+    }
+    return 0;
+ }
+
+void gc_mark_loop_master_init(jl_ptls_t ptls)
+{
+    jl_atomic_store(&gc_master_tid, ptls->tid);
+    // Wake threads up and try to do some work
+    uv_mutex_lock(&gc_threads_lock);
+    jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+    uv_cond_broadcast(&gc_threads_cond);
+    uv_mutex_unlock(&gc_threads_lock);
+    gc_mark_and_steal(ptls);
+    jl_atomic_fetch_add(&gc_n_threads_marking, -1);
+}
+
+#define GC_MIN_BACKOFF_LG2 (4)
+#define GC_MAX_BACKOFF_LG2 (12)
+
+void gc_mark_loop_parallel(jl_ptls_t ptls)
+{
+    int b = GC_MIN_BACKOFF_LG2;
+    while (jl_atomic_load(&gc_n_threads_marking) > 0) {
+        if (gc_some_work_left()) {
+            // Try to become a thief while other threads are marking
+            jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+            int marked = gc_mark_and_steal(ptls);
+            jl_atomic_fetch_add(&gc_n_threads_marking, -1);
+            if (marked) {
+                b = GC_MIN_BACKOFF_LG2;
+            }
+        }
+        uint64_t c0 = cycleclock();
+        do {
+            jl_cpu_pause();
+        } while (cycleclock() - c0 < (1 << b));
+        if (b < GC_MAX_BACKOFF_LG2) {
+            b++;
         }
     }
 }
 
-void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
+void gc_mark_loop_master(jl_ptls_t ptls)
 {
-    int backoff = GC_BACKOFF_MIN;
-    if (master) {
-        jl_atomic_store(&gc_master_tid, ptls->tid);
-        // Wake threads up and try to do some work
+    gc_mark_loop_master_init(ptls);
+    gc_mark_loop_parallel(ptls);
+}
+
+STATIC_INLINE int gc_may_mark(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load(&gc_n_threads_marking) > 0;
+}
+
+STATIC_INLINE int gc_may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load(&ptls->gc_sweeps_requested) > 0;
+}
+
+void gc_worker_loop(jl_ptls_t ptls)
+{
+    while (1) {
         uv_mutex_lock(&gc_threads_lock);
-        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        uv_cond_broadcast(&gc_threads_cond);
-        uv_mutex_unlock(&gc_threads_lock);
-        gc_mark_and_steal(ptls);
-        jl_atomic_fetch_add(&gc_n_threads_marking, -1);
-    }
-    while (jl_atomic_load(&gc_n_threads_marking) > 0) {
-        // Try to become a thief while other threads are marking
-        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        if (jl_atomic_load(&gc_master_tid) != -1) {
-            gc_mark_and_steal(ptls);
+        while (!gc_may_mark() && !gc_may_sweep(ptls)) {
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
-        jl_atomic_fetch_add(&gc_n_threads_marking, -1);
-        // Failed to steal
-        gc_backoff(&backoff);
+        uv_mutex_unlock(&gc_threads_lock);
+        if (gc_may_mark()) {
+            gc_mark_loop_parallel(ptls);
+        }
+        if (gc_may_sweep(ptls)) { // not an else!
+            gc_sweep_pool_parallel();
+            jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
+        }
     }
 }
 
@@ -2926,7 +3004,7 @@ void gc_mark_loop(jl_ptls_t ptls)
         gc_mark_loop_serial(ptls);
     }
     else {
-        gc_mark_loop_parallel(ptls, 1);
+        gc_mark_loop_master(ptls);
     }
 }
 
