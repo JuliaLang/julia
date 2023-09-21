@@ -2,7 +2,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/stdlib/stdlib.inc
+include $(JULIAHOME)/stdlib/stdlib.mk
 
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug

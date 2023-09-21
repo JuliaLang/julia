@@ -2,7 +2,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/stdlib/stdlib.inc
+include $(JULIAHOME)/stdlib/stdlib.mk
 
 
 # set some influential environment variables
