@@ -30,6 +30,7 @@ char *jl_safepoint_pages = NULL;
 // so that both safepoint load and pending signal load falls in this page.
 // The initialization of the `safepoint` pointer is done `ti_initthread`
 // in `threading.c`.
+// The fourth page is always disabled, so not tracked here.
 uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 
 // This lock should be acquired before enabling/disabling the safepoint
@@ -92,9 +93,9 @@ void jl_safepoint_init(void)
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
-    char *addr = (char*)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
+    char *addr = (char*)VirtualAlloc(NULL, pgsz * 4, MEM_COMMIT, PAGE_READONLY);
 #else
-    char *addr = (char*)mmap(0, pgsz * 3, PROT_READ,
+    char *addr = (char*)mmap(0, pgsz * 4, PROT_READ,
                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (addr == MAP_FAILED)
         addr = NULL;
@@ -104,6 +105,13 @@ void jl_safepoint_init(void)
         jl_gc_debug_critical_error();
         abort();
     }
+    char *pageaddr = jl_safepoint_pages + jl_page_size * 3;
+#ifdef _OS_WINDOWS_
+    DWORD old_prot;
+    VirtualProtect(pageaddr, jl_page_size, PAGE_NOACCESS, &old_prot);
+#else
+    mprotect(pageaddr, jl_page_size, PROT_NONE);
+#endif
     // The signal page is for the gc safepoint.
     // The page before it is the sigint pending flag.
     jl_safepoint_pages = addr;
@@ -173,6 +181,57 @@ void jl_safepoint_wait_gc(void)
             uv_cond_wait(&safepoint_cond, &safepoint_lock);
         uv_mutex_unlock(&safepoint_lock);
     }
+}
+
+// equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
+void jl_safepoint_wait_thread_resume(void)
+{
+    jl_task_t *ct = jl_current_task;
+    JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
+    int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
+    uv_mutex_lock(&ct->ptls->sleep_lock);
+    while (jl_atomic_load(&ct->ptls->suspend_count))
+        uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
+    uv_mutex_unlock(&ct->ptls->sleep_lock);
+    jl_atomic_store_release(&ct->ptls->gc_state, state);
+}
+
+// n.b. suspended threads may still run in the GC or GC safe regions
+int jl_safepoint_suspend_thread(int tid)
+{
+    if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    uv_mutex_lock(&ptls2->sleep_lock);
+    int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count) + 1;
+    jl_atomic_store(&ptls2->suspend_count, suspend_count); // seq-cst to ensure this happens-before gc_state read
+    if (suspend_count == 1) // first to suspend
+        jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 3 + sizeof(void*)));
+    uv_mutex_unlock(&ptls2->sleep_lock);
+    while (jl_atomic_load_acquire(&ptls2->gc_state)) // wait for suspend
+        jl_cpu_pause(); // yield?
+    return suspend_count;
+}
+
+int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
+{
+    if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    uv_mutex_lock(&ptls2->sleep_lock);
+    int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count);
+    if (suspend_count == 1) { // last to unsuspend
+        if (tid == 0)
+            jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size));
+        else
+            jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 2 + sizeof(void*)));
+        uv_cond_signal(&safepoint_cond);
+    }
+    if (suspend_count != 0)
+        jl_atomic_store(&ptls2->suspend_count, suspend_count - 1);
+    uv_mutex_unlock(&ptls2->sleep_lock);
+    return suspend_count;
 }
 
 void jl_safepoint_enable_sigint(void)

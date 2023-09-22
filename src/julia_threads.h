@@ -211,7 +211,7 @@ typedef struct _jl_tls_states_t {
     int16_t tid;
     int8_t threadpoolid;
     uint64_t rngseed;
-    volatile size_t *safepoint;
+    _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
@@ -225,9 +225,9 @@ typedef struct _jl_tls_states_t {
     // statements is prohibited from certain
     // callbacks (such as generated functions)
     // as it may make compilation undecidable
-    int8_t in_pure_callback;
-    int8_t in_finalizer;
-    int8_t disable_gc;
+    int16_t in_pure_callback;
+    int16_t in_finalizer;
+    int16_t disable_gc;
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_thread_heap_t heap; // this is very large, and the offset is baked into codegen
@@ -264,6 +264,7 @@ typedef struct _jl_tls_states_t {
     void *signal_stack;
 #endif
     jl_thread_t system_id;
+    _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
     jl_gc_page_stack_t page_metadata_allocd;
     jl_gc_page_stack_t page_metadata_buffered;
