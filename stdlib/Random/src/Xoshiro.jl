@@ -122,6 +122,8 @@ rng_native_52(::TaskLocalRNG) = UInt64
 copy(rng::Union{TaskLocalRNG, Xoshiro}) = Xoshiro(getstate(rng)...)
 copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = setstate!(dst, getstate(src))
 ==(x::Union{TaskLocalRNG, Xoshiro}, y::Union{TaskLocalRNG, Xoshiro}) = getstate(x) == getstate(y)
+# use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
+hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
 function seed!(rng::Union{TaskLocalRNG, Xoshiro})
     # as we get good randomness from RandomDevice, we can skip hashing
