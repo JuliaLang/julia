@@ -1127,7 +1127,7 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
     }
 }
 
-// Print backtrace for specified task
+// Print backtrace for specified task to jl_safe_printf stderr
 JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
@@ -1147,9 +1147,7 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 
 extern int gc_first_tid;
 
-// Print backtraces for all live tasks, for all threads.
-// WARNING: this is dangerous and can crash if used outside of gdb, if
-// all of Julia's threads are not stopped!
+// Print backtraces for all live tasks, for all threads, to jl_safe_printf stderr
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -1160,24 +1158,33 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             continue;
         }
         jl_ptls_t ptls2 = allstates[i];
-        arraylist_t *live_tasks = &ptls2->heap.live_tasks;
-        size_t n = live_tasks->len;
+        if (ptls2 == NULL)
+            continue;
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        jl_task_t *t = ptls2->root_task;
+        int t_state = jl_atomic_load_relaxed(&t->_state);
         jl_safe_printf("==== Thread %d created %zu live tasks\n",
-                ptls2->tid + 1, n + 1);
-        jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
-        jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                ptls2->root_task->sticky, ptls2->root_task->started,
-                jl_atomic_load_relaxed(&ptls2->root_task->_state),
-                jl_atomic_load_relaxed(&ptls2->root_task->tid) + 1);
-        jlbacktracet(ptls2->root_task);
+                ptls2->tid + 1, n + (t_state != JL_TASK_STATE_DONE));
+        if (show_done || t_state != JL_TASK_STATE_DONE) {
+            jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
+            jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+                    t->sticky, t->started, t_state,
+                    jl_atomic_load_relaxed(&t->tid) + 1);
+            if (t->stkbuf != NULL)
+                jlbacktracet(t);
+            else
+                jl_safe_printf("      no stack\n");
+            jl_safe_printf("     ---- End root task\n");
+        }
 
-        void **lst = live_tasks->items;
-        for (size_t j = 0; j < live_tasks->len; j++) {
-            jl_task_t *t = (jl_task_t *)lst[j];
-            int t_state = jl_atomic_load_relaxed(&t->_state);
-            if (!show_done && t_state == JL_TASK_STATE_DONE) {
+        for (size_t j = 0; j < n; j++) {
+            jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, j);
+            if (t == NULL)
                 continue;
-            }
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (!show_done && t_state == JL_TASK_STATE_DONE)
+                continue;
             jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
             // n.b. this information might not be consistent with the stack printing after it, since it could start running or change tid, etc.
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
