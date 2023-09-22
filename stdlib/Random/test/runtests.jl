@@ -648,6 +648,7 @@ end
         # test that the following is not an error (#16925)
         @test Random.seed!(m..., typemax(UInt)) === m2
         @test Random.seed!(m..., typemax(UInt128)) === m2
+        @test Random.seed!(m..., "a random seed") === m2
     end
 end
 
@@ -702,7 +703,7 @@ end
 end
 
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
-    seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
+    seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), randstring(), randstring(), rand(UInt128, 3)...]
     if RNG == Xoshiro
         push!(seeds, rand(UInt64, rand(1:4)))
     end
@@ -715,7 +716,7 @@ end
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
-    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4), randstring(20)]
 
     for seed=seeds
         Random.seed!(seed)
@@ -932,6 +933,15 @@ end
         @test string(m) == "MersenneTwister(-3)"
         Random.seed!(m, typemin(Int8))
         @test string(m) == "MersenneTwister(-128)"
+
+        # string seeds
+        Random.seed!(m, "seed 1")
+        @test string(m) == "MersenneTwister(\"seed 1\")"
+        x = rand(m)
+        @test x == rand(MersenneTwister("seed 1"))
+        @test string(m) == """MersenneTwister("seed 1", (0, 1002, 0, 1))"""
+        # test that MersenneTwister's fancy constructors accept string seeds
+        @test MersenneTwister("seed 1", (0, 1002, 0, 1)) == m
     end
 
     @testset "RandomDevice" begin
@@ -1188,6 +1198,17 @@ end
     hash32 = Random.hash_seed(seed32)
     @test Random.hash_seed(map(UInt64, seed32)) == hash32
     @test hash32 ∉ keys(vseeds)
+
+    seed_str = randstring()
+    seed_gstr = GenericString(seed_str)
+    @test Random.hash_seed(seed_str) == Random.hash_seed(seed_gstr)
+    string_seeds = Set{Vector{UInt8}}()
+    for ch = 'A':'z'
+        vseed = Random.hash_seed(string(ch))
+        @test vseed ∉ keys(vseeds)
+        @test vseed ∉ string_seeds
+        push!(string_seeds, vseed)
+    end
 end
 
 @testset "rand(::Type{<:Pair})" begin
