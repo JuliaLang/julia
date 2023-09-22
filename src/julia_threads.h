@@ -200,6 +200,10 @@ typedef struct {
 struct _jl_bt_element_t;
 struct _jl_gc_pagemeta_t;
 
+typedef struct {
+    _Atomic(struct _jl_gc_pagemeta_t *) bottom;
+} jl_gc_page_stack_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -261,11 +265,12 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
-    struct _jl_gc_pagemeta_t *page_metadata_allocd;
-    struct _jl_gc_pagemeta_t *page_metadata_lazily_freed;
+    jl_gc_page_stack_t page_metadata_allocd;
+    jl_gc_page_stack_t page_metadata_buffered;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
+    _Atomic(int64_t) gc_sweeps_requested;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;

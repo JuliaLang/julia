@@ -180,37 +180,39 @@ typedef struct _jl_gc_pagemeta_t {
     char *data;
 } jl_gc_pagemeta_t;
 
-typedef struct {
-    _Atomic(jl_gc_pagemeta_t *) page_metadata_back;
-} jl_gc_global_page_pool_t;
-
-extern jl_gc_global_page_pool_t global_page_pool_lazily_freed;
-extern jl_gc_global_page_pool_t global_page_pool_clean;
-extern jl_gc_global_page_pool_t global_page_pool_freed;
+extern jl_gc_page_stack_t global_page_pool_lazily_freed;
+extern jl_gc_page_stack_t global_page_pool_clean;
+extern jl_gc_page_stack_t global_page_pool_freed;
 
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
+// XXX: this is not a general-purpose lock-free stack. We can
+// get away with just using a CAS and not implementing some ABA
+// prevention mechanism since once a node is popped from the
+// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// in the sweeping phase, which also doesn't push a node into the
+// same stack after it's popped
 
-STATIC_INLINE void push_lf_page_metadata_back(jl_gc_global_page_pool_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
+STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {
     while (1) {
-        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         elt->next = old_back;
-        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, elt)) {
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, elt)) {
             break;
         }
         jl_cpu_pause();
     }
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *pop_lf_page_metadata_back(jl_gc_global_page_pool_t *pool) JL_NOTSAFEPOINT
+STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
 {
     while (1) {
-        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         if (old_back == NULL) {
             return NULL;
         }
-        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, old_back->next)) {
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, old_back->next)) {
             return old_back;
         }
         jl_cpu_pause();
@@ -359,7 +361,7 @@ extern jl_gc_num_t gc_num;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
-extern int64_t lazy_freed_pages;
+extern int64_t buffered_pages;
 extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
@@ -427,12 +429,15 @@ extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
+extern _Atomic(int) gc_n_threads_sweeping;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
+void gc_sweep_pool_parallel(void);
+void gc_free_pages(void);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 

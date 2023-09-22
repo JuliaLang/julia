@@ -767,10 +767,10 @@ void jl_start_threads(void)
             }
         }
         else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_gc_sweep_threadfun, t);
+            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
         }
         else {
-            uv_thread_create(&uvtid, jl_gc_mark_threadfun, t);
+            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
         }
         uv_thread_detach(&uvtid);
     }
