@@ -14,6 +14,13 @@ REPL.run_repl(repl)
 """
 module REPL
 
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+Base.REPL_MODULE_REF[] = REPL
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+end
+
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 

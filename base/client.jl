@@ -423,11 +423,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     if !fallback_repl && interactive
         load_InteractiveUtils()
         if !isassigned(REPL_MODULE_REF)
-            let REPL = load_REPL()
-                # If someone imported Pkg (which has a dependency on REPL)
-                # we will side-step the special hook in Base.
-                REPL_MODULE_REF[] = REPL
-            end
+            load_REPL()
         end
     end
     # TODO cleanup REPL_MODULE_REF
