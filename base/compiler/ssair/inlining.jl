@@ -504,50 +504,45 @@ end
 """
     ir_inline_unionsplit!
 
-The core idea of this function is to simulate the dispatch semantics by generating
-(flat) `isa`-checks corresponding to the signatures of union-split dispatch candidates,
-and then inline their bodies into each `isa`-conditional block.
-This `isa`-based virtual dispatch requires few pre-conditions to hold in order to simulate
-the actual semantics correctly.
+The primary purpose of this function is to emulate the dispatch behavior by generating flat
+`isa`-checks that correspond to the signatures of union-split dispatch candidates.
+These checks allow us to inline the method bodies into respective `isa`-conditional blocks.
 
-The first one is that these dispatch candidates need to be processed in order of their specificity,
-and the corresponding `isa`-checks should reflect the method specificities, since now their
-signatures are not necessarily concrete.
-For example, given the following definitions:
+Note that two pre-conditions are required for this emulation to work correctly:
+
+1. Ordered Dispatch Candidates
+
+The dispatch candidates must be processed in order of their specificity.
+The generated `isa`-checks should reflect this order,
+especially since the method signatures may not be concrete.
+For instance, with the methods:
 
     f(x::Int)    = ...
     f(x::Number) = ...
     f(x::Any)    = ...
 
-and a callsite:
-
-    f(x::Any)
-
-then a correct `isa`-based virtual dispatch would be:
+A correct `isa`-based dispatch emulation for the call site `f(x::Any)` would look like:
 
     if isa(x, Int)
         [inlined/resolved f(x::Int)]
     elseif isa(x, Number)
         [inlined/resolved f(x::Number)]
-    else # implies `isa(x, Any)`, which fully covers this call signature,
-         # otherwise we need to insert a fallback dynamic dispatch case also
+    else
         [inlined/resolved f(x::Any)]
     end
 
-Fortunately, `ml_matches` should already sorted them in that way, except cases when there is
-any ambiguity, from which we already bail out at this point.
+`ml_matches` should already sort the matched method candidates correctly,
+except in ambiguous cases, which we've already excluded at this state.
 
-Another consideration is type equality constraint from type variables: the `isa`-checks are
-not enough to simulate the dispatch semantics in cases like:
-Given a definition:
+2. Type Equality Constraints
+
+Another factor is the type equality constraint imposed by type variables.
+Simple `isa`-checks are insufficient to capture the semantics in some cases.
+For example, given the following method definition:
 
     g(x::T, y::T) where T<:Integer = ...
 
-transform a callsite:
-
-    g(x::Any, y::Any)
-
-into the optimized form:
+it is _invalid_ to optimize a cal site like `g(x::Any, y::Any)` into:
 
     if isa(x, Integer) && isa(y, Integer)
         [inlined/resolved g(x::Integer, y::Integer)]
@@ -555,11 +550,14 @@ into the optimized form:
         g(x, y) # fallback dynamic dispatch
     end
 
-But again, we should already bail out from such cases at this point, essentially by
-excluding cases where `case.sig::UnionAll`.
+since we also need to check that `x` and `y` are equal types.
 
-In short, here we can process the dispatch candidates in order, assuming we haven't changed
-their order somehow somewhere up to this point.
+But, we've already excluded such cases at this point,
+mainly by filtering out `case.sig::UnionAll`,
+so there is no need to worry about type equality at this point.
+
+In essence, we can process the dispatch candidates sequentially,
+assuming their order stays the same post-discovery in `ml_matches`.
 """
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                                union_split::UnionSplit, boundscheck::Symbol,

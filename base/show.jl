@@ -1778,9 +1778,8 @@ end
 function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
-    if (isa(slotnames, Vector{String}) &&
-        slotid <= length(slotnames::Vector{String}))
-        print(io, (slotnames::Vector{String})[slotid])
+    if isa(slotnames, Vector{String}) && slotid ≤ length(slotnames)
+        print(io, slotnames[slotid])
     else
         print(io, "_", slotid)
     end
