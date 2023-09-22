@@ -81,6 +81,8 @@ function ==(a::Xoshiro, b::Xoshiro)
     a.s0 == b.s0 && a.s1 == b.s1 && a.s2 == b.s2 && a.s3 == b.s3 && a.s4 == b.s4
 end
 
+hash(x::Xoshiro, h::UInt) =  hash((x.s0, x.s1, x.s2, x.s3, x.s4), h + 0x49a62c2dda6fa9be % UInt)
+
 rng_native_52(::Xoshiro) = UInt64
 
 @inline function rand(rng::Xoshiro, ::SamplerType{UInt64})
@@ -220,6 +222,12 @@ function ==(a::Xoshiro, b::TaskLocalRNG)
 end
 
 ==(a::TaskLocalRNG, b::Xoshiro) = b == a
+
+function hash(x::TaskLocalRNG, h::UInt)
+    t = current_task()
+    hash((t.rngState0, t.rngState1, t.rngState2, t.rngState3, t.rngState4), h + 0x49a62c2dda6fa9be % UInt)
+end
+
 
 # for partial words, use upper bits from Xoshiro
 
