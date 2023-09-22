@@ -678,7 +678,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
