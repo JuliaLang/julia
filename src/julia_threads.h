@@ -109,7 +109,7 @@ typedef struct {
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
-typedef DWORD jl_thread_t;
+typedef HANDLE jl_thread_t;
 #else
 typedef pthread_t jl_thread_t;
 #endif
