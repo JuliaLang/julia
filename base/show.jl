@@ -1084,7 +1084,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
     if istuple
-        max_n = 3
+        max_n = 1
         taillen = 1
         for i in (n-1):-1:1
             if parameters[i] === parameters[n]
