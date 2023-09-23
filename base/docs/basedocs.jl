@@ -66,6 +66,9 @@ kw"export"
 public API of the module . For example: `public foo` indicates that the name
 `foo` is public, without making it available when [`using`](@ref)
 the module. See the [manual section about modules](@ref modules) for details.
+
+!!! compat "Julia 1.11"
+    The public keyword and notion of publicity were added in Julia 1.11.
 """
 kw"public"
 
@@ -111,7 +114,7 @@ kw"abstract type", kw"abstract"
 
 `module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting).
+specify which of your names are intended to be public (via `export` and `public`).
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
 See the [manual section about modules](@ref modules) for more details.
