@@ -433,6 +433,11 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
+seed!(rng::AbstractRNG) = seed!(rng, nothing)
+#=
+We have this generic definition instead of the alternative option
+`seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)`
+because it would lead too easily to ambiguities, e.g. when we define `seed!(::Xoshiro, seed)`.
+=#
 
 end # module
