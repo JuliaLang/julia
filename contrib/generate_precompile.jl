@@ -33,6 +33,19 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
+precompile(Base.unsafe_string, (Ptr{UInt8},))
+precompile(Base.unsafe_string, (Ptr{Int8},))
+
+# loading.jl
+precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
+precompile(Base._require, (Base.PkgId, Nothing))
+
+# REPL
+precompile(isequal, (String, String))
+precompile(Base.check_open, (Base.TTY,))
+precompile(Base.getproperty, (Base.TTY, Symbol))
+precompile(write, (Base.TTY, String))
+
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
 precompile(Base.read_dependency_src, (String, String))
@@ -65,30 +78,6 @@ for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base
     global hardcoded_precompile_statements
     hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
 end
-
-repl_script = """
-2+2
-print("")
-printstyled("a", "b")
-display([1])
-display([1 2; 3 4])
-foo(x) = 1
-@time @eval foo(1)
-; pwd
-$CTRL_C
-$CTRL_R$CTRL_C
-? reinterpret
-using Ra\t$CTRL_C
-\\alpha\t$CTRL_C
-\e[200~paste here ;)\e[201~"$CTRL_C
-$UP_ARROW$DOWN_ARROW$CTRL_C
-123\b\b\b$CTRL_C
-\b\b$CTRL_C
-f(x) = x03
-f(1,2)
-[][1]
-cd("complet_path\t\t$CTRL_C
-"""
 
 precompile_script = """
 # NOTE: these were moved to the end of Base.jl. TODO: move back here.
@@ -126,14 +115,6 @@ precompile_script = """
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
-
-have_repl =  haskey(Base.loaded_modules,
-                    Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
-if have_repl
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
-    """
-end
 
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
@@ -173,27 +154,12 @@ if Libdl !== nothing
     """
 end
 
-InteractiveUtils = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
-          nothing)
-if InteractiveUtils !== nothing
-    repl_script *= """
-    @time_imports using Random
-    """
-end
-
-const JULIA_PROMPT = "julia> "
-const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
-
 # Printing the current state
 let
     global print_state
     print_lk = ReentrantLock()
     status = Dict{String, String}(
         "step1" => "W",
-        "step2" => "W",
-        "repl" => "0/0",
         "step3" => "W",
         "clock" => "◐",
     )
@@ -214,8 +180,6 @@ let
             isempty(args) || push!(status, args...)
             print("\r└ Collect (Basic: ")
             print_status("step1")
-            print(", REPL ", status["repl"], ": ")
-            print_status("step2")
             print(") => Execute ")
             print_status("step3")
         end
@@ -230,7 +194,8 @@ procenv = Dict{String,Any}(
         "JULIA_PROJECT" => nothing, # remove from environment
         "JULIA_LOAD_PATH" => "@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
-        "TERM" => "")
+        "TERM" => "",
+        "JULIA_FALLBACK_REPL" => "true")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
@@ -238,7 +203,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
 
     # Extract the precompile statements from the precompile file
     statements_step1 = Channel{String}(Inf)
-    statements_step2 = Channel{String}(Inf)
 
     # From hardcoded statements
     for statement in split(hardcoded_precompile_statements::String, '\n')
@@ -253,7 +217,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         anim_chars = ["◐","◓","◑","◒"]
         current = 1
         if fancyprint
-            while isopen(statements_step2) || !isempty(statements_step2)
+            while isopen(statements_step1) || !isempty(statements_step1)
                 print_state("clock" => anim_chars[current])
                 wait(t)
                 current = current == 4 ? 1 : current + 1
@@ -297,104 +261,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "F$n_step1")
         return :ok
     end
+    Base.errormonitor(step1)
     !PARALLEL_PRECOMPILATION && wait(step1)
-
-    step2 = @async mktemp() do precompile_file, precompile_file_h
-        print_state("step2" => "R")
-        # Collect statements from running a REPL process and replaying our REPL script
-        touch(precompile_file)
-        pts, ptm = open_fake_pty()
-        if have_repl
-            cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        else
-            cmdargs = `-e nothing`
-        end
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                --cpu-target=native --startup-file=no --color=yes -i $cmdargs```, procenv),
-                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
-            pts, pts, pts; wait=false)
-        Base.close_stdio(pts)
-        # Prepare a background process to copy output from process until `pts` is closed
-        output_copy = Base.BufferStream()
-        tee = @async try
-            while !eof(ptm)
-                l = readavailable(ptm)
-                write(debug_output, l)
-                Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
-                write(output_copy, l)
-            end
-        catch ex
-            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO on ptm after pts dies
-            end
-        finally
-            close(output_copy)
-            close(ptm)
-        end
-        repl_inputter = @async begin
-            # wait for the definitive prompt before start writing to the TTY
-            readuntil(output_copy, JULIA_PROMPT)
-            sleep(0.1)
-            readavailable(output_copy)
-            # Input our script
-            if have_repl
-                precompile_lines = split(repl_script::String, '\n'; keepempty=false)
-                curr = 0
-                for l in precompile_lines
-                    sleep(0.1)
-                    curr += 1
-                    print_state("repl" => "$curr/$(length(precompile_lines))")
-                    # consume any other output
-                    bytesavailable(output_copy) > 0 && readavailable(output_copy)
-                    # push our input
-                    write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                    write(ptm, l, "\n")
-                    readuntil(output_copy, "\n")
-                    # wait for the next prompt-like to appear
-                    readuntil(output_copy, "\n")
-                    strbuf = ""
-                    while !eof(output_copy)
-                        strbuf *= String(readavailable(output_copy))
-                        occursin(JULIA_PROMPT, strbuf) && break
-                        occursin(SHELL_PROMPT, strbuf) && break
-                        occursin(HELP_PROMPT, strbuf) && break
-                        sleep(0.1)
-                    end
-                end
-            end
-            write(ptm, "exit()\n")
-            wait(tee)
-            success(p) || Base.pipeline_error(p)
-            close(ptm)
-            write(debug_output, "\n#### FINISHED ####\n")
-        end
-
-        n_step2 = 0
-        precompile_copy = Base.BufferStream()
-        buffer_reader = @async for statement in eachline(precompile_copy)
-            print_state("step2" => "R$n_step2")
-            push!(statements_step2, statement)
-            n_step2 += 1
-        end
-
-        open(precompile_file, "r") do io
-            while true
-                # We need to allways call eof(io) for bytesavailable(io) to work
-                eof(io) && istaskdone(repl_inputter) && eof(io) && break
-                if bytesavailable(io) == 0
-                    sleep(0.1)
-                    continue
-                end
-                write(precompile_copy, readavailable(io))
-            end
-        end
-        close(precompile_copy)
-        wait(buffer_reader)
-        close(statements_step2)
-        print_state("step2" => "F$n_step2")
-        return :ok
-    end
-    !PARALLEL_PRECOMPILATION && wait(step2)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -408,7 +276,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     # Make statements unique
     statements = Set{String}()
     # Execute the precompile statements
-    for sts in [statements_step1, statements_step2], statement in sts
+    for sts in [statements_step1,], statement in sts
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
@@ -447,7 +315,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
-    fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
 
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")

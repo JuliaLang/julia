@@ -14,6 +14,10 @@ REPL.run_repl(repl)
 """
 module REPL
 
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+end
+
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
@@ -1530,5 +1534,14 @@ Base.MainInclude.Out
 end
 
 import .Numbered.numbered_prompt!
+
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+# Needs to occur after this module is finished.
+Base.REPL_MODULE_REF[] = REPL
+
+if Base.generating_output()
+    include("precompile.jl")
+end
 
 end # module

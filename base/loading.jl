@@ -1818,9 +1818,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-        if uuidkey == REPL_PKGID
-            REPL_MODULE_REF[] = newm
-        end
     else
         newm = root_module(uuidkey)
     end
