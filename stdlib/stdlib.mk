@@ -1,12 +1,12 @@
 STDLIBS_WITHIN_SYSIMG := \
-	Artifacts FileWatching Libdl SHA libblastrampoline_jll OpenBLAS_jll Random \
+	Artifacts FileWatching Libdl libblastrampoline_jll OpenBLAS_jll \
 	LinearAlgebra Sockets
 
 INDEPENDENT_STDLIBS := \
 	ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads Future \
 	InteractiveUtils LazyArtifacts LibGit2 LibCURL Logging Markdown Mmap \
-	NetworkOptions Profile Printf Pkg REPL Serialization SharedArrays SparseArrays \
-	Statistics Tar Test TOML Unicode UUIDs \
+	NetworkOptions Profile Printf Pkg Random REPL Serialization SharedArrays \
+	SparseArrays Statistics SHA Tar Test TOML Unicode UUIDs \
 	dSFMT_jll GMP_jll libLLVM_jll LLD_jll LLVMLibUnwind_jll LibUnwind_jll LibUV_jll \
 	LibCURL_jll LibSSH2_jll LibGit2_jll nghttp2_jll  MozillaCACerts_jll MbedTLS_jll \
 	MPFR_jll OpenLibm_jll PCRE2_jll p7zip_jll Zlib_jll

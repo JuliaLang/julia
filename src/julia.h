@@ -1737,6 +1737,7 @@ extern JL_DLLIMPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_libdl_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
+JL_DLLEXPORT size_t jl_module_world(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);

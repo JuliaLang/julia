@@ -31,6 +31,15 @@ export rand!, randn!,
 
 ## general definitions
 
+module Stubs
+    function __init__()
+        # Remove the shim methods
+        if !Base.generating_output()
+            Base.Stubs.delete_stubs(Base.Stubs.Random)
+        end
+    end
+end
+
 """
     AbstractRNG
 
