@@ -508,6 +508,10 @@ include("docs/basedocs.jl")
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
+
+# excised stdlib stubs, needs to be after docs
+include("stubs.jl")
+
 if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
@@ -662,7 +666,7 @@ end
 # enable threads support
 @eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
 
-end
+end # is_primary_base_module
 
 # Ensure this file is also tracked
 @assert !isassigned(_included_files, 1)

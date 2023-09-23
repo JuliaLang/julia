@@ -73,7 +73,6 @@ let
         :FileWatching, # used by loading.jl -- implicit assumption that init runs
         :Libdl, # Transitive through LinAlg
         :Artifacts, # Transitive through LinAlg
-        :SHA, # transitive through Random
         :Sockets, # used by stream.jl
 
         # Transitive through LingAlg
@@ -82,7 +81,6 @@ let
 
         # 1-depth packages
         :LinearAlgebra, # Commits type-piracy and GEMM
-        :Random, # Can't be removed due to rand being exported by Base
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)

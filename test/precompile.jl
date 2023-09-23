@@ -1074,25 +1074,30 @@ precompile_test_harness("invoke") do dir
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
               export f44320, g44320
-              export getlast
+              export getlast, getdata
+
+              # use instead of `rand`
+              const data = Ref{Float64}(0)
+              getdata() = data[]
+
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
-              fnc(x::Real) = rand()-1
-              fnc(x::Int) = x < 5 ? rand()+1 : invoke(fnc, Tuple{Real}, x)
+              fnc(x::Real) = getdata()-1
+              fnc(x::Int) = x < 5 ? getdata()+1 : invoke(fnc, Tuple{Real}, x)
               # g is for testing invoke that occurs from a dependent
               g(x::Real) = 0
               g(x::Int) = 1
-              gnc(x::Real) = rand()-1
-              gnc(x::Int) = rand()+1
+              gnc(x::Real) = getdata()-1
+              gnc(x::Int) = getdata()+1
               # h will be entirely superseded by a new method (full invalidation)
               h(x::Real) = 0
               h(x::Int) = x < 5 ? 1 : invoke(h, Tuple{Integer}, x)
-              hnc(x::Real) = rand()-1
-              hnc(x::Int) = x < 5 ? rand()+1 : invoke(hnc, Tuple{Integer}, x)
+              hnc(x::Real) = getdata()-1
+              hnc(x::Int) = x < 5 ? getdata()+1 : invoke(hnc, Tuple{Integer}, x)
               # q will have some callers invalidated
               q(x::Integer) = 0
-              qnc(x::Integer) = rand()-1
+              qnc(x::Integer) = getdata()-1
               # Issue #44320
               f44320(::Int) = 1
               f44320(::Any) = 2
@@ -1129,8 +1134,8 @@ precompile_test_harness("invoke") do dir
               # Purely internal
               internal(x::Real) = 0
               internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
-              internalnc(x::Real) = rand()-1
-              internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+              internalnc(x::Real) = getdata()-1
+              internalnc(x::Int) = x < 5 ? getdata()+1 : invoke(internalnc, Tuple{Real}, x)
 
               # Issue #44320
               f44320(::Real) = 3
@@ -1157,10 +1162,10 @@ precompile_test_harness("invoke") do dir
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
               $InvokeModule.h(x::Integer) = -1
-              $InvokeModule.hnc(x::Integer) = rand() - 20
+              $InvokeModule.hnc(x::Integer) = getdata() - 20
               # ...and for q, override with a more specialized method that should leave only the invoked version still valid
               $InvokeModule.q(x::Int) = -1
-              $InvokeModule.qnc(x::Int) = rand()+1
+              $InvokeModule.qnc(x::Int) = getdata()+1
           end
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
@@ -1618,13 +1623,16 @@ precompile_test_harness("No external edges") do load_path
     write(joinpath(load_path, "NoExternalEdges.jl"),
           """
           module NoExternalEdges
-          bar(x::Int) = hcat(rand())
-          @inline bar() = hcat(rand())
+          const data = Ref{Float64}()
+          getdata() = data[]
+
+          bar(x::Int) = hcat(getdata())
+          @inline bar() = hcat(getdata())
           bar(x::Float64) = bar()
           foo1() = bar(1)
           foo2() = bar(1.0)
           foo3() = bar()
-          foo4() = hcat(rand())
+          foo4() = hcat(getdata())
           precompile(foo1, ())
           precompile(foo2, ())
           precompile(foo3, ())
