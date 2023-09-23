@@ -228,8 +228,11 @@ incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
+    quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
-    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
+    history_file          = (opts.historyfile != 0)
+    color_set             = (opts.color != 0) # --color!=auto
+    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -320,8 +323,15 @@ function exec_options(opts)
             end
         end
     end
-
-    return repl
+    if repl || is_interactive::Bool
+        b = opts.banner
+        auto = b == -1
+        banner = b == 0 || (auto && !interactiveinput) ? :no  :
+                 b == 1 || (auto && interactiveinput)  ? :yes :
+                 :short # b == 2
+        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+    end
+    nothing
 end
 
 function _global_julia_startup_file()
@@ -395,13 +405,30 @@ function load_InteractiveUtils(mod::Module=Main)
     return getfield(mod, :InteractiveUtils)
 end
 
+function load_REPL()
+    # load interactive-only libraries
+    try
+        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+    catch ex
+        @warn "Failed to import REPL" exception=(ex, catch_backtrace())
+    end
+    return nothing
+end
+
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
-    load_InteractiveUtils()
+    fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
+    if !fallback_repl && interactive
+        load_InteractiveUtils()
+        if !isassigned(REPL_MODULE_REF)
+            load_REPL()
+        end
+    end
+    # TODO cleanup REPL_MODULE_REF
 
-    if interactive && isassigned(REPL_MODULE_REF)
+    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             global current_terminfo = load_terminfo(term_env)
@@ -423,8 +450,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     else
         # otherwise provide a simple fallback
-        if interactive && !quiet
-            @warn "REPL provider not available: using basic fallback"
+        if !fallback_repl && interactive && !quiet
+            @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
         banner == :no || Base.banner(short=banner==:short)
         let input = stdin
@@ -442,7 +469,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                     eval_user_input(stderr, ex, true)
                 end
             else
-                while isopen(input) || !eof(input)
+                while !eof(input)
                     if interactive
                         print("julia> ")
                         flush(stdout)
@@ -538,28 +565,13 @@ function _start()
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
-    local ret = 0
     try
-        repl_was_requested = exec_options(JLOptions())
-        if isdefined(Main, :main) && !is_interactive
-            if Core.Compiler.generating_sysimg()
-                precompile(Main.main, (typeof(ARGS),))
-            else
-                ret = invokelatest(Main.main, ARGS)
-            end
-        elseif (repl_was_requested || is_interactive)
-            if isassigned(REPL_MODULE_REF)
-                ret = REPL_MODULE_REF[].main(ARGS)
-            end
-        end
-        ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        exec_options(JLOptions())
     catch
-        ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        exit(1)
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
-    return ret
 end

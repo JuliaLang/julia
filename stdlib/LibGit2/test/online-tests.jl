@@ -90,6 +90,23 @@ mktempdir() do dir
     end
 end
 
+@testset "Remote" begin
+    repo_url = "https://github.com/JuliaLang/Example.jl"
+    LibGit2.with(LibGit2.GitRemoteDetached(repo_url)) do remote
+        @test !LibGit2.connected(remote)
+        c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
+        LibGit2.connect(remote, LibGit2.Consts.DIRECTION_FETCH, credentials=c)
+        @test LibGit2.connected(remote)
+        remote_heads = LibGit2.ls(remote)
+        default_branch = LibGit2.default_branch(remote)
+        @test !isempty(remote_heads)
+        @test startswith(default_branch, "refs/heads/")
+        @test any(head.name == default_branch for head in remote_heads)
+        LibGit2.disconnect(remote)
+        @test !LibGit2.connected(remote)
+    end
+end
+
 # needs to be run in separate process so it can re-initialize libgit2
 # with a useless self-signed certificate authority root certificate
 file = joinpath(@__DIR__, "bad_ca_roots.jl")

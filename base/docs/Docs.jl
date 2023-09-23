@@ -535,7 +535,7 @@ function docm(source::LineNumberNode, mod::Module, ex)
     elseif isassigned(Base.REPL_MODULE_REF)
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         REPL = Base.REPL_MODULE_REF[]
-        return REPL.lookup_doc(ex)
+        return invokelatest(REPL.lookup_doc, ex)
     end
     return nothing
 end

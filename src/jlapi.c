@@ -576,20 +576,16 @@ static NOINLINE int true_main(int argc, char *argv[])
 
     if (start_client) {
         jl_task_t *ct = jl_current_task;
-        int ret = 1;
         JL_TRY {
             size_t last_age = ct->world_age;
             ct->world_age = jl_get_world_counter();
-            jl_value_t *r = jl_apply(&start_client, 1);
-            if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
-                jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
-            ret = jl_unbox_int32(r);
+            jl_apply(&start_client, 1);
             ct->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_current_exception(), ct);
         }
-        return ret;
+        return 0;
     }
 
     // run program if specified, otherwise enter REPL

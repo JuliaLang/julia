@@ -170,20 +170,18 @@ end
 
 
 # Allow us to easily serialize Platform objects
-function Base.repr(p::Platform; context=nothing)
-    str = string(
-        "Platform(",
-        repr(arch(p)),
-        ", ",
-        repr(os(p)),
-        "; ",
-        join(("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", "),
-        ")",
-    )
+function Base.show(io::IO, p::Platform)
+    print(io, "Platform(")
+    show(io, arch(p))
+    print(io, ", ")
+    show(io, os(p))
+    print(io, "; ")
+    join(io, ("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", ")
+    print(io, ")")
 end
 
 # Make showing the platform a bit more palatable
-function Base.show(io::IO, p::Platform)
+function Base.show(io::IO, ::MIME"text/plain", p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
     other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))

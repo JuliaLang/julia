@@ -20,7 +20,7 @@ for (T, c) in (
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
     )
@@ -4554,48 +4554,6 @@ test_shared_array_resize(Int)
 test_shared_array_resize(Any)
 end
 
-module TestArrayNUL
-using Test
-function check_nul(a::Vector{UInt8})
-    b = ccall(:jl_array_cconvert_cstring,
-              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
-    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
-    return b === a
-end
-
-a = UInt8[]
-b = "aaa"
-c = [0x2, 0x1, 0x3]
-
-@test check_nul(a)
-@test check_nul(unsafe_wrap(Vector{UInt8},b))
-@test check_nul(c)
-d = [0x2, 0x1, 0x3]
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
-@test check_nul(d)
-ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-f = unsafe_wrap(Array, pointer(d), length(d))
-@test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
-@test !check_nul(f)
-end
-
 # Copy of `#undef`
 copyto!(Vector{Any}(undef, 10), Vector{Any}(undef, 10))
 function test_copy_alias(::Type{T}) where T
@@ -7592,6 +7550,19 @@ struct T36104
 end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
+end
+struct S36104{K,V}
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
+@test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
+@test !isdefined(S36104.body.body.name, :partial)
+@test hasfield(typeof(S36104.body.body.name), :partial)
+struct S36104{K,V}   # check that redefining it works
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
 # with a gensymmed unionall
 struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}

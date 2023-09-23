@@ -501,6 +501,10 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
+
+    m_error = try @eval method_c6(a::Vararg{:A}) = 1; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument a in method definition for method_c6 at $filename:")
 end
 
 # issue #7272

@@ -3,6 +3,7 @@ Julia v1.11 Release Notes
 
 New language features
 ---------------------
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes
 ----------------
@@ -15,12 +16,6 @@ Compiler/Runtime improvements
 
 Command-line option changes
 ---------------------------
-
-* The entry point for Julia has been standardized to `Main.main(ARGS)`. When julia is invoked to run a script or expression
-(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically if
-such a function has been defined. This is intended to unify script and compilation workflows, where code loading may happen
-in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
 
 Multi-threading changes
 -----------------------
@@ -54,6 +49,9 @@ Standard library changes
 
 #### REPL
 
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
+
 #### SuiteSparse
 
 
@@ -63,6 +61,9 @@ Standard library changes
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
 

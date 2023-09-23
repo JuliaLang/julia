@@ -25,7 +25,6 @@
     XX(jl_arrayref) \
     XX(jl_arrayset) \
     XX(jl_arrayunset) \
-    XX(jl_array_cconvert_cstring) \
     XX(jl_array_copy) \
     XX(jl_array_del_at) \
     XX(jl_array_del_beg) \
@@ -329,13 +328,14 @@
     XX(jl_methtable_lookup) \
     XX(jl_mi_cache_insert) \
     XX(jl_module_build_id) \
-    XX(jl_module_export) \
     XX(jl_module_exports_p) \
     XX(jl_module_globalref) \
     XX(jl_module_import) \
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_public) \
+    XX(jl_module_public_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
@@ -563,24 +563,8 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
-    YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraAddLowerSimdLoopPass) \
-    YY(LLVMExtraAddFinalLowerGCPass) \
-    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
-    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraAddCombineMulAddPass) \
-    YY(LLVMExtraAddMultiVersioningPass) \
-    YY(LLVMExtraAddLowerExcHandlersPass) \
-    YY(LLVMExtraAddLateLowerGCFramePass) \
-    YY(LLVMExtraJuliaLICMPass) \
-    YY(LLVMExtraAddAllocOptPass) \
-    YY(LLVMExtraAddLowerPTLSPass) \
-    YY(LLVMExtraAddRemoveNIPass) \
-    YY(LLVMExtraAddGCInvariantVerifierPass) \
-    YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \

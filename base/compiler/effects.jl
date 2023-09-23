@@ -131,7 +131,14 @@ const CONSISTENT_IF_NOTRETURNED         = 0x01 << 1
 const CONSISTENT_IF_INACCESSIBLEMEMONLY = 0x01 << 2
 
 # :effect_free-ness bits
-const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
+const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x02
+
+"""
+`EFFECT_FREE_GLOBALLY` means that the statement is `:effect-free` and does not have a
+caller-visible effect, but may not be removed from the function itself. This may e.g.
+be used for effects that last only for the scope of the current function.
+"""
+const EFFECT_FREE_GLOBALLY = 0x03
 
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1

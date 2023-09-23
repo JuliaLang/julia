@@ -116,7 +116,7 @@ stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 
 debug release : % : julia-% stdlibs-cache-%
 
-docs: julia-sysimg-$(JULIA_BUILD_MODE)
+docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no'
 
 docs-revise:
@@ -184,7 +184,7 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
-	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
+	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) JULIA_FALLBACK_REPL=1 WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 

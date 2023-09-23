@@ -14,6 +14,10 @@ REPL.run_repl(repl)
 """
 module REPL
 
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+end
+
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
@@ -1111,6 +1115,31 @@ function setup_interface(
                 edit_insert(s, '?')
             end
         end,
+        ']' => function (s::MIState,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                    Pkg = Base.require(pkgid)
+                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
+                    pkg_mode = nothing
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                            pkg_mode = mode
+                            break
+                        end
+                    end
+                    # TODO: Cache the `pkg_mode`?
+                    if pkg_mode !== nothing
+                        buf = copy(LineEdit.buffer(s))
+                        transition(s, pkg_mode) do
+                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        end
+                        return
+                    end
+                end
+            end
+            edit_insert(s, ']')
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1506,20 +1535,13 @@ end
 
 import .Numbered.numbered_prompt!
 
-# TODO: Move more of this implementation into REPL.
-function main(ARGS)
-    opts = Base.JLOptions()
-    interactiveinput = isa(stdin, Base.TTY)
-    b = opts.banner
-    auto = b == -1
-    banner = b == 0 || (auto && !interactiveinput) ? :no  :
-             b == 1 || (auto && interactiveinput)  ? :yes :
-             :short # b == 2
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+# Needs to occur after this module is finished.
+Base.REPL_MODULE_REF[] = REPL
 
-    quiet                 = (opts.quiet != 0)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    Base.run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+if Base.generating_output()
+    include("precompile.jl")
 end
 
 end # module

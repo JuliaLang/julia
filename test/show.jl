@@ -326,7 +326,7 @@ end
             # line meta
             if d < 0
                 # line meta
-                error(\"dimension size must be nonnegative (got \$d)\")
+                error(\"dimension size must be non-negative (got \$d)\")
             end
             # line meta
             n *= d
@@ -522,6 +522,13 @@ end
 @test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
+# Test that public expressions are rendered nicely
+# though they are hard to create with quotes because public is not a context dependant keyword
+@test sprint(show, Expr(:public, Symbol("@foo"))) == ":(public @foo)"
+@test sprint(show, Expr(:public, :f,:o,:o)) == ":(public f, o, o)"
+s = sprint(show, :(module A; public x; end))
+@test match(r"^:\(module A\n  #= .* =#\n  #= .* =#\n  public x\n  end\)$", s) !== nothing
 
 # PR #38418
 module M1 var"#foo#"() = 2 end
