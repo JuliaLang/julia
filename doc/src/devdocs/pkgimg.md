@@ -9,7 +9,7 @@ In fact the underlying serialization format is the same, and the system image is
 Package images are shared libraries that contain both code and data. Like `.ji` cache files, they are generated per package. The data section contains both global data (global variables in the package) as well as the necessary metadata about what methods and types are defined by the package. The code section contains native objects that cache the final output of Julia's LLVM-based compiler.
 
 The command line option `--pkgimages=no` can be used to turn off object caching for this session. Note that this means that cache files have to likely be regenerated.
-See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref env-max-num-precompile-files) for the upper limit of variants Julia caches per default.
+See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref JULIA_MAX_NUM_PRECOMPILE_FILES) for the upper limit of variants Julia caches per default.
 
 !!! note
     While the package images present themselves as native shared libraries, they are only an approximation thereof. You will not be able to link against them from a native program and they must be loaded from Julia.
@@ -17,7 +17,7 @@ See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref env-max-num-precompile-files) for th
 
 ## Linking
 
-Since the package images contain native code, we must run a linker over them before we can use them. You can set the environment variable `JULIA_VERBOSE_LINKING` to `true` to make the package image linking process verbose.
+Since the package images contain native code, we must run a linker over them before we can use them. You can set the environment variable [`JULIA_VERBOSE_LINKING`](@ref JULIA_VERBOSE_LINKING) to `true` to make the package image linking process verbose.
 
 Furthermore, we cannot assume that the user has a working system linker installed. Therefore, Julia ships with LLD, the LLVM linker, to provide a working out of the box experience. In `base/linking.jl`, we implement a limited interface to be able to link package images on all supported platforms.
 

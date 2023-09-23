@@ -19,6 +19,10 @@ struct KeywordCompletion <: Completion
     keyword::String
 end
 
+struct KeyvalCompletion <: Completion
+    keyval::String
+end
+
 struct PathCompletion <: Completion
     path::String
 end
@@ -99,6 +103,7 @@ end
 
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::KeyvalCompletion) = c.keyval
 _completion_text(c::PathCompletion) = c.path
 _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
@@ -131,6 +136,7 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -220,24 +226,30 @@ function add_field_completions!(suggestions::Vector{Completion}, name::String, @
     end
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export", "false",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "true", "try", "using", "while"]
-
-function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
+function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+    r = searchsorted(list, s)
     i = first(r)
-    n = length(sorted_keywords)
-    while i <= n && startswith(sorted_keywords[i],s)
+    n = length(list)
+    while i <= n && startswith(list[i],s)
         r = first(r):i
         i += 1
     end
-    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
+    Completion[T(kw) for kw in list[r]]
 end
+
+const sorted_keywords = [
+    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "const", "continue", "do", "else", "elseif", "end", "export",
+    "finally", "for", "function", "global", "if", "import",
+    "let", "local", "macro", "module", "mutable struct",
+    "primitive type", "quote", "return", "struct",
+    "try", "using", "while"]
+
+complete_keyword(s::Union{String,SubString{String}}) = complete_from_list(KeywordCompletion, sorted_keywords, s)
+
+const sorted_keyvals = ["false", "true"]
+
+complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
 
 function complete_path(path::AbstractString, pos::Int;
                        use_envpath=false, shell_escape=false,
@@ -926,6 +938,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
     append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+    append!(suggestions, complete_keyval(last_word))
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -948,7 +961,10 @@ end
 
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
     ex = nothing
-    comp_keywords && append!(suggestions, complete_keyword(name))
+    if comp_keywords
+        append!(suggestions, complete_keyword(name))
+        append!(suggestions, complete_keyval(name))
+    end
     if dotpos > 1 && string[dotpos] == '.'
         s = string[1:dotpos-1]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.

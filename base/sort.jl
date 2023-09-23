@@ -335,14 +335,14 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """
     searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the first value in `v` greater than or equivalent to `x`.
-If `x` is greater than all values in `v`, return `lastindex(v) + 1`.
+Return the index of the first value in `v` that is not ordered before `x`.
+If all values in `v` are ordered before `x`, return `lastindex(v) + 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
-`insert!`ing `x` at the returned index will maintain the sorted order. Refer to
-[`sort!`](@ref) for the meaning of the keywords and the definition of
-"greater than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`.
+`insert!`ing `x` at the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
@@ -374,13 +374,14 @@ julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) 
 """
     searchsortedlast(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the last value in `v` less than or equivalent to `x`.
-If `x` is less than all values in `v` the function returns `firstindex(v) - 1`.
+Return the index of the last value in `v` that is not ordered after `x`.
+If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
-Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
-"less than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`.
+`insert!`ing `x` immediately after the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs

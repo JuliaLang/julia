@@ -700,7 +700,9 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     catch
         buf = PipeBuffer()
         original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        let InteractiveUtils = Base.require(Base, :InteractiveUtils)
+            @invokelatest InteractiveUtils.versioninfo(buf)
+        end
         empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")

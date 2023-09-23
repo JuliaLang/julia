@@ -7,6 +7,8 @@ New language features
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module. ([#50105])
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+
 Language changes
 ----------------
 
@@ -63,6 +65,9 @@ Standard library changes
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
 

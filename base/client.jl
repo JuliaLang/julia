@@ -405,13 +405,30 @@ function load_InteractiveUtils(mod::Module=Main)
     return getfield(mod, :InteractiveUtils)
 end
 
+function load_REPL()
+    # load interactive-only libraries
+    try
+        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+    catch ex
+        @warn "Failed to import REPL" exception=(ex, catch_backtrace())
+    end
+    return nothing
+end
+
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
-    load_InteractiveUtils()
+    fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
+    if !fallback_repl && interactive
+        load_InteractiveUtils()
+        if !isassigned(REPL_MODULE_REF)
+            load_REPL()
+        end
+    end
+    # TODO cleanup REPL_MODULE_REF
 
-    if interactive && isassigned(REPL_MODULE_REF)
+    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             global current_terminfo = load_terminfo(term_env)
@@ -433,8 +450,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     else
         # otherwise provide a simple fallback
-        if interactive && !quiet
-            @warn "REPL provider not available: using basic fallback"
+        if !fallback_repl && interactive && !quiet
+            @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
         banner == :no || Base.banner(short=banner==:short)
         let input = stdin
@@ -452,7 +469,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                     eval_user_input(stderr, ex, true)
                 end
             else
-                while isopen(input) || !eof(input)
+                while !eof(input)
                     if interactive
                         print("julia> ")
                         flush(stdout)

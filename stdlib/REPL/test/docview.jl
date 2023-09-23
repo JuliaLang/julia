@@ -4,21 +4,17 @@ using Test
 import REPL, REPL.REPLCompletions
 import Markdown
 
+function get_help_io(input)
+    buf = IOBuffer()
+    eval(REPL.helpmode(buf, input))
+    String(take!(buf))
+end
+get_help_standard(input) = string(eval(REPL.helpmode(IOBuffer(), input)))
+
 @testset "symbol completion" begin
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "α"))
-            String(take!(buf))
-        end, "\"α\" can be typed by \\alpha<tab>\n")
-
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "🐨"))
-            String(take!(buf))
-        end, "\"🐨\" can be typed by \\:koala:<tab>\n")
-
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "ᵞ₁₂₃¹²³α"))
-            String(take!(buf))
-        end, "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
+    @test startswith(get_help_io("α"), "\"α\" can be typed by \\alpha<tab>\n")
+    @test startswith(get_help_io("🐨"), "\"🐨\" can be typed by \\:koala:<tab>\n")
+    @test startswith(get_help_io("ᵞ₁₂₃¹²³α"), "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
 
     # Check that all symbols with several completions have a canonical mapping (#39148)
     symbols = values(REPLCompletions.latex_symbols)
@@ -27,10 +23,7 @@ import Markdown
 end
 
 @testset "quoting in doc search" begin
-    str = let buf = IOBuffer()
-        Core.eval(Main, REPL.helpmode(buf, "mutable s"))
-        String(take!(buf))
-    end
+    str = get_help_io("mutable s")
     @test occursin("'mutable struct'", str)
     @test occursin("Couldn't find 'mutable s'", str)
 end
@@ -73,6 +66,27 @@ end
     R = Complex{<:Integer}
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
+end
+
+@testset "Struct field help (#51178)" begin
+    struct StructWithNoFields end
+    struct StructWithOneField
+        field1
+    end
+    struct StructWithTwoFields
+        field1
+        field2
+    end
+    struct StructWithThreeFields
+        field1
+        field2
+        field3
+    end
+
+    @test endswith(get_help_standard("StructWithNoFields.not_a_field"), "StructWithNoFields` has no fields.\n")
+    @test endswith(get_help_standard("StructWithOneField.not_a_field"), "StructWithOneField` has field `field1`.\n")
+    @test endswith(get_help_standard("StructWithTwoFields.not_a_field"), "StructWithTwoFields` has fields `field1`, and `field2`.\n")
+    @test endswith(get_help_standard("StructWithThreeFields.not_a_field"), "StructWithThreeFields` has fields `field1`, `field2`, and `field3`.\n")
 end
 
 module InternalWarningsTests

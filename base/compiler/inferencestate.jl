@@ -584,11 +584,8 @@ _topmod(sv::InferenceState) = _topmod(frame_module(sv))
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
-        # typically, we expect that old ⊑ new (that output information only
-        # gets less precise with worse input information), but to actually
-        # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
+    if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
+        ssavaluetypes[ssa_id] = new
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)

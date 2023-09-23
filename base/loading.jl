@@ -1000,11 +1000,14 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
-cache_file_entry(pkg::PkgId) = joinpath(
-    "compiled",
-    "v$(VERSION.major).$(VERSION.minor)",
-    pkg.uuid === nothing ? ""       : pkg.name),
-    pkg.uuid === nothing ? pkg.name : package_slug(pkg.uuid)
+function cache_file_entry(pkg::PkgId)
+    uuid = pkg.uuid
+    return joinpath(
+        "compiled",
+        "v$(VERSION.major).$(VERSION.minor)",
+        uuid === nothing ? ""       : pkg.name),
+        uuid === nothing ? pkg.name : package_slug(uuid)
+end
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
@@ -1815,9 +1818,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-        if uuidkey == REPL_PKGID
-            REPL_MODULE_REF[] = newm
-        end
     else
         newm = root_module(uuidkey)
     end
@@ -1958,7 +1958,7 @@ function _require(pkg::PkgId, env=nothing)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
                     finally
                         lock(require_lock)
                     end

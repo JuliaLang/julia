@@ -6,6 +6,8 @@ using Random
 import REPL.LineEdit
 using Markdown
 
+@test isassigned(Base.REPL_MODULE_REF)
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
 import .Main.FakePTYs: with_fake_pty
@@ -1700,6 +1702,13 @@ fake_repl() do stdin_write, stdout_read, repl
 
     write(stdin_write, "\t")
     s4 = readuntil(stdout_read, "readavailable") # full completion is reprinted
+
+    write(stdin_write, "\x15")
+    write(stdin_write, "x") # single chars shouldn't hint e.g. `x` shouldn't hint at `xor`
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
 
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
