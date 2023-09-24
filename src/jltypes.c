@@ -1713,7 +1713,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     JL_GC_POP();
 }
 
-jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_GLOBALLY_ROOTED
+jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
 {
     t = jl_unwrap_unionall(t);
     if (jl_is_datatype(t))
@@ -1832,6 +1832,8 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
 // used to expand an NTuple to a flat representation
 static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check)
 {
+    jl_value_t *p = NULL;
+    JL_GC_PUSH1(&p);
     if (check) {
         // Since we are skipping making the Vararg and skipping checks later,
         // we inline the checks from jl_wrap_vararg here now
@@ -1839,13 +1841,13 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check)
             jl_type_error_rt("Vararg", "type", (jl_value_t*)jl_type_type, t);
         // jl_wrap_vararg sometimes simplifies the type, so we only do this 1 time, instead of for each n later
         t = normalize_unionalls(t);
+        p = t;
         jl_value_t *tw = extract_wrapper(t);
         if (tw && t != tw && jl_types_equal(t, tw))
             t = tw;
+        p = t;
         check = 0; // remember that checks are already done now
     }
-    jl_value_t *p = NULL;
-    JL_GC_PUSH1(&p);
     p = (jl_value_t*)jl_svec_fill(n, t);
     p = jl_apply_tuple_type((jl_svec_t*)p, check);
     JL_GC_POP();
