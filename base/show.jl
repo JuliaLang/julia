@@ -1818,9 +1818,9 @@ function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if isa(slotnames, Vector{String}) && slotid ≤ length(slotnames)
-        print(io, slotnames[slotid])
+        print(io, "%", slotnames[slotid])
     else
-        print(io, "_", slotid)
+        print(io, "%_", slotid)
     end
 end
 
@@ -2834,10 +2834,23 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     end
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
+        config = IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src))
+        if isa(src.parent, MethodInstance) && isa(src.parent.def, Method)
+            nargs = src.parent.def.nargs
+            print(lambda_io, "(")
+            # 1 is #self#, don't print that
+            for i = 2:nargs
+                i > 2 && print(lambda_io, ", ")
+                show_unquoted(lambda_io, SlotNumber(i), 0, 0)
+                config.line_info_postprinter(lambda_io; type=src.slottypes[i], used=true, show_type=true, idx=-1)
+            end
+            print(lambda_io, ") =>")
+            println(lambda_io)
+        end
         # TODO: static parameter values?
         # only accepts :source or :none, we can't have a fallback for default since
         # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
-        IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
+        IRShow.show_ir(lambda_io, src, config)
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
