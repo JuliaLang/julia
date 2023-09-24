@@ -11,7 +11,6 @@
 #include <llvm/IR/ValueMap.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -298,42 +297,15 @@ bool propagateJuliaAddrspaces(Function &F) {
     visitor.Visited.clear();
     return true;
 }
-
-struct PropagateJuliaAddrspacesLegacy : FunctionPass {
-    static char ID;
-
-    PropagateJuliaAddrspacesLegacy() : FunctionPass(ID) {}
-    bool runOnFunction(Function &F) override {
-        bool modified = propagateJuliaAddrspaces(F);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(F, &errs()));
-#endif
-        return modified;
-    }
-};
-
-char PropagateJuliaAddrspacesLegacy::ID = 0;
-static RegisterPass<PropagateJuliaAddrspacesLegacy> X("PropagateJuliaAddrspaces", "Propagate (non-)rootedness information", false, false);
-
-Pass *createPropagateJuliaAddrspaces() {
-    return new PropagateJuliaAddrspacesLegacy();
-}
-
 PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysisManager &AM) {
     bool modified = propagateJuliaAddrspaces(F);
 
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();
     }
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

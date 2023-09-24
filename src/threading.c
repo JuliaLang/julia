@@ -332,7 +332,7 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
         if (tid < n)
             return (int8_t)i;
     }
-    return 0; // everything else uses threadpool 0 (though does not become part of any threadpool)
+    return -1; // everything else uses threadpool -1 (does not belong to any threadpool)
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)
@@ -752,10 +752,10 @@ void jl_start_threads(void)
             }
         }
         else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_gc_sweep_threadfun, t);
+            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
         }
         else {
-            uv_thread_create(&uvtid, jl_gc_mark_threadfun, t);
+            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
         }
         uv_thread_detach(&uvtid);
     }

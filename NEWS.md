@@ -3,12 +3,20 @@ Julia v1.11 Release Notes
 
 New language features
 ---------------------
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module. ([#50105])
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes
 ----------------
 
 Compiler/Runtime improvements
 -----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
 
 Command-line option changes
 ---------------------------
@@ -31,6 +39,8 @@ New library features
 Standard library changes
 ------------------------
 
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
+
 #### Package Manager
 
 #### LinearAlgebra
@@ -43,6 +53,9 @@ Standard library changes
 
 #### REPL
 
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
+
 #### SuiteSparse
 
 
@@ -52,6 +65,9 @@ Standard library changes
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
 
@@ -69,6 +85,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------

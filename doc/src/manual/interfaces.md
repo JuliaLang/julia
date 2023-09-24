@@ -7,29 +7,24 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
-|:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
-| **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
-| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
-| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
-| `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
-| `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
-| `Base.isdone(iter[, state])`   | `missing`              | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
+There are two methods that are always required:
 
-| Value returned by `IteratorSize(IterType)` | Required Methods                           |
-|:------------------------------------------ |:------------------------------------------ |
-| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
-| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
-| `Base.IsInfinite()`                        | (*none*)                                   |
-| `Base.SizeUnknown()`                       | (*none*)                                   |
+| Required method         | Brief description                                                                        |
+|:----------------------- |:---------------------------------------------------------------------------------------- |
+| [`iterate(iter)`](@ref) | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty |
+| `iterate(iter, state)`  | Returns either a tuple of the next item and next state or `nothing` if no items remain   |
 
-| Value returned by `IteratorEltype(IterType)` | Required Methods   |
-|:-------------------------------------------- |:------------------ |
-| `Base.HasEltype()`                           | `eltype(IterType)` |
-| `Base.EltypeUnknown()`                       | (*none*)           |
+There are several more methods that should be defined in some circumstances.
+Please note that you should always define at least one of `Base.IteratorSize(IterType)` and `length(iter)` because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`.
+
+| Method                                  | When should this method be defined?                                         | Default definition | Brief description |
+|:--- |:--- |:--- |:--- |
+| [`Base.IteratorSize(IterType)`](@ref)   | If default is not appropriate                                               | `Base.HasLength()` | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| [`length(iter)`](@ref)                  | If `Base.IteratorSize()` returns `Base.HasLength()` or `Base.HasShape{N}()` | (*undefined*)      | The number of items, if known |
+| [`size(iter, [dim])`](@ref)             | If `Base.IteratorSize()` returns `Base.HasShape{N}()`                       | (*undefined*)      | The number of items in each dimension, if known |
+| [`Base.IteratorEltype(IterType)`](@ref) | If default is not appropriate                                               | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate |
+| [`eltype(IterType)`](@ref)              | If default is not appropriate                                               | `Any`              | The type of the first entry of the tuple returned by `iterate()` |
+| [`Base.isdone(iter, [state])`](@ref)    | **Must** be defined if iterator is stateful                                 | `missing`          | Fast-path hint for iterator completion. If not defined for a stateful iterator then functions that check for done-ness, like `isempty()` and `zip()`, may mutate the iterator and cause buggy behaviour! |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
@@ -157,10 +152,10 @@ julia> collect(Iterators.reverse(Squares(4)))
 
 | Methods to implement | Brief description                |
 |:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed element access   |
-| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
+| `getindex(X, i)`     | `X[i]`, indexed access, non-scalar `i` should allocate a copy  |
+| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
 | `firstindex(X)`         | The first index, used in `X[begin]` |
-| `lastindex(X)`           | The last index, used in `X[end]` |
+| `lastindex(X)`           | The last index, used in `X[end]`   |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -841,3 +836,51 @@ julia> p.r
 Finally, it is worth noting that adding instance properties like this is quite
 rarely done in Julia and should in general only be done if there is a good
 reason for doing so.
+
+## [Rounding](@id man-rounding-interface)
+
+| Methods to implement                          | Default definition        | Brief description                                                                                   |
+|:--------------------------------------------- |:------------------------- |:--------------------------------------------------------------------------------------------------- |
+| `round(x::ObjType, r::RoundingMode)`          | none                      | Round `x` and return the result. If possible, round should return an object of the same type as `x` |
+| `round(T::Type, x::ObjType, r::RoundingMode)` | `convert(T, round(x, r))` | Round `x`, returning the result as a `T`                                                            |
+
+To support rounding on a new type it is typically sufficient to define the single method
+`round(x::ObjType, r::RoundingMode)`. The passed rounding mode determines in which direction
+the value should be rounded. The most commonly used rounding modes are `RoundNearest`,
+`RoundToZero`, `RoundDown`, and `RoundUp`, as these rounding modes are used in the
+definitions of the one argument `round`, method, and `trunc`, `floor`, and `ceil`,
+respectively.
+
+In some cases, it is possible to define a three-argument `round` method that is more
+accurate or performant than the two-argument method followed by conversion. In this case it
+is acceptable to define the three argument method in addition to the two argument method.
+If it is impossible to represent the rounded result as an object of the type `T`,
+then the three argument method should throw an `InexactError`.
+
+For example, if we have an `Interval` type which represents a range of possible values
+similar to https://github.com/JuliaPhysics/Measurements.jl, we may define rounding on that
+type with the following
+
+```jldoctest
+julia> struct Interval{T}
+           min::T
+           max::T
+       end
+
+julia> Base.round(x::Interval, r::RoundingMode) = Interval(round(x.min, r), round(x.max, r))
+
+julia> x = Interval(1.7, 2.2)
+Interval{Float64}(1.7, 2.2)
+
+julia> round(x)
+Interval{Float64}(2.0, 2.0)
+
+julia> floor(x)
+Interval{Float64}(1.0, 2.0)
+
+julia> ceil(x)
+Interval{Float64}(2.0, 3.0)
+
+julia> trunc(x)
+Interval{Float64}(1.0, 2.0)
+```

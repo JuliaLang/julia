@@ -1873,3 +1873,40 @@ let s = "`abc`.e"
     # (completions for the fields of `Cmd`)
     @test c == Any["env", "exec"]
 end
+
+# Test completion for a case when type inference returned `Union` of the same types
+union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
+let s = "union_somes(1, 1.0)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c
+end
+union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
+let s = "union_some_ref(1, 1.0)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c && "x" in c
+end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
+end

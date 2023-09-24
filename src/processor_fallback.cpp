@@ -2,6 +2,9 @@
 
 // Fallback processor detection and dispatch
 
+static constexpr FeatureName *feature_names = nullptr;
+static constexpr uint32_t nfeature_names = 0;
+
 namespace Fallback {
 
 static inline const std::string &host_cpu_name()
@@ -33,7 +36,7 @@ static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host
     return res;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -51,7 +54,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<1> target = jit_targets.front();
     // Find the last name match or use the default one.
@@ -175,9 +178,15 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)

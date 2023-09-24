@@ -594,24 +594,41 @@ guardseed() do
     Random.seed!(typemax(UInt128))
 end
 
-# copy, == and hash
-let seed = rand(UInt32, 10)
-    r = MersenneTwister(seed)
-    @test r == MersenneTwister(seed) # r.vals should be all zeros
-    @test hash(r) == hash(MersenneTwister(seed))
-    s = copy(r)
-    @test s == r && s !== r
-    @test hash(s) == hash(r)
-    skip, len = rand(0:2000, 2)
-    for j=1:skip
-        rand(r)
-        rand(s)
+@testset "copy, == and hash" begin
+    for RNG = (MersenneTwister, Xoshiro)
+        seed = rand(UInt32, 10)
+        r = RNG(seed)
+        t = RNG(seed)
+        @test r == t
+        @test hash(r) == hash(t)
+        s = copy(r)
+        @test s == r == t && s !== r
+        @test hash(s) == hash(r)
+        skip, len = rand(0:2000, 2)
+        for j=1:skip
+            rand(r)
+            @test r != s
+            @test hash(r) != hash(s)
+            rand(s)
+        end
+        @test rand(r, len) == rand(s, len)
+        @test s == r
+        @test hash(s) == hash(r)
+        h = rand(UInt)
+        @test hash(s, h) == hash(r, h)
+        if RNG == Xoshiro
+            t = copy(TaskLocalRNG())
+            @test hash(t) == hash(TaskLocalRNG())
+            @test hash(t, h) == hash(TaskLocalRNG(), h)
+            x = rand()
+            @test hash(t) != hash(TaskLocalRNG())
+            @test rand(t) == x
+            @test hash(t) == hash(TaskLocalRNG())
+            copy!(TaskLocalRNG(), r)
+            @test hash(TaskLocalRNG()) == hash(r)
+            @test TaskLocalRNG() == r
+        end
     end
-    @test rand(r, len) == rand(s, len)
-    @test s == r
-    @test hash(s) == hash(r)
-    h = rand(UInt)
-    @test hash(s, h) == hash(r, h)
 end
 
 # MersenneTwister initialization with invalid values
@@ -1063,5 +1080,28 @@ end
             end
             @test y == rand(UInt64)
         end
+    end
+end
+
+@testset "TaskLocalRNG: copy and copy! handle the splitmix state" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        rng1 = copy(TaskLocalRNG())
+        x = fetch(@async rand(UInt64))
+        rng2 = copy(TaskLocalRNG())
+        y = fetch(@async rand(UInt64))
+        rng3 = copy(TaskLocalRNG())
+        @test x != y
+        @test rng1 != rng2
+        Random.seed!(seed)
+        @test TaskLocalRNG() == rng1
+        @test x == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng2
+        # this should be a no-op:
+        copy!(TaskLocalRNG(), copy(TaskLocalRNG()))
+        @test TaskLocalRNG() == rng2
+        @test y == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng3
     end
 end

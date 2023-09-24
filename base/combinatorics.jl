@@ -136,28 +136,6 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     a
 end
 
-function permute!!(a, p::AbstractVector{<:Integer})
-    require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            a[ptr] = a[next]
-            p[ptr] = 0
-            ptr = next
-            next = p[next]
-            count += 1
-        end
-        a[ptr] = temp
-        p[ptr] = 0
-    end
-    a
-end
-
 """
     permute!(v, p)
 
@@ -188,30 +166,6 @@ julia> A
 ```
 """
 permute!(v, p::AbstractVector) = (v .= v[p])
-
-function invpermute!!(a, p::AbstractVector{<:Integer})
-    require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            temp_next = a[next]
-            a[next] = temp
-            temp = temp_next
-            ptr = p[next]
-            p[next] = 0
-            next = ptr
-            count += 1
-        end
-        a[next] = temp
-        p[next] = 0
-    end
-    a
-end
 
 """
     invpermute!(v, p)

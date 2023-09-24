@@ -208,7 +208,8 @@ macro _total_meta()
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
         #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true))
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -218,8 +219,9 @@ macro _foldable_meta()
         #=:nothrow=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#true))
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -230,7 +232,8 @@ macro _nothrow_meta()
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
         #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -241,7 +244,8 @@ macro _terminates_locally_meta()
         #=:terminates_globally=#false,
         #=:terminates_locally=#true,
         #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -252,12 +256,16 @@ macro _effect_free_terminates_locally_meta()
         #=:terminates_globally=#false,
         #=:terminates_locally=#true,
         #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
 end
 
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
+end
+macro _nospecializeinfer_meta()
+    return Expr(:meta, :nospecializeinfer)
 end
 
 function iterate end
@@ -346,7 +354,7 @@ end
 pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
@@ -375,6 +383,7 @@ tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 function unwrap_unionall(@nospecialize(a))
+    @_foldable_meta
     while isa(a,UnionAll)
         a = a.body
     end
@@ -382,6 +391,7 @@ function unwrap_unionall(@nospecialize(a))
 end
 
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
+    @_foldable_meta
     if !isa(u, UnionAll)
         return t
     end
@@ -389,6 +399,7 @@ function rewrap_unionall(@nospecialize(t), @nospecialize(u))
 end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
+    @_foldable_meta
     isdefined(t, :T) || return t
     if !isa(u, UnionAll)
         return t
@@ -416,6 +427,7 @@ function isvarargtype(@nospecialize(t))
 end
 
 function isvatuple(@nospecialize(t))
+    @_foldable_meta
     t = unwrap_unionall(t)
     if isa(t, DataType)
         n = length(t.parameters)
@@ -571,8 +583,8 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
 """
-function reinterpret(Out::Type, x::In) where {In}
-    if isprimitivetype(Out) && isprimitivetype(In)
+function reinterpret(::Type{Out}, x) where {Out}
+    if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end
     # only available when Base is fully loaded.
@@ -761,7 +773,7 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
+getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
     @_total_meta
     t = @_gc_preserve_begin v
@@ -933,9 +945,10 @@ Determine whether a collection is empty (has no elements).
 !!! warning
 
     `isempty(itr)` may consume the next element of a stateful iterator `itr`
-    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
-    Use of `isempty` should therefore be avoided when writing generic
-    code which should support any iterator type.
+    unless an appropriate [`Base.isdone(itr)`](@ref) method is defined.
+    Stateful iterators *should* implement `isdone`, but you may want to avoid
+    using `isempty` when writing generic code which should support any iterator
+    type.
 
 # Examples
 ```jldoctest
@@ -1044,17 +1057,21 @@ end
 
 # Iteration
 """
-    isdone(itr, state...) -> Union{Bool, Missing}
+    isdone(itr, [state]) -> Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
-This is useful for mutable iterators that want to avoid having elements
-consumed, if they are not going to be exposed to the user (e.g. to check
-for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature should define an isdone method that returns
-true/false depending on whether the iterator is done or not. Stateless
-iterators need not implement this function. If the result is `missing`,
-callers may go ahead and compute `iterate(x, state...) === nothing` to
-compute a definite answer.
+This is useful for stateful iterators that want to avoid having elements
+consumed if they are not going to be exposed to the user (e.g. when checking
+for done-ness in `isempty` or `zip`).
+
+Stateful iterators that want to opt into this feature should define an `isdone`
+method that returns true/false depending on whether the iterator is done or
+not. Stateless iterators need not implement this function.
+
+If the result is `missing`, callers may go ahead and compute
+`iterate(x, state) === nothing` to compute a definite answer.
+
+See also [`iterate`](@ref), [`isempty`](@ref)
 """
 isdone(itr, state...) = missing
 

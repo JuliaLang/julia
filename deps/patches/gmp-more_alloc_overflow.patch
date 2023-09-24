@@ -1,0 +1,37 @@
+diff -ur a/mpz/n_pow_ui.c b/mpz/n_pow_ui.c
+--- a/mpz/n_pow_ui.c
++++ b/mpz/n_pow_ui.c
+@@ -220,8 +220,7 @@
+   umul_ppmm (ovfl, rtwos_bits, e, btwos);
+   if (ovfl)
+     {
+-      fprintf (stderr, "gmp: overflow in mpz type\n");
+-      abort ();
++      __GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+
+   rtwos_limbs += rtwos_bits / GMP_NUMB_BITS;
+@@ -382,8 +381,7 @@
+   umul_ppmm (ovfl, ralloc, (bsize*GMP_NUMB_BITS - cnt + GMP_NAIL_BITS), e);
+   if (ovfl)
+     {
+-      fprintf (stderr, "gmp: overflow in mpz type\n");
+-      abort ();
++      __GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+   ralloc = ralloc / GMP_NUMB_BITS + 5;
+
+diff -ur a/tal-reent.c b/tal-reent.c
+--- a/tal-reent.c
++++ b/tal-reent.c
+@@ -61,6 +61,10 @@
+
+   total_size = size + HSIZ;
+   p = __GMP_ALLOCATE_FUNC_TYPE (total_size, char);
++  if (!p)
++    {
++      __GMP_ALLOC_OVERFLOW_FUNC ();
++    }
+   P->size = total_size;
+   P->next = *markp;
+   *markp = P;

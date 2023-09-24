@@ -249,9 +249,7 @@ end
     isa(x, Const) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
-@nospecializeinfer function is_forwardable_argtype(::JLTypeLattice, @nospecialize x)
-    return false
-end
+@nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false
 
 """
     widenreturn(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo) -> new_bestguess

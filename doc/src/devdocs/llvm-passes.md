@@ -58,9 +58,9 @@ This pass removes the non-integral address spaces from the module's datalayout s
 
 * Filename: `llvm-simdloop.cpp`
 * Class Name: `LowerSIMDLoopPass`
-* Opt Name: `module(LowerSIMDLoop)`
+* Opt Name: `loop(LowerSIMDLoop)`
 
-This pass acts as the main driver of the `@simd` annotation. Codegen inserts a call to a marker intrinsic (`julia.simdloop`), which this pass uses to identify loops that were originally marked with `@simd`. Then, this pass looks for a chain of floating point operations that form a reduce and adds the `contract` and `reassoc` fast math flags to allow reassociation (and thus vectorization). This pass does not preserve either loop information nor inference correctness, so it may violate Julia semantics in surprising ways. If the loop was annotated with `ivdep` as well, then the pass marks the loop as having no loop-carried dependencies (the resulting behavior is undefined if the user annotation was incorrect or gets applied to the wrong loop).
+This pass acts as the main driver of the `@simd` annotation. Codegen inserts a `!llvm.loopid` marker at the back branch of a loop, which this pass uses to identify loops that were originally marked with `@simd`. Then, this pass looks for a chain of floating point operations that form a reduce and adds the `contract` and `reassoc` fast math flags to allow reassociation (and thus vectorization). This pass does not preserve either loop information nor inference correctness, so it may violate Julia semantics in surprising ways. If the loop was annotated with `ivdep` as well, then the pass marks the loop as having no loop-carried dependencies (the resulting behavior is undefined if the user annotation was incorrect or gets applied to the wrong loop).
 
 ### LowerPTLS
 
@@ -94,7 +94,7 @@ This pass removes Julia-specific address spaces from LLVM IR. It is mostly used 
 * Class Name: `MultiVersioningPass`
 * Opt Name: `module(JuliaMultiVersioning)`
 
-This pass performs modifications to a module to create functions that are optimized for running on different architectures (see sysimg.md and pkgimg.md for more details). Implementation-wise, it clones functions and applies different target-specific attributes to them to allow the optimizer to use advanced features such as vectorization and instruction scheduling for that platform. It also creates some infrastructure to enable the Julia image loader to select the appropriate version of the function to call based on the architecture the loader is running on. The target-specific attributes are controlled by the `julia.mv.specs` module flag, which during compilation is derived from the `JULIA_CPU_TARGET` environment variable. The pass must also be enabled by providing a `julia.mv.enable` module flag with a value of 1.
+This pass performs modifications to a module to create functions that are optimized for running on different architectures (see sysimg.md and pkgimg.md for more details). Implementation-wise, it clones functions and applies different target-specific attributes to them to allow the optimizer to use advanced features such as vectorization and instruction scheduling for that platform. It also creates some infrastructure to enable the Julia image loader to select the appropriate version of the function to call based on the architecture the loader is running on. The target-specific attributes are controlled by the `julia.mv.specs` module flag, which during compilation is derived from the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable. The pass must also be enabled by providing a `julia.mv.enable` module flag with a value of 1.
 
 !!! warning
 

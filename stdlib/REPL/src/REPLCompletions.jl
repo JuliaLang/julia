@@ -19,6 +19,10 @@ struct KeywordCompletion <: Completion
     keyword::String
 end
 
+struct KeyvalCompletion <: Completion
+    keyval::String
+end
+
 struct PathCompletion <: Completion
     path::String
 end
@@ -99,6 +103,7 @@ end
 
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::KeyvalCompletion) = c.keyval
 _completion_text(c::PathCompletion) = c.path
 _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
@@ -131,6 +136,7 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -170,7 +176,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool)
+            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool
         end
         # Looking for a binding in a module
         if mod == context_module
@@ -192,45 +198,58 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         end
     else
         # Looking for a member of a type
-        if t isa DataType && t != Any
-            # Check for cases like Type{typeof(+)}
-            if Base.isType(t)
-                t = typeof(t.parameters[1])
-            end
-            # Only look for fields if this is a concrete type
-            if isconcretetype(t)
-                fields = fieldnames(t)
-                for field in fields
-                    isa(field, Symbol) || continue # Tuple type has ::Int field name
-                    s = string(field)
-                    if startswith(s, name)
-                        push!(suggestions, FieldCompletion(t, field))
-                    end
+        add_field_completions!(suggestions, name, t)
+    end
+    return suggestions
+end
+
+function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
+    if isa(t, Union)
+        add_field_completions!(suggestions, name, t.a)
+        add_field_completions!(suggestions, name, t.b)
+    elseif t isa DataType && t != Any
+        # Check for cases like Type{typeof(+)}
+        if Base.isType(t)
+            t = typeof(t.parameters[1])
+        end
+        # Only look for fields if this is a concrete type
+        if isconcretetype(t)
+            fields = fieldnames(t)
+            for field in fields
+                isa(field, Symbol) || continue # Tuple type has ::Int field name
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, FieldCompletion(t, field))
                 end
             end
         end
     end
-    suggestions
+end
+
+function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+    r = searchsorted(list, s)
+    i = first(r)
+    n = length(list)
+    while i <= n && startswith(list[i],s)
+        r = first(r):i
+        i += 1
+    end
+    Completion[T(kw) for kw in list[r]]
 end
 
 const sorted_keywords = [
     "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export", "false",
+    "const", "continue", "do", "else", "elseif", "end", "export",
     "finally", "for", "function", "global", "if", "import",
     "let", "local", "macro", "module", "mutable struct",
     "primitive type", "quote", "return", "struct",
-    "true", "try", "using", "while"]
+    "try", "using", "while"]
 
-function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
-    i = first(r)
-    n = length(sorted_keywords)
-    while i <= n && startswith(sorted_keywords[i],s)
-        r = first(r):i
-        i += 1
-    end
-    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
-end
+complete_keyword(s::Union{String,SubString{String}}) = complete_from_list(KeywordCompletion, sorted_keywords, s)
+
+const sorted_keyvals = ["false", "true"]
+
+complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
 
 function complete_path(path::AbstractString, pos::Int;
                        use_envpath=false, shell_escape=false,
@@ -422,7 +441,7 @@ function get_code_cache()
     #     that those produced by `NativeInterpreter`, will leak into the native code cache,
     #     potentially causing runtime slowdown.
     #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if (@ccall jl_generating_output()::Cint) == 1
+    if Base.generating_output()
         return REPLInterpreterCache()
     else
         return REPL_INTERPRETER_CACHE
@@ -919,6 +938,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
     append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+    append!(suggestions, complete_keyval(last_word))
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -941,7 +961,10 @@ end
 
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
     ex = nothing
-    comp_keywords && append!(suggestions, complete_keyword(name))
+    if comp_keywords
+        append!(suggestions, complete_keyword(name))
+        append!(suggestions, complete_keyval(name))
+    end
     if dotpos > 1 && string[dotpos] == '.'
         s = string[1:dotpos-1]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.

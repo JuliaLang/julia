@@ -8,10 +8,6 @@ AdjOrTransStridedMat{T} = Union{Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:
 StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
 StridedMaybeAdjOrTransVecOrMat{T} = Union{StridedVecOrMat{T}, AdjOrTrans{<:Any, <:StridedVecOrMat{T}}}
 
-_parent(A) = A
-_parent(A::Adjoint) = parent(A)
-_parent(A::Transpose) = parent(A)
-
 matprod(x, y) = x*y + x*y
 
 # dot products
@@ -115,14 +111,14 @@ end
 function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
-         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
-         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
+         wrapperop(A)(convert(AbstractArray{TS}, _unwrap(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _unwrap(B))))
 end
 function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
-         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
-         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
+         wrapperop(A)(convert(AbstractArray{TS}, _unwrap(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _unwrap(B))))
 end
 
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
@@ -131,13 +127,13 @@ function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:Bla
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          convert(AbstractArray{TS}, A),
-         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _unwrap(B))))
 end
 function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          copymutable_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
-         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _unwrap(B))))
 end
 # the following case doesn't seem to benefit from the translation A*B = (B' * A')'
 function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})

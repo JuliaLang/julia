@@ -304,7 +304,6 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         else {
             a->length = n;
             a->nrows = n;
-            ((char*)a->data)[n] = '\0';
         }
         if (str) {
             JL_GC_PUSH1(&a);
@@ -776,13 +775,12 @@ static _Atomic(uint64_t) g_rngseed;
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
 {
     uint64_t max = UINT64_MAX;
-    uint64_t unbias = UINT64_MAX;
     uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
     uint64_t rngseed;
     uint64_t rnd;
     do {
         rngseed = rngseed0;
-        rnd = cong(max, unbias, &rngseed);
+        rnd = cong(max, &rngseed);
     } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
     return rnd;
 }
