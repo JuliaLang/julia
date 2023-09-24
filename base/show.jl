@@ -1789,6 +1789,14 @@ end
 
 ## AST printing ##
 
+function escape_ssa_name(name)
+    # escape names that are not valid SSA identifiers
+    if typeof(name) <: AbstractString && match(r"[^a-zA-Z0-9_]", name)
+        return "\"" * escape_string(name) * "\""
+    end
+    return name
+end
+
 function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
     if get(io, :maxssaid, typemax(Int))::Int < val.id
         # invalid SSAValue, print this in red for better recognition
@@ -1818,7 +1826,7 @@ function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if isa(slotnames, Vector{String}) && slotid ≤ length(slotnames)
-        print(io, "%", slotnames[slotid])
+        print(io, "%", escape_ssa_name(slotnames[slotid]))
     else
         print(io, "%_", slotid)
     end
