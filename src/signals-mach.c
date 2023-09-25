@@ -384,12 +384,12 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
+static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;
-    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL) // this thread is already dead
         return 0;
 
@@ -407,18 +407,18 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
     return 1;
 }
 
-static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t **ctx)
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
-    static host_thread_state_t state;
+    host_thread_state_t state;
     if (!jl_thread_suspend_and_get_state2(tid, &state)) {
-        *ctx = NULL;
-        return;
+        return 0;
     }
-    *ctx = (unw_context_t*)&state;
+    *ctx = *(unw_context_t*)&state;
+    return 1;
 }
 
-static void jl_thread_resume(int tid, int sig)
+void jl_thread_resume(int tid)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -593,8 +593,15 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     jl_unlock_profile();
 }
 
-#define jl_lock_profile()       int keymgr_locked = jl_lock_profile_mach(1)
-#define jl_unlock_profile()     jl_unlock_profile_mach(1, keymgr_locked)
+int jl_lock_stackwalk(void)
+{
+    return jl_lock_profile_mach(1);
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    jl_unlock_profile_mach(1, lockret);
+}
 
 void *mach_profile_listener(void *arg)
 {
@@ -691,7 +698,7 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
             // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
+            jl_thread_resume(i);
         }
         jl_unlock_profile_mach(0, keymgr_locked);
         if (running) {

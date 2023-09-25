@@ -1050,6 +1050,11 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 
+void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;
+size_t mtarraylist_length(small_arraylist_t *_a) JL_NOTSAFEPOINT;
+void mtarraylist_add(small_arraylist_t *_a, void *elt, size_t idx) JL_NOTSAFEPOINT;
+void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
+
 // object accessors -----------------------------------------------------------
 
 #define jl_svec_len(t)              (((jl_svec_t*)(t))->length)
