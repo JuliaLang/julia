@@ -2074,7 +2074,6 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
         if (new_obj != NULL) {
             verify_parent2("object", obj16_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj16_parent, slot, (jl_datatype_t*)jl_typeof(obj16_parent)));
-            gc_try_claim_and_push(mq, new_obj, &nptr);
             if (obj16_begin + 1 != obj16_end) {
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
