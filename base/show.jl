@@ -1791,7 +1791,7 @@ end
 
 function escape_ssa_name(name)
     # escape names that are not valid SSA identifiers
-    if typeof(name) <: AbstractString && match(r"[^a-zA-Z0-9_]", name)
+    if typeof(name) <: AbstractString && match(r"[^a-zA-Z0-9_]", name) !== nothing
         return "\"" * escape_string(name) * "\""
     end
     return name
