@@ -85,7 +85,8 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test (@test_deprecated zeros(eltya,n)\fill(eltya(1),n)) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
+                temp = @test_deprecated zeros(eltya,n)\fill(eltya(1),n)
+                @test temp ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
@@ -1129,12 +1130,16 @@ end
 end
 
 function test_rdiv_pinv_consistency_dep(a, b)
-    @test (@test_deprecated /(a*b,b)) ≈ (a*(@test_deprecated b/b)) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((@test_deprecated /(a*b,b))) == a*(typeof((@test_deprecated b/b))) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    temp1 = @test_deprecated /(a*b,b)
+    temp2 = @test_deprecated b/b
+    @test temp1 ≈ (a*temp2) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof(temp1) == a*(typeof(temp2)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency_dep(a, b)
-    @test (@test_deprecated \(a,a*b)) ≈ (@test_deprecated a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof((@test_deprecated \(a,a*b))) == typeof(((@test_deprecated a\a)*b)) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    temp1 = @test_deprecated \(a,a*b)
+    temp2 = @test_deprecated \(a,a)
+    @test temp1 ≈ temp2*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof(temp1) == typeof((temp2*b)) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency_dep(a, b)
     test_rdiv_pinv_consistency_dep(a, b)
