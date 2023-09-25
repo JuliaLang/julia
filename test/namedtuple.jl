@@ -384,19 +384,19 @@ end
 for f in (Base.merge, Base.structdiff)
     @testset let f = f
         # test the effects of the fallback path
-        @testset let eff = Base.infer_effects() do a::NamedTuple, b::NamedTuple
-                @invoke f(a::NamedTuple, b::NamedTuple)
-            end
+        fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
+        @testset let eff = Base.infer_effects(fallback_func)
             @test Core.Compiler.is_foldable(eff)
             @test eff.nonoverlayed
         end
+        @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
-        func(a, b) = f(a, b)
-        @testset let eff = Base.infer_effects(func, (NamedTuple, NamedTuple))
+        general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
+        @testset let eff = Base.infer_effects(general_func)
             @test Core.Compiler.is_foldable(eff)
             @test eff.nonoverlayed
         end
-        @test Core.Compiler.return_type(func, Tuple{NamedTuple,NamedTuple}) == NamedTuple
+        @test only(Base.return_types(general_func)) == NamedTuple
     end
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
