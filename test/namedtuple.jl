@@ -382,10 +382,22 @@ end
 
 # Test effect/inference for merge/diff of unknown NamedTuples
 for f in (Base.merge, Base.structdiff)
-    let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
-        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+    @testset let f = f
+        # test the effects of the fallback path
+        fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
+        @testset let eff = Base.infer_effects(fallback_func)
+            @test Core.Compiler.is_foldable(eff)
+            @test eff.nonoverlayed
+        end
+        @test only(Base.return_types(fallback_func)) == NamedTuple
+        # test if `max_methods = 4` setting works as expected
+        general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
+        @testset let eff = Base.infer_effects(general_func)
+            @test Core.Compiler.is_foldable(eff)
+            @test eff.nonoverlayed
+        end
+        @test only(Base.return_types(general_func)) == NamedTuple
     end
-    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
 
