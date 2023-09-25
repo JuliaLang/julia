@@ -155,6 +155,20 @@
 #    name::Symbol
 #end
 
+#struct DetachNode
+#    syncregion
+#    label::Int
+#end
+
+#struct ReattachNode
+#    syncregion
+#    label::Int
+#end
+
+#struct SyncNode
+#    syncregion
+#end
+
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -427,6 +441,9 @@ eval(Core, quote
     ReturnNode(@nospecialize val) = $(Expr(:new, :ReturnNode, :val))
     ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
     GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
+    SyncNode(token) = $(Expr(:new, :SyncNode, :token))
+    DetachNode(token, bb::Int) = $(Expr(:new, :DetachNode, :token, :bb,))
+    ReattachNode(token, bb::Int) = $(Expr(:new, :ReattachNode, :token, :bb))
     LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
     function LineNumberNode(l::Int, @nospecialize(f))
         isa(f, String) && (f = Symbol(f))
@@ -525,11 +542,13 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode,
     Const, PartialStruct, InterConditional
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode,
     Const, PartialStruct, InterConditional
 
 end # module IR

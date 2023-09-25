@@ -287,6 +287,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
+    isa(stmt, SyncNode) && return (true, false, true)
+    isa(stmt, DetachNode) && return (true, false, true)
+    isa(stmt, ReattachNode) && return (true, false, true)
     if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
         consistent = nothrow && isconst(stmt.mod, stmt.name)
@@ -1185,6 +1188,39 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     body[i] = ReturnNode(SSAValue(val.id + ssachangemap[val.id]))
                 end
             end
+        elseif isa(el, DetachNode)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = DetachNode(syncregion, label)
+                else
+                    body[i] = DetachNode(syncregion, label)
+                end
+            end
+        elseif isa(el, ReattachNode)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+                # TODO: Make this always valid by using fallthrough in ReattachNode
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = ReattachNode(syncregion, label)
+                else
+                    body[i] = ReattachNode(syncregion, label)
+                end
+            end
+        elseif isa(el, SyncNode)
+            syncregion = el.syncregion
+            if isa(syncregion, SSAValue)
+                syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            body[i] = SyncNode(syncregion)
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, PhiNode)

@@ -3081,6 +3081,27 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         end
                         @goto fallthrough
                     end
+                elseif isa(stmt, DetachNode)
+                    # A detach node has two edges we need to add
+                    # the reattach edge to the work queue
+                    succs = bbs[currbb].succs
+                    @assert length(succs) == 2
+                    detachbb = succs[1] == currbb + 1 ? succs[2] : succs[1]
+                    if update_bbstate!(𝕃ᵢ, frame, detachbb, currstate)
+                        handle_control_backedge!(interp, frame, currpc, stmt.label)
+                        push!(W, detachbb)
+                    end
+                    ssavaluetypes[currpc] = Any
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
+                    @goto fallthrough
+                elseif isa(stmt, ReattachNode)
+                    succs = bbs[currbb].succs
+                    @assert length(succs) == 1
+                    nextbb = succs[1]
+                    ssavaluetypes[currpc] = Any
+                    handle_control_backedge!(interp, frame, currpc, stmt.label)
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
+                    @goto branch
                 elseif isa(stmt, ReturnNode)
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
                     if update_bestguess!(interp, frame, currstate, rt)

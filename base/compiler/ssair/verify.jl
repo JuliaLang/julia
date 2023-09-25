@@ -195,6 +195,50 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end
+        elseif isa(terminator, DetachNode)
+            if !(block.succs == [idx + 1, terminator.label] || block.succs == [terminator.label, idx + 1])
+                @verify_error " Block $idx successors ($(block.succs)), does not match DetachNode; expected detach edge to block $(idx + 1) and continue edge to block $(terminator.label)"
+                error("")
+            end
+            detached = ir.cfg.blocks[idx + 1]
+            if length(detached.preds) != 1
+                @verify_error " Block $(idx+1) detached from block $(idx) has multiple predecessors ($(block.preds)))"
+                error("")
+            end
+            continuation = ir.cfg.blocks[terminator.label]
+            for child in continuation.preds  # BBs in the child task
+                child == idx && continue
+                local t = ir.stmts[ir.cfg.blocks[child].stmts[end]][:inst]
+                if !(t isa ReattachNode)
+                    continue
+                end
+                if !dominates(domtree, idx, child)
+                    @verify_error "Detach block $idx does not dominate reattach block $child"
+                    error("")
+                end
+            end
+            for idx in continuation.stmts
+                # Note: This assumes that `early_tapir_pass!` (`check_tapir_race!`) was
+                # already run.
+                if ir.stmts[idx][:inst] isa PhiNode
+                    @verify_error "Continuation block $continuation has a PhiNode"
+                    error("")
+                end
+            end
+        elseif isa(terminator, ReattachNode)
+            if block.succs != [terminator.label]
+                @verify_error " Block $idx successors ($(block.succs)), does not match ReattachNode; expected reattach edge to block $(terminator.label)"
+                error("")
+            end
+            continuation = ir.cfg.blocks[terminator.label]
+            ndetaches = 0
+            for p in continuation.preds
+                ndetaches += ir.stmts[ir.cfg.blocks[p].stmts[end]][:inst] isa DetachNode
+            end
+            if ndetaches != 1
+                @verify_error "Continuation block $(terminator.label) has $ndetaches continue edgees (expected only one such edge)"
+                error("")
+            end
         elseif isexpr(terminator, :enter)
             @label enter_check
             if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
@@ -319,6 +363,9 @@ function verify_ir(ir::IRCode, print::Bool=true,
         elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)) && idx != last(ir.cfg.blocks[bb].stmts)
             @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
             error("")
+            # Note: We can't do the same check for DetachNode and ReattachNode
+            # since they may be inside a closure that captures the syncregion
+            # token.
         else
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if (stmt isa ReturnNode)

@@ -115,6 +115,23 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
         end
         return stmt
     end
+    if isa(stmt, Union{DetachNode, ReattachNode, SyncNode})
+        x = fixemup!(slot_filter, rename_slot, ir, ci, idx, stmt.syncregion)
+        if x === UNDEF_TOKEN
+            # `syncregion` can become undef at this point if the sub-CFG
+            # containing detaches etc. is already determined to be unreachable.
+            # Instead of removing the statement, we use goto nodes for
+            # preserving the CFG (i.e., serial projection).
+            isa(stmt, DetachNode) && return GotoIfNot(true, stmt.label)
+            isa(stmt, ReattachNode) && return GotoNode(stmt.label)
+            isa(stmt, SyncNode) && return nothing  # fallthrough
+        else
+            isa(stmt, DetachNode) && return DetachNode(x, stmt.label)
+            isa(stmt, ReattachNode) && return ReattachNode(x, stmt.label)
+            isa(stmt, SyncNode) && return SyncNode(x)
+        end
+        @assert false # unreachable
+    end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
         if isa(val, SlotNumber)
@@ -179,7 +196,8 @@ function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::V
     # If the last instruction is not a terminator, add one. This can
     # happen for implicit return on dead branches.
     term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
+    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode) &&
+       !isa(term, DetachNode) && !isa(term, ReattachNode) && !isa(term, SyncNode)
         push!(code, ReturnNode())
         push!(ssavaluetypes, Union{})
         push!(codelocs, 0)
@@ -399,7 +417,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         if node == -1 && !isempty(stack)
             node = pop!(stack)
         end
-        if node != next_node && !isa(terminator, Union{GotoNode, ReturnNode})
+        if node != next_node && !isa(terminator, Union{GotoNode, ReturnNode, DetachNode, ReattachNode, SyncNode})
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
                 ncritbreaks += 1
@@ -467,6 +485,10 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+        elseif isa(terminator, DetachNode)
+            result[inst_range[end]][:stmt] = DetachNode(terminator.syncregion, bb_rename[terminator.label])
+        elseif isa(terminator, ReattachNode)
+            result[inst_range[end]][:stmt] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
                 if terminator.head === :enter
@@ -845,10 +867,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             push!(worklist, (succ, item, copy(incoming_vals)))
         end
     end
+    code1 = copy(code)
     # Delete any instruction in unreachable blocks (except for terminators)
     for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
-            if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
+            if isterminator(code[idx])
                 code[idx] = ReturnNode()
             else
                 code[idx] = nothing
@@ -866,6 +889,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, DetachNode)
+            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, ReattachNode)
+            new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1

@@ -1465,7 +1465,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 
 const ExprNode = Union{Expr, QuoteNode, SlotNumber, LineNumberNode, SSAValue,
                        GotoNode, GotoIfNot, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
-                       ReturnNode}
+                       ReturnNode, DetachNode, ReattachNode, SyncNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax.
@@ -1800,6 +1800,9 @@ end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
+show_unquoted(io::IO, ex::DetachNode, ::Int, ::Int)     = print(io, "detach within ", ex.syncregion, " reattach to %", ex.label)
+show_unquoted(io::IO, ex::ReattachNode, ::Int, ::Int)   = print(io, "reattach within ", ex.syncregion, " %", ex.label)
+show_unquoted(io::IO, ex::SyncNode, ::Int, ::Int)       = print(io, "sync within ", ex.syncregion)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)

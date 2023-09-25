@@ -63,7 +63,9 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo ||
+                                  head === :detach || head === :reattach || head === :sync ||
+                                  head === :syncregion
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
@@ -393,6 +395,8 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
+        elseif isa(e, Union{DetachNode,ReattachNode,SyncNode})
+            e = e.syncregion
         end
         if isa(e, SSAValue)
             push!(uses[e.id], line)

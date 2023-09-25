@@ -90,7 +90,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             e->head == jl_meta_sym || e->head == jl_inbounds_sym ||
             e->head == jl_boundscheck_sym || e->head == jl_loopinfo_sym ||
             e->head == jl_aliasscope_sym || e->head == jl_popaliasscope_sym ||
-            e->head == jl_inline_sym || e->head == jl_noinline_sym) {
+            e->head == jl_inline_sym || e->head == jl_noinline_sym ||
+            e->head == jl_detach_sym || e->head == jl_reattach_sym || e->head == jl_sync_sym) {
             // ignore these
         }
         else {

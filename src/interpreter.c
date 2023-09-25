@@ -323,7 +323,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_true;
     }
     else if (head == jl_meta_sym || head == jl_coverageeffect_sym || head == jl_inbounds_sym || head == jl_loopinfo_sym ||
-             head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
+             head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym ||
+             head == jl_syncregion_sym) {
         return jl_nothing;
     }
     else if (head == jl_gc_preserve_begin_sym || head == jl_gc_preserve_end_sym) {
