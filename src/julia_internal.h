@@ -195,10 +195,12 @@ JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 
 JL_DLLEXPORT void jl_init_profile_lock(void);
 JL_DLLEXPORT uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
+JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
+int jl_lock_stackwalk(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
@@ -1181,6 +1183,9 @@ void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_data) JL_NOTSAFEPOIN
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT;
+void jl_thread_resume(int tid) JL_NOTSAFEPOINT;
+
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from) JL_NOTSAFEPOINT
 {
