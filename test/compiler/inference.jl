@@ -3290,7 +3290,10 @@ end
 call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
 @test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
 @test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
-@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+let (src, rt) = only(code_typed(my_ntuple, Tuple{Any, Val}))
+    @test src isa CodeInfo
+    @test rt == Tuple
+end
 
 @generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
 @test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
