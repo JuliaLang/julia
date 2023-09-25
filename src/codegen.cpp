@@ -5828,6 +5828,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         ctx.LoopID->replaceOperandWith(0, ctx.LoopID);
         return jl_cgval_t();
     }
+    else if (head == jl_syncregion_sym) {
+#ifdef USE_TAPIR
+        Value *syncrintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::syncregion_start);
+        Value *token = ctx.builder.CreateCall(syncrintr);
+#else
+        Value *token = nullptr;
+#endif
+        jl_cgval_t tok(token, (jl_value_t*)jl_nothing_type, NULL);
+        return tok;
+    }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
             || head == jl_pop_exception_sym || head == jl_enter_sym || head == jl_inbounds_sym
             || head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
@@ -8296,6 +8306,20 @@ static jl_llvm_functions_t
                 branch_targets.insert(dest);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
+            } else if (jl_is_detachnode(stmt)) {
+                int dest = jl_detachnode_label(stmt);
+                branch_targets.insert(dest);
+                // The next 1-indexed statement
+                branch_targets.insert(i + 2);
+            } else if (jl_is_reattachnode(stmt)) {
+                int dest = jl_reattachnode_label(stmt);
+                branch_targets.insert(dest);
+                if (i + 2 <= stmtslen)
+                    branch_targets.insert(i + 2);
+            } else if (jl_is_syncnode(stmt)) {
+                // sync node act as terminator, implicit fall-through
+                if (i + 2 <= stmtslen)
+                    branch_targets.insert(i + 2);
             } else if (jl_is_phinode(stmt)) {
                 jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
                 for (size_t j = 0; j < jl_array_len(edges); ++j) {
@@ -8467,6 +8491,74 @@ static jl_llvm_functions_t
             find_next_stmt(cursor + 1);
             continue;
         }
+#ifdef USE_TAPIR
+        if (jl_is_detachnode(stmt)) {
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            int lname = jl_detachnode_label(stmt);
+            workstack.push_back(lname - 1);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateDetach(BB[cursor+2], BB[lreattach], syncregion.V);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_reattachnode(stmt)) {
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            int lname = jl_reattachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateReattach(BB[lname], syncregion.V);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_syncnode(stmt)) {
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateSync(BB[cursor+2], syncregion.V);
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+#else
+        if (jl_is_detachnode(stmt)) {
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[cursor+2]); // fallthrough
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+        if (jl_is_reattachnode(stmt)) {
+            int lname = jl_reattachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            workstack.push_back(lname - 1);
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_syncnode(stmt)) {
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[cursor+2]); // fallthrough
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+#endif
         if (jl_is_gotoifnot(stmt)) {
             jl_value_t *cond = jl_gotoifnot_cond(stmt);
             int lname = jl_gotoifnot_label(stmt);
@@ -8572,7 +8664,10 @@ static jl_llvm_functions_t
 #endif
                 continue;
             }
-            assert(std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
+            // In Tapir-SSP Julia might have an additional fictious edge.
+            // FIXME: Phi-Edges post reattach are verboten
+            if (std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) == pred_end(PhiBB))
+                continue; // consistency check
             TerminatorInst *terminator = FromBB->getTerminator();
             if (!terminator->getParent()->getUniqueSuccessor()) {
                 // Can't use `llvm::SplitCriticalEdge` here because
