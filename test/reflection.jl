@@ -1076,3 +1076,50 @@ private() = 1
 end
 
 @test names(TestNames) == [:TestNames, :exported, :publicized]
+
+# reflections for generated function with abstract input types
+
+# :generated_only function should return failed results if given abstract input types
+@generated function generated_only_simple(x)
+    if x <: Integer
+        return :(x ^ 2)
+    else
+        return :(x)
+    end
+end
+@test only(Base.return_types(generated_only_simple, (Real,))) == Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
+let (src, rt) = only(code_typed(generated_only_simple, (Real,)))
+    @test src isa Method
+    @test rt == Any
+end
+
+# optionally generated function should return fallback results if given abstract input types
+function sub2ind_gen_impl(dims::Type{NTuple{N,Int}}, I...) where N
+    ex = :(I[$N] - 1)
+    for i = (N - 1):-1:1
+        ex = :(I[$i] - 1 + dims[$i] * $ex)
+    end
+    return :($ex + 1)
+end;
+function sub2ind_gen_fallback(dims::NTuple{N,Int}, I) where N
+    ind = I[N] - 1
+    for i = (N - 1):-1:1
+        ind = I[i] - 1 + dims[i]*ind
+    end
+    return (ind + 1)::Int
+end;
+function sub2ind_gen(dims::NTuple{N,Int}, I::Integer...) where N
+    length(I) == N || error("partial indexing is unsupported")
+    if @generated
+        return sub2ind_gen_impl(dims, I...)
+    else
+        return sub2ind_gen_fallback(dims, I)
+    end
+end;
+@test only(Base.return_types(sub2ind_gen, (NTuple,Int,Int,))) == Int
+let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
+    @test src isa CodeInfo
+    @test rt == Int
+    @test any(iscall((src,sub2ind_gen_fallback)), src.code)
+    @test any(iscall((src,error)), src.code)
+end

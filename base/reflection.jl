@@ -1477,15 +1477,6 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     return true
 end
 
-# give a decent error message if we try to instantiate a staged function on non-leaf types
-function func_for_method_checked(m::Method, @nospecialize(types), sparams::SimpleVector)
-    if isdefined(m, :generator) && !may_invoke_generator(m, types, sparams)
-        error("cannot call @generated function `", m, "` ",
-              "with abstract argument types: ", types)
-    end
-    return m
-end
-
 """
     code_typed(f, types; kw...)
 
@@ -1568,10 +1559,9 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match.method, match.spec_types, match.sparams, optimize)
         if code === nothing
-            push!(asts, meth => Any)
+            push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
             push!(asts, code => ty)
@@ -1665,16 +1655,15 @@ function code_ircode_by_type(
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_ircode(
             interp,
-            meth,
+            match.method,
             match.spec_types,
             match.sparams,
             optimize_until,
         )
         if code === nothing
-            push!(asts, meth => Any)
+            push!(asts, match.method => Any)
         else
             push!(asts, code => ty)
         end
@@ -1735,8 +1724,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, types, match.sparams)
-        ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
+        ty = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
         push!(rts, something(ty, Any))
     end
     return rts
@@ -1833,9 +1821,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     cst = Int[]
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
-        println(io, meth)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        println(io, match.method)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match.method, match.spec_types, match.sparams, true)
         if code === nothing
             println(io, "  inference not successful")
         else
