@@ -29,6 +29,10 @@ ifeq ($(USECLANG),1)
 FLAGS += -Wno-return-type-c-linkage
 endif
 
+ifeq ($(USE_TAPIR),1)
+FLAGS += -DUSE_TAPIR
+endif
+
 FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
 ifeq ($(OS),WINNT)
 FLAGS += -DJL_BUILD_UNAME='"NT"'

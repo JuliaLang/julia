@@ -359,6 +359,9 @@ USE_MLIR := 0
 # Options to use RegionVectorizer
 USE_RV := 0
 
+# Option to enable experimental Tapir support
+USE_TAPIR := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
