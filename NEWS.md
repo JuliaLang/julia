@@ -39,8 +39,6 @@ New library features
 Standard library changes
 ------------------------
 
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
-
 #### Package Manager
 
 #### LinearAlgebra
@@ -70,6 +68,8 @@ Standard library changes
 * Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
