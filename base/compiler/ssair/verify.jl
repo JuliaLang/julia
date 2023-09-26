@@ -217,14 +217,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-            for idx in continuation.stmts
-                # Note: This assumes that `early_tapir_pass!` (`check_tapir_race!`) was
-                # already run.
-                if ir.stmts[idx][:inst] isa PhiNode
-                    @verify_error "Continuation block $continuation has a PhiNode"
-                    error("")
-                end
-            end
         elseif isa(terminator, ReattachNode)
             if block.succs != [terminator.label]
                 @verify_error " Block $idx successors ($(block.succs)), does not match ReattachNode; expected reattach edge to block $(terminator.label)"
