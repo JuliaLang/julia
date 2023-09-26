@@ -185,7 +185,7 @@ The fields of the structure are:
 | gid     | The group id of the file owner                                     |
 | rdev    | If this file refers to a device, the ID of the device it refers to |
 | blksize | The file-system preferred block size for the file                  |
-| blocks  | The number of such blocks allocated                                |
+| blocks  | The number of 512-byte blocks allocated                            |
 | mtime   | Unix timestamp of when the file was last modified                  |
 | ctime   | Unix timestamp of when the file's metadata was changed             |
 
