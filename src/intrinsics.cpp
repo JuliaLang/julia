@@ -165,7 +165,7 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
         return getInt32Ty(ctxt);
-    if (t == getHalfTy(ctxt))
+    if (t == getHalfTy(ctxt) || t == getBFloatTy(ctxt))
         return getInt16Ty(ctxt);
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != getVoidTy(ctxt) && nb > 0);
