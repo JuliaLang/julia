@@ -485,7 +485,10 @@ function abstract_call_method(interp::AbstractInterpreter,
         return MethodCallResult(Any, false, false, nothing, Effects())
     end
     sigtuple = unwrap_unionall(sig)
-    sigtuple isa DataType || return MethodCallResult(Any, false, false, nothing, Effects())
+    sigtuple isa DataType ||
+        return MethodCallResult(Any, false, false, nothing, Effects())
+    all(@nospecialize(x) -> valid_as_lattice(unwrapva(x), true), sigtuple.parameters) ||
+        return MethodCallResult(Union{}, false, false, nothing, EFFECTS_THROWS) # catch bad type intersections early
 
     if is_nospecializeinfer(method)
         sig = get_nospecializeinfer_sig(method, sig, sparams)
@@ -1365,25 +1368,35 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
-        if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
-            return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
-        end
-        ltp = length((utis[1]::DataType).parameters)
-        for t in utis
-            if length((t::DataType).parameters) != ltp
-                return AbstractIterationResult(Any[Vararg{Any}], nothing)
+        # refine the Union to remove elements that are not valid tags for objects
+        filter!(@nospecialize(x) -> valid_as_lattice(x, true), utis)
+        if length(utis) == 0
+            return AbstractIterationResult(Any[], nothing) # oops, this statement was actually unreachable
+        elseif length(utis) == 1
+            tti = utis[1]
+            tti0 = rewrap_unionall(tti, tti0)
+        else
+            if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+                return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
             end
-        end
-        result = Any[ Union{} for _ in 1:ltp ]
-        for t in utis
-            tps = (t::DataType).parameters
-            _all(valid_as_lattice, tps) || continue
-            for j in 1:ltp
-                result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
+            ltp = length((utis[1]::DataType).parameters)
+            for t in utis
+                if length((t::DataType).parameters) != ltp
+                    return AbstractIterationResult(Any[Vararg{Any}], nothing)
+                end
             end
+            result = Any[ Union{} for _ in 1:ltp ]
+            for t in utis
+                tps = (t::DataType).parameters
+                for j in 1:ltp
+                    @assert valid_as_lattice(tps[j], true)
+                    result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
+                end
+            end
+            return AbstractIterationResult(result, nothing)
         end
-        return AbstractIterationResult(result, nothing)
-    elseif tti0 <: Tuple
+    end
+    if tti0 <: Tuple
         if isa(tti0, DataType)
             return AbstractIterationResult(Any[ p for p in tti0.parameters ], nothing)
         elseif !isa(tti, DataType)
@@ -1647,7 +1660,7 @@ end
     return isa_condition(xt, ty, max_union_splitting)
 end
 @inline function isa_condition(@nospecialize(xt), @nospecialize(ty), max_union_splitting::Int)
-    tty_ub, isexact_tty = instanceof_tfunc(ty)
+    tty_ub, isexact_tty = instanceof_tfunc(ty, true)
     tty = widenconst(xt)
     if isexact_tty && !isa(tty_ub, TypeVar)
         tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
@@ -1657,7 +1670,7 @@ end
                 # `typeintersect` may be unable narrow down `Type`-type
                 thentype = tty_ub
             end
-            valid_as_lattice(thentype) || (thentype = Bottom)
+            valid_as_lattice(thentype, true) || (thentype = Bottom)
             elsetype = typesubtract(tty, tty_lb, max_union_splitting)
             return ConditionalTypes(thentype, elsetype)
         end
@@ -1903,7 +1916,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
     ft === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
+    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
     isexact || return CallMeta(Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
@@ -2322,7 +2335,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         (; rt, effects) = abstract_eval_call(interp, e, vtypes, sv)
         t = rt
     elseif ehead === :new
-        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
+        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
         ut = unwrap_unionall(t)
         consistent = noub = ALWAYS_FALSE
         nothrow = false
@@ -2387,7 +2400,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow, noub)
     elseif ehead === :splatnew
-        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
+        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
         nothrow = false # TODO: More precision
         if length(e.args) == 2 && isconcretedispatch(t) && !ismutabletype(t)
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)

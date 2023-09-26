@@ -95,12 +95,13 @@ end
 
 has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
 
-# determine whether x is a valid lattice element tag
+# determine whether x is a valid lattice element
 # For example, Type{v} is not valid if v is a value
 # Accepts TypeVars also, since it assumes the user will rewrap it correctly
-function valid_as_lattice(@nospecialize(x))
+# If astag is true, then also requires that it be a possible type tag for a valid object
+function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
-    x isa TypeVar && return valid_as_lattice(x.ub)
+    x isa TypeVar && return valid_as_lattice(x.ub, astag)
     x isa UnionAll && (x = unwrap_unionall(x))
     if x isa Union
         # the Union constructor ensures this (and we'll recheck after
@@ -111,6 +112,9 @@ function valid_as_lattice(@nospecialize(x))
         if isType(x)
             p = x.parameters[1]
             p isa Type || p isa TypeVar || return false
+        elseif astag && isstructtype(x)
+            datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
+            return has_concrete_subtype(x)
         end
         return true
     end
@@ -149,6 +153,7 @@ function compatible_vatuple(a::DataType, b::DataType)
 end
 
 # return an upper-bound on type `a` with type `b` removed
+# and also any contents that are not valid type tags on any objects
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::Int)
     if a <: b && isnotbrokensubtype(a, b)
@@ -158,8 +163,8 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     if isa(ua, Union)
         uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
         uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
-        return Union{valid_as_lattice(uua) ? uua : Union{},
-                     valid_as_lattice(uub) ? uub : Union{}}
+        return Union{valid_as_lattice(uua, true) ? uua : Union{},
+                     valid_as_lattice(uub, true) ? uub : Union{}}
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
