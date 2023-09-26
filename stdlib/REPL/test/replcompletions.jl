@@ -1832,6 +1832,32 @@ let s = "Some(Issue36437(42)).value."
     end
 end
 
+some_issue36437 = Some(Issue36437(42))
+
+let s = "some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# get completions for :toplevel/:tuple expressions
+let s = "some_issue36437.value.a, some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+let s = "@show some_issue36437.value.a; some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
     c, r, res = test_complete_context(s, @__MODULE__)
