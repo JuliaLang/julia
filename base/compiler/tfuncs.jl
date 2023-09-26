@@ -1223,31 +1223,36 @@ end
             return Bottom
         end
         if nf == 1
-            return rewrap_unionall(unwrapva(ftypes[1]), s00)
+            fld = 1
+        else
+            # union together types of all fields
+            t = Bottom
+            for i in 1:nf
+                _ft = unwrapva(ftypes[i])
+                valid_as_lattice(_ft, true) || continue
+                setfield && isconst(s, i) && continue
+                t = tmerge(t, rewrap_unionall(_ft, s00))
+                t === Any && break
+            end
+            return t
         end
-        # union together types of all fields
-        t = Bottom
-        for i in 1:nf
-            _ft = ftypes[i]
-            setfield && isconst(s, i) && continue
-            t = tmerge(t, rewrap_unionall(unwrapva(_ft), s00))
-            t === Any && break
-        end
-        return t
+    else
+        fld = _getfield_fieldindex(s, name)
+        fld === nothing && return Bottom
     end
-    fld = _getfield_fieldindex(s, name)
-    fld === nothing && return Bottom
     if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
-        return rewrap_unionall(unwrapva(ftypes[nf]), s00)
-    end
-    if fld < 1 || fld > nf
-        return Bottom
-    elseif setfield && isconst(s, fld)
-        return Bottom
-    end
-    R = ftypes[fld]
-    if isempty(s.parameters)
-        return R
+        R = unwrapva(ftypes[nf])
+    else
+        if fld < 1 || fld > nf
+            return Bottom
+        elseif setfield && isconst(s, fld)
+            return Bottom
+        end
+        R = ftypes[fld]
+        valid_as_lattice(R, true) || return Bottom
+        if isempty(s.parameters)
+            return R
+        end
     end
     return rewrap_unionall(R, s00)
 end

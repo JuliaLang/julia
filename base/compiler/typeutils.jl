@@ -97,7 +97,7 @@ has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often comp
 
 # determine whether x is a valid lattice element
 # For example, Type{v} is not valid if v is a value
-# Accepts TypeVars also, since it assumes the user will rewrap it correctly
+# Accepts TypeVars and has_free_typevar also, since it assumes the user will rewrap it correctly
 # If astag is true, then also requires that it be a possible type tag for a valid object
 function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
