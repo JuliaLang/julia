@@ -5830,7 +5830,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     else if (head == jl_syncregion_sym) {
 #ifdef USE_TAPIR
-        Value *syncrintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::syncregion_start);
+        FunctionCallee syncrintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::syncregion_start);
         Value *token = ctx.builder.CreateCall(syncrintr);
 #else
         Value *token = nullptr;
@@ -8504,8 +8504,8 @@ static jl_llvm_functions_t
             int lname = jl_detachnode_label(stmt);
             workstack.push_back(lname - 1);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateDetach(BB[cursor+2], BB[lreattach], syncregion.V);
-            find_next_stmt(lname - 1);
+            ctx.builder.CreateDetach(BB[cursor+2], BB[lname], syncregion.V);
+            find_next_stmt(cursor + 1);
             continue;
         }
         if (jl_is_reattachnode(stmt)) {
