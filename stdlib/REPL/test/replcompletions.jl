@@ -1868,22 +1868,34 @@ let s = "Ref(Issue36437(42))[]."
     @test "v" ∉ c
 end
 
-# concrete evaluation throught `getindex`ing dictionary
-global_dict = Dict{Symbol, Any}(:a => r"foo")
-let s = "global_dict[:a]."
+# concrete evaluation through `getindex`ing dictionary
+global_dict = Dict{Symbol, Any}(:r => r"foo")
+let s = "global_dict[:r]."
     c, r, res = test_complete_context(s, @__MODULE__)
     @test res
     for fname in fieldnames(Regex)
         @test String(fname) in c
     end
 end
-global_dict_nested = Dict{Symbol, Any}(:a => global_dict)
-let s = "global_dict_nested[:a][:a]."
+global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
+let s = "global_dict_nested[:g][:r]."
     c, r, res = test_complete_context(s, @__MODULE__)
     @test res
     for fname in fieldnames(Regex)
         @test String(fname) in c
     end
+end
+
+# dict completions through nested `getindex`ing
+let s = "global_dict_nested["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":g]" in c
+end
+let s = "global_dict_nested[:g]["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":r]" in c
 end
 
 const global_xs = [Some(42)]

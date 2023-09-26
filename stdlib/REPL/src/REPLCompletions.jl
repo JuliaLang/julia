@@ -356,13 +356,10 @@ end
 # Returns a range that includes the method name in front of the first non
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
-    braces = 0
     r = reverse(s)
     i = firstindex(r)
-    in_single_quotes = false
-    in_double_quotes = false
-    in_back_ticks = false
-    in_comment = 0
+    braces = in_comment = 0
+    in_single_quotes = in_double_quotes = in_back_ticks = false
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -851,20 +848,18 @@ function dict_identifier_key(str::String, tag::Symbol, context_module::Module=Ma
     else
         str_close = str
     end
-
     frange, end_of_identifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    obj = context_module
-    for name in split(str[frange[1]:end_of_identifier], '.')
-        Base.isidentifier(name) || return (nothing, nothing, nothing)
-        sym = Symbol(name)
-        isdefined(obj, sym) || return (nothing, nothing, nothing)
-        obj = getfield(obj, sym)
-    end
-    (isa(obj, AbstractDict) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
+    objstr = str[1:end_of_identifier]
+    objex = Meta.parse(objstr, raise=false, depwarn=false)
+    objt = repl_eval_ex(objex, context_module)
+    isa(objt, Core.Const) || return (nothing, nothing, nothing)
+    obj = objt.val
+    isa(obj, AbstractDict) || return (nothing, nothing, nothing)
+    length(obj)::Int < 1_000_000 || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
-    return (obj::AbstractDict, str[begin_of_key:end], begin_of_key)
+    return (obj, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
