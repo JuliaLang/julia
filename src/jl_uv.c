@@ -106,26 +106,26 @@ void jl_wake_libuv(void)
     uv_async_send(&signal_async);
 }
 
-jl_mutex_t jl_uv_mutex;
+jl_spin_mutex_t jl_uv_mutex;
 
 void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
     uv_unref((uv_handle_t*)&signal_async);
-    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
+    JL_SPIN_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
 _Atomic(int) jl_uv_n_waiters = 0;
 
 void JL_UV_LOCK(void)
 {
-    if (jl_mutex_trylock(&jl_uv_mutex)) {
+    if (jl_spin_mutex_trylock(&jl_uv_mutex)) {
     }
     else {
         jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, 1);
         jl_fence(); // [^store_buffering_2]
         jl_wake_libuv();
-        JL_LOCK(&jl_uv_mutex);
+        JL_SPIN_LOCK(&jl_uv_mutex);
         jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, -1);
     }
 }
@@ -273,7 +273,7 @@ JL_DLLEXPORT int jl_process_events(void)
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
     if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
-        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_spin_mutex_trylock(&jl_uv_mutex)) {
             JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
             uv_ref((uv_handle_t*)&signal_async); // force the loop alive

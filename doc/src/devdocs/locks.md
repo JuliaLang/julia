@@ -16,7 +16,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 
 >   * safepoint
 >
->     > Note that this lock is acquired implicitly by `JL_LOCK` and `JL_UNLOCK`. use the `_NOGC` variants
+>     > Note that this lock is acquired implicitly by `JL_SPIN_LOCK` and `JL_SPIN_UNLOCK`. use the `_NOGC` variants
 >     > to avoid that for level 1 locks.
 >     >
 >     > While holding this lock, the code must not do any allocation or hit any safepoints. Note that

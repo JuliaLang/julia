@@ -31,7 +31,7 @@ JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is T
 JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
-jl_mutex_t jl_modules_mutex;
+jl_spin_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
 JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
@@ -139,9 +139,9 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     jl_module_t *newm = jl_new_module(name, is_parent__toplevel__ ? NULL : parent_module);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
-    JL_LOCK(&jl_modules_mutex);
+    JL_SPIN_LOCK(&jl_modules_mutex);
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
-    JL_UNLOCK(&jl_modules_mutex);
+    JL_SPIN_UNLOCK(&jl_modules_mutex);
 
     jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
 
@@ -170,10 +170,10 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_gc_wb_binding(b, newm);
         if (old != NULL) {
             // create a hidden gc root for the old module
-            JL_LOCK(&jl_modules_mutex);
+            JL_SPIN_LOCK(&jl_modules_mutex);
             uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)old);
             *refcnt += 1;
-            JL_UNLOCK(&jl_modules_mutex);
+            JL_SPIN_UNLOCK(&jl_modules_mutex);
         }
     }
 
@@ -238,7 +238,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     }
 #endif
 
-    JL_LOCK(&jl_modules_mutex);
+    JL_SPIN_LOCK(&jl_modules_mutex);
     uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)newm);
     assert(*refcnt > (uintptr_t)HT_NOTFOUND);
     *refcnt -= 1;
@@ -270,7 +270,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
                 jl_array_del_end(jl_module_init_order, l - ns);
         }
     }
-    JL_UNLOCK(&jl_modules_mutex);
+    JL_SPIN_UNLOCK(&jl_modules_mutex);
 
     if (form) {
         size_t i, l = jl_array_len(form);
@@ -954,7 +954,7 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
         jl_errorf("%s cannot be used in a generated function", fname);
     if (jl_options.incremental && jl_generating_output()) {
         if (m != jl_main_module) { // TODO: this was grand-fathered in
-            JL_LOCK(&jl_modules_mutex);
+            JL_SPIN_LOCK(&jl_modules_mutex);
             int open = ptrhash_has(&jl_current_modules, (void*)m);
             if (!open && jl_module_init_order != NULL) {
                 size_t i, l = jl_array_len(jl_module_init_order);
@@ -965,7 +965,7 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
                     }
                 }
             }
-            JL_UNLOCK(&jl_modules_mutex);
+            JL_SPIN_UNLOCK(&jl_modules_mutex);
             if (!open && !jl_is__toplevel__mod(m)) {
                 const char* name = jl_symbol_name(m->name);
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "

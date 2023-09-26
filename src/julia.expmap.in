@@ -9,7 +9,9 @@
     small_arraylist_grow;
     jl_*;
     ijl_*;
-    _jl_mutex_*;
+    _jl_spin_mutex_*;
+    _jl_sleep_mutex_*;
+    _jl_dyn_mutex_*;
     rec_backtrace;
     julia_*;
     libsupport_init;

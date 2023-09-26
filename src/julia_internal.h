@@ -178,10 +178,10 @@ extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
 // provided and with JL_UV_LOCK used around the calls
 static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
-extern jl_mutex_t jl_uv_mutex;
+extern jl_spin_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
-#define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_SPIN_UNLOCK(&jl_uv_mutex)
 
 #ifdef __cplusplus
 extern "C" {
@@ -1393,8 +1393,8 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 // -- synchronization utilities -- //
 
-extern jl_mutex_t typecache_lock;
-extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
+extern jl_spin_mutex_t typecache_lock;
+extern JL_DLLEXPORT jl_spin_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
 void jl_mach_gc_end(void);

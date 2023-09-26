@@ -121,7 +121,7 @@ struct HeapSnapshot {
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
 HeapSnapshot *g_snapshot = nullptr;
-extern jl_mutex_t heapsnapshot_lock;
+extern jl_spin_mutex_t heapsnapshot_lock;
 
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
 static inline void _record_gc_edge(const char *edge_type,
@@ -135,7 +135,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one)
     HeapSnapshot snapshot;
     _add_internal_root(&snapshot);
 
-    jl_mutex_lock(&heapsnapshot_lock);
+    JL_SPIN_LOCK(&heapsnapshot_lock);
 
     // Enable snapshotting
     g_snapshot = &snapshot;
@@ -148,7 +148,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one)
     gc_heap_snapshot_enabled = false;
     g_snapshot = nullptr;
 
-    jl_mutex_unlock(&heapsnapshot_lock);
+    JL_SPIN_UNLOCK(&heapsnapshot_lock);
 
     // When we return, the snapshot is full
     // Dump the snapshot

@@ -37,7 +37,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->max_methods = -1;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
-    JL_MUTEX_INIT(&m->lock, "module->lock");
+    JL_SPIN_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
@@ -191,14 +191,14 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     return b;
 }
 
-extern jl_mutex_t jl_modules_mutex;
+extern jl_spin_mutex_t jl_modules_mutex;
 
 static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new globals cannot be created in a generated function");
     if (jl_options.incremental && jl_generating_output()) {
-        JL_LOCK(&jl_modules_mutex);
+        JL_SPIN_LOCK(&jl_modules_mutex);
         int open = ptrhash_has(&jl_current_modules, (void*)m);
         if (!open && jl_module_init_order != NULL) {
             size_t i, l = jl_array_len(jl_module_init_order);
@@ -209,7 +209,7 @@ static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
                 }
             }
         }
-        JL_UNLOCK(&jl_modules_mutex);
+        JL_SPIN_UNLOCK(&jl_modules_mutex);
         if (!open) {
             jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
                       "because the side effects will not be permanent.",
@@ -315,13 +315,13 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
 {
     jl_binding_t *b = NULL;
     jl_module_t *owner = NULL;
-    JL_LOCK(&m->lock);
+    JL_SPIN_LOCK(&m->lock);
     int i = (int)m->usings.len - 1;
-    JL_UNLOCK(&m->lock);
+    JL_SPIN_UNLOCK(&m->lock);
     for (; i >= 0; --i) {
-        JL_LOCK(&m->lock);
+        JL_SPIN_LOCK(&m->lock);
         jl_module_t *imp = module_usings_getidx(m, i);
-        JL_UNLOCK(&m->lock);
+        JL_SPIN_UNLOCK(&m->lock);
         jl_binding_t *tempb = jl_get_module_binding(imp, var, 0);
         if (tempb != NULL && tempb->exportp) {
             tempb = jl_resolve_owner(NULL, imp, var, st); // find the owner for tempb
@@ -634,16 +634,16 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
-    JL_LOCK(&to->lock);
+    JL_SPIN_LOCK(&to->lock);
     for (size_t i = 0; i < to->usings.len; i++) {
         if (from == to->usings.items[i]) {
-            JL_UNLOCK(&to->lock);
+            JL_SPIN_UNLOCK(&to->lock);
             return;
         }
     }
     arraylist_push(&to->usings, from);
     jl_gc_wb(to, from);
-    JL_UNLOCK(&to->lock);
+    JL_SPIN_UNLOCK(&to->lock);
 
     // print a warning if something visible via this "using" conflicts with
     // an existing identifier. note that an identifier added later may still
@@ -732,14 +732,14 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
         if (idx != -1) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
             if (locked)
-                JL_UNLOCK(&m->lock);
+                JL_SPIN_UNLOCK(&m->lock);
             return b;
         }
         if (!alloc) {
             return NULL;
         }
         else if (!locked) {
-            JL_LOCK(&m->lock);
+            JL_SPIN_LOCK(&m->lock);
         }
         else {
             size_t i, cl = jl_svec_len(bindings);
@@ -763,7 +763,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             assert(jl_svecref(bindings, i) == jl_nothing);
             jl_svecset(bindings, i, b); // relaxed
             jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, bindings); // release
-            JL_UNLOCK(&m->lock);
+            JL_SPIN_UNLOCK(&m->lock);
             return b;
         }
     }
@@ -928,7 +928,7 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_
 
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
-    JL_LOCK(&m->lock);
+    JL_SPIN_LOCK(&m->lock);
     int j = m->usings.len;
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, j);
     JL_GC_PUSH1(&a);
@@ -937,7 +937,7 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
         jl_module_t *imp = (jl_module_t*)m->usings.items[i];
         jl_array_ptr_set(a, j, (jl_value_t*)imp);
     }
-    JL_UNLOCK(&m->lock); // may gc
+    JL_SPIN_UNLOCK(&m->lock); // may gc
     JL_GC_POP();
     return (jl_value_t*)a;
 }
@@ -1001,7 +1001,7 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 // is to leave `Main` as empty as possible in the default system image.
 JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
 {
-    JL_LOCK(&m->lock);
+    JL_SPIN_LOCK(&m->lock);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
@@ -1010,7 +1010,7 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
         if (jl_atomic_load_relaxed(&b->owner) && jl_atomic_load_relaxed(&b->owner) != b && !b->imported)
             jl_atomic_store_relaxed(&b->owner, NULL);
     }
-    JL_UNLOCK(&m->lock);
+    JL_SPIN_UNLOCK(&m->lock);
 }
 
 JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)

@@ -443,7 +443,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             //    the lock as unlocked and thus must win this race here.
             int uvlock = 0;
             if (jl_atomic_load_relaxed(&_threadedregion)) {
-                uvlock = jl_mutex_trylock(&jl_uv_mutex);
+                uvlock = jl_spin_mutex_trylock(&jl_uv_mutex);
             }
             else if (ptls->tid == 0) {
                 uvlock = 1;
