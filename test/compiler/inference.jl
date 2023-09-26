@@ -5246,3 +5246,13 @@ let TV = TypeVar(:T)
     some = Some{Any}((TV, t))
     @test abstract_call_unionall_vararg(some) isa UnionAll
 end
+
+# use `Vararg` type constraints
+use_vararg_constrant1(args::Vararg{T,N}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant1, Tuple{Int,Int})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant2(args::Vararg{T,N}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant2, Tuple{Vararg{Int}})) == Tuple{Val{Int},Int}
+use_vararg_constrant3(args::NTuple{N,T}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant3, Tuple{Tuple{Int,Int}})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant4(args::NTuple{N,T}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant4, Tuple{NTuple{N,Int}} where N)) == Tuple{Val{Int},Int}

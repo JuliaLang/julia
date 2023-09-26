@@ -1106,7 +1106,7 @@ function sub2ind_gen_fallback(dims::NTuple{N,Int}, I) where N
     for i = (N - 1):-1:1
         ind = I[i] - 1 + dims[i]*ind
     end
-    return (ind + 1)::Int
+    return ind + 1
 end;
 function sub2ind_gen(dims::NTuple{N,Int}, I::Integer...) where N
     length(I) == N || error("partial indexing is unsupported")
