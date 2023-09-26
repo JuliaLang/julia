@@ -1860,3 +1860,14 @@ f45952(x) = [x;;]
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
 end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+end

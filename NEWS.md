@@ -35,6 +35,7 @@ New library features
 --------------------
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
+* `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces `[[0,0],[0,0,0]]` rather than erroring [#38064].
 
 Standard library changes
 ------------------------
