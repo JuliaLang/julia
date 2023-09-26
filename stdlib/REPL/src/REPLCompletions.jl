@@ -457,7 +457,8 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     code_cache::REPLInterpreterCache
     function REPLInterpreter(repl_frame::CC.InferenceResult;
                              world::UInt = Base.get_world_counter(),
-                             inf_params::CC.InferenceParams = CC.InferenceParams(),
+                             inf_params::CC.InferenceParams = CC.InferenceParams(;
+                                unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                              code_cache::REPLInterpreterCache = get_code_cache())
