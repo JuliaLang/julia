@@ -195,12 +195,12 @@ JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 
 JL_DLLEXPORT void jl_init_profile_lock(void);
 JL_DLLEXPORT uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
-JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
-int jl_lock_stackwalk(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
+JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT;
+int jl_lock_stackwalk(void) JL_NOTSAFEPOINT;
+void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT;
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
