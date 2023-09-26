@@ -17,8 +17,9 @@ macro sync(block)
     var = esc(tokenname)
     quote
         let $var = @syncregion()
-            $(esc(block))
+            v = $(esc(block))
             @sync_end($var)
+            v
         end
     end
 end
