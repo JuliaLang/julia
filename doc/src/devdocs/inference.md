@@ -36,9 +36,9 @@ m = first(mths)
 # Create variables needed to call `typeinf_code`
 interp = Core.Compiler.NativeInterpreter()
 sparams = Core.svec()      # this particular method doesn't have type-parameters
-optimize = true            # run all inference optimizations
+run_optimizer = true       # run all inference optimizations
 types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
-Core.Compiler.typeinf_code(interp, m, types, sparams, optimize)
+Core.Compiler.typeinf_code(interp, m, types, sparams, run_optimizer)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
