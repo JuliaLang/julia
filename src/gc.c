@@ -527,42 +527,6 @@ JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void)
     return jl_current_task->ptls->in_finalizer;
 }
 
-static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
-{
-    void **items = flist->items;
-    size_t len = flist->len;
-    for(size_t i = 0; i < len; i+=2) {
-        void *v = items[i];
-        void *f = items[i + 1];
-        if (__unlikely(!v))
-            continue;
-        schedule_finalization(v, f);
-    }
-    flist->len = 0;
-}
-
-void jl_gc_run_all_finalizers(jl_task_t *ct)
-{
-    int gc_n_threads;
-    jl_ptls_t* gc_all_tls_states;
-    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
-    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
-    // this is called from `jl_atexit_hook`; threads could still be running
-    // so we have to guard the finalizers' lists
-    JL_LOCK_NOGC(&finalizers_lock);
-    schedule_all_finalizers(&finalizer_list_marked);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            schedule_all_finalizers(&ptls2->finalizers);
-    }
-    // unlock here because `run_finalizers` locks this
-    JL_UNLOCK_NOGC(&finalizers_lock);
-    gc_n_threads = 0;
-    gc_all_tls_states = NULL;
-    run_finalizers(ct);
-}
-
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);

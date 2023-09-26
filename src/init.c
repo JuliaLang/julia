@@ -295,9 +295,6 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    if (ct)
-        jl_gc_run_all_finalizers(ct);
-
     uv_loop_t *loop = jl_global_event_loop();
     if (loop != NULL) {
         struct uv_shutdown_queue queue = {NULL, NULL};
