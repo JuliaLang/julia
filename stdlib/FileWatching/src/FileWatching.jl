@@ -464,10 +464,6 @@ function __init__()
     global uv_jl_fseventscb_file = @cfunction(uv_fseventscb_file, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
     global uv_jl_fseventscb_folder = @cfunction(uv_fseventscb_folder, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
 
-    Base.mkpidlock_hook = mkpidlock
-    Base.trymkpidlock_hook = trymkpidlock
-    Base.parse_pidfile_hook = Pidfile.parse_pidfile
-
     nothing
 end
 
@@ -893,4 +889,7 @@ end
 include("pidfile.jl")
 import .Pidfile: mkpidlock, trymkpidlock
 
+precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
 end

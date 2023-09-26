@@ -134,17 +134,6 @@ if Artifacts !== nothing
     """
 end
 
-FileWatching = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
-          nothing)
-if FileWatching !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
-    precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
-    precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
-    """
-end
-
 Libdl = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
           nothing)

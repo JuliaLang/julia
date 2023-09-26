@@ -31,7 +31,6 @@ let
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
-        :FileWatching, # used by loading.jl -- implicit assumption that init runs
         :Libdl, # Transitive through LinAlg
         :Artifacts, # Transitive through LinAlg
         :SHA, # transitive through Random

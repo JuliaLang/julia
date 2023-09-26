@@ -1,20 +1,9 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Pidfile
 
-
+import Base.Pidfile: trymkpidlock
 export mkpidlock, trymkpidlock
-
-using Base:
-    IOError, UV_EEXIST, UV_ESRCH,
-    Process
-
-using Base.Libc: rand
-
-using Base.Filesystem:
-    File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
-    rename, samefile, path_separator
-
-using ..FileWatching: watch_file
-using Base.Sys: iswindows
 
 """
     mkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
@@ -40,48 +29,8 @@ Optional keyword arguments:
      By default, this is set to `stale_age/2`, which is the recommended value.
  - `wait`: If true, block until we get the lock, if false, raise error if lock fails.
 """
-function mkpidlock end
-
-"""
-    trymkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
-    trymkpidlock(at::String, proc::Process; kwopts...)
-
-Like `mkpidlock` except returns `false` instead of waiting if the file is already locked.
-
-!!! compat "Julia 1.10"
-    This function requires at least Julia 1.10.
-"""
-function trymkpidlock end
-
-# mutable only because we want to add a finalizer
-mutable struct LockMonitor
-    const path::String
-    const fd::File
-    const update::Union{Nothing,Timer}
-
-    global function mkpidlock(at::String, pid::Cint; stale_age::Real=0, refresh::Real=stale_age/2, kwopts...)
-        local lock
-        atdir, atname = splitdir(at)
-        isempty(atdir) && (atdir = pwd())
-        at = realpath(atdir) * path_separator * atname
-        fd = open_exclusive(at; stale_age=stale_age, kwopts...)
-        update = nothing
-        try
-            write_pidfile(fd, pid)
-            if refresh > 0
-                # N.b.: to ensure our finalizer works we are careful to capture
-                # `fd` here instead of `lock`.
-                update = Timer(t -> isopen(t) && touch(fd), refresh; interval=refresh)
-            end
-            lock = new(at, fd, update)
-            finalizer(close, lock)
-        catch ex
-            tryrmopenfile(at)
-            close(fd)
-            rethrow(ex)
-        end
-        return lock
-    end
+function mkpidlock(at::String, pid::Cint; stale_age::Real=0, refresh::Real=stale_age/2, kwopts...)
+    Base.Pidfile.mkpidlock(at, pid, open_exclusive; stale_age, refresh, kwopts...)
 end
 
 mkpidlock(at::String; kwopts...) = mkpidlock(at, getpid(); kwopts...)
@@ -96,7 +45,7 @@ function mkpidlock(f::Function, at::String, pid::Cint; kwopts...)
     end
 end
 
-function mkpidlock(at::String, proc::Process; kwopts...)
+function mkpidlock(at::String, proc::Base.Process; kwopts...)
     lock = mkpidlock(at, getpid(proc); kwopts...)
     closer = @async begin
         wait(proc)
@@ -106,118 +55,10 @@ function mkpidlock(at::String, proc::Process; kwopts...)
     return lock
 end
 
-function trymkpidlock(args...; kwargs...)
-    try
-        mkpidlock(args...; kwargs..., wait=false)
-    catch ex
-        if ex isa PidlockedError
-            return false
-        else
-            rethrow()
-        end
-    end
-end
-
-"""
-    Base.touch(::Pidfile.LockMonitor)
-
-Update the `mtime` on the lock, to indicate it is still fresh.
-
-See also the `refresh` keyword in the [`mkpidlock`](@ref) constructor.
-"""
-Base.touch(lock::LockMonitor) = (touch(lock.fd); lock)
-
-"""
-    write_pidfile(io, pid)
-
-Write our pidfile format to an open IO descriptor.
-"""
-function write_pidfile(io::IO, pid::Cint)
-    print(io, "$pid $(gethostname())")
-end
-
-"""
-    parse_pidfile(file::Union{IO, String}) => (pid, hostname, age)
-
-Attempt to parse our pidfile format,
-replaced an element with (0, "", 0.0), respectively, for any read that failed.
-"""
-function parse_pidfile(io::IO)
-    fields = split(read(io, String), ' ', limit = 2)
-    pid = tryparse(Cuint, fields[1])
-    pid === nothing && (pid = Cuint(0))
-    hostname = (length(fields) == 2) ? fields[2] : ""
-    when = mtime(io)
-    age = time() - when
-    return (pid, hostname, age)
-end
-
-function parse_pidfile(path::String)
-    try
-        existing = open(path, JL_O_RDONLY)
-        try
-            return parse_pidfile(existing)
-        finally
-            close(existing)
-        end
-    catch ex
-        isa(ex, EOFError) || isa(ex, IOError) || rethrow(ex)
-        return (Cuint(0), "", 0.0)
-    end
-end
-
-"""
-    isvalidpid(hostname::String, pid::Cuint) :: Bool
-
-Attempt to conservatively estimate whether pid is a valid process id.
-"""
-function isvalidpid(hostname::AbstractString, pid::Cuint)
-    # can't inspect remote hosts
-    (hostname == "" || hostname == gethostname()) || return true
-    # pid < 0 is never valid (must be a parser error or different OS),
-    # and would have a completely different meaning when passed to kill
-    !iswindows() && pid > typemax(Cint) && return false
-    # (similarly for pid 0)
-    pid == 0 && return false
-    # see if the process id exists by querying kill without sending a signal
-    # and checking if it returned ESRCH (no such process)
-    return ccall(:uv_kill, Cint, (Cuint, Cint), pid, 0) != UV_ESRCH
-end
-
-"""
-    stale_pidfile(path::String, stale_age::Real) :: Bool
-
-Helper function for `open_exclusive` for deciding if a pidfile is stale.
-"""
-function stale_pidfile(path::String, stale_age::Real)
-    pid, hostname, age = parse_pidfile(path)
-    age < -stale_age && @warn "filesystem time skew detected" path=path
-    if age > stale_age
-        if (age > stale_age * 25) || !isvalidpid(hostname, pid)
-            return true
-        end
-    end
-    return false
-end
-
-"""
-    tryopen_exclusive(path::String, mode::Integer = 0o444) :: Union{Void, File}
-
-Try to create a new file for read-write advisory-exclusive access,
-return nothing if it already exists.
-"""
-function tryopen_exclusive(path::String, mode::Integer = 0o444)
-    try
-        return open(path, JL_O_RDWR | JL_O_CREAT | JL_O_EXCL, mode)
-    catch ex
-        (isa(ex, IOError) && ex.code == UV_EEXIST) || rethrow(ex)
-    end
-    return nothing
-end
-
-struct PidlockedError <: Exception
-    msg::AbstractString
-end
+using ..FileWatching: watch_file
+import Base.Pidfile: tryopen_exclusive, tryrmopenfile, tryopen_exclusive,
+                     stale_pidfile, write_pidfile, parse_pidfile, stale_pidfile,
+                     isvalidpid, LockMonitor
 
 """
     open_exclusive(path::String; mode, poll_interval, wait, stale_age) :: File
@@ -274,71 +115,4 @@ function open_exclusive(path::String;
     end
 end
 
-function _rand_filename(len::Int=4) # modified from Base.Libc
-    slug = Base.StringVector(len)
-    chars = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i = 1:len
-        slug[i] = chars[(Libc.rand() % length(chars)) + 1]
-    end
-    return String(slug)
 end
-
-function tryrmopenfile(path::String)
-    # Deleting open file on Windows is a bit hard
-    # if we want to reuse the name immediately after:
-    # we need to first rename it, then delete it.
-    if Sys.iswindows()
-        try
-            local rmpath
-            rmdir, rmname = splitdir(path)
-            while true
-                rmpath = string(rmdir, isempty(rmdir) ? "" : path_separator,
-                    "\$", _rand_filename(), rmname, ".deleted")
-                ispath(rmpath) || break
-            end
-            rename(path, rmpath)
-            path = rmpath
-        catch ex
-            isa(ex, IOError) || rethrow(ex)
-        end
-    end
-    return try
-        rm(path)
-        true
-    catch ex
-        isa(ex, IOError) || rethrow(ex)
-        ex
-    end
-end
-
-"""
-    close(lock::LockMonitor)
-
-Release a pidfile lock.
-"""
-function Base.close(lock::LockMonitor)
-    update = lock.update
-    update === nothing || close(update)
-    isopen(lock.fd) || return false
-    removed = false
-    path = lock.path
-    pathstat = try
-            # Windows sometimes likes to return EACCES here,
-            # if the path is in the process of being deleted
-            stat(path)
-        catch ex
-            ex isa IOError || rethrow()
-            removed = ex
-            nothing
-        end
-    if pathstat !== nothing && samefile(stat(lock.fd), pathstat)
-        # try not to delete someone else's lock
-        removed = tryrmopenfile(path)
-    end
-    close(lock.fd)
-    havelock = removed === true
-    havelock || @warn "failed to remove pidfile on close" path=path removed=removed
-    return havelock
-end
-
-end # module

@@ -462,6 +462,8 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+include("pidfile.jl")
+import .Pidfile
 include("loading.jl")
 
 # misc useful functions & macros

@@ -2961,11 +2961,6 @@ function show(io::IO, it::ImageTarget)
     # Is feature_dis useful?
 end
 
-# Set by FileWatching.__init__()
-global mkpidlock_hook
-global trymkpidlock_hook
-global parse_pidfile_hook
-
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
@@ -2979,26 +2974,21 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); projec
 #  - the lock is held by another host, since processes cannot be checked remotely
 # or after `stale_age * 25` seconds if the process does still exist.
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
-    if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
-        pidfile = compilecache_pidfile_path(pkg)
-        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
-        if cachefile === false
-            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
-            verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-            if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
-            else
-                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
-            end
-            # wait until the lock is available, but don't actually acquire it
-            # returning nothing indicates a process waited for another
-            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
+    pidfile = compilecache_pidfile_path(pkg)
+    cachefile = Pidfile.trymkpidlock(f, pidfile; stale_age)
+    if cachefile === false
+        pid, hostname, age = Pidfile.parse_pidfile_hook(pidfile)
+        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+        if isempty(hostname) || hostname == gethostname()
+            @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+        else
+            @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
         end
-        return cachefile
-    else
-        # for packages loaded before FileWatching.__init__()
-        f()
+        # wait until the lock is available, but don't actually acquire it
+        # returning nothing indicates a process waited for another
+        return Pidfile.mkpidlock(Returns(nothing), pidfile; stale_age)
     end
+    return cachefile
 end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check

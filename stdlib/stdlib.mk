@@ -1,9 +1,9 @@
 STDLIBS_WITHIN_SYSIMG := \
-	Artifacts FileWatching Libdl SHA libblastrampoline_jll OpenBLAS_jll Random \
+	Artifacts Libdl SHA libblastrampoline_jll OpenBLAS_jll Random \
 	LinearAlgebra Sockets
 
 INDEPENDENT_STDLIBS := \
-	ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads Future \
+	ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads FileWatching Future \
 	InteractiveUtils LazyArtifacts LibGit2 LibCURL Logging Markdown Mmap \
 	NetworkOptions Profile Printf Pkg REPL Serialization SharedArrays SparseArrays \
 	Statistics Tar Test TOML Unicode UUIDs \
