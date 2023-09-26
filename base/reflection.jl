@@ -1559,7 +1559,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match.method, match.spec_types, match.sparams, optimize)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
@@ -1655,13 +1655,7 @@ function code_ircode_by_type(
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_ircode(
-            interp,
-            match.method,
-            match.spec_types,
-            match.sparams,
-            optimize_until,
-        )
+        (code, ty) = Core.Compiler.typeinf_ircode(interp, match, optimize_until)
         if code === nothing
             push!(asts, match.method => Any)
         else
@@ -1792,8 +1786,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     for match in matches.matches
         match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp,
-            match.method, match.spec_types, match.sparams, #=run_optimizer=#true)
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#true)
         frame === nothing && return Core.Compiler.Effects()
         effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
@@ -1822,7 +1815,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     for match in matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match.method, match.spec_types, match.sparams, true)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
