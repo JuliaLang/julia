@@ -1081,7 +1081,33 @@ end
                 @async rand(UInt64)
             end
             @test y == rand(UInt64)
-=======
+        end
+    end
+end
+
+@testset "TaskLocalRNG: copy and copy! handle the splitmix state" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        rng1 = copy(TaskLocalRNG())
+        x = fetch(@async rand(UInt64))
+        rng2 = copy(TaskLocalRNG())
+        y = fetch(@async rand(UInt64))
+        rng3 = copy(TaskLocalRNG())
+        @test x != y
+        @test rng1 != rng2
+        Random.seed!(seed)
+        @test TaskLocalRNG() == rng1
+        @test x == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng2
+        # this should be a no-op:
+        copy!(TaskLocalRNG(), copy(TaskLocalRNG()))
+        @test TaskLocalRNG() == rng2
+        @test y == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng3
+    end
+end
+
 # Xoshiro jumps
 @testset "Xoshiro jump, basic" begin
     x1 = Xoshiro(1)
@@ -1125,33 +1151,10 @@ end
         for T ∈ (Float64, UInt64, Int, Char, Bool)
             @test rand(x1, T, 5) == rand(x2, T, 5)
             @test rand(jump!(x1), T, 5) == rand(jump!(x2), T, 5)
->>>>>>> ce11fe6e21 (Add jump functions (`jump`, `long_jump`) for `Xoshiro`)
         end
     end
 end
 
-<<<<<<< HEAD
-@testset "TaskLocalRNG: copy and copy! handle the splitmix state" begin
-    seeds = rand(RandomDevice(), UInt64, 5)
-    for seed in seeds
-        Random.seed!(seed)
-        rng1 = copy(TaskLocalRNG())
-        x = fetch(@async rand(UInt64))
-        rng2 = copy(TaskLocalRNG())
-        y = fetch(@async rand(UInt64))
-        rng3 = copy(TaskLocalRNG())
-        @test x != y
-        @test rng1 != rng2
-        Random.seed!(seed)
-        @test TaskLocalRNG() == rng1
-        @test x == fetch(@async rand(UInt64))
-        @test TaskLocalRNG() == rng2
-        # this should be a no-op:
-        copy!(TaskLocalRNG(), copy(TaskLocalRNG()))
-        @test TaskLocalRNG() == rng2
-        @test y == fetch(@async rand(UInt64))
-        @test TaskLocalRNG() == rng3
-=======
 @testset "Xoshiro long_jump, various seeds" begin
     for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
         x = Xoshiro(seed)
@@ -1164,6 +1167,5 @@ end
             @test rand(x1, T, 5) == rand(x2, T, 5)
             @test rand(long_jump!(x1), T, 5) == rand(long_jump!(x2), T, 5)
         end
->>>>>>> ce11fe6e21 (Add jump functions (`jump`, `long_jump`) for `Xoshiro`)
     end
 end
