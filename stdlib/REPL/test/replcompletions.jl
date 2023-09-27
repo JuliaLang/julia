@@ -7,7 +7,7 @@ using REPL
     @testset "Check symbols previously not shown by REPL.doc_completions()" begin
     symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
         for i in symbols
-            @test REPL.doc_completions(i)[1]==i
+            @test i ∈ REPL.doc_completions(i, Main)
         end
     end
 let ex = quote
@@ -30,6 +30,25 @@ let ex = quote
         foo() = bar
         macro foobar()
             :()
+        end
+        macro barfoo(ex)
+            ex
+        end
+        macro error_expanding()
+            error("cannot expand @error_expanding")
+            :()
+        end
+        macro error_lowering_conditional(a)
+            if isa(a, Number)
+                return a
+            end
+            throw(AssertionError("Not a Number"))
+            :()
+        end
+        macro error_throwing()
+            return quote
+                error("@error_throwing throws an error")
+            end
         end
 
         primitive type NonStruct 8 end
@@ -70,15 +89,39 @@ let ex = quote
         test8() = Any[1][1]
         test9(x::Char) = pass
         test9(x::Char, i::Int) = pass
+
+        test10(a, x::Int...) = pass
+        test10(a::Integer, b::Integer, c) = pass
+        test10(a, y::Bool...) = pass
+        test10(a, d::Integer, z::Signed...) = pass
+        test10(s::String...) = pass
+
+        test11(a::Integer, b, c) = pass
+        test11(u, v::Integer, w) = pass
+        test11(x::Int, y::Int, z) = pass
+        test11(_, _, s::String) = pass
+
+        test!12() = pass
+
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
+        kwtest3(a::Number; length, len2, foobar, kwargs...) = pass
+        kwtest3(a::Real; another!kwarg, len2) = pass
+        kwtest3(a::Integer; namedarg, foobar, slurp...) = pass
+        kwtest4(a::AbstractString; _a1b, x23) = pass
+        kwtest4(a::String; _a1b, xαβγ) = pass
+        kwtest4(a::SubString; x23, _something) = pass
+        kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
+        kwtest5(a::Char, b; xyz) = pass
+
+        const named = (; len2=3)
 
         array = [1, 1]
         varfloat = 0.1
 
         const tuple = (1, 2)
 
-        test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+        test_y_array=[(@__MODULE__).Test_y(rand()) for i in 1:10]
         test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
                          occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                          "α"=>12, :α=>13)
@@ -89,7 +132,12 @@ let ex = quote
         macro testcmd_cmd(s) end
         macro tϵsτcmδ_cmd(s) end
 
-        end
+        var"complicated symbol with spaces" = 5
+
+        struct WeirdNames end
+        Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+
+        end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
         test_dict_ℂ = Dict(1=>2)
@@ -108,9 +156,24 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
+
+test_methods_list(@nospecialize(f), tt) = map(x -> string(x.method), Base._methods_by_ftype(Base.signature_type(f, tt), 10, Base.get_world_counter()))
+
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
+
+macro test_nocompletion(s)
+    tests = [
+        :(@test c == String[]),
+        :(@test res === false)
+    ]
+    for t in tests
+        t.args[2] = __source__ # fix the LineNumberNode
+    end
+    return Expr(:let, Expr(:(=), :((c, _, res)), :(test_complete($(esc(s))))), Expr(:block, tests...))
+end
 
 let s = ""
     c, r = test_complete(s)
@@ -238,17 +301,17 @@ let
     @test isempty(c)
 end
 
-# inexistent completion inside a string
-let s = "Base.print(\"lol"
-    c, r, res = test_complete(s)
-    @test res == false
+# issue 46800: (3,2).<TAB> errors in the REPL
+let
+    c, r = test_complete("(3,2).")
+    @test isempty(c)
 end
 
+# inexistent completion inside a string
+@test_nocompletion("Base.print(\"lol")
+
 # inexistent completion inside a cmd
-let s = "run(`lol"
-    c, r, res = test_complete(s)
-    @test res == false
-end
+@test_nocompletion("run(`lol")
 
 # test latex symbol completions
 let s = "\\alpha"
@@ -360,11 +423,15 @@ let
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
-let s = "CompletionFoo.test(1,1, "
+let s = "CompletionFoo.test(1, 1, "
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test length(c) == 3
+    m = test_methods_list(Main.CompletionFoo.test, Tuple{Int, Int, Vararg})
+    @test c[1] == m[1]
+    @test c[2] == m[2]
+    @test length(c) == 2
+    # In particular, this checks that test(x::Real, y::Real) is not a valid completion
+    # since it is strictly less specific than test(x::T, y::T) where T
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
 end
@@ -372,7 +439,7 @@ end
 let s = "CompletionFoo.test(CompletionFoo.array,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any, Vararg}))
     @test length(c) == 2
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
@@ -381,7 +448,8 @@ end
 let s = "CompletionFoo.test(1,1,1,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test, Tuple{Any, Any, Any, Vararg}))
+    @test length(c) == 1
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
 end
@@ -404,7 +472,7 @@ end
 
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test c[1] == first(test_methods_list(prevind, Tuple{String, Int, Vararg}))
     @test r == 1:7
     @test s[r] == "prevind"
 end
@@ -413,7 +481,7 @@ for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{T,})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test2, Tuple{T, Vararg}))
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
@@ -421,19 +489,19 @@ end
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test2, Tuple{Cmd, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
     @test r == 1:19
     @test length(c) == 1
     @test s[r] == "CompletionFoo.test3"
@@ -442,7 +510,7 @@ end
 let s = "CompletionFoo.test4(\"e\",r\" \","
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, Regex})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test4, Tuple{String, Regex, Vararg}))
     @test r == 1:19
     @test length(c) == 1
     @test s[r] == "CompletionFoo.test4"
@@ -453,7 +521,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test5, Tuple{BitArray{1}, Vararg}))
 end
 
 # test partial expression expansion
@@ -461,39 +529,45 @@ let s = "CompletionFoo.test5(Bool[x==1 for x=1:4],"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{Array{Bool,1}})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test5, Tuple{Array{Bool,1}, Vararg}))
 end
 
 let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test4, Tuple{String, String, Vararg}))
 end
 
-# Test that string escaption is handled correct
+# Test that string escaping is handled correct
 let s = """CompletionFoo.test4("\\"","""
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 2
 end
 
-########## Test where the current inference logic fails ########
-# Fails due to inference fails to determine a concrete type for arg 1
-# But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
-let s = "CompletionFoo.test5(AbstractArray[[]][1],"
-    c, r, res = test_complete(s)
+# Test max method suggestions
+let s = "convert("
+    c, _, res = test_complete_noshift(s)
     @test !res
-    @test length(c) == 2
+    @test only(c) == "convert( too many methods, use SHIFT-TAB to show )"
+    c2, _, res2 = test_complete(s)
+    @test !res2
+    @test any(==(string(first(methods(convert)))), c2)
+    @test length(c2) > REPL.REPLCompletions.MAX_METHOD_COMPLETIONS
 end
 
-# equivalent to above but due to the time macro the completion fails to find the concrete type
-let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+let s = "CompletionFoo.test5(AbstractArray[Bool[]][1],"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+end
+
+let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 2
 end
-#################################################################
 
 # method completions with kwargs
 let s = "CompletionFoo.kwtest( "
@@ -501,31 +575,71 @@ let s = "CompletionFoo.kwtest( "
     @test !res
     @test length(c) == 1
     @test occursin("x, y, w...", c[1])
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(;")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(; x=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(; kw=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(x=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(x=1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(x=kw=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest(; x=kw=1, ")
 end
 
-for s in ("CompletionFoo.kwtest(;",
-          "CompletionFoo.kwtest(; x=1, ",
-          "CompletionFoo.kwtest(; kw=1, ",
-          )
-    c, r, res = test_complete(s)
-    @test !res
-    @test length(c) == 1
-    @test occursin("x, y, w...", c[1])
-end
-
-for s in ("CompletionFoo.kwtest2(1; x=1,",
-          "CompletionFoo.kwtest2(1; kw=1, ",
-          )
+let s = "CompletionFoo.kwtest2(1, x=1,"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
     @test occursin("a; x, y, w...", c[1])
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1; x=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1, x=1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1, kw=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1; kw=1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1, kw=1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(y=3, 1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(y=3, 1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(kw=3, 1, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(kw=3, 1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1; ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest2(1, ")
 end
+
+let s = "CompletionFoo.kwtest4(x23=18, x; "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3 # TODO: remove "kwtest4(a::String; _a1b, xαβγ)"
+    @test any(str->occursin("kwtest4(a::SubString", str), c)
+    @test any(str->occursin("kwtest4(a::AbstractString", str), c)
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest4(x23=18, x, ")
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest4(x23=18, ")
+end
+
+# TODO: @test_nocompletion("CompletionFoo.kwtest4(x23=17; ")
+# TODO: @test_nocompletion("CompletionFoo.kwtest4.(x23=17; ")
+
+let s = "CompletionFoo.kwtest5(3, somekwarg=6,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("kwtest5(a::$(Int), b, x...; somekwarg, somekotherkwarg)", c[1])
+    @test (c, r, res) == test_complete("CompletionFoo.kwtest5(3, somekwarg=6, anything, ")
+end
+
+# TODO: @test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6,")
+# TODO: @test_nocompletion("CompletionFoo.kwtest5(3;")
+# TODO: @test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6, anything, ")
 
 #################################################################
 
 # method completion with `?` (arbitrary method with given argument types)
 let s = "CompletionFoo.?([1,2,3], 2.0)"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", c[1])
+    # In particular, this checks that test(args...) is not a valid completion
+    # since it is strictly less specific than test(x::AbstractArray{T}, y)
+end
+
+let s = "CompletionFoo.?([1,2,3], 2.0"
     c, r, res = test_complete(s)
     @test !res
     @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
@@ -538,6 +652,7 @@ let s = "CompletionFoo.?('c')"
     c, r, res = test_complete(s)
     @test !res
     @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test10(a, ", str), c)
     @test !any(str->occursin("test9(x::Char, i::Int", str), c)
 end
 
@@ -545,10 +660,236 @@ let s = "CompletionFoo.?('c'"
     c, r, res = test_complete(s)
     @test !res
     @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test10(a, ", str), c)
     @test  any(str->occursin("test9(x::Char, i::Int", str), c)
 end
 
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test occursin("test(args...)", c[1])
+    @test occursin("test11(a::Integer, b, c)", c[2])
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test11(a::Integer, b, c)", c[1])
+end
+
+let s = "CompletionFoo.?(\"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test !any(str->occursin("test10(a, y::Bool...)", str), c)
+    @test !any(str->occursin("test10(s::String...)", str), c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete(s)
+    @test !res
+    @test any(str->occursin("foo()", str), c)
+    @test any(str->occursin("kwtest(;", str), c)
+    @test any(str->occursin("test(args...)", str), c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test10(s::String...)", c[1])
+end
+
+#= TODO: restrict the number of completions when a semicolon is present in ".?(" syntax
+let s = "CompletionFoo.?(; y=2, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(x -> occursin("kwtest", x), c)
+    # We choose to include kwtest2 and kwtest3 although the number of args if wrong.
+    # This is because the ".?(" syntax with no closing parenthesis does not constrain the
+    # number of arguments in the methods it suggests.
+end
+
+let s = "CompletionFoo.?(3; len2=5, "
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("kwtest3(a::Integer; namedarg, foobar, slurp...)", c[1])
+    # the other two kwtest3 methods should not appear because of specificity
+end
+=#
+
+# For the ".?(" syntax, do not constrain the number of arguments even with a semicolon.
+@test test_complete("CompletionFoo.?(; ") ==
+      test_complete("CompletionFoo.?(")
+
+#TODO: @test test_complete("CompletionFoo.?(Any[]...; ") == test_complete("CompletionFoo.?(Cmd[]..., ") == test_complete("CompletionFoo.?(")
+
+@test test_complete("CompletionFoo.?()") == test_complete("CompletionFoo.?(;)")
+
+#TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
+
 #################################################################
+
+# Test method completion with varargs
+let s = "CompletionFoo.test10(z, Integer[]...,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 5
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+end
+
+let s = "CompletionFoo.test10(3, Integer[]...,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+    @test !any(str->occursin("test10(s::String...)", str), c)
+end
+
+let s = "CompletionFoo.test10(3, 4,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+end
+
+let s = "CompletionFoo.test10(3, 4, 5,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c) # show it even though the call would result in an ambiguity error
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+    # the last one is not eliminated by specificity since the complete call could be
+    # test10(3, 4, 5, Int8(6)) for instance
+end
+
+let s = "CompletionFoo.test10(z, z, 0, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c) # show it even though the call would result in an ambiguity error
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+end
+
+let s = "CompletionFoo.test10(\"a\", Union{Signed,Bool,String}[3][1], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+    @test !any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
+end
+
+# Test method completion with ambiguity
+let s = "CompletionFoo.test11(Integer[false][1], Integer[14][1], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test all(startswith("test11("), c)
+    @test allunique(c)
+end
+
+let s = "CompletionFoo.test11(Integer[-7][1], Integer[0x6][1], 6,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test !any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+end
+
+let s = "CompletionFoo.test11(3, 4,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 5,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 'c',"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11('d', 3,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test!12("
+    c, r, res = test_complete(s)
+    @test !res
+    @test occursin("test!12()", only(c))
+end
+
+#= TODO: Test method completion depending on the number of arguments with splatting
+
+@test_nocompletion("CompletionFoo.test3(unknown; ")
+@test_nocompletion("CompletionFoo.test3.(unknown; ")
+
+let s = "CompletionFoo.test2(unknown..., somethingelse..., xyz...; " # splat may be empty
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test all(str->occursin("test2(", str), c)
+    @test (c, r, res) == test_complete("CompletionFoo.test2(unknown..., somethingelse..., xyz, ")
+    @test (c, r, res) == test_complete("CompletionFoo.test2(unknown..., somethingelse..., xyz; ")
+end
+
+let s = "CompletionFoo.test('a', args..., 'b';"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test(args...)", c[1])
+    @test (c, r, res) == test_complete("CompletionFoo.test(a, args..., b, c;")
+end
+
+let s = "CompletionFoo.test(3, 5, args...,;"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test(x::T, y::T) where T<:Real", str), c)
+    @test any(str->occursin("test(args...)", str), c)
+end
+=#
+
+# Test that method calls with ill-formed kwarg syntax are not completed
+
+@test_nocompletion("CompletionFoo.kwtest(; x=2, y=4; kw=3, ")
+@test_nocompletion("CompletionFoo.kwtest(x=2; y=4; ")
+@test_nocompletion("CompletionFoo.kwtest((x=y)=4, ")
+@test_nocompletion("CompletionFoo.kwtest(; (x=y)=4, ")
+@test_nocompletion("CompletionFoo.kwtest(; w...=16, ")
+@test_nocompletion("CompletionFoo.kwtest(; 2, ")
+@test_nocompletion("CompletionFoo.kwtest(; 2=3, ")
+@test_nocompletion("CompletionFoo.kwtest3(im; (true ? length : length), ")
+@test_nocompletion("CompletionFoo.kwtest.(x=2; y=4; ")
+@test_nocompletion("CompletionFoo.kwtest.(; w...=16, ")
 
 # Test of inference based getfield completion
 let s = "(1+2im)."
@@ -584,6 +925,13 @@ let s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
     @test length(c) == 1
     @test r == lastindex(s):lastindex(s)
     @test c[1] == "yy"
+end
+
+let s = "CompletionFoo.named."
+    c, r = test_complete(s)
+    @test length(c) == 1
+    @test r == (lastindex(s) + 1):lastindex(s)
+    @test c[1] == "len2"
 end
 
 # Test completion in multi-line comments
@@ -755,6 +1103,9 @@ let s, c, r
             s = "\"~"
             @test "tmpfoobar/" in c
             c,r = test_complete(s)
+            s = "\"~user"
+            c, r = test_complete(s)
+            @test isempty(c)
             rm(dir)
         end
     end
@@ -813,30 +1164,105 @@ let s, c, r
 end
 end
 
+#test that it does not crash on files for which `stat` errors
+let current_dir, forbidden
+    # Issue #36855
+    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+        mktempdir() do path
+            selfsymlink = joinpath(path, "selfsymlink")
+            symlink(selfsymlink, selfsymlink)
+            @test try
+                stat(selfsymlink) # should crash with a IOError
+                false
+            catch e
+                e isa Base.IOError && occursin("ELOOP", e.msg)
+            end
+            c, r = test_complete("\""*escape_string(joinpath(path, "selfsym")))
+            @test c == ["selfsymlink"]
+        end
+    end
+
+    # Issue #32797
+    forbidden = Sys.iswindows() ? "C:\\S" : "/root/x"
+    test_complete(forbidden); @test true # simply check that it did not crash
+
+     # Issue #19310
+    if Sys.iswindows()
+        current_dir = pwd()
+        cd("C:\\")
+        test_complete("C"); @test true
+        test_complete("C:"); @test true
+        test_complete("C:\\"); @test true
+        if isdir("D:\\")
+            cd("D:\\")
+            test_complete("C"); @test true
+            test_complete("C:"); @test true
+            test_complete("C:\\"); @test true
+        end
+        cd(current_dir)
+    end
+end
+
 #test that it can auto complete with spaces in file/path
 mktempdir() do path
     space_folder = randstring() * " α"
     dir = joinpath(path, space_folder)
-    dir_space = replace(space_folder, " " => "\\ ")
-
     mkdir(dir)
     cd(path) do
-        open(joinpath(space_folder, "space .file"),"w") do f
-            s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c, r = test_scomplete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file" in c
+        touch(joinpath(space_folder, "space .file"))
 
-            s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c, r = test_complete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space .file\"" in c
-        end
-        # Test for issue #10324
-        s = "cd(\"$dir_space"
+        dir_space = replace(space_folder, " " => "\\ ")
+        s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+        # Also use shell escape rules within cmd backticks
+        s = "`$s"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+
+        # escape string according to Julia escaping rules
+        julia_esc(str) = escape_string(str, ('\"','$'))
+
+        # For normal strings the string should be properly escaped according to
+        # the usual rules for Julia strings.
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
         c, r = test_complete(s)
-        @test r == 5:15
-        @test s[r] ==  dir_space
+        @test s[r] == "space"
+        @test "space .file\"" in c
+
+        # '$' is the only character which can appear in a windows filename and
+        # which needs to be escaped in Julia strings (on unix we could do this
+        # test with all sorts of special chars)
+        touch(joinpath(space_folder, "needs_escape\$.file"))
+        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        s = "cd(\"$escpath"
+        c, r = test_complete(s)
+        @test s[r] == "needs_escape\\\$"
+        @test "needs_escape\\\$.file\"" in c
+
+        if !Sys.iswindows()
+            touch(joinpath(space_folder, "needs_escape2\n\".file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape2\n\""))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape2\\n\\\""
+            @test "needs_escape2\\n\\\".file\"" in c
+
+            touch(joinpath(space_folder, "needs_escape3\\.file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape3\\"))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape3\\\\"
+            @test "needs_escape3\\\\.file\"" in c
+        end
+
+        # Test for issue #10324
+        s = "cd(\"$space_folder"
+        c, r = test_complete(s)
+        @test r == 5:14
+        @test s[r] == space_folder
 
         #Test for #18479
         for c in "'`@\$;&"
@@ -850,8 +1276,9 @@ mktempdir() do path
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c, r, res = test_complete("\""*test_dir)
-                @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                escdir = julia_esc(test_dir)
+                c, r, res = test_complete("\""*escdir)
+                @test c[1] == escdir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -895,7 +1322,7 @@ if Sys.iswindows()
         @test r == length(s)-1:length(s)
         @test file in c
 
-        s = "cd(\"..\\"
+        s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == length(s)+1:length(s)
         @test temp_name * "\\\\" in c
@@ -1018,6 +1445,129 @@ test_dict_completion("test_repl_comp_customdict")
     @test "tϵsτcmδ`" in c
 end
 
+@testset "Keyword-argument completion" begin
+    c, r = test_complete("CompletionFoo.kwtest3(a;foob")
+    @test c == ["foobar="]
+    c, r = test_complete("CompletionFoo.kwtest3(a; le")
+    @test "length" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "length=" ∈ c
+    @test "len2=" ∈ c
+    @test "len2" ∉ c
+    c, r = test_complete("CompletionFoo.kwtest3.(a;\nlength")
+    @test "length" ∈ c
+    @test "length=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest3(a, length=4, l")
+    @test "length" ∈ c
+    @test "length=" ∉ c # since it was already used, do not suggest it again
+    @test "len2=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest3(a; kwargs..., fo")
+    @test "foreach" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "foobar=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, le")
+    @test "length" ∈ c
+    @test "length=" ∈ c # the first method could be called and `anotherkwarg` slurped
+    @test "len2=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest3(a; another!")
+    @test c == ["another!kwarg="]
+    c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, foob")
+    @test c == ["foobar="] # the first method could be called and `anotherkwarg` slurped
+    c, r = test_complete("CompletionFoo.kwtest3(a; namedarg=0, foob")
+    @test c == ["foobar="]
+
+    # Check for confusion with CompletionFoo.named
+    c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
+    @test c == ["namedarg="]
+    c, r = test_complete_foo("kwtest3(blabla; named")
+    @test "named" ∈ c
+    @test "namedarg=" ∈ c
+    @test "len2" ∉ c
+    c, r = test_complete_foo("kwtest3(blabla; named.")
+    @test c == ["len2"]
+    c, r = test_complete_foo("kwtest3(blabla; named..., another!")
+    @test c == ["another!kwarg="]
+    c, r = test_complete_foo("kwtest3(blabla; named..., len")
+    @test "length" ∈ c
+    @test "length=" ∈ c
+    @test "len2=" ∈ c
+    c, r = test_complete_foo("kwtest3(1+3im; named")
+    @test "named" ∈ c
+    # TODO: @test "namedarg=" ∉ c
+    @test "len2" ∉ c
+    c, r = test_complete_foo("kwtest3(1+3im; named.")
+    @test c == ["len2"]
+
+    c, r = test_complete("CompletionFoo.kwtest4(a; x23=0, _")
+    @test "_a1b=" ∈ c
+    @test "_something=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest4(a; xαβγ=1, _")
+    @test "_a1b=" ∈ c
+    # TODO: @test "_something=" ∉ c # no such keyword for the method with keyword `xαβγ`
+    c, r = test_complete("CompletionFoo.kwtest4.(a; xαβγ=1, _")
+    @test "_a1b=" ∈ c
+    # TODO: @test "_something=" ∉ c # broadcasting does not affect the existence of kwargs
+    c, r = test_complete("CompletionFoo.kwtest4(a; x23=0, x")
+    @test "x23=" ∉ c
+    # TODO: @test "xαβγ=" ∉ c
+    c, r = test_complete("CompletionFoo.kwtest4.(a; x23=0, x")
+    @test "x23=" ∉ c
+    # TODO: @test "xαβγ=" ∉ c
+    c, r = test_complete("CompletionFoo.kwtest4(a; _a1b=1, x")
+    @test "x23=" ∈ c
+    @test "xαβγ=" ∈ c
+
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5; somek")
+    @test c == ["somekotherkwarg=", "somekwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5, somekwarg=4, somek")
+    @test c == ["somekotherkwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5, 7; somekw")
+    @test c == ["somekwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5, 7, 9; somekw")
+    @test c == ["somekwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5, 7, 9, Any[]...; somek")
+    @test c == ["somekotherkwarg=", "somekwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(unknownsplat...; somekw")
+    @test c == ["somekwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(3, 5, 7, 9, somekwarg=4, somek")
+    @test c == ["somekotherkwarg="]
+    c, r = test_complete("CompletionFoo.kwtest5(String[]..., unknownsplat...; xy")
+    @test c == ["xyz="]
+    c, r = test_complete("CompletionFoo.kwtest5('a', unknownsplat...; xy")
+    @test c == ["xyz="]
+    c, r = test_complete("CompletionFoo.kwtest5('a', 3, String[]...; xy")
+    @test c == ["xyz="]
+
+    # return true if no completion suggests a keyword argument
+    function hasnokwsuggestions(str)
+        c, _ = test_complete(str)
+        return !any(x -> endswith(x, r"[a-z]="), c)
+    end
+    @test hasnokwsuggestions("Completio")
+    @test hasnokwsuggestions("CompletionFoo.kwt")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a;")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; len2=")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; len2=le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; len2=3 ")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; [le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3([length; le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; (le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; foo(le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; (; le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; length, ")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; kwargs..., ")
+
+    #= TODO: Test the absence of kwarg completion the call is incompatible with the method bearing the kwarg.
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(le")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; unknown=4, another!kw") # only methods 1 and 3 could slurp `unknown`
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(1+3im; nameda")
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(12//7; foob") # because of specificity
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a, len2=b, length, foob") # length is not length=length
+    @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
+    @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
+    =#
+end
+
 # Test completion in context
 
 # No CompletionFoo.CompletionFoo
@@ -1097,10 +1647,16 @@ let s = ":(function foo(::Int) end).args[1].args[2]."
     @test c == Any[]
 end
 
-let s = "log(log.(x),"
+let s = "log(log.(varfloat),"
     c, r = test_complete_foo(s)
     @test !isempty(c)
 end
+
+# TODO: this is a bad test
+#let s = "log(log.(noexist),"
+#    c, r = test_complete_foo(s)
+#    @test isempty(c)
+#end
 
 let s = "Base.return_types(getin"
     c, r = test_complete_foo(s)
@@ -1117,8 +1673,12 @@ end
 let s = "test(1,1, "
     c, r, res = test_complete_foo(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test length(c) == 3
+    m = test_methods_list(Main.CompletionFoo.test, Tuple{Int, Int, Vararg})
+    @test length(m) == 2 == length(c)
+    @test c[1] == m[1]
+    @test c[2] == m[2]
+    # In particular, this checks that test(x::Real, y::Real) is not a valid completion
+    # since it is strictly less specific than test(x::T, y::T) where T
     @test r == 1:4
     @test s[r] == "test"
 end
@@ -1129,11 +1689,13 @@ let s = "test.(1,1, "
     @test length(c) == 4
     @test r == 1:4
     @test s[r] == "test"
+    # TODO: @test (c, r, res) == test_complete_foo("test.(1, 1, String[]..., ")
+    # TODO: @test (c, r, res) == test_complete_foo("test.(1, Any[]..., 2, ")
 end
 
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete_foo(s)
-    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test c[1] == first(test_methods_list(prevind, Tuple{String, Int, Vararg}))
     @test r == 1:7
     @test s[r] == "prevind"
 end
@@ -1161,11 +1723,30 @@ let
     (test_complete("@Main.noexist."); @test true)
 end
 
+let # Check that completion does not crash on (possibly invalid) macro calls
+    (test_complete("@show."); @test true)
+    (test_complete("@macroexpand."); @test true)
+    (test_complete("@.."); @test true)
+    (test_complete("CompletionFoo.@foobar."); @test true)
+    (test_complete("CompletionFoo.@foobar()."); @test true)
+    (test_complete("CompletionFoo.@foobar(4)."); @test true)
+    (test_complete("CompletionFoo.@barfoo."); @test true)
+    (test_complete("CompletionFoo.@barfoo()."); @test true)
+    (test_complete("CompletionFoo.@barfoo(6)."); @test true)
+    (test_complete("CompletionFoo.@error_expanding."); @test true)
+    (test_complete("CompletionFoo.@error_expanding()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional(3)."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional('a')."); @test true)
+    (test_complete("CompletionFoo.@error_throwing."); @test true)
+    (test_complete("CompletionFoo.@error_throwing()."); @test true)
+end
+
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin
     # getfield type completion can work for complicated expression
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct Rs
                 rs::Vector{Regex}
@@ -1177,13 +1758,12 @@ end
             end
         end
 
-        c, r = test_complete_context("foo().rs[1].", m)
-        @test m.var ≠ 1 # getfield type completion should never execute `foo()`
+        c, r = test_complete_context("foo(#=#==#=##==#).rs[1].", m)
+        @test m.var === nothing # getfield type completion should never execute `foo()`
         @test length(c) == fieldcount(Regex)
     end
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct R
                 r::Regex
@@ -1196,8 +1776,193 @@ end
         end
 
         c, r = test_complete_context("foo().r.", m)
-        # the current implementation of `REPL.REPLCompletions.completions(::String, ::Int, ::Module)`
-        # cuts off "foo().r." to `.r.`, and the getfield type completion doesn't work for this simpler case
-        @test_broken length(c) == fieldcount(Regex)
+        @test m.var === nothing # getfield type completion should never execute `foo()`
+        @test length(c) == fieldcount(Regex)
+
+        c, r = test_complete_context("foo(#=#=# =#= =#).r.", m)
+        @test m.var === nothing # getfield type completion should never execute `foo()`
+        @test length(c) == fieldcount(Regex)
     end
+end
+
+@testset "https://github.com/JuliaLang/julia/issues/47593" begin
+    let m = Module()
+        @eval m begin
+            struct TEST_47594
+                var"("::Int
+            end
+            test_47594 = TEST_47594(1)
+        end
+
+        c, r = test_complete_context("test_47594.", m)
+        @test c == Any["var\"(\""]
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/36437
+struct Issue36437{T}
+    v::T
+end
+Base.propertynames(::Issue36437) = (:a, :b, :c)
+function Base.getproperty(v::Issue36437, s::Symbol)
+    if s === :a
+        return 1
+    elseif s === :b
+        return 2
+    elseif s === :c
+        return getfield(v, :v)
+    else
+        throw(ArgumentError(lazy"`(v::Issue36437).$s` is not supported"))
+    end
+end
+
+let s = "Issue36437(42)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+let s = "Some(Issue36437(42)).value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+some_issue36437 = Some(Issue36437(42))
+
+let s = "some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# get completions for :toplevel/:tuple expressions
+let s = "some_issue36437.value.a, some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+let s = "@show some_issue36437.value.a; some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# aggressive concrete evaluation on mutable allocation in `repl_frame`
+let s = "Ref(Issue36437(42))[]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+    @test "v" ∉ c
+end
+
+# concrete evaluation through `getindex`ing dictionary
+global_dict = Dict{Symbol, Any}(:r => r"foo")
+let s = "global_dict[:r]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
+let s = "global_dict_nested[:g][:r]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+
+# dict completions through nested `getindex`ing
+let s = "global_dict_nested["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":g]" in c
+end
+let s = "global_dict_nested[:g]["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":r]" in c
+end
+
+const global_xs = [Some(42)]
+let s = "pop!(global_xs)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c
+end
+@test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# Test completion of var"" identifiers (#49280)
+let s = "var\"complicated "
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"complicated symbol with spaces\""]
+end
+
+for s in ("WeirdNames().var\"oh ", "WeirdNames().var\"")
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"oh no!\"", "var\"oh yes!\""]
+end
+
+# Test completion of non-Expr literals
+let s = "\"abc\"."
+    c, r = test_complete(s)
+    # (no completion, but shouldn't error)
+    @test isempty(c)
+end
+
+let s = "`abc`.e"
+    c, r = test_complete(s)
+    # (completions for the fields of `Cmd`)
+    @test c == Any["env", "exec"]
+end
+
+# Test completion for a case when type inference returned `Union` of the same types
+union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
+let s = "union_somes(1, 1.0)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c
+end
+union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
+let s = "union_some_ref(1, 1.0)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c && "x" in c
+end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
 end

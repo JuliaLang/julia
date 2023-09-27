@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Quaternions
+using Random
 
 export Quaternion
 
@@ -35,5 +36,18 @@ Base.:(*)(q::Quaternion, r::Real) = Quaternion(q.s*r, q.v1*r, q.v2*r, q.v3*r)
 Base.:(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
 Base.:(/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
 Base.:(\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
+
+# adapted from https://github.com/JuliaGeometry/Quaternions.jl/pull/42
+function Base.rand(rng::AbstractRNG, ::Random.SamplerType{Quaternion{T}}) where {T<:Real}
+    return Quaternion{T}(rand(rng, T), rand(rng, T), rand(rng, T), rand(rng, T))
+end
+function Base.randn(rng::AbstractRNG, ::Type{Quaternion{T}}) where {T<:AbstractFloat}
+    return Quaternion{T}(
+        randn(rng, T) / 2,
+        randn(rng, T) / 2,
+        randn(rng, T) / 2,
+        randn(rng, T) / 2,
+    )
+end
 
 end

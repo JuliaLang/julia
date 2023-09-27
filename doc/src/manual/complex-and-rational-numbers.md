@@ -36,7 +36,7 @@ julia> (-1 + 2im)^2
 -3 - 4im
 
 julia> (-1 + 2im)^2.5
-2.7296244647840084 - 6.960664459571898im
+2.729624464784009 - 6.9606644595719im
 
 julia> (-1 + 2im)^(1 + 1im)
 -0.27910381075826657 + 0.08708053414102428im
@@ -48,7 +48,7 @@ julia> 3(2 - 5im)^2
 -63 - 60im
 
 julia> 3(2 - 5im)^-1.0
-0.20689655172413796 + 0.5172413793103449im
+0.20689655172413793 + 0.5172413793103449im
 ```
 
 The promotion mechanism ensures that combinations of operands of different types just work:
@@ -140,7 +140,7 @@ when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 
@@ -254,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
+of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;

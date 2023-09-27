@@ -19,15 +19,16 @@ The number of execution threads is controlled either by using the
 specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
-(`--threads=auto`), where `auto` sets the number of threads to the number of local CPU
-threads.
+(`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
+(see [Command-line Options](@ref command-line-interface) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` together with the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash
@@ -71,7 +72,77 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
-## Data-race freedom
+### Multiple GC Threads
+
+The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
+of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+[`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
+
+!!! compat "Julia 1.10"
+    The `--gcthreads` command line argument requires at least Julia 1.10.
+
+## [Threadpools](@id man-threadpools)
+
+When a program's threads are busy with many tasks to run, tasks may experience
+delays which may negatively affect the responsiveness and interactivity of the
+program. To address this, you can specify that a task is interactive when you
+[`Threads.@spawn`](@ref) it:
+
+```julia
+using Base.Threads
+@spawn :interactive f()
+```
+
+Interactive tasks should avoid performing high latency operations, and if they
+are long duration tasks, should yield frequently.
+
+Julia may be started with one or more threads reserved to run interactive tasks:
+
+```bash
+$ julia --threads 3,1
+```
+
+The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
+```bash
+export JULIA_NUM_THREADS=3,1
+```
+
+This starts Julia with 3 threads in the `:default` threadpool and 1 thread in
+the `:interactive` threadpool:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreadpools()
+2
+
+julia> threadpool()
+:default
+
+julia> nthreads(:default)
+3
+
+julia> nthreads(:interactive)
+1
+
+julia> nthreads()
+3
+```
+
+!!! note
+    The zero-argument version of `nthreads` returns the number of threads
+    in the default pool.
+
+Either or both numbers can be replaced with the word `auto`, which causes
+Julia to choose a reasonable default.
+
+## Communication and synchronization
+
+Although Julia's threads can communicate through shared memory, it is notoriously
+difficult to write correct and data-race free multi-threaded code. Julia's
+[`Channel`](@ref)s are thread-safe and may be used to communicate safely.
+
+### Data-race freedom
 
 You are entirely responsible for ensuring that your program is data-race free,
 and nothing promised here can be assumed if you do not observe that
@@ -94,6 +165,8 @@ julia> begin
                unlock(lk)
            end
        end
+
+julia> @lock lk use(a)
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
@@ -168,6 +241,68 @@ julia> a
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
+### Using `@threads` without data races
+
+Taking the example of a naive sum
+
+```julia-repl
+julia> function sum_single(a)
+           s = 0
+           for i in a
+               s += i
+           end
+           s
+       end
+sum_single (generic function with 1 method)
+
+julia> sum_single(1:1_000_000)
+500000500000
+```
+
+Simply adding `@threads` exposes a data race with multiple threads reading and writing `s` at the same time.
+```julia-repl
+julia> function sum_multi_bad(a)
+           s = 0
+           Threads.@threads for i in a
+               s += i
+           end
+           s
+       end
+sum_multi_bad (generic function with 1 method)
+
+julia> sum_multi_bad(1:1_000_000)
+70140554652
+```
+
+Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
+
+To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
+Here `sum_single` is reused, with its own internal buffer `s`, and vector `a` is split into `nthreads()`
+chunks for parallel work via `nthreads()` `@spawn`-ed tasks.
+
+```julia-repl
+julia> function sum_multi_good(a)
+           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           tasks = map(chunks) do chunk
+               Threads.@spawn sum_single(chunk)
+           end
+           chunk_sums = fetch.(tasks)
+           return sum_single(chunk_sums)
+       end
+sum_multi_good (generic function with 1 method)
+
+julia> sum_multi_good(1:1_000_000)
+500000500000
+```
+!!! note
+    Buffers should not be managed based on `threadid()` i.e. `buffers = zeros(Threads.nthreads())` because concurrent tasks
+    can yield, meaning multiple concurrent tasks may use the same buffer on a given thread, introducing risk of data races.
+    Further, when more than one thread is available tasks may change thread at yield points, which is known as
+    [task migration](@ref man-task-migration).
+
+Another option is the use of atomic operations on variables shared across tasks/threads, which may be more performant
+depending on the characteristics of the operations.
+
 ## Atomic Operations
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
@@ -212,7 +347,7 @@ avoid the race:
 ```julia-repl
 julia> using Base.Threads
 
-julia> nthreads()
+julia> Threads.nthreads()
 4
 
 julia> acc = Ref(0)
@@ -306,13 +441,7 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * After a task starts running on a certain thread (e.g. via `@spawn`), it
-    will always be restarted on the same thread after blocking. In the future
-    this limitation will be removed, and tasks will migrate between threads.
-  * `@threads` currently uses a static schedule, using all threads and assigning
-    equal iteration counts to each. In the future the default schedule is likely
-    to change to be dynamic.
-  * The schedule used by `@spawn` is nondeterministic and should not be relied on.
+  * The schedule used by [`@spawn`](@ref Threads.@spawn) is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may
     be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.
@@ -322,6 +451,20 @@ threads in Julia:
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
     can be widely adopted with confidence. See the next section for further details.
+
+## [Task Migration](@id man-task-migration)
+
+After a task starts running on a certain thread it may move to a different thread if the task yields.
+
+Such tasks may have been started with [`@spawn`](@ref Threads.@spawn) or [`@threads`](@ref Threads.@threads),
+although the `:static` schedule option for `@threads` does freeze the threadid.
+
+This means that in most cases [`threadid()`](@ref Threads.threadid) should not be treated as constant within a task,
+and therefore should not be used to index into a vector of buffers or stateful objects.
+
+!!! compat "Julia 1.7"
+    Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
+    started on.
 
 ## Safe use of Finalizers
 
@@ -366,7 +509,7 @@ There are a few approaches to dealing with this problem:
 
 3. A related third strategy is to use a yield-free queue. We don't currently
    have a lock-free queue implemented in Base, but
-   `Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
    good strategy to use for code with event loops. For example, this strategy is
    employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
    don't do any explicit work inside the `finalizer`, and instead add it to a queue

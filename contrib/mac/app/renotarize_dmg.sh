@@ -39,7 +39,7 @@ APP_NAME=$(basename dmg/*.app)
 VOL_NAME=$(basename /Volumes/Julia-*)
 
 if [[ ! -d dmg/${APP_NAME} ]]; then
-    echo "ERORR: Unable to auto-detect APP_NAME, check dmg folder!" >&2
+    echo "ERROR: Unable to auto-detect APP_NAME, check dmg folder!" >&2
     exit 1
 fi
 # Unmount everything again

@@ -90,7 +90,7 @@ function getalladdrinfo(host::String)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -170,7 +170,7 @@ using the operating system's underlying `getnameinfo` implementation.
 
 # Examples
 ```julia-repl
-julia> getnameinfo(Sockets.IPv4("8.8.8.8"))
+julia> getnameinfo(IPv4("8.8.8.8"))
 "google-public-dns-a.google.com"
 ```
 """
@@ -205,7 +205,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later

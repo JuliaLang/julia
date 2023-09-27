@@ -16,7 +16,7 @@ variables.
 
 When compiled the first time, the build will automatically download
 pre-built [external
-dependencies](#required-build-tools-and-external-libraries). If you
+dependencies](#Required-Build-Tools-and-External-Libraries). If you
 prefer to build all the dependencies on your own, or are building on a system that cannot
 access the network during the build process, add the following in `Make.user`:
 
@@ -144,7 +144,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 5.1) or **[Clang][clang]** (>= 3.5, >= 6.0 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++][gcc]** (>= 7.1) or **[Clang][clang]** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
 - **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
@@ -167,9 +167,9 @@ Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
-uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blob/master/deps/Versions.make):
+uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (15.0 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -187,6 +187,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
+- **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
 
 [GNU make]:     https://www.gnu.org/software/make
 [patch]:        https://www.gnu.org/software/patch
@@ -222,6 +223,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
 [which]:        https://carlowood.github.io/which/
+[ITTAPI]:       https://github.com/intel/ittapi
 
 ## Build dependencies
 
@@ -236,7 +238,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
+   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/15.x` branch.
    * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
@@ -269,3 +271,84 @@ If you need to build Julia from source with a Git checkout of a stdlib, then use
 For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
 
 If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.
+
+## Building an "assert build" of Julia
+
+An "assert build" of Julia is a build that was built with both `FORCE_ASSERTIONS=1` and
+`LLVM_ASSERTIONS=1`. To build an assert build, define both of the following variables
+in your `Make.user` file:
+
+```
+FORCE_ASSERTIONS=1
+LLVM_ASSERTIONS=1
+```
+
+Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+## Building 32-bit Julia on a 64-bit machine
+
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.  Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
+However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system.  At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+
+```sh
+$ docker pull i386/ubuntu
+$ docker run --platform i386 -i -t i386/ubuntu /bin/bash
+```
+
+At this point you should be in a 32-bit machine console (note that `uname` reports the host architecture, so will still say 64-bit, but this will not affect the Julia build). You can add packages and compile code; when you `exit`, all the changes will be lost, so be sure to finish your analysis in a single session or set up a copy/pastable script you can use to set up your environment.
+
+From this point, you should
+
+```sh
+# apt update
+```
+(Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
+
+Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
+
+
+## Update the version number of a dependency
+
+There are two types of builds
+1. Build everything (`deps/` and `src/`) from source code.
+    (Add `USE_BINARYBUILDER=0` to `Make.user`, see [Building Julia](#building-julia))
+2. Build from source (`src/`) with pre-compiled dependencies (default)
+
+When you want to update the version number of a dependency in `deps/`,
+you may want to use the following checklist:
+
+```md
+### Check list
+
+Version numbers:
+- [ ] `deps/$(libname).version`: `LIBNAME_VER`, `LIBNAME_BRANCH`, `LIBNAME_SHA1` and `LIBNAME_JLL_VER`
+- [ ] `stdlib/$(LIBNAME_JLL_NAME)_jll/Project.toml`: `version`
+
+Checksum:
+- [ ] `deps/checksums/$(libname)`
+- [ ] `deps/checksums/$(LIBNAME_JLL_NAME)-*/`: `md5` and `sha512`
+
+Patches:
+- [ ] `deps/$(libname).mk`
+- [ ] `deps/patches/$(libname)-*.patch`
+```
+
+Note:
+- For specific dependencies, some items in the checklist may not exist.
+- For checksum file, it may be **a single file** without a suffix, or **a folder** containing two files.
+
+
+### Example: `OpenLibm`
+
+1. Update Version numbers in `deps/openlibm.version`
+    - `OPENLIBM_VER := 0.X.Y`
+    - `OPENLIBM_BRANCH = v0.X.Y`
+    - `OPENLIBM_SHA1 = new-sha1-hash`
+2. Update Version number in `stdlib/OpenLibm_jll/Project.toml`
+    - `version = "0.X.Y+0"`
+3. Update checksums in `deps/checksums/openlibm`
+    - `make -f contrib/refresh_checksums.mk openlibm`
+4. Check if the patch files `deps/patches/openlibm-*.patch` exist
+    - if patches don't exist, skip.
+    - if patches exist, check if they have been merged into the new version and need to be removed.
+        When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-print(xs...)   = print(stdout::IO, xs...)
-println(xs...) = println(stdout::IO, xs...)
+print(xs...)   = print(stdout, xs...)
+println(xs...) = println(stdout, xs...)
 println(io::IO) = print(io, '\n')
 
 function show end
@@ -29,6 +29,6 @@ let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     global wait_readnb(::CoreIO, nb::Int) = nothing
 end
 
-stdin = devnull
-stdout = Core.stdout
-stderr = Core.stderr
+stdin::IO = devnull
+stdout::IO = Core.stdout
+stderr::IO = Core.stderr

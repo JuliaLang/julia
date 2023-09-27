@@ -8,14 +8,13 @@
 //
 // TODO: add half-float support
 
+#include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
-#include "APInt-C.h"
 
 const unsigned int host_char_bit = 8;
 
 // float16 intrinsics
-// TODO: use LLVM's compiler-rt
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -186,24 +185,17 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     return h;
 }
 
-#if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
-
-JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
+JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
 {
     return half_to_float(param);
 }
 
-JL_DLLEXPORT float __extendhfsf2(uint16_t param)
-{
-    return half_to_float(param);
-}
-
-JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
+JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
 {
     return float_to_half(param);
 }
 
-JL_DLLEXPORT uint16_t __truncdfhf2(double param)
+JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
 {
     float res = (float)param;
     uint32_t resi;
@@ -225,7 +217,25 @@ JL_DLLEXPORT uint16_t __truncdfhf2(double param)
     return float_to_half(res);
 }
 
-#endif
+//JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) { return (double)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) { return (int32_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) { return (int64_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint32_t julia__fixunshfsi(uint16_t n) { return (uint32_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint64_t julia__fixunshfdi(uint16_t n) { return (uint64_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint16_t julia__floatsihf(int32_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatdihf(int64_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) { return julia__gnu_f2h_ieee((float)n); }
+//HANDLE_LIBCALL(F16, F128, __extendhftf2)
+//HANDLE_LIBCALL(F16, F80, __extendhfxf2)
+//HANDLE_LIBCALL(F80, F16, __truncxfhf2)
+//HANDLE_LIBCALL(F128, F16, __trunctfhf2)
+//HANDLE_LIBCALL(PPCF128, F16, __trunctfhf2)
+//HANDLE_LIBCALL(F16, I128, __fixhfti)
+//HANDLE_LIBCALL(F16, I128, __fixunshfti)
+//HANDLE_LIBCALL(I128, F16, __floattihf)
+//HANDLE_LIBCALL(I128, F16, __floatuntihf)
+
 
 // run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
@@ -357,8 +367,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    JL_TYPECHK(atomic_pointerref, pointer, p);
-    JL_TYPECHK(atomic_pointerref, symbol, order)
+    JL_TYPECHK(atomic_pointermodify, pointer, p);
+    JL_TYPECHK(atomic_pointermodify, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
@@ -419,6 +429,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         jl_atomic_error("atomic_pointerreplace: invalid atomic ordering");
     // TODO: filter other invalid orderings
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    if (!is_valid_intrinsic_elptr(ety))
+        jl_error("atomic_pointerreplace: invalid pointer");
     char *pp = (char*)jl_unbox_long(p);
     jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
@@ -437,8 +449,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         return result;
     }
     else {
-        if (!is_valid_intrinsic_elptr(ety))
-            jl_error("atomic_pointerreplace: invalid pointer");
         if (jl_typeof(x) != ety)
             jl_type_error("atomic_pointerreplace", ety, x);
         size_t nb = jl_datatype_size(ety);
@@ -451,7 +461,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
-    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;
@@ -480,14 +490,14 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref_noalloc(v, 1);
-        v = jl_fieldref(v, 0);
+        jl_value_t *t1 = jl_fieldref(v, 1);
         if (jl_is_symbol(t1))
             f_lib = jl_symbol_name((jl_sym_t*)t1);
         else if (jl_is_string(t1))
             f_lib = jl_string_data(t1);
         else
             JL_TYPECHK(cglobal, symbol, t1)
+        v = jl_fieldref(v, 0);
     }
 
     char *f_name = NULL;
@@ -498,10 +508,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     else
         JL_TYPECHK(cglobal, symbol, v)
 
-#ifdef _OS_WINDOWS_
     if (!f_lib)
-        f_lib = (char*)jl_dlfind_win32(f_name);
-#endif
+        f_lib = (char*)jl_dlfind(f_name);
 
     void *ptr;
     jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
@@ -551,9 +559,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 
 #define fp_select(a, func) \
-    sizeof(a) == sizeof(float) ? func##f((float)a) : func(a)
+    sizeof(a) <= sizeof(float) ? func##f((float)a) : func(a)
 #define fp_select2(a, b, func) \
-    sizeof(a) == sizeof(float) ? func##f(a, b) : func(a, b)
+    sizeof(a) <= sizeof(float) ? func##f(a, b) : func(a, b)
 
 // fast-function generators //
 
@@ -597,11 +605,11 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     uint16_t a = *(uint16_t*)pa; \
-    float A = __gnu_h2f_ieee(a); \
+    float A = julia__gnu_h2f_ieee(a); \
     if (osize == 16) { \
         float R; \
         OP(&R, A); \
-        *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+        *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
     } else { \
         OP((uint16_t*)pr, A); \
     } \
@@ -625,11 +633,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     float R = OP(A, B); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 // float or integer inputs, bool output
@@ -650,8 +658,8 @@ static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEP
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     return OP(A, B); \
 }
@@ -691,12 +699,12 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
     uint16_t c = *(uint16_t*)pc; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
-    float C = __gnu_h2f_ieee(c); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
+    float C = julia__gnu_h2f_ieee(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 
@@ -707,7 +715,7 @@ SELECTOR_FUNC(intrinsic_1)
 #define un_iintrinsic(name, u) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
+    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
 }
 #define un_iintrinsic_fast(LLVMOP, OP, name, u) \
 un_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -733,7 +741,7 @@ SELECTOR_FUNC(intrinsic_u1)
 #define uu_iintrinsic(name, u) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
+    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
 }
 #define uu_iintrinsic_fast(LLVMOP, OP, name, u) \
 uu_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -755,14 +763,13 @@ static const select_intrinsic_u1_t name##_list = { \
 uu_iintrinsic(name, u)
 
 static inline
-jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
+jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
                             char (*getsign)(void*, unsigned),
                             jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*), const void *list)
 {
-    if (!jl_is_primitivetype(jl_typeof(a)))
-        jl_errorf("%s: value is not a primitive type", name);
+    jl_value_t *ty = jl_typeof(a);
     if (!jl_is_primitivetype(ty))
-        jl_errorf("%s: type is not a primitive type", name);
+        jl_errorf("%s: value is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(jl_typeof(a));
     unsigned isize2 = next_power_of_two(isize);
@@ -823,11 +830,12 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 
 static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op)
 {
+    JL_TYPECHKS(name, datatype, ty);
+    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
+        jl_errorf("%s: target type not a leaf primitive type", name);
     jl_value_t *aty = jl_typeof(a);
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
-    if (!jl_is_primitivetype(ty))
-        jl_errorf("%s: type is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
@@ -1025,10 +1033,10 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_value_t *params[2];
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_task_t *ct = jl_current_task;
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
 
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
@@ -1172,11 +1180,114 @@ bi_fintrinsic(add,add_float)
 bi_fintrinsic(sub,sub_float)
 bi_fintrinsic(mul,mul_float)
 bi_fintrinsic(div,div_float)
-bi_fintrinsic(frem,rem_float)
 
 // ternary operators //
+// runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
+#if defined(_OS_WINDOWS_)
+// reinterpret(UInt64, ::Float64)
+uint64_t bitcast_d2u(double d) {
+    uint64_t r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// reinterpret(Float64, ::UInt64)
+double bitcast_u2d(uint64_t d) {
+    double r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// Base.splitbits(::Float64)
+void splitbits(double *hi, double *lo, double d) {
+    *hi = bitcast_u2d(bitcast_d2u(d) & 0xfffffffff8000000);
+    *lo = d - *hi;
+}
+// Base.exponent(::Float64)
+int exponent(double a) {
+    int e;
+    frexp(a, &e);
+    return e - 1;
+}
+// Base.fma_emulated(::Float32, ::Float32, ::Float32)
+float julia_fmaf(float a, float b, float c) {
+    double ab, res;
+    ab = (double)a * b;
+    res = ab + (double)c;
+    if ((bitcast_d2u(res) & 0x1fffffff) == 0x10000000){
+        double reslo = fabsf(c) > fabs(ab) ? ab-(res - c) : c-(res - ab);
+        if (reslo != 0)
+            res = nextafter(res, copysign(1.0/0.0, reslo));
+    }
+    return (float)res;
+}
+// Base.twomul(::Float64, ::Float64)
+void two_mul(double *abhi, double *ablo, double a, double b) {
+    double ahi, alo, bhi, blo, blohi, blolo;
+    splitbits(&ahi, &alo, a);
+    splitbits(&bhi, &blo, b);
+    splitbits(&blohi, &blolo, blo);
+    *abhi = a*b;
+    *ablo = alo*blohi - (((*abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo;
+}
+// Base.issubnormal(::Float64) (Win32's fpclassify seems broken)
+int issubnormal(double d) {
+    uint64_t y = bitcast_d2u(d);
+    return ((y & 0x7ff0000000000000) == 0) & ((y & 0x000fffffffffffff) != 0);
+}
+#if defined(_WIN32)
+// Win32 needs volatile (avoid over optimization?)
+#define VDOUBLE volatile double
+#else
+#define VDOUBLE double
+#endif
+
+// Base.fma_emulated(::Float64, ::Float64, ::Float64)
+double julia_fma(double a, double b, double c) {
+    double abhi, ablo, r, s;
+    two_mul(&abhi, &ablo, a, b);
+    if (!isfinite(abhi+c) || fabs(abhi) < 2.0041683600089732e-292 ||
+        issubnormal(a) || issubnormal(b)) {
+        int aandbfinite = isfinite(a) && isfinite(b);
+        if (!(aandbfinite && isfinite(c)))
+            return aandbfinite ? c : abhi+c;
+        if (a == 0 || b == 0)
+            return abhi+c;
+        int bias = exponent(a) + exponent(b);
+        VDOUBLE c_denorm = ldexp(c, -bias);
+        if (isfinite(c_denorm)) {
+            if (issubnormal(a))
+                a *= 4.503599627370496e15;
+            if (issubnormal(b))
+                b *= 4.503599627370496e15;
+            a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            c = c_denorm;
+            two_mul(&abhi, &ablo, a, b);
+            r = abhi+c;
+            s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+            double sumhi = r+s;
+            if (issubnormal(ldexp(sumhi, bias))) {
+                double sumlo = r-sumhi+s;
+                int bits_lost = -bias-exponent(sumhi)-1022;
+                if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))
+                    if (sumlo != 0)
+                        sumhi = nextafter(sumhi, copysign(1.0/0.0, sumlo));
+            }
+            return ldexp(sumhi, bias);
+        }
+        if (isinf(abhi) && signbit(c) == signbit(a*b))
+            return abhi;
+    }
+    r = abhi+c;
+    s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+    return r+s;
+}
+#define fma(a, b, c) \
+    sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : julia_fma(a, b, c)
+#else // On other systems use fma(f) directly
 #define fma(a, b, c) \
     sizeof(a) == sizeof(float) ? fmaf(a, b, c) : fma(a, b, c)
+#endif
+
 #define muladd(a, b, c) a * b + c
 ter_fintrinsic(fma,fma_float)
 ter_fintrinsic(muladd,muladd_float)
@@ -1214,7 +1325,7 @@ static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
 fpiseq_n(float, 32)
 fpiseq_n(double, 64)
 #define fpiseq(a,b) \
-    sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
+    sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 bool_fintrinsic(eq,eq_float)
 bool_fintrinsic(ne,ne_float)
@@ -1263,7 +1374,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
         else if (osize == 16) \
-            *(uint16_t*)pr = __gnu_f2h_ieee(a); \
+            *(uint16_t*)pr = julia__gnu_f2h_ieee(a); \
         else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
@@ -1348,4 +1459,11 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
     JL_TYPECHK(arraylen, array, a);
     return jl_box_long(jl_array_len((jl_array_t*)a));
+}
+
+JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
+{
+    JL_TYPECHK(have_fma, datatype, typ);
+    // TODO: run-time feature check?
+    return jl_false;
 }

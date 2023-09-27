@@ -14,25 +14,25 @@ export libmbedcrypto, libmbedtls, libmbedx509
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libmbedcrypto_handle = C_NULL
-libmbedcrypto_path = ""
-libmbedtls_handle = C_NULL
-libmbedtls_path = ""
-libmbedx509_handle = C_NULL
-libmbedx509_path = ""
+artifact_dir::String = ""
+libmbedcrypto_handle::Ptr{Cvoid} = C_NULL
+libmbedcrypto_path::String = ""
+libmbedtls_handle::Ptr{Cvoid} = C_NULL
+libmbedtls_path::String = ""
+libmbedx509_handle::Ptr{Cvoid} = C_NULL
+libmbedx509_path::String = ""
 
 if Sys.iswindows()
     const libmbedcrypto = "libmbedcrypto.dll"
     const libmbedtls = "libmbedtls.dll"
     const libmbedx509 = "libmbedx509.dll"
 elseif Sys.isapple()
-    const libmbedcrypto = "@rpath/libmbedcrypto.5.dylib"
-    const libmbedtls = "@rpath/libmbedtls.13.dylib"
+    const libmbedcrypto = "@rpath/libmbedcrypto.7.dylib"
+    const libmbedtls = "@rpath/libmbedtls.14.dylib"
     const libmbedx509 = "@rpath/libmbedx509.1.dylib"
 else
-    const libmbedcrypto = "libmbedcrypto.so.5"
-    const libmbedtls = "libmbedtls.so.13"
+    const libmbedcrypto = "libmbedcrypto.so.7"
+    const libmbedtls = "libmbedtls.so.14"
     const libmbedx509 = "libmbedx509.so.1"
 end
 

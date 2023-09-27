@@ -2,12 +2,18 @@
 
 module TestTridiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
 
 include("testutils.jl") # test_approx_eq_modphase
 
@@ -71,11 +77,13 @@ end
             @test ST == Matrix(ST)
             @test ST.dv === x
             @test ST.ev === y
+            @test typeof(ST)(ST) === ST
             TT = (Tridiagonal(y, x, y))::Tridiagonal{elty, typeof(x)}
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
             @test TT.du === y
+            @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
@@ -221,12 +229,12 @@ end
             @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
-            @test isa(similar(A, (3, 2)), SparseMatrixCSC)
-            @test isa(similar(A, Int, (3, 2)), SparseMatrixCSC{Int})
+            @test isa(similar(A, (3, 2)), Matrix)
+            @test isa(similar(A, Int, (3, 2)), Matrix{Int})
             @test size(A, 3) == 1
             @test size(A, 1) == n
             @test size(A) == (n, n)
-            @test_throws ArgumentError size(A, 0)
+            @test_throws BoundsError size(A, 0)
         end
         @testset "getindex" begin
             @test_throws BoundsError A[n + 1, 1]
@@ -261,10 +269,23 @@ end
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
         end
+        @testset "trace" begin
+            if real(elty) <: Integer
+                @test tr(A) == tr(fA)
+            else
+                @test tr(A) ≈ tr(fA) rtol=2eps(real(elty))
+            end
+        end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
             end
+        end
+        @testset "permutedims(::[Sym]Tridiagonal)" begin
+            @test permutedims(permutedims(A)) === A
+            @test permutedims(A) == transpose.(transpose(A))
+            @test permutedims(A, [1, 2]) === A
+            @test permutedims(A, (2, 1)) == permutedims(A)
         end
         if elty != Int
             @testset "Simple unary functions" begin
@@ -400,8 +421,8 @@ end
                     @testset "similar" begin
                         @test isa(similar(Ts), SymTridiagonal{elty})
                         @test isa(similar(Ts, Int), SymTridiagonal{Int})
-                        @test isa(similar(Ts, (3, 2)), SparseMatrixCSC)
-                        @test isa(similar(Ts, Int, (3, 2)), SparseMatrixCSC{Int})
+                        @test isa(similar(Ts, (3, 2)), Matrix)
+                        @test isa(similar(Ts, Int, (3, 2)), Matrix{Int})
                     end
 
                     @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
@@ -413,27 +434,37 @@ end
             end
         else # mat_type is Tridiagonal
             @testset "tridiagonal linear algebra" begin
-                for (BB, vv) in ((copy(B), copy(v)), (view(B, 1:n, 1), view(v, 1:n)))
+                for vv in (copy(v), view(copy(v), 1:n))
                     @test A*vv ≈ fA*vv
                     invFv = fA\vv
                     @test A\vv ≈ invFv
-                    # @test Base.solve(T,v) ≈ invFv
-                    # @test Base.solve(T, B) ≈ F\B
                     Tlu = factorize(A)
                     x = Tlu\vv
                     @test x ≈ invFv
                 end
+                elty != Int && @test A \ v ≈ ldiv!(copy(A), copy(v))
             end
+            F = lu(A)
+            L1, U1, p1 = F
+            G = lu!(F, 2A)
+            L2, U2, p2 = F
+            @test L1 ≈ L2
+            @test 2U1 ≈ U2
+            @test p1 == p2
         end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end
 
-@testset "SymTridiagonal block matrix" begin
+@testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
@@ -447,6 +478,27 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
+    @test @inferred A[1,1] == M
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == M
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(M, n)
+    @test @inferred diag(A, -1) == fill(M, n-1)
+    @test_throws MethodError diag(A, -2)
+    @test_throws MethodError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
+
+    for n in 0:2
+        dv, ev = fill(M, n), fill(M, max(n-1,0))
+        A = SymTridiagonal(dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+
+        A = Tridiagonal(ev, dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+    end
 end
 
 @testset "Issue 12068" begin
@@ -474,13 +526,6 @@ end
     x = ones(1)
     @test T*x == ones(1)
     @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
-end
-
-@testset "issue #29644" begin
-    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
-    @test F.L == Matrix(I, 3, 3)
-    @test startswith(sprint(show, MIME("text/plain"), F),
-          "$(LinearAlgebra.LU){Float64, $(LinearAlgebra.Tridiagonal){Float64, SparseArrays.SparseVector")
 end
 
 @testset "Issue 29630" begin
@@ -692,6 +737,71 @@ end
         Tsym = SymTridiagonal(x, x)
         @test dot(x, T, x) == 0.0
         @test dot(x, Tsym, x) == 0.0
+    end
+end
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+@testset "non-number eltype" begin
+    @testset "sum for SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        ev = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test Sdense == collect(S)
+        @test sum(S) == sum(Sdense)
+        @test sum(S, dims = 1) == sum(Sdense, dims = 1)
+        @test sum(S, dims = 2) == sum(Sdense, dims = 2)
+    end
+    @testset "issymmetric/ishermitian for Tridiagonal" begin
+        @test !issymmetric(Tridiagonal([[1 2;3 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+        @test !issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;3 4], [1 2;3 4]], [[1 2;3 4]]))
+        @test issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+
+        @test ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].+im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+    end
+    @testset "== between Tridiagonal and SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}([1 2;3 4]) for i in 1:4]
+        ev = [SizedArray{(2,2)}([3 4;1 2]) for i in 1:4]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test S == Tridiagonal(diag(Sdense, -1), diag(Sdense),  diag(Sdense, 1)) == S
+        @test S !== Tridiagonal(diag(Sdense, 1), diag(Sdense),  diag(Sdense, 1)) !== S
+    end
+end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Tridiagonal" begin
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                T = Tridiagonal(ud, d, ud)
+                @test copyto!(T, I) === T
+            end
+        end
+        T = Tridiagonal(fill(3, 3), fill(2, 4), fill(3, 3))
+        copyto!(T, I)
+        @test all(isone, diag(T))
+        @test all(iszero, diag(T, 1))
+        @test all(iszero, diag(T, -1))
+    end
+    @testset "SymTridiagonal" begin
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                ST = SymTridiagonal(d, ud)
+                @test copyto!(ST, I) === ST
+            end
+        end
+        ST = SymTridiagonal(fill(2, 4), fill(3, 3))
+        copyto!(ST, I)
+        @test all(isone, diag(ST))
+        @test all(iszero, diag(ST, 1))
+        @test all(iszero, diag(ST, -1))
     end
 end
 

@@ -11,7 +11,7 @@ A menu that allows a user to select a multiple options from a list.
 ```julia-repl
 julia> request(MultiSelectMenu(options))
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -86,7 +86,7 @@ end
 # See AbstractMenu.jl
 #######################################
 
-header(m::MultiSelectMenu) = "[press: d=done, a=all, n=none]"
+header(m::MultiSelectMenu) = "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
 options(m::MultiSelectMenu) = m.options
 

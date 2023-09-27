@@ -42,7 +42,7 @@ function handle_message end
 """
     shouldlog(logger, level, _module, group, id)
 
-Return true when `logger` accepts a message at `level`, generated for
+Return `true` when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
 function shouldlog end
@@ -58,7 +58,7 @@ function min_enabled_level end
 """
     catch_exceptions(logger)
 
-Return true if the logger should catch exceptions which happen during log
+Return `true` if the logger should catch exceptions which happen during log
 record construction.  By default, messages are caught
 
 By default all exceptions are caught to prevent log message generation from
@@ -73,7 +73,7 @@ catch_exceptions(logger) = true
 
 # Prevent invalidation when packages define custom loggers
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
-function _invoked_shouldlog(logger, level, _module, group, id)
+Base.@constprop :none function _invoked_shouldlog(logger, level, _module, group, id)
     @nospecialize
     return invoke(
         shouldlog,
@@ -349,7 +349,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -361,7 +361,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -369,7 +369,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
     return quote
         let
             level = $level
-            std_level = convert(LogLevel, level)
+            # simplify std_level code emitted, if we know it is one of our global constants
+            std_level = $(level isa Symbol ? :level : :(level isa LogLevel ? level : convert(LogLevel, level)::LogLevel))
             if std_level >= _min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
@@ -378,11 +379,14 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if _invoked_shouldlog(logger, level, _module, group, id)
+                    if invokelatest(shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
+                        if file isa String
+                            file = Base.fixup_stdlib_path(file)
+                        end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && handle_message(
+                        $(logrecord) && invokelatest(handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end
@@ -442,7 +446,7 @@ function default_group_code(file)
         QuoteNode(default_group(file))  # precompute if we can
     else
         ref = Ref{Symbol}()  # memoized run-time execution
-        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, ""))::Symbol)
     end
 end
 
@@ -457,7 +461,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
@@ -488,31 +492,23 @@ end
 
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
+const CURRENT_LOGSTATE = ScopedValue{LogState}()
+
 function current_logstate()
-    logstate = current_task().logstate
-    return (logstate !== nothing ? logstate : _global_logstate)::LogState
+    maybe = @inline Base.ScopedValues.get(CURRENT_LOGSTATE)
+    return something(maybe, _global_logstate)::LogState
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
-    logstate = current_logstate()
+@noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
+    logstate = @inline current_logstate()
     if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
         return logstate.logger
     end
     return nothing
 end
 
-function with_logstate(f::Function, logstate)
-    @nospecialize
-    t = current_task()
-    old = t.logstate
-    try
-        t.logstate = logstate
-        f()
-    finally
-        t.logstate = old
-    end
-end
+with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering
@@ -536,7 +532,7 @@ end
 let _debug_groups_include::Vector{Symbol} = Symbol[],
     _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
-global function env_override_minlevel(group, _module)
+global Base.@constprop :none function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
@@ -582,6 +578,8 @@ global function env_override_minlevel(group, _module)
 end
 end
 
+
+global _global_logstate::LogState
 
 """
     global_logger()
@@ -668,13 +666,13 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         remaining > 0 || return
     end
     buf = IOBuffer()
-    stream = logger.stream
-    if !isopen(stream)
+    stream::IO = logger.stream
+    if !(isopen(stream)::Bool)
         stream = stderr
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = eachsplit(chomp(string(message)::String), '\n')
+    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
     msg1, rest = Iterators.peel(msglines)
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest

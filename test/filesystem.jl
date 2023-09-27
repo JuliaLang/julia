@@ -34,3 +34,9 @@ mktempdir() do dir
   close(file)
 
 end
+
+import Base.Filesystem: S_IRUSR, S_IRGRP, S_IROTH
+@testset "types of permission mask constants" begin
+  @test S_IRUSR & ~S_IRGRP == S_IRUSR
+  @test typeof(S_IRUSR) == typeof(S_IRGRP) == typeof(S_IROTH)
+end

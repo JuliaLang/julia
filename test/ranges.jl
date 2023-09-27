@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Checked: checked_length
+using InteractiveUtils: code_llvm
 
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
@@ -35,9 +36,32 @@ using Base.Checked: checked_length
         @test r ==  range(; stop=Float64(stop))
     end
 
-    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+    for T = (Int8, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        @test typeof(range(start=T(5), length=Int8(3))) === typeof(range(stop=T(5), length=Int8(3)))
     end
+    let T = Rational{Int16}
+        @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
+    end
+
+
+    @test first(10:3) === 10
+    @test last(10:3) === 9
+    @test step(10:3) === 1
+    @test isempty(10:3)
+
+    @test first(10:2:3) === 10
+    @test last(10:2:3) === 9
+    @test step(10:2:3) === 2
+    @test isempty(10:2:3)
+
+    @test first(10:0.2:3) === 10.0
+    @test last(10:0.2:3) === 9.8
+    @test step(10:0.2:3) === 0.2
+    @test isempty(10:0.2:3)
+
+    unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
+    @test_throws unitrangeerrstr UnitRange('a', 'b')
 end
 
 using Dates, Random
@@ -234,6 +258,45 @@ end
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
     @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
+
+    function twiceprecision_roundtrip_is_not_lossy(
+        ::Type{S},
+        x::T,
+    ) where {S<:Number, T<:Union{Number,Base.TwicePrecision}}
+        tw = Base.TwicePrecision{S}(x)
+        @test x == T(tw)
+    end
+
+    function twiceprecision_is_normalized(tw::Tw) where {Tw<:Base.TwicePrecision}
+        (hi, lo) = (tw.hi, tw.lo)
+        normalized = Tw(Base.canonicalize2(hi, lo)...)
+        @test (abs(lo) ≤ abs(hi)) & (tw == normalized)
+    end
+
+    rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
+
+    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
+
+    # For this test the `BigFloat` mantissa needs to be just a bit
+    # larger than the `Float64` mantissa
+    setprecision(BigFloat, 70) do
+        n = 10
+        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
+            rand_twiceprecision_is_ok(T)
+        end
+        @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
+        end
+        @testset "twiceprecision roundtrip is not lossy 2" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand_twiceprecision(Float32))
+        end
+        @testset "twiceprecision normalization 1: Float64 to Float32" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float32}(rand_twiceprecision(Float64)))
+        end
+        @testset "twiceprecision normalization 2: Float32 to Float64" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
+        end
+    end
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -367,53 +430,64 @@ end
         @test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
         @test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
     end
+    @testset "reverse `[Step|Unit]Range{$T}`" for T in (Int8, UInt8, Int, UInt, Int128, UInt128)
+        @test reverse(T(1):T(10)) == T(10):-1:T(1)
+        @test reverse(typemin(T):typemax(T)) == typemax(T):-1:typemin(T)
+        @test reverse(typemin(T):2:typemax(T)) == typemax(T)-T(1):-2:typemin(T)
+        @test reverse(reverse(T(1):T(10))) == T(1):T(10)
+        @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
+        @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+    end
     @testset "intersect" begin
-        @test intersect(1:5, 2:3) == 2:3
-        @test intersect(-3:5, 2:8) == 2:5
-        @test intersect(-8:-3, -8:-3) == -8:-3
-        @test intersect(1:5, 5:13) == 5:5
+        @test intersect(1:5, 2:3) === 2:3
+        @test intersect(-3:5, 2:8) === 2:5
+        @test intersect(-8:-3, -8:-3) === -8:-3
+        @test intersect(1:5, 5:13) === 5:5
         @test isempty(intersect(-8:-3, -2:2))
         @test isempty(intersect(-3:7, 2:1))
-        @test intersect(1:11, -2:3:15) == 1:3:10
-        @test intersect(1:11, -2:2:15) == 2:2:10
-        @test intersect(1:11, -2:1:15) == 1:11
-        @test intersect(1:11, 15:-1:-2) == 1:11
-        @test intersect(1:11, 15:-4:-2) == 3:4:11
-        @test intersect(-20:-5, -10:3:-2) == -10:3:-7
+        @test intersect(-8:-3, -2:2) === -2:-3
+        @test intersect(-3:7, 2:1) === 2:1
+        @test intersect(1:11, -2:3:15) === 1:3:10
+        @test intersect(1:11, -2:2:15) === 2:2:10
+        @test intersect(1:11, -2:1:15) === 1:1:11
+        @test intersect(1:11, 15:-1:-2) === 1:1:11
+        @test intersect(1:11, 15:-4:-2) === 3:4:11
+        @test intersect(-20:-5, -10:3:-2) === -10:3:-7
         @test isempty(intersect(-5:5, -6:13:20))
         @test isempty(intersect(1:11, 15:4:-2))
         @test isempty(intersect(11:1, 15:-4:-2))
-        #@test intersect(-5:5, 1+0*(1:3)) == 1:1
-        #@test isempty(intersect(-5:5, 6+0*(1:3)))
-        @test intersect(-15:4:7, -10:-2) == -7:4:-3
-        @test intersect(13:-2:1, -2:8) == 7:-2:1
+        @test intersect(-5:5, 1 .+ 0 .* (1:3)) == 1:1
+        @test isempty(intersect(-5:5, 6 .+ 0 .* (1:3)))
+        @test intersect(-15:4:7, -10:-2) === -7:4:-3
+        @test intersect(13:-2:1, -2:8) === 7:-2:1
         @test isempty(intersect(13:2:1, -2:8))
         @test isempty(intersect(13:-2:1, 8:-2))
-        #@test intersect(5+0*(1:4), 2:8) == 5+0*(1:4)
-        #@test isempty(intersect(5+0*(1:4), -7:3))
-        @test intersect(0:3:24, 0:4:24) == 0:12:24
-        @test intersect(0:4:24, 0:3:24) == 0:12:24
-        @test intersect(0:3:24, 24:-4:0) == 0:12:24
-        @test intersect(24:-3:0, 0:4:24) == 24:-12:0
-        @test intersect(24:-3:0, 24:-4:0) == 24:-12:0
-        @test intersect(1:3:24, 0:4:24) == 4:12:16
-        @test intersect(0:6:24, 0:4:24) == 0:12:24
+        @test intersect(5 .+ 0 .* (1:4), 2:8) == 5:5
+        @test isempty(intersect(5 .+ 0 .* (1:4), -7:3))
+        @test intersect(0:3:24, 0:4:24) === 0:12:24
+        @test intersect(0:4:24, 0:3:24) === 0:12:24
+        @test intersect(0:3:24, 24:-4:0) === 0:12:24
+        @test intersect(24:-3:0, 0:4:24) === 24:-12:0
+        @test intersect(24:-3:0, 24:-4:0) === 24:-12:0
+        @test intersect(1:3:24, 0:4:24) === 4:12:16
+        @test intersect(0:6:24, 0:4:24) === 0:12:24
         @test isempty(intersect(1:6:2400, 0:4:2400))
-        @test intersect(-51:5:100, -33:7:125) == -26:35:79
-        @test intersect(-51:5:100, -32:7:125) == -11:35:94
-        #@test intersect(0:6:24, 6+0*(0:4:24)) == 6:6:6
-        #@test intersect(12+0*(0:6:24), 0:4:24) == AbstractRange(12, 0, 5)
-        #@test isempty(intersect(6+0*(0:6:24), 0:4:24))
-        @test intersect(-10:3:24, -10:3:24) == -10:3:23
+        @test intersect(-51:5:100, -33:7:125) === -26:35:79
+        @test intersect(-51:5:100, -32:7:125) === -11:35:94
+        @test intersect(0:6:24, 6 .+ 0 .* (0:4:24)) == 6:6:6
+        @test intersect(12 .+ 0 .* (0:6:24), 0:4:24) == 12:12 # forms StepRangeLen(12, 0, 5)
+        @test isempty(intersect(6 .+ 0 .* (0:6:24), 0:4:24))
+        @test intersect(-10:3:24, -10:3:24) === -10:3:23
         @test isempty(intersect(-11:3:24, -10:3:24))
-        @test intersect(typemin(Int):2:typemax(Int),1:10) == 2:2:10
-        @test intersect(1:10,typemin(Int):2:typemax(Int)) == 2:2:10
+        @test intersect(-11:3:24, -10:3:24) === -11:3:-14
+        @test intersect(typemin(Int):2:typemax(Int),1:10) === 2:2:10
+        @test intersect(1:10, typemin(Int):2:typemax(Int)) === 2:2:10
 
         @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
         @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-        @test intersect(UnitRange(1,2),3) == UnitRange(3,2)
-        @test intersect(UnitRange(1,2), UnitRange(1,5), UnitRange(3,7), UnitRange(4,6)) == UnitRange(4,3)
+        @test intersect(UnitRange(1, 2), 3) === UnitRange(3, 2)
+        @test intersect(UnitRange(1, 2), UnitRange(1, 5), UnitRange(3, 7), UnitRange(4, 6)) === UnitRange(4, 2)
 
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
@@ -487,8 +561,10 @@ end
         @test !(3.5 in 1:5)
         @test (3 in 1:5)
         @test (3 in 5:-1:1)
-        #@test (3 in 3+0*(1:5))
-        #@test !(4 in 3+0*(1:5))
+        @test (3 in 3 .+ 0*(1:5))
+        @test !(4 in 3 .+ 0*(1:5))
+        @test 0. in (0. .* (1:10))
+        @test !(0.1 in (0. .* (1:10)))
 
         let r = 0.0:0.01:1.0
             @test (r[30] in r)
@@ -505,8 +581,17 @@ end
             x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
             @test !(x in r)
         end
+
+        @test 1e40 ∉ 0:1.0 # Issue #45747
+        @test 1e20 ∉ 0:1e-20:1e-20
+        @test 1e20 ∉ 0:1e-20
+        @test 1.0  ∉ 0:1e-20:1e-20
+        @test 0.5  ∉ 0:1e-20:1e-20
+        @test 1    ∉ 0:1e-20:1e-20
+
+        @test_broken 17.0 ∈ 0:1e40 # Don't support really long ranges
     end
-    @testset "in() works across types, including non-numeric types (#21728)" begin
+    @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
         @test 1//1 in 1.0:3.0
         @test !(5//1 in 1:3)
@@ -527,6 +612,22 @@ end
         @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+        # We use Ducks because of their propensity to stand in a row and because we know
+        # that no additional methods (e.g. isfinite) are defined specifically for Ducks.
+        struct Duck
+            location::Int
+        end
+        Base.:+(x::Duck, y::Int) = Duck(x.location + y)
+        Base.:-(x::Duck, y::Int) = Duck(x.location - y)
+        Base.:-(x::Duck, y::Duck) = x.location - y.location
+        Base.isless(x::Duck, y::Duck) = isless(x.location, y.location)
+
+        @test Duck(3) ∈ Duck(1):2:Duck(5)
+        @test Duck(3) ∈ Duck(5):-2:Duck(2)
+        @test Duck(4) ∉ Duck(5):-2:Duck(1)
+        @test Duck(4) ∈ Duck(1):Duck(5)
+        @test Duck(0) ∉ Duck(1):Duck(5)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
@@ -699,9 +800,9 @@ end
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
     @test broadcast(-, T(1):2:6, 0.3) === range(T(1)-0.3, step=2, length=T(3)) == T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
-    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
-    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
+    @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2) === (is_unsigned ? T(0) : T(3))
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -829,11 +930,19 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test_skip stop == last(r)
+        # potential floating point error:
+        #   stop = strt + (n-1)*Δ
+        #      *          error <= eps((n-1)*Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #      +          error <= eps(stop)/2    <= abs(stop)/2    * eps(T)
+        #   last(r)
+        #     rat(strt)   error <= eps(strt)/2    <= abs(strt)/2    * eps(T)
+        #     rat(Δ)      error <= (n-1)*eps(Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #     T(...)      error <= eps(last(r))/2 <= abs(stop)/2    * eps(T)
+        @test stop ≈ last(r) atol = (abs(strt)/2 + (n-1)*abs(Δ) + abs(stop)) * eps(T)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
-        @test stop  == last(l)
+        @test stop == last(l)
     end
 end
 @testset "range fuzztests for $T" for T = (Float32, Float64,)
@@ -843,7 +952,6 @@ end
 @testset "Inexact errors on 32 bit architectures. #22613" begin
     @test first(range(log(0.2), stop=log(10.0), length=10)) == log(0.2)
     @test last(range(log(0.2), stop=log(10.0), length=10)) == log(10.0)
-    @test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
@@ -1166,15 +1274,15 @@ end
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0, 1.66667, 2.33333, 3.0, 3.66667, 4.33333, 5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
+    @test repr(LinRange{Float64}(1,5,7)) == "LinRange{Float64}(1.0, 5.0, 7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
     # next is to test a very large range, which should be fast because print_range
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replrepr(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0, 0.010001, 0.020002, 0.030003, …, 99.96, 99.97, 99.98, 99.99, 100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -1315,6 +1423,7 @@ end
         @test size(similar(r, size(r))) == size(similar(r, length(r)))
     end
 end
+
 @testset "sign, conj, ~ (Issue #16067)" begin
     A = -1:1
     B = -1.0:1.0
@@ -1373,6 +1482,8 @@ end
         @test isempty(r)
         @test length(r) == checked_length(r) == 0
         @test size(r) == (0,)
+        @test first(r) === 1
+        @test last(r) === 0
     end
     let r = Base.OneTo(3)
         @test !isempty(r)
@@ -1496,8 +1607,10 @@ isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
 using .Main.Furlongs
 
 @testset "dimensional correctness" begin
-    @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test_throws TypeError Furlong(2):Furlong(10)
+    @test_throws TypeError range(Furlong(2), length=9)
+    @test length(Vector(Furlong(2):Furlong(1):Furlong(10))) == 9
+    @test length(range(Furlong(2), step=Furlong(1), length=9)) == checked_length(range(Furlong(2), step=Furlong(1), length=9)) == 9
     @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
@@ -1576,6 +1689,60 @@ end
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end
 
+@testset "Issue #44292" begin
+    let x = @inferred range(0, step=0.2, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [0.0, 0.2, 0.4, 0.6, 0.8]
+    end
+
+    let x = @inferred range(0.0, step=2, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [0.0, 2.0, 4.0, 6.0, 8.0]
+        @test x === range(0.0, step=2.0, length=5)
+        @test x === range(0.0f0, step=2e0, length=5)
+        @test x === range(0e0, step=2.0f0, length=5)
+    end
+
+    # start::IEEEFloat and step::Complex
+    let x = @inferred range(2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Float64, Complex{Int}, Int}
+        @test x == range(2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .+ [0im, 1im, 2im]
+    end
+
+    # start::Complex and step::IEEEFloat
+    let x = @inferred range(2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Complex{Int}, Float64, Int}
+        @test x == range(2im, step=1, length=3)  # compare with integer range
+    end
+
+    # stop::IEEEFloat and step::Complex
+    let x = @inferred range(stop=2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Complex{Int}, Int}
+        @test x == range(stop=2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .- [2im, 1im, 0im]
+    end
+
+    # stop::Complex and step::IEEEFloat
+    let x = @inferred range(stop=2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Float64, Int}
+        @test x == range(stop=2im, step=1, length=3)  # compare with integer range
+    end
+
+    let x = @inferred range(stop=10, step=2.0, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x === @inferred range(stop=10.0, step=2.0, length=5)
+        @test x === @inferred range(stop=10f0, step=2.0, length=5)
+        @test x === @inferred range(stop=10e0, step=2.0f0, length=5)
+        @test x == [2, 4, 6, 8, 10]
+    end
+
+    let x = @inferred range(stop=10.0, step=2, length=4)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [4.0, 6.0, 8.0, 10.0]
+    end
+end
+
 @testset "Views of ranges" begin
     @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
     @test view(1:10, 1:5) === 1:5
@@ -1635,6 +1802,7 @@ Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 # required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
+Base.Int(x::Displacement) = x.val
 
 # Unsigned complement, for testing checked_length
 struct UPosition <: Unsigned
@@ -1656,6 +1824,7 @@ Base.:-(x::UPosition, y::UDisplacement) = UPosition(x.val - y.val)
 Base.:+(x::UPosition, y::UDisplacement) = UPosition(x.val + y.val)
 Base.:+(x::UDisplacement, y::Displacement) = UDisplacement(x.val + y.val)
 Base.:+(x::UDisplacement, y::UDisplacement) = UDisplacement(x.val + y.val)
+Base.:-(x::UPosition, y::Displacement) = UPosition(x.val - y.val)
 checked_sub(x::UPosition, y::UPosition) = UDisplacement(checked_sub(x.val, y.val))
 checked_sub(x::UPosition, y::UDisplacement) = UPosition(checked_sub(x.val, y.val))
 checked_sub(x::UDisplacement, y::UDisplacement) = UDisplacement(checked_sub(x.val, y.val))
@@ -1894,41 +2063,64 @@ end
 end
 
 @testset "eltype of range(::Integer; step::Rational, length) (#37295)" begin
-    @test range(1, step=1//2, length=3) == [1//1, 3//2, 2//1]
-    @test eltype(range(1, step=1//2, length=3)) === Rational{Int}
-    @test typeof(step(range(1, step=1//2, length=3))) === Rational{Int}
+    r = range(1, step=1//2, length=3)
+    @test r == [1//1, 3//2, 2//1]
+    @test eltype(r) === Rational{Int}
+    @test typeof(step(r)) === Rational{Int}
 
-    @test range(1//1, step=2, length=3) == [1, 3, 5]
-    @test eltype(range(1//1, step=2, length=3)) === Rational{Int}
-    @test typeof(step(range(1//1, step=2, length=3))) === Int
+    r = range(1//1, step=2, length=3)
+    @test r == [1, 3, 5]
+    @test eltype(r) === Rational{Int}
+    @test typeof(step(r)) === Int
 
-    @test range(Int16(1), step=Rational{Int8}(1,2), length=3) == [1//1, 3//2, 2//1]
-    @test eltype(range(Int16(1), step=Rational{Int8}(1,2), length=3)) === Rational{Int16}
-    @test typeof(step(range(Int16(1), step=Rational{Int8}(1,2), length=3))) === Rational{Int8}
+    r = range(Int16(1), step=Rational{Int8}(1,2), length=Int16(3))
+    @test r == [1//1, 3//2, 2//1]
+    @test eltype(r) === Rational{Int16}
+    @test typeof(step(r)) === Rational{Int8}
 
-    @test range(Rational{Int8}(1), step=Int16(2), length=3) == [1, 3, 5]
-    @test eltype(range(Rational{Int8}(1), step=Int16(2), length=3)) === Rational{Int16}
-    @test typeof(step(range(Rational{Int8}(1), step=Int16(2), length=3))) === Int16
+    r = range(Rational{Int8}(1), step=Int16(2), length=Int8(3))
+    @test r == [1, 3, 5]
+    @test eltype(r) === Rational{Int16}
+    @test typeof(step(r)) === Int16
 
-    @test range('a', step=2, length=3) == ['a', 'c', 'e']
-    @test eltype(range('a', step=2, length=3)) === Char
-    @test typeof(step(range('a', step=2, length=3))) === Int
+    r = range('a', step=2, length=3)
+    @test r == ['a', 'c', 'e']
+    @test eltype(r) === Char
+    @test typeof(step(r)) === Int
 
-    @test isempty(range(typemax(Int)//1, step=1, length=0))
-    @test eltype(range(typemax(Int)//1, step=1, length=0)) === Rational{Int}
-    @test typeof(step(range(typemax(Int)//1, step=1, length=0))) === Int
+    r = range(typemax(Int)//1, step=1, length=0)
+    @test isempty(r)
+    @test eltype(r) === Rational{Int}
+    @test typeof(step(r)) === Int
 
-    @test isempty(range(typemin(Int), step=-1//1, length=0))
-    @test eltype(range(typemin(Int), step=-1//1, length=0)) === Rational{Int}
-    @test typeof(step(range(typemin(Int), step=-1//1, length=0))) === Rational{Int}
+    r = range(typemin(Int), step=-1//1, length=0)
+    @test isempty(r)
+    @test eltype(r) === Rational{Int}
+    @test typeof(step(r)) === Rational{Int}
 
-    @test StepRangeLen(Int8(1), Int8(2), 3) == Int8[1, 3, 5]
-    @test eltype(StepRangeLen(Int8(1), Int8(2), 3)) === Int8
-    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3))) === Int8
+    r = StepRangeLen(Int8(1), Int8(2), 3)
+    @test r == Int8[1, 3, 5]
+    @test eltype(r) === Int8
+    @test typeof(step(r)) === Int8
 
-    @test StepRangeLen(Int8(1), Int8(2), 3, 2) == Int8[-1, 1, 3]
-    @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
-    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
+    r = StepRangeLen(Int8(1), Int8(2), 3, 2)
+    @test r == Int8[-1, 1, 3]
+    @test eltype(r) === Int8
+    @test typeof(step(r)) === Int8
+end
+
+@testset "length(StepRange()) type stability" begin
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2225,4 +2417,121 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test first(r) === Ptr{Cvoid}(20)
     @test step(r) === -UInt(2)
     @test last(r) === Ptr{Cvoid}(10)
+end
+
+# test behavior of wrap-around and promotion of empty ranges (#35711)
+@test length(range(0, length=UInt(0))) === UInt(0)
+@test isempty(range(0, length=UInt(0)))
+@test length(range(typemax(Int), length=UInt(0))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0)))
+@test length(range(0, length=UInt(0), step=UInt(2))) == UInt(0)
+@test isempty(range(0, length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=2)) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=2))
+@test length(range(typemax(Int), length=0, step=UInt(2))) === 0
+@test isempty(range(typemax(Int), length=0, step=UInt(2)))
+
+@test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
+    end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end
+
+@testset "PR 49516" begin
+    struct PR49516 <: Signed
+        n::Int
+    end
+    PR49516(f::PR49516) = f
+    Base.:*(x::Integer, f::PR49516) = PR49516(*(x, f.n))
+    Base.:+(f1::PR49516, f2::PR49516) = PR49516(+(f1.n, f2.n))
+    Base.show(io::IO, f::PR49516) = print(io, "PR49516(", f.n, ")")
+
+    srl = StepRangeLen(PR49516(1), PR49516(2), 10)
+    @test sprint(show, srl) == "PR49516(1):PR49516(2):PR49516(19)"
+end
+
+@testset "Inline StepRange Construction #49270" begin
+    x = rand(Float32, 80)
+    a = rand(round(Int, length(x) / 2):length(x), 10^6)
+
+    function test(x, a)
+        c = zero(Float32)
+
+        @inbounds for j in a
+            for i in 1:8:j
+                c += x[i]
+            end
+        end
+
+        return c
+    end
+
+    llvm_ir(f, args) = sprint((io, args...) -> code_llvm(io, args...; debuginfo=:none), f, Base.typesof(args...))
+
+    ir = llvm_ir(test, (x, a))
+    @test !occursin("steprange_last", ir)
+    @test !occursin("_colon", ir)
+    @test !occursin("StepRange", ir)
+end
+
+# DimensionMismatch and LazyString
+function check_ranges(rx, ry)
+    if length(rx) != length(ry)
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+    end
+    rx, ry
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
+# TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "checkbounds overflow (#26623)" begin
+    # the reported issue:
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
+
+    # a case that using mul_with_overflow & add_with_overflow might get wrong:
+    @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
+end
+
+@testset "collect with specialized vcat" begin
+    struct OneToThree <: AbstractUnitRange{Int} end
+    Base.size(r::OneToThree) = (3,)
+    Base.first(r::OneToThree) = 1
+    Base.length(r::OneToThree) = 3
+    Base.last(r::OneToThree) = 3
+    function Base.getindex(r::OneToThree, i::Int)
+        checkbounds(r, i)
+        i
+    end
+    Base.vcat(r::OneToThree) = r
+    r = OneToThree()
+    a = Array(r)
+    @test a isa Vector{Int}
+    @test a == r
+    @test collect(r) isa Vector{Int}
+    @test collect(r) == r
+end
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+
+end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
 end

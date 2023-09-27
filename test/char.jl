@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "basic properties" begin
-
+    @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
+    @test typemax(Char) == reinterpret(Char, 0xffffffff)
     @test ndims(Char) == 0
     @test getindex('a', 1) == 'a'
     @test_throws BoundsError getindex('a', 2)
@@ -212,6 +213,35 @@ end
     end
 end
 
+# issue #50532
+@testset "invalid read(io, Char)" begin
+    # byte values with different numbers of leading bits
+    B = UInt8[
+        0x3f, 0x4d, 0x52, 0x63, 0x81, 0x83, 0x89, 0xb6,
+        0xc0, 0xc8, 0xd3, 0xe3, 0xea, 0xeb, 0xf0, 0xf2,
+        0xf4, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+    ]
+    f = tempname()
+    for b1 in B, b2 in B, t = 0:3
+        bytes = [b1, b2]
+        append!(bytes, rand(B, t))
+        s = String(bytes)
+        write(f, s)
+        @test s == read(f, String)
+        chars = collect(s)
+        ios = [IOBuffer(s), open(f), Base.Filesystem.open(f, 0)]
+        for io in ios
+            chars′ = Char[]
+            while !eof(io)
+                push!(chars′, read(io, Char))
+            end
+            @test chars == chars′
+            close(io)
+        end
+    end
+    rm(f)
+end
+
 @testset "overlong codes" begin
     function test_overlong(c::Char, n::Integer, rep::String)
         if isvalid(c)
@@ -248,6 +278,7 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
 @testset "abstractchar" begin
     @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+    @test convert(AbstractChar, 2.0) == Char(2)
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
@@ -255,6 +286,9 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
+    @test length(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end
@@ -301,4 +335,28 @@ end
     @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
     @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
     @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
+end
+
+@testset "malformed chars" begin
+    u1 = UInt32(0xc0) << 24
+    u2 = UInt32(0xc1) << 24
+    u3 = UInt32(0x0704) << 21
+    u4 = UInt32(0x0f08) << 20
+
+    overlong_uints = [u1, u2, u3, u4]
+    overlong_chars = reinterpret.(Char, overlong_uints)
+    @test all(Base.is_overlong_enc, overlong_uints)
+    @test all(Base.isoverlong, overlong_chars)
+    @test all(Base.ismalformed, overlong_chars)
+    @test repr("text/plain", overlong_chars[1]) ==
+        "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
+end
+
+@testset "More fallback tests" begin
+    @test length(ASCIIChar('x')) == 1
+    @test firstindex(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test hash(ASCIIChar('x'), UInt(10)) == hash('x', UInt(10))
+    @test Base.IteratorSize(Char) == Base.HasShape{0}()
+    @test convert(ASCIIChar, 1) == Char(1)
 end

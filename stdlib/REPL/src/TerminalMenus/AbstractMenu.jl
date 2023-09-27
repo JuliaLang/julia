@@ -131,7 +131,7 @@ end
 """
     header(m::AbstractMenu) -> String
 
-Returns a header string to be printed above the menu.
+Return a header string to be printed above the menu.
 Defaults to "".
 """
 header(m::AbstractMenu) = ""
@@ -192,7 +192,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
         REPL.Terminals.raw!(term, true)
         true
     catch err
-        suppress_output || @warn("TerminalMenus: Unable to enter raw mode: $err")
+        suppress_output || @warn "TerminalMenus: Unable to enter raw mode: " exception=(err, catch_backtrace())
         false
     end
     # hide the cursor
@@ -216,7 +216,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
                 m.pageoffset = 0
             elseif c == Int(END_KEY)
                 cursor[] = lastoption
-                m.pageoffset = lastoption - m.pagesize
+                m.pageoffset = max(0, lastoption - m.pagesize)
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor[]) && break
@@ -269,7 +269,7 @@ function move_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     elseif scroll_wrap(m)
         # wrap to bottom
         cursor = lastoption
-        m.pageoffset = lastoption - m.pagesize
+        m.pageoffset = max(0, lastoption - m.pagesize)
     end
     return cursor
 end
@@ -299,7 +299,7 @@ end
 
 function page_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
-    m.pageoffset = min(m.pageoffset, lastoption - m.pagesize)
+    m.pageoffset = max(0, min(m.pageoffset, lastoption - m.pagesize))
     return min(cursor + m.pagesize, lastoption)
 end
 
@@ -388,27 +388,27 @@ end
 scroll_wrap(m::ConfiguredMenu) = scroll_wrap(m.config)
 scroll_wrap(c::AbstractConfig) = scroll_wrap(c.config)
 scroll_wrap(c::Config) = c.scroll_wrap
-scroll_wrap(::AbstractMenu) = CONFIG[:scroll_wrap]
+scroll_wrap(::AbstractMenu) = CONFIG[:scroll_wrap]::Bool
 
 ctrl_c_interrupt(m::ConfiguredMenu) = ctrl_c_interrupt(m.config)
 ctrl_c_interrupt(c::AbstractConfig) = ctrl_c_interrupt(c.config)
 ctrl_c_interrupt(c::Config) = c.ctrl_c_interrupt
-ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]
+ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]::Bool
 
 up_arrow(m::ConfiguredMenu) = up_arrow(m.config)
 up_arrow(c::AbstractConfig) = up_arrow(c.config)
 up_arrow(c::Config) = c.up_arrow
-up_arrow(::AbstractMenu) = CONFIG[:up_arrow]
+up_arrow(::AbstractMenu) = CONFIG[:up_arrow]::Char
 
 down_arrow(m::ConfiguredMenu) = down_arrow(m.config)
 down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
-down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
+down_arrow(::AbstractMenu) = CONFIG[:down_arrow]::Char
 
 updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
 updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
 updown_arrow(c::Config) = c.updown_arrow
-updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]::Char
 
 printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)

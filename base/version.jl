@@ -8,18 +8,32 @@ const VInt = UInt32
 """
     VersionNumber
 
-Version number type which follow the specifications of
-[semantic versioning](https://semver.org/), composed of major, minor
+Version number type which follows the specifications of
+[semantic versioning (semver)](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations. See also [`@v_str`](@ref).
+alpha-numeric annotations.
+
+`VersionNumber` objects can be compared with all of the standard comparison
+operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+
+See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
+from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
+of Julia itself, and [Version Number Literals](@ref man-version-number-literals)
+in the manual.
 
 # Examples
 ```jldoctest
-julia> VersionNumber("1.2.3")
+julia> a = VersionNumber(1, 2, 3)
 v"1.2.3"
 
-julia> VersionNumber("2.0.1-rc1")
+julia> a >= v"1.2"
+true
+
+julia> b = VersionNumber("2.0.1-rc1")
 v"2.0.1-rc1"
+
+julia> b >= v"2.0.1"
+false
 ```
 """
 struct VersionNumber
@@ -66,6 +80,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -221,7 +236,7 @@ nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.
 """
     VERSION
 
-A `VersionNumber` object describing which version of Julia is in use. For details see
+A [`VersionNumber`](@ref) object describing which version of Julia is in use. See also
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
@@ -252,7 +267,7 @@ end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
-function banner(io::IO = stdout)
+function banner(io::IO = stdout; short = false)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)
@@ -274,7 +289,7 @@ function banner(io::IO = stdout)
 
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
-    if get(io, :color, false)
+    if get(io, :color, false)::Bool
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
@@ -283,27 +298,41 @@ function banner(io::IO = stdout)
         d3 = c[:bold] * c[:green]   # third dot
         d4 = c[:bold] * c[:magenta] # fourth dot
 
-        print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-          $(jl)| | | | | | |/ _` |$(tx)  |
-          $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-         $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
 
-        """)
+            """)
+        end
     else
-        print(io,"""
-                       _
-           _       _ _(_)_     |  Documentation: https://docs.julialang.org
-          (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-          | | | | | | |/ _` |  |
-          | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-         _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |
+        if short
+            print(io,"""
+              o  |  Version $(VERSION)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
 
-        """)
+            """)
+        end
     end
 end

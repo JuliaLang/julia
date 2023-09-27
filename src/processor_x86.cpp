@@ -71,6 +71,7 @@ enum class CPU : uint32_t {
     intel_corei7_icelake_client,
     intel_corei7_icelake_server,
     intel_corei7_tigerlake,
+    intel_corei7_alderlake,
     intel_corei7_sapphirerapids,
     intel_knights_landing,
     intel_knights_mill,
@@ -92,6 +93,7 @@ enum class CPU : uint32_t {
     amd_barcelona,
     amd_znver1,
     amd_znver2,
+    amd_znver3,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -136,6 +138,7 @@ static constexpr FeatureDep deps[] = {
     {vaes, aes},
     {vpclmulqdq, avx},
     {vpclmulqdq, pclmul},
+    {avxvnni, avx2},
     {avx512f, avx2},
     {avx512dq, avx512f},
     {avx512ifma, avx512f},
@@ -151,6 +154,9 @@ static constexpr FeatureDep deps[] = {
     {avx512vnni, avx512f},
     {avx512vp2intersect, avx512f},
     {avx512vpopcntdq, avx512f},
+    {avx512fp16, avx512bw},
+    {avx512fp16, avx512dq},
+    {avx512fp16, avx512vl},
     {amx_int8, amx_tile},
     {amx_bf16, amx_tile},
     {sse4a, sse3},
@@ -202,9 +208,11 @@ constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx5
 constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
+constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
+                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
 constexpr auto sapphirerapids = icelake_server |
-    get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
-                      ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
+    get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, avx512fp16, serialize, cldemote, waitpkg,
+                      avxvnni, uintr, ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
 
 constexpr auto k8_sse3 = get_feature_masks(sse3, cx16);
 constexpr auto amdfam10 = k8_sse3 | get_feature_masks(sse4a, lzcnt, popcnt, sahf);
@@ -214,14 +222,18 @@ constexpr auto btver2 = btver1 | get_feature_masks(sse41, sse42, avx, aes, pclmu
                                                    movbe, xsave, xsaveopt);
 
 constexpr auto bdver1 = amdfam10 | get_feature_masks(xop, fma4, avx, ssse3, sse41, sse42, aes,
-                                                     prfchw, pclmul, xsave, lwp);
+                                                     prfchw, pclmul, xsave);
 constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
 constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);
 
+// technically xsaves is part of znver1, znver2, and znver3
+// Disabled due to Erratum 1386
+// See: https://github.com/JuliaLang/julia/issues/50102
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
-                                                    rdseed, sha, sse4a, xsavec, xsaves);
+                                                    rdseed, sha, sse4a, xsavec);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
+constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 
 }
 
@@ -255,6 +267,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
      Feature::icelake_server},
     {"tigerlake", CPU::intel_corei7_tigerlake, CPU::intel_corei7_icelake_client, 100000,
      Feature::tigerlake},
+    {"alderlake", CPU::intel_corei7_alderlake, CPU::intel_corei7_skylake, 120000,
+     Feature::alderlake},
     {"sapphirerapids", CPU::intel_corei7_sapphirerapids, CPU::intel_corei7_icelake_server, 120000,
      Feature::sapphirerapids},
 
@@ -280,6 +294,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
+    {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -411,6 +426,10 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x8c:
         case 0x8d:
             return CPU::intel_corei7_tigerlake;
+            //Alder Lake
+        case 0x97:
+        case 0x9a:
+            return CPU::intel_corei7_alderlake;
 
             // Sapphire Rapids
         case 0x8f:
@@ -543,6 +562,10 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
         if (model >= 0x30)
             return CPU::amd_znver2;
         return CPU::amd_znver1;
+    case 0x19:  // AMD Family 19h
+        if (model <= 0x0f || model == 0x21)
+            return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
+        return CPU::amd_znver3; // fallback
     }
 }
 
@@ -817,7 +840,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
     return 16;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -845,7 +868,9 @@ static uint32_t sysimg_init_cb(const void *id)
                  "virtualized environment.  Please read "
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if (match.best_idx == (uint32_t)-1)
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -858,6 +883,19 @@ static uint32_t sysimg_init_cb(const void *id)
         }
     }
     jit_targets.push_back(std::move(target));
+    return match.best_idx;
+}
+
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
@@ -877,6 +915,8 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
         auto &features0 = jit_targets[t.base].en.features;
@@ -898,10 +938,10 @@ static void ensure_jit_target(bool imaging)
                                                   Feature::avx512pf, Feature::avx512er,
                                                   Feature::avx512cd, Feature::avx512bw,
                                                   Feature::avx512vl, Feature::avx512vbmi,
-                                                  Feature::avx512vpopcntdq,
+                                                  Feature::avx512vpopcntdq, Feature::avxvnni,
                                                   Feature::avx512vbmi2, Feature::avx512vnni,
                                                   Feature::avx512bitalg, Feature::avx512bf16,
-                                                  Feature::avx512vp2intersect};
+                                                  Feature::avx512vp2intersect, Feature::avx512fp16};
         for (auto fe: clone_math) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
                 t.en.flags |= JL_TARGET_CLONE_MATH;
@@ -911,6 +951,13 @@ static void ensure_jit_target(bool imaging)
         for (auto fe: clone_simd) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
                 t.en.flags |= JL_TARGET_CLONE_SIMD;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_fp16[] = {Feature::avx512fp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
                 break;
             }
         }
@@ -987,16 +1034,41 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
+{
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 {
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
+jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

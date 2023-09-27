@@ -109,10 +109,10 @@
 
 #struct LineInfoNode
 #    module::Module
-#    method::Symbol
+#    method::Any (Union{Symbol, Method, MethodInstance})
 #    file::Symbol
-#    line::Int
-#    inlined_at::Int
+#    line::Int32
+#    inlined_at::Int32
 #end
 
 #struct GotoNode
@@ -163,7 +163,7 @@
 #    result::Any
 #    exception::Any
 #    backtrace::Any
-#    logstate::Any
+#    scope::Any
 #    code::Any
 #end
 
@@ -193,6 +193,8 @@ export
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
     nfields, throw, tuple, ===, isdefined, eval,
+    # access to globals
+    getglobal, setglobal!,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
@@ -201,7 +203,7 @@ export
     # constants
     nothing, Main
 
-const getproperty = getfield
+const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
 
 abstract type Number end
@@ -222,7 +224,7 @@ primitive type Char <: AbstractChar 32 end
 primitive type Int8    <: Signed   8 end
 #primitive type UInt8   <: Unsigned 8 end
 primitive type Int16   <: Signed   16 end
-primitive type UInt16  <: Unsigned 16 end
+#primitive type UInt16  <: Unsigned 16 end
 #primitive type Int32   <: Signed   32 end
 #primitive type UInt32  <: Unsigned 32 end
 #primitive type Int64   <: Signed   64 end
@@ -243,22 +245,49 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
-
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
 
-TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    return _is_internal(__module__) && _expr(:meta, _expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
+end
 
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+# n.b. the effects and model of these is refined in inference abstractinterpretation.jl
+TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
+TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
+TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
+UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
-const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
+# simple convert for use by constructors of types in Core
+# note that there is no actual conversion defined here,
+# so the methods and ccall's in Core aren't permitted to use convert
+convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{T}, x::T) where {T} = x
+cconvert(::Type{T}, x) where {T} = convert(T, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
-# let the compiler assume that calling Union{} as a constructor does not need
-# to be considered ever (which comes up often as Type{<:T})
-Union{}(a...) = throw(MethodError(Union{}, a))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
+
+# Let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T} inference, and
+# occasionally in user code from eltype).
+Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
+kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -313,9 +342,8 @@ TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
     TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
-    T  # Type
-    val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
+    args
+    InexactError(f::Symbol, @nospecialize(args...)) = (@noinline; new(f, args))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -367,10 +395,6 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
-
-kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
-
 mutable struct Box
     contents::Any
     Box(@nospecialize(x)) = new(x)
@@ -394,56 +418,55 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
-_new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
-_new(:GotoNode, :Int)
-_new(:NewvarNode, :SlotNumber)
-_new(:QuoteNode, :Any)
-_new(:SSAValue, :Int)
-_new(:Argument, :Int)
-_new(:ReturnNode, :Any)
-eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
-eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
-eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
-eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
-LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
-eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
-eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
-eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
-eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
-eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
-eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
-                          @nospecialize(inferred), const_flags::Int32,
-                          min_world::UInt, max_world::UInt) =
-                ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
-                    mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
-eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
-eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
-eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
-eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
-eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
-    $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
+eval(Core, quote
+    GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
+    NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
+    QuoteNode(@nospecialize value) = $(Expr(:new, :QuoteNode, :value))
+    SSAValue(id::Int) = $(Expr(:new, :SSAValue, :id))
+    Argument(n::Int) = $(Expr(:new, :Argument, :n))
+    ReturnNode(@nospecialize val) = $(Expr(:new, :ReturnNode, :val))
+    ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
+    GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
+    LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
+    function LineNumberNode(l::Int, @nospecialize(f))
+        isa(f, String) && (f = Symbol(f))
+        return $(Expr(:new, :LineNumberNode, :l, :f))
+    end
+    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
+        $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
+    SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
+    PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
+    PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
+    PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
+    UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
+    UpsilonNode() = $(Expr(:new, :UpsilonNode))
+    Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
+    # NOTE the main constructor is defined within `Core.Compiler`
+    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
+    MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
+end)
 
+function CodeInstance(
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    relocatability::UInt8)
+    return ccall(:jl_new_codeinst, Ref{CodeInstance},
+        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, argescapes,
+        relocatability)
+end
+GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
 
-# simple convert for use by constructors of types in Core
-# note that there is no actual conversion defined here,
-# so the methods and ccall's in Core aren't permitted to use convert
-convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
-cconvert(::Type{T}, x) where {T} = convert(T, x)
-unsafe_convert(::Type{T}, x::T) where {T} = x
-
 const NTuple{N,T} = Tuple{Vararg{T,N}}
-
 
 ## primitive Array constructors
 struct UndefInitializer end
@@ -470,7 +493,6 @@ Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
-
 (Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
@@ -479,39 +501,44 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-eval(Core, :(function Symbol(s::String)
-    $(Expr(:meta, :pure))
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
-                 sizeof(s))
-end))
+
+## Helper for proper GC rooting without unsafe_convert
+eval(Core, quote
+    _Symbol(ptr::Ptr{UInt8}, sz::Int, root::Any) = $(Expr(:foreigncall, QuoteNode(:jl_symbol_n),
+        Ref{Symbol}, svec(Ptr{UInt8}, Int), 0, QuoteNode(:ccall), :ptr, :sz, :root))
+end)
+
+function Symbol(s::String)
+    @_foldable_meta
+    @noinline
+    return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
+end
 function Symbol(a::Array{UInt8,1})
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-                 Intrinsics.arraylen(a))
+    @noinline
+    return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
+
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-end
+end # module IR
 
 # docsystem basics
-const unescape = Symbol("hygienic-scope")
 macro doc(x...)
     docex = atdoc(__source__, __module__, x...)
     isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
+    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
 end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -563,28 +590,25 @@ println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
-    argnames::Array{Any,1}
-    spnames::Union{Nothing, Array{Any,1}}
-    line::Int
-    file::Symbol
-    expand_early::Bool
+    argnames::SimpleVector
+    spnames::SimpleVector
 end
 
-# invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
+# invoke and wrap the results of @generated expression
+function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+    # args is (spvals..., argtypes...)
     body = g.gen(args...)
-    if body isa CodeInfo
-        return body
-    end
-    lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(g.line, g.file),
-                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         source,
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    if spnames === nothing
+    if spnames === svec()
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, spnames...)
@@ -593,7 +617,8 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
+             $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
 
 using .Intrinsics: sle_int, add_int
 
@@ -604,8 +629,6 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
-
 function is_top_bit_set(x)
     @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
@@ -615,6 +638,9 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     @inline
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
+
+#TODO delete this function (but see #48097):
+throw_inexacterror(args...) = throw(InexactError(args...))
 
 function check_top_bit(::Type{To}, x) where {To}
     @inline
@@ -792,7 +818,7 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #
-#    Core._parse(text, filename, offset, options)
+#    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
@@ -802,8 +828,10 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
 #
-# The internal jl_parse which will call into Core._parse if not `nothing`.
+# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
+
+_setparser!(parser) = setglobal!(Core, :_parse, parser)
 
 # support for deprecated uses of internal _apply function
 _apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
@@ -816,8 +844,15 @@ struct Pair{A, B}
     # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
     # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
     Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
-    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
-    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @inline
+        return new(a::A, b::B)
+    end
+end
+
+function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

@@ -90,7 +90,12 @@ begin
     @test f((1,2,3), A) == 3
     @test f((1,2), A) == 2
     @test f((), reshape([1])) == 1
+
+    oldstderr = stderr
+    newstderr = redirect_stderr() # redirect stderr to avoid method definition overwrite warning
     f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
+    redirect_stderr(oldstderr)
+
     @test f((1,2), A) == 4
     @test f((1,2,3), A) == 3
 end
@@ -209,7 +214,7 @@ f27361(::M) where M <: Tuple{3} = nothing
 @test length(methods(f27361)) == 2
 
 # specificity of TypeofBottom
-@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{DataType})
+@test !args_morespecific(Tuple{DataType}, Tuple{Core.TypeofBottom})
 @test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{Type{<:Tuple}})
 
 @test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
@@ -306,3 +311,8 @@ let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
     @test  args_morespecific(B, C)
     @test  args_morespecific(A, C)
 end
+
+@test args_morespecific(Tuple{Type{Union{}}, Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})

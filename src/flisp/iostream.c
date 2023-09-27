@@ -203,6 +203,15 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return size_wrap(fl_ctx, s->lineno);
 }
 
+value_t fl_iosetlineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.set-lineno!", nargs, 2);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.set-lineno!");
+    size_t new_lineno = tosize(fl_ctx, args[1], "io.set-lineno!");
+    s->lineno = new_lineno;
+    return args[1];
+}
+
 value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "input-port-column", nargs, 1);
@@ -345,7 +354,7 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_setbuf(&dest, data, 80, 0);
     char delim = get_delim_arg(fl_ctx, args[1], "io.readuntil");
     ios_t *src = toiostream(fl_ctx, args[0], "io.readuntil");
-    size_t n = ios_copyuntil(&dest, src, delim);
+    size_t n = ios_copyuntil(&dest, src, delim, 1);
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
@@ -367,7 +376,7 @@ value_t fl_iocopyuntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_t *dest = toiostream(fl_ctx, args[0], "io.copyuntil");
     ios_t *src = toiostream(fl_ctx, args[1], "io.copyuntil");
     char delim = get_delim_arg(fl_ctx, args[2], "io.copyuntil");
-    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim));
+    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim, 1));
 }
 
 value_t fl_iocopy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -439,6 +448,7 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.tostring!", fl_iotostring },
     { "input-port-line", fl_iolineno },
     { "input-port-column", fl_iocolno },
+    { "io.set-lineno!", fl_iosetlineno },
 
     { NULL, NULL }
 };

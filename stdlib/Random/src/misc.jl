@@ -11,7 +11,7 @@ function rand!(rng::AbstractRNG, B::BitArray, ::SamplerType{Bool})
 end
 
 """
-    bitrand([rng=GLOBAL_RNG], [dims...])
+    bitrand([rng=default_rng()], [dims...])
 
 Generate a `BitArray` of random boolean values.
 
@@ -43,7 +43,7 @@ bitrand(dims::Integer...) = rand!(BitArray(undef, convert(Dims, dims)))
 ## randstring (often useful for temporary filenames/dirnames)
 
 """
-    randstring([rng=GLOBAL_RNG], [chars], [len=8])
+    randstring([rng=default_rng()], [chars], [len=8])
 
 Create a random string of length `len`, consisting of characters from
 `chars`, which defaults to the set of upper- and lower-case letters
@@ -71,12 +71,20 @@ function randstring end
 
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
+
     function randstring(r::AbstractRNG, chars=b, n::Integer=8)
         T = eltype(chars)
-        v = T === UInt8 ? Base.StringVector(n) : Vector{T}(undef, n)
-        rand!(r, v, chars)
-        return String(v)
+        if T === UInt8
+            str = Base._string_n(n)
+            GC.@preserve str rand!(r, UnsafeView(pointer(str), n), chars)
+            return str
+        else
+            v = Vector{T}(undef, n)
+            rand!(r, v, chars)
+            return String(v)
+        end
     end
+
     randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
     randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, n)
     randstring(n::Integer) = randstring(default_rng(), b, n)
@@ -126,7 +134,7 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
 end
 
 """
-    randsubseq!([rng=GLOBAL_RNG,] S, A, p)
+    randsubseq!([rng=default_rng(),] S, A, p)
 
 Like [`randsubseq`](@ref), but the results are stored in `S`
 (which is resized as needed).
@@ -154,7 +162,7 @@ randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
 
 """
-    randsubseq([rng=GLOBAL_RNG,] A, p) -> Vector
+    randsubseq([rng=default_rng(),] A, p) -> Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
@@ -182,7 +190,7 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 ## shuffle & shuffle!
 
 """
-    shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle!([rng=default_rng(),] v::AbstractArray)
 
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
@@ -193,34 +201,35 @@ julia> rng = MersenneTwister(1234);
 
 julia> shuffle!(rng, Vector(1:16))
 16-element Vector{Int64}:
-  2
- 15
-  5
- 14
+ 16
   1
-  9
+ 14
+ 12
+  5
  10
+  4
+ 15
+ 13
+  3
+  7
+  9
   6
  11
-  3
- 16
-  7
-  4
- 12
   8
- 13
+  2
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
+    # keep it consistent with `randperm!` and `randcycle!` if possible
     require_one_based_indexing(a)
     n = length(a)
-    n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
-    mask = nextpow(2, n) - 1
-    for i = n:-1:2
-        (mask >> 1) == i && (mask >>= 1)
+    n == 0 && return a
+    mask = 3
+    @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i, mask))
         a[i], a[j] = a[j], a[i]
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
@@ -228,7 +237,7 @@ end
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
 
 """
-    shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle([rng=default_rng(),] v::AbstractArray)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
@@ -241,26 +250,27 @@ julia> rng = MersenneTwister(1234);
 
 julia> shuffle(rng, Vector(1:10))
 10-element Vector{Int64}:
-  6
-  1
- 10
   2
-  3
+  1
+  7
   9
   5
-  7
+ 10
   4
   8
+  6
+  3
 ```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractArray) = shuffle(default_rng(), a)
 
+shuffle(r::AbstractRNG, a::Base.OneTo) = randperm(r, last(a))
 
 ## randperm & randperm!
 
 """
-    randperm([rng=GLOBAL_RNG,] n::Integer)
+    randperm([rng=default_rng(),] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng`
 argument specifies a random number generator (see [Random
@@ -288,7 +298,7 @@ randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(und
 randperm(n::Integer) = randperm(default_rng(), n)
 
 """
-    randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+    randperm!([rng=default_rng(),] A::Array{<:Integer})
 
 Construct in `A` a random permutation of length `length(A)`. The
 optional `rng` argument specifies a random number generator (see
@@ -306,6 +316,7 @@ julia> randperm!(MersenneTwister(1234), Vector{Int}(undef, 4))
 ```
 """
 function randperm!(r::AbstractRNG, a::Array{<:Integer})
+    # keep it consistent with `shuffle!` and `randcycle!` if possible
     n = length(a)
     @assert n <= Int64(2)^52
     n == 0 && return a
@@ -317,7 +328,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
             a[i] = a[j]
         end
         a[j] = i
-        i == 1+mask && (mask = 2mask + 1)
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
@@ -328,15 +339,21 @@ randperm!(a::Array{<:Integer}) = randperm!(default_rng(), a)
 ## randcycle & randcycle!
 
 """
-    randcycle([rng=GLOBAL_RNG,] n::Integer)
+    randcycle([rng=default_rng(),] n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
 
+Here, a "cyclic permutation" means that all of the elements lie within
+a single cycle.  If `n > 0`, there are ``(n-1)!`` possible cyclic permutations,
+which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty vector.
+
+[`randcycle!`](@ref) is an in-place variant of this function.
+
 !!! compat "Julia 1.1"
-    In Julia 1.1 `randcycle` returns a vector `v` with `eltype(v) == typeof(n)`
-    while in Julia 1.0 `eltype(v) == Int`.
+    In Julia 1.1 and above, `randcycle` returns a vector `v` with
+    `eltype(v) == typeof(n)` while in Julia 1.0 `eltype(v) == Int`.
 
 # Examples
 ```jldoctest
@@ -354,11 +371,17 @@ randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(u
 randcycle(n::Integer) = randcycle(default_rng(), n)
 
 """
-    randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+    randcycle!([rng=default_rng(),] A::Array{<:Integer})
 
-Construct in `A` a random cyclic permutation of length `length(A)`.
+Construct in `A` a random cyclic permutation of length `n = length(A)`.
 The optional `rng` argument specifies a random number generator, see
 [Random Numbers](@ref).
+
+Here, a "cyclic permutation" means that all of the elements lie within a single cycle.
+If `A` is nonempty (`n > 0`), there are ``(n-1)!`` possible cyclic permutations,
+which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
+
+[`randcycle`](@ref) is a variant of this function that allocates a new vector.
 
 # Examples
 ```jldoctest
@@ -373,16 +396,18 @@ julia> randcycle!(MersenneTwister(1234), Vector{Int}(undef, 6))
 ```
 """
 function randcycle!(r::AbstractRNG, a::Array{<:Integer})
+    # keep it consistent with `shuffle!` and `randperm!` if possible
     n = length(a)
-    n == 0 && return a
     @assert n <= Int64(2)^52
+    n == 0 && return a
     a[1] = 1
     mask = 3
+    # Sattolo's algorithm:
     @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i-1, mask))
         a[i] = a[j]
         a[j] = i
-        i == 1+mask && (mask = 2mask + 1)
+        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end

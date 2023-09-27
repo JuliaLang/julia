@@ -21,8 +21,12 @@ own licenses:
 
 - [LIBUNWIND](https://github.com/libunwind/libunwind/blob/master/LICENSE) [MIT]
 - [LIBUV](https://github.com/JuliaLang/libuv/blob/julia-uv2-1.39.0/LICENSE) [MIT]
-- [LLVM](https://releases.llvm.org/6.0.0/LICENSE.TXT) [UIUC]
+- [LLVM](https://releases.llvm.org/12.0.1/LICENSE.TXT) [APACHE 2.0 with LLVM Exception]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
+
+and optionally:
+
+- [ITTAPI](https://github.com/intel/ittapi/blob/master/LICENSES/BSD-3-Clause.txt) [BSD-3]
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 

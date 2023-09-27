@@ -6,7 +6,7 @@ module Order
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex,
+    AbstractVector, @propagate_inbounds, isless, identity, getindex, reverse,
     +, -, !, &, <, |
 
 ## notions of element ordering ##
@@ -46,6 +46,14 @@ ReverseOrdering(rev::ReverseOrdering) = rev.fwd
 ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
 ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 
+"""
+    reverse(o::Base.Ordering)
+
+reverses ordering specified by `o`.
+
+"""
+reverse(o::Ordering) = ReverseOrdering(o)
+
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 """
@@ -79,8 +87,8 @@ By(by) = By(by, Forward)
 """
     Lt(lt)
 
-`Ordering` which calls `lt(a, b)` to compare elements. `lt` should
-obey the same rules as implementations of [`isless`](@ref).
+`Ordering` that calls `lt(a, b)` to compare elements. `lt` must
+obey the same rules as the `lt` parameter of [`sort!`](@ref).
 """
 struct Lt{T} <: Ordering
     lt::T
@@ -114,7 +122,7 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 @propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
-    lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
+    (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
 end
 
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
@@ -138,8 +146,8 @@ Construct an [`Ordering`](@ref) object from the same arguments used by
 Elements are first transformed by the function `by` (which may be
 [`identity`](@ref)) and are then compared according to either the function `lt`
 or an existing ordering `order`. `lt` should be [`isless`](@ref) or a function
-which obeys similar rules. Finally, the resulting order is reversed if
-`rev=true`.
+that obeys the same rules as the `lt` parameter of [`sort!`](@ref). Finally,
+the resulting order is reversed if `rev=true`.
 
 Passing an `lt` other than `isless` along with an `order` other than
 [`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,

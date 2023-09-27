@@ -81,9 +81,9 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_relaxed(&tab[empty_slot], key);
+            jl_atomic_store_release(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            jl_atomic_store_relaxed(&tab[empty_slot + 1], val);
+            jl_atomic_store_release(&tab[empty_slot + 1], val);
             jl_gc_wb(a, val);
             return 1;
         }
@@ -157,6 +157,12 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL
 {
     _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
+}
+
+jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
+{
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
+    return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp - 1);
 }
 
 JL_DLLEXPORT

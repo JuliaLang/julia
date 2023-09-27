@@ -12,11 +12,11 @@ let
             if meta isa Array
                 for meta in meta
                     get(meta, "lazy", false) && continue
-                    ensure_artifact_installed(name, meta, toml; platform=unused)
+                    ensure_artifact_installed(name, meta, toml; platform=unused, io = devnull)
                 end
             else; meta::Dict
                 get(meta, "lazy", false) && continue
-                ensure_artifact_installed(name, meta, toml; platform=unused)
+                ensure_artifact_installed(name, meta, toml; platform=unused, io = devnull)
             end
         end
     end

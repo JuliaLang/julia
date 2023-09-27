@@ -10,7 +10,7 @@
 ## randn
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
@@ -19,6 +19,8 @@ The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
+
+See also [`randn!`](@ref) to act in-place.
 
 # Examples
 ```jldoctest
@@ -90,10 +92,19 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
     Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 
+### fallback randn for float types defining rand:
+function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
+    # Marsaglia polar variant of Box–Muller transform:
+    while true
+        x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
+        0 < (s = x^2 + y^2) < 1 && return x * sqrt(-2log(s)/s)
+    end
+end
+
 ## randexp
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the
 exponential distribution with scale 1.
@@ -137,11 +148,14 @@ end
     end
 end
 
+### fallback randexp for float types defining rand:
+randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
+    -log1p(-rand(rng, T))
 
 ## arrays & other scalar methods
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -162,7 +176,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution
 (with scale 1).
