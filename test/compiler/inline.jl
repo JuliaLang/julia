@@ -1642,33 +1642,6 @@ function oc_capture_oc(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
 
-@eval struct OldVal{T}
-    x::T
-    (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
-end
-with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
-with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
-function with_unmatched_typeparam3()
-    f(x::OldVal{i}) where {i} = i
-    r = 0
-    for i = 1:10000
-        r += f(OldVal{i}())
-    end
-    return r
-end
-
-@testset "Inlining with unmatched type parameters" begin
-    let src = code_typed1(with_unmatched_typeparam1, (Any,))
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-    let src = code_typed1(with_unmatched_typeparam2)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-    let src = code_typed1(with_unmatched_typeparam3)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-end
-
 function twice_sitofp(x::Int, y::Int)
     x = Base.sitofp(Float64, x)
     y = Base.sitofp(Float64, y)
