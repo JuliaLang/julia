@@ -79,6 +79,9 @@
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
+#ifdef USE_TAPIR
+#include <llvm/Transforms/Tapir/TapirToTarget.h>
+#endif
 
 #ifdef _COMPILER_GCC_
 #pragma GCC diagnostic pop
@@ -519,6 +522,11 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         // Needed **before** LateLowerGCFrame on LLVM < 12
         // due to bug in `CreateAlignmentAssumption`.
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
+#ifdef USE_TAPIR
+        MPM.addPass(TapirToTargetPass());
+        MPM.addPass(AlwaysInlinerPass(
+            /*InsertLifetimeIntrinsics*/false));
+#endif
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
@@ -694,6 +702,21 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         return PIC;
     }
 
+    // TODO: addTargetPasses for reflection and AOT
+    auto createTLII(llvm::Triple TargetTriple) {
+        TargetLibraryInfoImpl *TLII = new TargetLibraryInfoImpl(TargetTriple);
+        // We could add VecLib here
+#ifdef USE_TAPIR
+        // TapirTargetID::Lambda
+        // TapirTargetID::Serial
+        TLII->setTapirTarget(TapirTargetID::Serial);
+        // TLII->setTapirTargetOptions(
+        //     std::make_unique<OpenCilkABIOptions>(CodeGenOpts.OpenCilkABIBitcodeFile));
+        // TLII->addTapirTargetLibraryFunctions();
+#endif
+        return std::unique_ptr<TargetLibraryInfoImpl>(TLII);
+    }
+
     FunctionAnalysisManager createFAM(OptimizationLevel O, TargetMachine &TM) JL_NOTSAFEPOINT {
 
         FunctionAnalysisManager FAM;
@@ -710,7 +733,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         });
         // Register our TargetLibraryInfoImpl.
         FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
+        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(*createTLII(TM.getTargetTriple())); });
         return FAM;
     }
 
