@@ -80,7 +80,10 @@
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
 #ifdef USE_TAPIR
-#include <llvm/Transforms/Tapir/TapirToTarget.h>
+#include "llvm/Transforms/Tapir/LoopSpawningTI.h"
+#include "llvm/Transforms/Tapir/LoopStripMinePass.h"
+#include "llvm/Transforms/Tapir/SerializeSmallTasks.h"
+#include "llvm/Transforms/Tapir/TapirToTarget.h"
 #endif
 
 #ifdef _COMPILER_GCC_
@@ -587,6 +590,9 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         }
         FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+#ifdef USE_TAPIR
+        MPM.addPass(LoopSpawningPass());
+#endif
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
     buildCleanupPipeline(MPM, PB, O, options);
