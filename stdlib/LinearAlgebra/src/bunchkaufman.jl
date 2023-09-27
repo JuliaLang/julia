@@ -6,7 +6,7 @@
 
 ##----------- Type utilities for generic Bunch-Kaufman implementation ------------
 # Generic real type. Any real number type should able to approximate
-# real numbers, and thus be closed under arithmetic operations. 
+# real numbers, and thus be closed under arithmetic operations.
 # Therefore so Int, Complex{Int}, etc. are excluded.
 ClosedReal = T where T <: Union{AbstractFloat, Rational}
 # Similarly, we also use a closed scalar type
@@ -246,7 +246,7 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, 
     return p
 end
 
-function getproperty(B::BunchKaufman{TS}, 
+function getproperty(B::BunchKaufman{TS},
     d::Symbol) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     n = size(B, 1)
     if d === :p
@@ -255,19 +255,19 @@ function getproperty(B::BunchKaufman{TS},
         return Matrix{TS}(I, n, n)[:,invperm(B.p)]
     elseif d === :L || d === :U || d === :D
         if d === :D
-            _, od, md = generic_syconv!(getfield(B, :uplo), getfield(B, :LD), 
+            _, od, md = generic_syconv!(getfield(B, :uplo), getfield(B, :LD),
                 getfield(B, :ipiv), B.rook, false)
         elseif typeof(B) <: BunchKaufman{T,<:StridedMatrix} where {T<:BlasFloat}
             # We use LAPACK whenever we can
             if getfield(B, :rook)
-                LUD, _ = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', 
+                LUD, _ = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C',
                     copy(getfield(B, :LD)), getfield(B, :ipiv))
             else
                 LUD, _ = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)),
                     getfield(B, :ipiv))
             end
         else
-            LUD, _ = generic_syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), 
+            LUD, _ = generic_syconv!(getfield(B, :uplo), copy(getfield(B, :LD)),
                 getfield(B, :ipiv), B.rook)
         end
         if d === :D
@@ -419,8 +419,8 @@ end
 
 export inertia
 
-function arg_illegal(fun_name::AbstractString, 
-    info::Integer, 
+function arg_illegal(fun_name::AbstractString,
+    info::Integer,
     waer::AbstractChar)
     if waer == 'W'
         @warn " ** On entry to '$(fun_name)' parameter number " *
@@ -445,25 +445,25 @@ end
 """
 generic_adr1!(uplo, alpha, x, y, A, syhe) -> nothing
 
-`generic_adr1!` performs the following adjoint (symmetric or Hermitian) 
+`generic_adr1!` performs the following adjoint (symmetric or Hermitian)
 rank 1 operation
 
 `A[1:K,1:L] = alpha*x*y' + A[1:K,1:L]`
 
-in-place, where `alpha` is a scalar, `x` is a K element vector, `y` 
+in-place, where `alpha` is a scalar, `x` is a K element vector, `y`
 is an L element vector and `A` is an `NxM` matrix. Note that `y'` can
-denote either the transpose, i.e. `transpose(y)` or the conjugate 
+denote either the transpose, i.e. `transpose(y)` or the conjugate
 transpose , i.e. `adjoint(y)`.
 
 `uplo` is a character, either `'U'`, `'L'` or `'F'`, indicating whether
-the matrix is stored in the upper triangular part (`uplo=='U'`), the 
-lower triangular part (`uplo=='L'`), or the full storage space is used 
-(`uplo=='F'`). If `uplo!='F'` then only the corresponding triangular 
+the matrix is stored in the upper triangular part (`uplo=='U'`), the
+lower triangular part (`uplo=='L'`), or the full storage space is used
+(`uplo=='F'`). If `uplo!='F'` then only the corresponding triangular
 part is updated. The values `'U'` or `'L'` can onlt be used when A is
 square (`N==M`).
 
-`syhe` is a character, either `'S'` or `'H'`, indicating whether the 
-symmetric adjoint (`syhe=='S'`, and `y'==tranpose(y)`) or the hermitian 
+`syhe` is a character, either `'S'` or `'H'`, indicating whether the
+symmetric adjoint (`syhe=='S'`, and `y'==tranpose(y)`) or the hermitian
 adjoint (`syhe=='H'`, and `y'==adjoint(y)`) must be used.
 """
 function generic_adr1!(uplo::AbstractChar,
@@ -499,7 +499,7 @@ function generic_adr1!(uplo::AbstractChar,
     adj_op = syhe == 'S' ? identity : conj
 
     # Define loop range function according to the type of storage
-    # TODO: can we adjust the range without anonymous functions, 
+    # TODO: can we adjust the range without anonymous functions,
     # but without having to write the same code thrice?
     i_range = uplo == 'F' ? _ -> (1:K) : uplo == 'U' ? j -> (1:min(j,K)) : j -> (j:K)
 
@@ -523,11 +523,11 @@ generic_mvpv!(trans, alpha, A, x, beta, y) -> nothing
 
 `y[1:K] = alpha*A'*x[1:L] + beta*y[1:K]`
 
-in-place, where `alpha` and `beta` are scalars, `x` is a vector with at 
-least L elements, `y` is a vector with at least K elements, and `A` is 
-an `NxM` matrix. `A'` can denote the transpose, i.e. `transpose(A)` or 
-the conjugate transpose , i.e. `adjoint(A)`, and then `M==K && N==L`. 
-`A'` can also denote no adjoining at all, i.e. `A'==A`, and then 
+in-place, where `alpha` and `beta` are scalars, `x` is a vector with at
+least L elements, `y` is a vector with at least K elements, and `A` is
+an `NxM` matrix. `A'` can denote the transpose, i.e. `transpose(A)` or
+the conjugate transpose , i.e. `adjoint(A)`, and then `M==K && N==L`.
+`A'` can also denote no adjoining at all, i.e. `A'==A`, and then
 `N==K && M==L`.
 
 `trans` is a character, either `'T'`, `'C'` or `'N'`, indicating whether
@@ -567,9 +567,9 @@ function generic_mvpv!(trans::AbstractChar,
     #   accessed sequentially with one pass through A.
     #   First form  y := beta*y.
     @inbounds begin
-        if beta != 1 
+        if beta != 1
             if beta == 0
-                # Way less allocations and way faster for BigFloat. 
+                # Way less allocations and way faster for BigFloat.
                 # For Float64 there is some (acceptable IMO) performance loss.
                 y[1:K] .= 0
             else
@@ -610,19 +610,19 @@ end
 bk_rowcol_swap!(A, k, kp, kstep, upper, herm) -> did_swap::Bool
 
 Performs the row and column interchange of the Bunch-Kaufman factorization.
-If `upper==true` then the rows and columns `kp` of `A[1:k,1:k]` are 
-interchanged with either rows and columns `k` or `k-1` of `A[1:k,1:k]`, 
-depending on whether `kstep==1` or `kstep==2`, respectively. If 
-`upper==false` then the rows and columns `kp-k+1` of `A[k:N,k:N]` are 
-interchanged with either rows and columns `1` or `2` of `A[k:N,k:N]`, 
+If `upper==true` then the rows and columns `kp` of `A[1:k,1:k]` are
+interchanged with either rows and columns `k` or `k-1` of `A[1:k,1:k]`,
+depending on whether `kstep==1` or `kstep==2`, respectively. If
+`upper==false` then the rows and columns `kp-k+1` of `A[k:N,k:N]` are
+interchanged with either rows and columns `1` or `2` of `A[k:N,k:N]`,
 depending on whether `kstep==1` or `kstep==2`, respectively. `herm=true`
 then it is assumed that `A` is Hermitian, and conjugation is applied to
-the appropriate entries of the interchanged rows and columns. If 
+the appropriate entries of the interchanged rows and columns. If
 `herm=false` no conjugation is performed.
 
-This is an internal helper function for the main Bunch-Kaufman 
+This is an internal helper function for the main Bunch-Kaufman
 factorization function, `generic_bunchkaufman!`. As such, validity of the
-input values is not verified. 
+input values is not verified.
 """
 function bk_rowcol_swap!(
     A::AbstractMatrix{TS},
@@ -658,7 +658,7 @@ function bk_rowcol_swap!(
                 # Force diagonal entry to be purely real
                 A[k,k] = real(A[k,k])
             end
-            if upper 
+            if upper
                 A[k-1,k], A[kp,k] = A[kp,k], A[k-1,k]
             else
                 A[k+1,k], A[kp,k] = A[kp,k], A[k+1,k]
@@ -672,48 +672,48 @@ end
 
 
 """
-generic_bunchkaufman!(uplo, A, syhe, rook::Bool=false) -> 
+generic_bunchkaufman!(uplo, A, syhe, rook::Bool=false) ->
 LD<:AbstractMatrix, ipiv<:AbstractVector{Integer}, info::BlasInt
 
 Compute the Bunch-Kaufman factorization of a symmetric or
-Hermitian matrix `A` of size `NxN` as `P'*U*D*U'*P` or `P'*L*D*L'*P`, 
-depending on which triangle is stored in `A`. Note that if `A` is 
-complex symmetric then `U'` and `L'` denote the unconjugated 
-transposes, i.e. `transpose(U)` and `transpose(L)`. The resulting 
-`U` or `L` and D are store in-place in `A`, LAPACK style. `LD` is just 
+Hermitian matrix `A` of size `NxN` as `P'*U*D*U'*P` or `P'*L*D*L'*P`,
+depending on which triangle is stored in `A`. Note that if `A` is
+complex symmetric then `U'` and `L'` denote the unconjugated
+transposes, i.e. `transpose(U)` and `transpose(L)`. The resulting
+`U` or `L` and D are store in-place in `A`, LAPACK style. `LD` is just
 a reference to `A` (that is, `LD===A`). `ipiv` stores the permutation
-information of the algorithm in LAPACK format. `info` indicates whether 
-the factorization was sucessful and non-singular when `info==0`, or 
+information of the algorithm in LAPACK format. `info` indicates whether
+the factorization was sucessful and non-singular when `info==0`, or
 else `info` takes a different value. The outputs `LD`, `ipiv`, `info`
-follow the format of the LAPACK functions of the Bunch-Kaufman 
-factorization (`dsytrf`, `csytrf`, `chetrf`, etc.), so this function 
-can (ideally) be used interchangeably with its LAPACK counterparts 
-`LAPACK.sytrf!`, `LAPACK.sytrf_rook!`, etc. 
+follow the format of the LAPACK functions of the Bunch-Kaufman
+factorization (`dsytrf`, `csytrf`, `chetrf`, etc.), so this function
+can (ideally) be used interchangeably with its LAPACK counterparts
+`LAPACK.sytrf!`, `LAPACK.sytrf_rook!`, etc.
 
-`uplo` is a character, either `'U'` or `'L'`, indicating whether the 
+`uplo` is a character, either `'U'` or `'L'`, indicating whether the
 matrix is stored in the upper triangular part (`uplo=='U'`) or in the
 lower triangular part (`uplo=='L'`).
 
-`syhe` is a character, either `'S'` or `'H'`, indicating whether the 
-matrix is real/complex symmetric (`syhe=='S'`, and the symmetric 
-Bunch-Kaufman factorization is performed) or complex hermitian 
-(`syhe=='H'`, and the hermitian Bunch-Kaufman factorization is 
+`syhe` is a character, either `'S'` or `'H'`, indicating whether the
+matrix is real/complex symmetric (`syhe=='S'`, and the symmetric
+Bunch-Kaufman factorization is performed) or complex hermitian
+(`syhe=='H'`, and the hermitian Bunch-Kaufman factorization is
 performed).
 
-If `rook` is `true`, rook pivoting is used (also called bounded 
-Bunch-Kaufman factorization). If `rook` is false, rook pivoting is not 
-used (standard Bunch-Kaufman factorization). Rook pivoting can require 
-up to `~N^3/6` extra comparisons in adition to the `~N^3/3` additions 
-and `~N^3/3` multiplications of the standard Bunch-Kaufman 
-factorization. However, rook pivoting guarantees that the entries of 
+If `rook` is `true`, rook pivoting is used (also called bounded
+Bunch-Kaufman factorization). If `rook` is false, rook pivoting is not
+used (standard Bunch-Kaufman factorization). Rook pivoting can require
+up to `~N^3/6` extra comparisons in adition to the `~N^3/3` additions
+and `~N^3/3` multiplications of the standard Bunch-Kaufman
+factorization. However, rook pivoting guarantees that the entries of
 `U` or `L` are bounded.
 
-This function implements the factorization algorithm entirely in 
-native Julia, so it supports any number type representing real or 
-complex numbers. 
+This function implements the factorization algorithm entirely in
+native Julia, so it supports any number type representing real or
+complex numbers.
 """
 function generic_bunchkaufman!(
-    uplo::AbstractChar, 
+    uplo::AbstractChar,
     A::AbstractMatrix{TS},
     syhe::AbstractChar,
     rook::Bool=false
@@ -753,11 +753,11 @@ function generic_bunchkaufman!(
     # in order to not increase the denominator size too much in computations.
     # The error of this approximation is ≤0.1%, and it still guarantees that a
     # 2x2 block in the D factor has a positive-negative eigenvalue pair, as long
-    # as the approximation lies in (0,1). 
+    # as the approximation lies in (0,1).
     alpha = TR <: AbstractFloat ? (1 + sqrt(TR(17))) / 8 : TR(16//25)
     # Use complex 1-norm for pivot selection, as in LAPACK
     abs1_fun = TS <: Real ? abs : cabs1
-    
+
     # Check if the matrix is symmetric of hermitian
     if syhe == 'S' || (syhe == 'H' && TS <: Real)
         # Use symmetric variant if matrix is real, regardles of 'syhe' value
@@ -838,7 +838,7 @@ function generic_bunchkaufman!(
                     #   element in row IMAX, and ROWMAX is its absolute value.
                     #   Determine both ROWMAX and JMAX.
                     if imax != k
-                        thisview = upper ? view(A, imax, (imax+1):k) : 
+                        thisview = upper ? view(A, imax, (imax+1):k) :
                             view(A, imax, k:(imax-1))
                         rowmax, jmax = findmax(abs1_fun, thisview)
                         jmax += upper ? imax : k - 1
@@ -899,7 +899,7 @@ function generic_bunchkaufman!(
                     # of the matrix. We inspect the part of the row in the
                     # lower triangular part by traversing the corresponding
                     # part of the transpose column.
-                    thisview = upper ? view(A, 1:(imax-1), imax) : 
+                    thisview = upper ? view(A, 1:(imax-1), imax) :
                         view(A, (imax+1):N, imax)
                     rowmax = max(rowmax, findmax(abs1_fun, thisview)[1])
                 end
@@ -953,7 +953,7 @@ function generic_bunchkaufman!(
                     thisview = upper ? A : view(A, (k+1):N, (k+1):N)
                     generic_adr1!(uplo, -r1, x, x, thisview, syhe)
                     #   Store U(k) in column k
-                    thisrange = upper ? (1:(k-1)) : ((k+1):N) 
+                    thisrange = upper ? (1:(k-1)) : ((k+1):N)
                     for i in thisrange
                         A[i,k] *= r1
                     end
@@ -961,7 +961,7 @@ function generic_bunchkaufman!(
                     # Compute D(k)
                     r1 = !herm ? A[k,k] : real(A[k,k])
                     #   Store U(k) in column k
-                    thisrange = upper ? (1:(k-1)) : ((k+1):N) 
+                    thisrange = upper ? (1:(k-1)) : ((k+1):N)
                     for i in thisrange
                         A[i,k] /= r1
                     end
@@ -1015,9 +1015,9 @@ function generic_bunchkaufman!(
                     end
                     A[j,k] = wk
                     A[j,knext] = wknext
-                    # Force diagonal entry to be purely real, but still of 
-                    # complex type TS (I don't know why in LAPACK this 
-                    # case, unlike the rest, enforces a complex type 
+                    # Force diagonal entry to be purely real, but still of
+                    # complex type TS (I don't know why in LAPACK this
+                    # case, unlike the rest, enforces a complex type
                     # explicitly).
                     diagreal_op(j)
                 end
@@ -1039,40 +1039,40 @@ end
 
 
 """
-generic_syconv!(uplo, A, ipiv; gettri::Bool=true) -> 
+generic_syconv!(uplo, A, ipiv; gettri::Bool=true) ->
 TLU<:AbstractMatrix, e<:AbstractVector, d<:Union{AbstractVector,Nothing}
 
-`generic_syconv!` takes the Bunch-Kaufman factorization compact 
-result `A` and returns the block-diagonal factor `D`, and the triangular 
-factor `L` (or `U`) if requested. `ipiv` contains the permutations applied 
-during the factorization, and is required in order to compute `D` and `L` 
+`generic_syconv!` takes the Bunch-Kaufman factorization compact
+result `A` and returns the block-diagonal factor `D`, and the triangular
+factor `L` (or `U`) if requested. `ipiv` contains the permutations applied
+during the factorization, and is required in order to compute `D` and `L`
 (or `U`). If the `L` or `U` factor is requested then both `L` (or `U`) and
-the main diagonal of `D` will be stored in-place in `A`, following LAPACK 
+the main diagonal of `D` will be stored in-place in `A`, following LAPACK
 format, and `d` will be set to `nothing`. `TLU` is just a reference for `A`
-(`TLU===A`). `e` contains the first subdiagonal of `D`. If the triangular 
-factor is not requested, then `A` will not be modified, and the main 
-diagonal of `D` will be stored in `d`. All inputs are assumed to follow 
-the format of the LAPACK functions of the Bunch-Kaufman factorization 
+(`TLU===A`). `e` contains the first subdiagonal of `D`. If the triangular
+factor is not requested, then `A` will not be modified, and the main
+diagonal of `D` will be stored in `d`. All inputs are assumed to follow
+the format of the LAPACK functions of the Bunch-Kaufman factorization
 (`dsytrf`, `csytrf`, `chetrf`, etc.).
 
-`uplo` is a character, either `'U'` or `'L'`, indicating whether the 
+`uplo` is a character, either `'U'` or `'L'`, indicating whether the
 matrix is stored in the upper triangular part (`uplo=='U'`) or in the
 lower triangular part (`uplo=='L'`).
 
-`gettri` is a Bool, indicating whether the `L` (or `U`) triangular factor 
-should be computed (`gettri==true`) or not (`gettri==false`). If the 
-triangular factor is not computed, `A` will not be modified, but `TLU` 
+`gettri` is a Bool, indicating whether the `L` (or `U`) triangular factor
+should be computed (`gettri==true`) or not (`gettri==false`). If the
+triangular factor is not computed, `A` will not be modified, but `TLU`
 will still be a reference for `A` (`TLU===A`).
 
-`rook` is a logical value, indicating whether the factorization was 
-performed using rook pivoting (`rook==true`) or the standard diagonal 
+`rook` is a logical value, indicating whether the factorization was
+performed using rook pivoting (`rook==true`) or the standard diagonal
 pivoting (`rook==false`).
 
-This function implements the conversion entirely in native Julia, so it 
-supports any number type representing real or complex numbers. 
+This function implements the conversion entirely in native Julia, so it
+supports any number type representing real or complex numbers.
 """
 function generic_syconv!(
-    uplo::AbstractChar, 
+    uplo::AbstractChar,
     A::AbstractMatrix{TS},
     ipiv::AbstractVector{<:Integer},
     rook::Bool,
@@ -1151,26 +1151,26 @@ end
 """
 generic_bksolve!(uplo, A, ipiv, B, syhe) -> X<:AbstractMatrix
 
-`generic_bksolve!` solves a system of linear equations `M*X = B` with 
-a matrix M whose Bunch-Kaufman factorization compact result is 
-stored in `A`, and stores the solution `X` in place of `B`. `ipiv` 
-stores the permutation information of the Bunch-Kaufman factorization 
+`generic_bksolve!` solves a system of linear equations `M*X = B` with
+a matrix M whose Bunch-Kaufman factorization compact result is
+stored in `A`, and stores the solution `X` in place of `B`. `ipiv`
+stores the permutation information of the Bunch-Kaufman factorization
 of `M`. `X` is just a reference to `B` (that is, `X===B`).
 
-`uplo` is a character, either `'U'` or `'L'`, indicating whether the 
+`uplo` is a character, either `'U'` or `'L'`, indicating whether the
 matrix is stored in the upper triangular part (`uplo=='U'`) or in the
 lower triangular part (`uplo=='L'`).
 
-`syhe` is a character, either `'S'` or `'H'`, indicating whether the 
-matrix is real/complex symmetric (`syhe=='S'`) or complex hermitian 
+`syhe` is a character, either `'S'` or `'H'`, indicating whether the
+matrix is real/complex symmetric (`syhe=='S'`) or complex hermitian
 (`syhe=='H'`).
 
-`rook` is a logical value, indicating whether the factorization was 
-performed using rook pivoting (`rook==true`) or the standard diagonal 
+`rook` is a logical value, indicating whether the factorization was
+performed using rook pivoting (`rook==true`) or the standard diagonal
 pivoting (`rook==false`).
 """
 function generic_bksolve!(
-    uplo::AbstractChar, 
+    uplo::AbstractChar,
     A::AbstractMatrix{TS},
     ipiv::AbstractVector{<:Integer},
     B0::AbstractVecOrMat{TS},
@@ -1331,54 +1331,54 @@ end
 
 
 """
-inertia(B::BunchKaufman; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ) -> 
+inertia(B::BunchKaufman; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ) ->
     np::Union{Nothing,Integer}, nn::Union{Nothing,Integer}, nz::Integer
 
-`inertia` computes the numerical inertia (the number of positive, 
-negative and zero eigenvalues, given by `np`, `nn` and `nz`, 
-respectively) of a real symmetric of Hermitian matrix `B` that has been 
-factored using the Bunch-Kaufman algorithm. For complex symmetric 
-matrices the inertia is not defined. in that case `np` and `nn` are set 
-to `nothing`, but the function still returns the number of zero 
-eigenvalues. The inertia is computed by counting the eigenvalues signs 
-of `B.D`. The number of zero eigenvalues is computed as the number of 
-estimated eigenvalues with complex 1-norm (defined as `|re(.)|+|im(.)|`) 
+`inertia` computes the numerical inertia (the number of positive,
+negative and zero eigenvalues, given by `np`, `nn` and `nz`,
+respectively) of a real symmetric of Hermitian matrix `B` that has been
+factored using the Bunch-Kaufman algorithm. For complex symmetric
+matrices the inertia is not defined. in that case `np` and `nn` are set
+to `nothing`, but the function still returns the number of zero
+eigenvalues. The inertia is computed by counting the eigenvalues signs
+of `B.D`. The number of zero eigenvalues is computed as the number of
+estimated eigenvalues with complex 1-norm (defined as `|re(.)|+|im(.)|`)
 less or equal than `max(atol, rtol*s₁)`, where `s₁` is an upper bound of
-the largest singular value of `B.D`, `σ₁` (more specifically, 
-`0.5*s₁ <= σ₁ <= s₁` for real matrices and `0.35*s₁ <= σ₁ <= s₁` for 
-complex matrices). `atol` and `rtol` are the absolute and relative 
+the largest singular value of `B.D`, `σ₁` (more specifically,
+`0.5*s₁ <= σ₁ <= s₁` for real matrices and `0.35*s₁ <= σ₁ <= s₁` for
+complex matrices). `atol` and `rtol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where
-`n` is the size of  of `A`, and `ϵ` is the [`eps`](@ref) of the number 
-type of `A`, if this type is a subtype of `AbstractFloat`. In any other 
-case (if the number type of `A` is `Rational`, for example) `ϵ` is set 
+`n` is the size of  of `A`, and `ϵ` is the [`eps`](@ref) of the number
+type of `A`, if this type is a subtype of `AbstractFloat`. In any other
+case (if the number type of `A` is `Rational`, for example) `ϵ` is set
 to `0`.
 
 !!! note
     Numerical inertia can be a sensitive and imprecise characterization of
-    ill-conditioned matrices with eigenvalues that are close in magnitude to the 
-    threshold tolerance `max(atol, rtol*s₁)`. In such cases, slight perturbations 
-    to the Bunch-Kaufman computation or to the matrix can change the result of 
-    `rank` by pushing one or more eigenvalues across the threshold. These 
-    variations can even occur due to changes in floating-point errors between 
+    ill-conditioned matrices with eigenvalues that are close in magnitude to the
+    threshold tolerance `max(atol, rtol*s₁)`. In such cases, slight perturbations
+    to the Bunch-Kaufman computation or to the matrix can change the result of
+    `rank` by pushing one or more eigenvalues across the threshold. These
+    variations can even occur due to changes in floating-point errors between
     different Julia versions, architectures, compilers, or operating systems.
-    In particular, the size of the entries of the tringular factor directly 
-    influende the scale of the eigenvalues of the diagonal factor, so it is 
-    strongly recommended to use rook pivoting is the inertia is going to be 
+    In particular, the size of the entries of the tringular factor directly
+    influende the scale of the eigenvalues of the diagonal factor, so it is
+    strongly recommended to use rook pivoting is the inertia is going to be
     computed.
-    On the other hand, if the matrix has rational entries, the inertia 
-    computation is guaranteed is to be exact, as long as there is no 
-    under/overflow in the underlying integer type (and in such cases Julia itself 
-    throws an error), or a positive tolerance (absolute or relative) is 
+    On the other hand, if the matrix has rational entries, the inertia
+    computation is guaranteed is to be exact, as long as there is no
+    under/overflow in the underlying integer type (and in such cases Julia itself
+    throws an error), or a positive tolerance (absolute or relative) is
     specified.
 """
 function inertia(B::BunchKaufman{TS};
-    atol::TR = TR(0), 
+    atol::TR = TR(0),
     rtol::TR = TR(0)
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
 
     # Check if matrix is complex symmetric
     get_inertia = !(issymmetric(B) && TS <: Complex)
-    
+
     # Initialize outputs
     np, nn, nz = get_inertia ? (0, 0, 0) : (nothing, nothing, 0)
 
@@ -1401,9 +1401,9 @@ function inertia(B::BunchKaufman{TS};
     # Check if we must track the largest singular value
     get_s1 = (rtol > 0)
 
-    # Constant for lower bound estimation of the smallest eigenvalue in 2x2 blocks. 
-    # The best (largest) value for complex matrices is 1/sqrt(2), but for rational 
-    # matrices we use the small denominator approximation 12/17, in order to not 
+    # Constant for lower bound estimation of the smallest eigenvalue in 2x2 blocks.
+    # The best (largest) value for complex matrices is 1/sqrt(2), but for rational
+    # matrices we use the small denominator approximation 12/17, in order to not
     # increase the denominator size too much in computations. The error of this
     # approximation is ≤0.2%, and we still get a valid lower bound.
     c = real_matrix ? TR(1) : (TR <: AbstractFloat ? 1/sqrt(TR(2)) : TR(12//17))
@@ -1415,9 +1415,9 @@ function inertia(B::BunchKaufman{TS};
     while i <= N; @inbounds begin
         if i < N && D[i,i+1] != 0
             # 2x2 block
-            # The largest singular value of a 2x2 matrix is between [1, 2] times 
-            # its complex max-norm, which is between [c, 1] times the largest 
-            # complex 1-norm among the entries of the 2x2 matrix. See "Roger 
+            # The largest singular value of a 2x2 matrix is between [1, 2] times
+            # its complex max-norm, which is between [c, 1] times the largest
+            # complex 1-norm among the entries of the 2x2 matrix. See "Roger
             # Horn and Charles Johnson. Matrix Analysis, 2nd Edition, 5.6.P23".
             abs_Dii = abs1_fun(D[i,i])
             abs_Dxx = abs1_fun(D[i+1,i+1])
@@ -1427,22 +1427,22 @@ function inertia(B::BunchKaufman{TS};
             # abs(λ₂) ≥ abs(det(block)) / s1_block
             # so the bound in terms of the complex 1-norm becomes
             # abs1_fun(λ₂) ≥ c * abs1_fun(det(block)) / s1_block
-            # For rational matrices, if λ₂=0 then det(block)=0 and then the bound 
+            # For rational matrices, if λ₂=0 then det(block)=0 and then the bound
             # becomes zero too. If λ₁=0 too then the block has all zero entries
-            # and 's1_block'=0, but 'D[i,i+1]' != 0 and so 's1_block' > 0. However, we 
+            # and 's1_block'=0, but 'D[i,i+1]' != 0 and so 's1_block' > 0. However, we
             # may still have that 'smin_block'≈0, then the value of 'smin_block' may not
-            # be accurate. In that case the counting routine will detect that both 
+            # be accurate. In that case the counting routine will detect that both
             # eigenvalues are zero without using 'smin_block', so it doesn't matter.
             # TODO: is this the most numerically stable way to compute the determinant?
             # TODO: is this the best way to avoid under/overflow?
             if abs_Dii >= abs_Dxx
-                smin_block = c * abs1_fun((D[i,i]/s1_block)*D[i+1,i+1] - 
+                smin_block = c * abs1_fun((D[i,i]/s1_block)*D[i+1,i+1] -
                     (D[i,i+1]/s1_block)*D[i+1,i])
             else
-                smin_block = c * abs1_fun(D[i,i]*(D[i+1,i+1]/s1_block) - 
+                smin_block = c * abs1_fun(D[i,i]*(D[i+1,i+1]/s1_block) -
                     (D[i,i+1]/s1_block)*D[i+1,i])
             end
-            # Store lower bound in-place in the lower off-diagonal and upper bound 
+            # Store lower bound in-place in the lower off-diagonal and upper bound
             # in-place in the upper off-diagonal. The trace is stored in the first
             # diagonal entry block, but only if the full inertia is needed.
             D[i,i+1] = s1_block
@@ -1462,7 +1462,7 @@ function inertia(B::BunchKaufman{TS};
     while i <= N; @inbounds begin
         if i < N && D[i,i+1] != 0
             # 2x2 block. For the counting of zero eigenvalues we use the lower bound on the
-            # eigenvalues' magnitude. This way, if an eigenvalue is deemed non-zero, then 
+            # eigenvalues' magnitude. This way, if an eigenvalue is deemed non-zero, then
             # it is guaranteed that its magnitude is greater than the tolerance.
             s1_block = real_fun(D[i,i+1])
             if (c / 2) * s1_block <= tol
@@ -1476,24 +1476,24 @@ function inertia(B::BunchKaufman{TS};
             smin_block = real_fun(D[i+1,i])
             trace_block = real_fun(D[i,i])
             if smin_block > tol || trace_block == 0
-                # If first condition holds then the lower bound of the smallest eigenvalue 
+                # If first condition holds then the lower bound of the smallest eigenvalue
                 # is larger than the tolerance. If the second condition holds then the trace
-                # is exactly zero, so both eigenvalues have the same magnitude, and we 
-                # already know that the largest one is non-zero. In any case we conclude 
+                # is exactly zero, so both eigenvalues have the same magnitude, and we
+                # already know that the largest one is non-zero. In any case we conclude
                 # that both eigenvalues are non-zero.
                 if get_inertia
-                    # The eigenvalues of a 2x2 block are guaranteed to be a 
+                    # The eigenvalues of a 2x2 block are guaranteed to be a
                     # positive-negative pair.
                     np += 1
                     nn += 1
                 end
             else
-                # The lower bound of smallest eigenvalue is smaller than the tolerance and 
-                # the trace is non-zero, so we consider the smallest eigenvalues of this 
+                # The lower bound of smallest eigenvalue is smaller than the tolerance and
+                # the trace is non-zero, so we consider the smallest eigenvalues of this
                 # block to be zero.
                 nz += 1
                 if get_inertia
-                    # The trace is non-zero, and its sign is the same of the largest 
+                    # The trace is non-zero, and its sign is the same of the largest
                     # eigenvalue.
                     if trace_block >= 0
                         np += 1
@@ -1531,8 +1531,8 @@ end
 `bunchkaufman_native!` is the same as [`bunchkaufman!`](@ref), but it performs
 the factorization in native Julia code instead of calling LAPACK.
 """
-function bunchkaufman_native!(A::AbstractMatrix{TS}, 
-    rook::Bool = false; 
+function bunchkaufman_native!(A::AbstractMatrix{TS},
+    rook::Bool = false;
     check::Bool = true,
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     if typeof(A) <: RealHermSymComplexSym{TR}
@@ -1564,22 +1564,22 @@ end
 Overload 'bunchkaufman.jl' methods through multiple dispatch
 """
 
-function bunchkaufman!(A::AbstractMatrix{TS}, 
-    rook::Bool = false; 
+function bunchkaufman!(A::AbstractMatrix{TS},
+    rook::Bool = false;
     check::Bool = true
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     return bunchkaufman_native!(A, rook; check)
 end
 
-function bunchkaufman(A::AbstractMatrix{TS}, 
-    rook::Bool = false; 
+function bunchkaufman(A::AbstractMatrix{TS},
+    rook::Bool = false;
     check::Bool = true
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     return bunchkaufman!(eigencopy_oftype(A, TS), rook; check)
 end
 
-function bunchkaufman(A::AbstractMatrix{TS}, 
-    rook::Bool = false; 
+function bunchkaufman(A::AbstractMatrix{TS},
+    rook::Bool = false;
     check::Bool = true
     ) where TS <:Union{TI, Complex{TI}} where TI <: Integer
 
@@ -1614,7 +1614,7 @@ function bunchkaufman(A::AbstractMatrix{TS},
     return bunchkaufman_native!(M, rook; check)
 end
 
-function ldiv!(B::BunchKaufman{TS}, 
+function ldiv!(B::BunchKaufman{TS},
     R::AbstractVecOrMat{TS}
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     syhe = issymmetric(B) ? 'S' : 'H'
@@ -1623,9 +1623,9 @@ end
 
 function inv(B::BunchKaufman{TS}) where TS <: ClosedScalar{TR} where TR <: ClosedReal
     # I don't think there's value in implementing tha LAPACK in-place inverse
-    # functions `dsytri`, `chetri`, etc., unless of course an efficient 
+    # functions `dsytri`, `chetri`, etc., unless of course an efficient
     # in-place inverse function `inv!` is needed.
-    # TODO: reduce the operation count of the inverse by not computing the 
+    # TODO: reduce the operation count of the inverse by not computing the
     # lower/upper triangular part.
     if issymmetric(B)
         return copytri!(B \ I, B.uplo)
