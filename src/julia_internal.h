@@ -918,7 +918,7 @@ void jl_safepoint_end_gc(void);
 // Wait for the GC to finish
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
-void jl_safepoint_wait_gc(void);
+void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
 
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -946,8 +946,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
-static inline void jl_set_gc_and_wait(void)
+static inline void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
 {
     jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
@@ -956,8 +955,8 @@ static inline void jl_set_gc_and_wait(void)
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
     jl_atomic_store_release(&ct->ptls->gc_state, state);
+    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
 }
-#endif
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
@@ -1397,7 +1396,7 @@ extern jl_mutex_t typecache_lock;
 extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
-void jl_mach_gc_end(void);
+void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
 #endif
 
 // -- smallintset.c -- //

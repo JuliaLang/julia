@@ -164,7 +164,7 @@ void jl_safepoint_end_gc(void)
     uv_cond_broadcast(&safepoint_cond);
 }
 
-void jl_safepoint_wait_gc(void)
+void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task; (void)ct;
     JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
@@ -187,33 +187,60 @@ void jl_safepoint_wait_gc(void)
 void jl_safepoint_wait_thread_resume(void)
 {
     jl_task_t *ct = jl_current_task;
-    JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
+    // n.b. we do not permit a fast-path here that skips the lock acquire since
+    // we otherwise have no synchronization point to ensure that this thread
+    // will observe the change to the safepoint, even though the other thread
+    // might have already observed our gc_state.
+    // if (!jl_atomic_load_relaxed(&ct->ptls->suspend_count)) return;
+    JL_TIMING_SUSPEND_TASK(USER, ct);
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     uv_mutex_lock(&ct->ptls->sleep_lock);
-    while (jl_atomic_load(&ct->ptls->suspend_count))
+    while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
         uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
 }
 
 // n.b. suspended threads may still run in the GC or GC safe regions
-int jl_safepoint_suspend_thread(int tid)
+// waitstate = 0 : do not wait for suspend to finish
+// waitstate = 1 : wait for gc_state != 0 (JL_GC_STATE_WAITING or JL_GC_STATE_SAFE)
+// waitstate = 2 : wait for full suspend (gc_state == JL_GC_STATE_WAITING)
+// if another thread comes along and calls jl_safepoint_resume, we also return early
+// return new suspend count on success, 0 on failure
+int jl_safepoint_suspend_thread(int tid, int waitstate)
 {
     if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     uv_mutex_lock(&ptls2->sleep_lock);
     int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count) + 1;
-    jl_atomic_store(&ptls2->suspend_count, suspend_count); // seq-cst to ensure this happens-before gc_state read
+    jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count);
     if (suspend_count == 1) // first to suspend
         jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 3 + sizeof(void*)));
     uv_mutex_unlock(&ptls2->sleep_lock);
-    while (jl_atomic_load_acquire(&ptls2->gc_state)) // wait for suspend
-        jl_cpu_pause(); // yield?
+    if (waitstate) {
+        // wait for suspend (or another thread to call resume)
+        if (waitstate == 2) {
+            // We currently cannot distinguish if a thread is helping run GC or
+            // not, so assume it is running GC and wait for GC to finish first.
+            // It will be unable to reenter helping with GC because we have
+            // changed its safepoint page.
+            jl_set_gc_and_wait();
+        }
+        while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {
+            int8_t state2 = jl_atomic_load_acquire(&ptls2->gc_state);
+            if (waitstate == 1 && state2 != 0)
+                break;
+            if (waitstate == 2 && state2 == JL_GC_STATE_WAITING)
+                break;
+            jl_cpu_pause(); // yield?
+        }
+    }
     return suspend_count;
 }
 
+// return old suspend count on success, 0 on failure
 int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
 {
     if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
@@ -229,7 +256,7 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
         uv_cond_signal(&safepoint_cond);
     }
     if (suspend_count != 0)
-        jl_atomic_store(&ptls2->suspend_count, suspend_count - 1);
+        jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count - 1);
     uv_mutex_unlock(&ptls2->sleep_lock);
     return suspend_count;
 }

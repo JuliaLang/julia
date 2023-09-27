@@ -334,17 +334,17 @@ void jl_sigint_safepoint(jl_ptls_t tls);
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint_(ptls) do {                     \
-        jl_signal_fence();                              \
-        size_t safepoint_load = *ptls->safepoint;       \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_gc_safepoint_(ptls) do {                                            \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = jl_atomic_load_relaxed(&ptls->safepoint)[0];   \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
-#define jl_sigint_safepoint(ptls) do {                  \
-        jl_signal_fence();                              \
-        size_t safepoint_load = ptls->safepoint[-1];    \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_sigint_safepoint(ptls) do {                                         \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = jl_atomic_load_relaxed(&ptls->safepoint)[-1];  \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
 #endif
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
