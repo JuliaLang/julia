@@ -716,12 +716,28 @@ is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 # 6. Include the first frame above each contiguous set of user code frames to show what the user code called into.
 # 7. To support broadcasting, identify any visible `materialize` frames, and include the first frame after
 #    the broadcast functions, to show what function is being broadcast.
-# 8. Remove the topmost frame if it's a REPL toplevel.
-# 9. Remove a broadcast materialize frame if it's the topmost frame.
+# 8. Optionally add back public frames based on ENV["JULIA_STACKTRACE_PUBLIC"]
+# 9. Remove the topmost frame if it's a REPL toplevel.
+# 10. Remove a broadcast materialize frame if it's the topmost frame.
 function find_visible_frames(trace::Vector)
-    user_frames_i = findall(trace) do frame
-        file = String(frame[1].file)
-        !is_julia(file) && !is_ide_support(file)
+    public_frames_i = if parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "false"))
+        pfi = findall(trace) do frame
+            framemodule = parentmodule(frame[1])
+            framemodule === nothing && return false
+            module_public_names = names(framemodule)
+            frame[1].func ∈ module_public_names
+        end
+        pfi !== nothing ? pfi : Int[]
+    else
+        Int[]
+    end
+
+    user_frames_i = let
+        ufi = findall(trace) do frame
+            file = String(frame[1].file)
+            !is_julia(file) && !is_ide_support(file)
+        end
+        ufi !== nothing ? ufi : Int[]
     end
 
     # construct set of visible modules
@@ -765,6 +781,14 @@ function find_visible_frames(trace::Vector)
     end
     sort!(union!(visible_frames_i, filter!(!isnothing, broadcasti)))
 
+    # add back public frames
+    sort!(union!(visible_frames_i, public_frames_i))
+
+    if length(trace) > 1 && visible_frames_i[end] != length(trace)
+        # add back the top level if it's not included (as can happen if a macro is expanded at top-level)
+        push!(visible_frames_i, length(trace))
+    end
+
     if length(visible_frames_i) > 0 && visible_frames_i[end] == length(trace)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
@@ -791,34 +815,23 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        if i < j
-            print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
-            print(io, "[" * string(i) * "-" * string(j) * "] ")
-        else
-            print(io, " " ^ (ndigits_max - ndigits(i) + 1))
-            print(io, "[" * string(i) * "] ")
-        end
+        print(io, " " ^ (ndigits_max + 4))
         printstyled(io, "⋮ ", bold = true)
-        printstyled(io, "internal", color = :light_black)
-        if !parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
-            println(io)
-            print(io, " " ^ (ndigits_max + 2))
-        else
-            print(io, " ")
-        end
-        printstyled(io, "@ ", color = :light_black)
+        printstyled(io, "internal", color = :light_black, italic=true)
+        print(io, " ")
+        printstyled(io, "@ ", color = :light_black, italic=true)
         if length(modules) > 0
             for (i, m) ∈ enumerate(modules)
                 modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
-                printstyled(io, m, color = modulecolor)
-                i < length(modules) && print(io, ", ")
+                printstyled(io, m, color = modulecolor, italic=true)
+                i < length(modules) && printstyled(io, ", ", color = :light_black, italic=true)
             end
         end
         # indicate presence of inlined methods which lack module information
         # (they all do right now)
         if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
-            length(modules) > 0 && print(io, ", ")
-            printstyled(io, "Unknown", color = :light_black)
+            length(modules) > 0 && printstyled(io, ", ", color = :light_black, italic=true)
+            printstyled(io, "Unknown", color = :light_black, italic=true)
         end
     end
 
