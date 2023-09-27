@@ -515,6 +515,11 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
 static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeIntrinsicLoweringMarkerPass());
     if (options.lower_intrinsics) {
+#ifdef USE_TAPIR
+        MPM.addPass(TapirToTargetPass());
+        MPM.addPass(AlwaysInlinerPass(
+            /*InsertLifetimeIntrinsics*/false));
+#endif
         //TODO barrier pass?
         {
             FunctionPassManager FPM;
@@ -525,11 +530,6 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         // Needed **before** LateLowerGCFrame on LLVM < 12
         // due to bug in `CreateAlignmentAssumption`.
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
-#ifdef USE_TAPIR
-        MPM.addPass(TapirToTargetPass());
-        MPM.addPass(AlwaysInlinerPass(
-            /*InsertLifetimeIntrinsics*/false));
-#endif
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
@@ -715,7 +715,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #ifdef USE_TAPIR
         // TapirTargetID::Lambda
         // TapirTargetID::Serial
-        TLII->setTapirTarget(TapirTargetID::Serial);
+        TLII->setTapirTarget(TapirTargetID::Lambda);
         // TLII->setTapirTargetOptions(
         //     std::make_unique<OpenCilkABIOptions>(CodeGenOpts.OpenCilkABIBitcodeFile));
         // TLII->addTapirTargetLibraryFunctions();

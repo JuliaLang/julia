@@ -1740,8 +1740,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
-                if (AI->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked) {
-                    S.Allocas.push_back(AI);
+                if (AI->isStaticAlloca()) {
+                    if (isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked) {
+                        S.Allocas.push_back(AI);
+                    } else if (isa<StructType>(ElT) && dyn_cast<StructType>(ElT)->hasName() && CountTrackedPointers(ElT).count > 0) {
+                        S.Allocas.push_back(AI);
+                    }
                 }
             }
         }
