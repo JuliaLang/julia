@@ -29,15 +29,15 @@ breint = rand(1:5, n, 2)
 bimint = rand(1:5, n, 2)
 
 @testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int, ###
-    Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt, 
+    Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt,
     Complex{BigInt}, Rational{BigInt}, Complex{Rational{BigInt}})
     # a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    a = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ? 
-        complex.(areal, aimg) : complex.(areint, aimint)) : (eltya <: AbstractFloat ? 
+    a = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ?
+        complex.(areal, aimg) : complex.(areint, aimint)) : (eltya <: AbstractFloat ?
         areal : areint))
-    a2 = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ? 
-        complex.(a2real, a2img) : complex.(a2reint, a2imint)) : (eltya <: AbstractFloat ? 
+    a2 = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ?
+        complex.(a2real, a2img) : complex.(a2reint, a2imint)) : (eltya <: AbstractFloat ?
         a2real : a2reint))
     asym = transpose(a) + a                  # symmetric indefinite
     aher = a' + a                  # Hermitian indefinite
@@ -53,15 +53,15 @@ bimint = rand(1:5, n, 2)
         @testset "$uplo Bunch-Kaufman factor inertia" for uplo in (:L, :U)
             @testset "rook pivoting: $rook" for rook in (false, true)
                 test_list = eltya <: Complex ? (Hermitian(aher, uplo), Hermitian(apd, uplo)) :
-                    (Symmetric(transpose(a) + a, uplo), Hermitian(aher, uplo), 
+                    (Symmetric(transpose(a) + a, uplo), Hermitian(aher, uplo),
                 Hermitian(apd, uplo))
                 ελ = n*max(eps(Float64), εa) # zero-eigenvalue threshold
-                ελ = typeof(Integer(one(real(eltya)))) <: Signed ? Rational{BigInt}(ελ) : 
+                ελ = typeof(Integer(one(real(eltya)))) <: Signed ? Rational{BigInt}(ελ) :
                     real(eltya(ελ))
                 for M in test_list
                     bc = bunchkaufman(M, rook)
                     D = bc.D
-                    λ = real(eltya <: Complex ? eigen(ComplexF64.(D)).values : 
+                    λ = real(eltya <: Complex ? eigen(ComplexF64.(D)).values :
                         eigen(Float64.(D)).values)
                     σ₁ = norm(λ, Inf)
                     np = sum(λ .> ελ*σ₁)
@@ -135,11 +135,11 @@ bimint = rand(1:5, n, 2)
         end
 
         @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int, ###
-            Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt, 
+            Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt,
             Complex{BigInt}, Rational{BigInt}, Complex{Rational{BigInt}})
             # b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-            b = convert(Matrix{eltyb}, eltyb <: Complex ? (real(eltyb) <: AbstractFloat ? 
-                complex.(breal, bimg) : complex.(breint, bimint)) : (eltyb <: AbstractFloat ? 
+            b = convert(Matrix{eltyb}, eltyb <: Complex ? (real(eltyb) <: AbstractFloat ?
+                complex.(breal, bimg) : complex.(breint, bimint)) : (eltyb <: AbstractFloat ?
                 breal : breint))
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
