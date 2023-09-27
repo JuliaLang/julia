@@ -130,7 +130,7 @@ for (fname, sz) in ((:jump, 128), (:long_jump, 192))
         Jump forward, advancing the state equivalent to `2^$($sz)` calls which consume
         8 bytes (i.e. a full `UInt64`) each.
 
-        If `n > 0` is provided, the state is advanced equivalent to `2^$($sz)n` calls; if `n = 0`,
+        If `n > 0` is provided, the state is advanced equivalent to `n * 2^$($sz)` calls; if `n = 0`,
         the state remains unchanged.
 
         This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
@@ -150,7 +150,7 @@ for (fname, sz) in ((:jump, 128), (:long_jump, 192))
         """
             $($fname)(rng::Xoshiro, [n::Integer=1])
 
-        Return a copy of `rng` with the state advanced equivalent to `2^$($sz)n` calls which consume
+        Return a copy of `rng` with the state advanced equivalent to `n * 2^$($sz)` calls which consume
         8 bytes (i.e. a full `UInt64`) each; if `n = 0`, the state of the returned copy will be
         identical to `rng`.
 
