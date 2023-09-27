@@ -206,7 +206,6 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
             elseif miroots !== nothing
                 linfo = lookup_inline_frame_info(func, file, miroots)
             end
-            linfo = linfo === nothing ? parentmodule(res[i + 1]) : linfo # e.g. `macro expansion`
         end
         res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
