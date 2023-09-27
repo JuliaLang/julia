@@ -276,6 +276,9 @@ float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
 
 big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
+zero(r::TwicePrecision) = zero(typeof(r))
+zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(zero(T))
+
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
 function zero(::Type{TwicePrecision{T}}) where {T}

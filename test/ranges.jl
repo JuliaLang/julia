@@ -2539,7 +2539,8 @@ end
 @testset "zero" begin
     @testset "StepRangeLen" begin
         for r in (StepRangeLen(im, 2im, 10),
-                    StepRangeLen{Bool}(false, true, 2))
+                    StepRangeLen{Bool}(false, true, 2),
+                    1.0:2.0:5.0)
             z = zero(r)
             @test r + z == r
             @test typeof(z) == typeof(r)

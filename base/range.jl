@@ -1386,12 +1386,10 @@ end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 
 function zero(r::StepRangeLen{T,R,S}) where {T,R,S}
-    StepRangeLen{T}(zero(r.ref), zero(step(r)), length(r), r.offset)
+    StepRangeLen{T}(zero(r.ref), zero(r.step), length(r), r.offset)
 end
 zero(r::LinRange) = LinRange{eltype(r)}(zero(first(r)), zero(last(r)), length(r))
-# These are only defined for Integer currently to work around
-# TwicePrecision not having a zero defined
-zero(r::Union{UnitRange{<:Integer}, StepRange{<:Integer}}) = zero(StepRangeLen(r))
+zero(r::Union{UnitRange, StepRange}) = zero(StepRangeLen(r))
 
 ## sorting ##
 
