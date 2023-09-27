@@ -6,6 +6,7 @@ on:
 
 jobs:
   PullUpstream:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # run all jobs in the matrix even if one fails
       matrix:
@@ -17,12 +18,12 @@ jobs:
       - name: Checkout RAI/julia
         uses: actions/checkout@v3
         with:
-          ref: RelationalAI/julia
-      - name: Update ${{ branch }}
+          ref: ${{ matrix.branch }}
+      - name: Update ${{ matrix.branch }}
         run: |
           git config --global user.email "julia-engineering@relational.ai"
           git config --global user.name "RAI CI (GitHub Action Automation)"
 
           git remote add upstream https://github.com/JuliaLang/julia
-          git pull upstream ${{ branch }}
-          git push origin ${{ branch }}
+          git pull upstream ${{ matrix.branch }}
+          git push origin ${{ matrix.branch }}
