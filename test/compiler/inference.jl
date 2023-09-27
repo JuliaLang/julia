@@ -5256,3 +5256,24 @@ use_vararg_constrant3(args::NTuple{N,T}) where {T,N} = Val(T), Val(N)
 @test only(Base.return_types(use_vararg_constrant3, Tuple{Tuple{Int,Int}})) == Tuple{Val{Int},Val{2}}
 use_vararg_constrant4(args::NTuple{N,T}) where {T,N} = Val(T), N
 @test only(Base.return_types(use_vararg_constrant4, Tuple{NTuple{N,Int}} where N)) == Tuple{Val{Int},Int}
+
+# issue 51228
+global whatever_unknown_value51228
+f51228() = f51228(whatever_unknown_value51228)
+f51228(x) = 1
+f51228(::Vararg{T,T}) where {T} = "2"
+@test only(Base.return_types(f51228, ())) == Int
+
+struct A51317
+    b::Tuple{1}
+    A1() = new()
+end
+struct An51317
+    a::Int
+    b::Tuple{1}
+    An51317() = new()
+end
+@test only(Base.return_types((x,f) -> getfield(x, f), (A51317, Symbol))) === Union{}
+@test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
+@test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
+@test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}
