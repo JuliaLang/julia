@@ -257,6 +257,15 @@ function getproperty(B::BunchKaufman{TS},
         if d === :D
             _, od, md = generic_syconv!(getfield(B, :uplo), getfield(B, :LD), 
                 getfield(B, :ipiv), B.rook, false)
+        elseif typeof(B) <: BunchKaufman{T,<:StridedMatrix} where {T<:BlasFloat}
+            # We use LAPACK whenever we can
+            if getfield(B, :rook)
+                LUD, _ = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', 
+                    copy(getfield(B, :LD)), getfield(B, :ipiv))
+            else
+                LUD, _ = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)),
+                    getfield(B, :ipiv))
+            end
         else
             LUD, _ = generic_syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), 
                 getfield(B, :ipiv), B.rook)
