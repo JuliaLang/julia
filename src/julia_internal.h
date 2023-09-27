@@ -919,6 +919,7 @@ void jl_safepoint_end_gc(void);
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
 void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
 
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -1397,6 +1398,7 @@ extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
 void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
+void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPOINT;
 #endif
 
 // -- smallintset.c -- //
