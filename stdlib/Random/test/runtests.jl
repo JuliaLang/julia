@@ -11,7 +11,7 @@ using Random
 using Random.DSFMT
 
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
-using Random: jump, long_jump, jump!, long_jump!
+using Random: jump_128, jump_192, jump_128!, jump_192!
 
 import Future # randjump
 
@@ -1037,7 +1037,6 @@ guardseed() do
     end
 end
 
-<<<<<<< HEAD
 @testset "TaskLocalRNG: stream collision smoke test" begin
     # spawn a trinary tree of tasks:
     # - spawn three recursive child tasks in each
