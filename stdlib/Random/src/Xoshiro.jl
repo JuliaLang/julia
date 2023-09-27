@@ -70,9 +70,6 @@ end
 
 rng_native_52(::Xoshiro) = UInt64
 
-<<<<<<< HEAD
-=======
-
 # Jump functions from: https://xoshiro.di.unimi.it/xoshiro256plusplus.c
 
 for (fname, JUMP) in ((:jump, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c)),
@@ -175,7 +172,6 @@ for (fname, sz) in ((:jump, 128), (:long_jump, 192))
         function $fname end
     end
 end
->>>>>>> ce11fe6e21 (Add jump functions (`jump`, `long_jump`) for `Xoshiro`)
 
 ## Task local RNG
 
