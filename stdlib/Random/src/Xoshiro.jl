@@ -72,8 +72,8 @@ rng_native_52(::Xoshiro) = UInt64
 
 # Jump functions from: https://xoshiro.di.unimi.it/xoshiro256plusplus.c
 
-for (fname, JUMP) in ((:jump, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c)),
-                      (:long_jump, (0x76e15d3efefdcbbf, 0xc5004e441c522fb3, 0x77710069854ee241, 0x39109bb02acbe635)))
+for (fname, JUMP) in ((:jump_128, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c)),
+                      (:jump_192, (0x76e15d3efefdcbbf, 0xc5004e441c522fb3, 0x77710069854ee241, 0x39109bb02acbe635)))
     local fname! = Symbol(fname, :!)
     @eval function $fname!(rng::Xoshiro)
         _s0 = 0x0000000000000000
@@ -98,7 +98,7 @@ for (fname, JUMP) in ((:jump, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa958261
                 s3 = s3 << 45 | s3 >> 19
             end
         end
-        setstate!(rng, _s0, _s1, _s2, _s3)
+        setstate!(rng, (_s0, _s1, _s2, _s3, nothing))
     end
     @eval $fname(rng::Xoshiro) = $fname!(copy(rng))
 
@@ -115,9 +115,9 @@ for (fname, JUMP) in ((:jump, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa958261
     @eval $fname(rng::Xoshiro, n::Integer) = $fname!(copy(rng), n)
 end
 
-for (fname, sz) in ((:jump, 128), (:long_jump, 192))
+for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
     local fname! = Symbol(fname, :!)
-    local see_other = Symbol(fname === :jump ? :long_jump : :jump)
+    local see_other = Symbol(fname === :jump_128 ? :jump_192 : :jump_128)
     local see_other! = Symbol(see_other, :!)
     local seq_pow = 256 - sz
     @eval begin
