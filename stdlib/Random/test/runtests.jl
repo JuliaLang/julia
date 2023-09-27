@@ -1139,7 +1139,7 @@ end
     @test jump_192!(x, 0) == y
 end
 
-@testset "Xoshiro jump, various seeds" begin
+@testset "Xoshiro jump_128, various seeds" begin
     for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
         x = Xoshiro(seed)
         @test jump_128(jump_128(jump_128(x))) == jump_128(x, 3)
