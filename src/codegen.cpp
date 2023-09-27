@@ -1363,6 +1363,7 @@ extern "C" {
         /* gnu_pubnames */ 1,
 #endif
         /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
+        /* debug_line_info */ 1,
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1,

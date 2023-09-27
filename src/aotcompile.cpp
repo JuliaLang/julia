@@ -304,7 +304,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging_mode = imaging;
-    params.debug_level = jl_options.debug_level;
+    params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
@@ -1854,7 +1854,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // Force at least medium debug info for introspection
         // No debug info = no variable names,
         // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
-        output.debug_level = std::max(2, static_cast<int>(jl_options.debug_level));
+        output.debug_level = params.debug_info_level;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 
