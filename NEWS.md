@@ -8,6 +8,7 @@ New language features
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module. ([#50105])
 * `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+* A struct definition can be marked with `@inline` or `@noinline` to allow/prohibit it from being treated as inline-alloc eligable.
 
 Language changes
 ----------------

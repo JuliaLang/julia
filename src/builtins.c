@@ -1745,12 +1745,15 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 1, 2);
+    JL_NARGS(_typebody!, 1, 3);
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 2) {
+    if (nargs > 1) {
         jl_value_t *ft = args[1];
+        jl_value_t *forceinline = nargs > 2 ? args[2] : NULL;
         JL_TYPECHK(_typebody!, simplevector, ft);
+        if (forceinline)
+            JL_TYPECHK(_typebody!, bool, forceinline);
         size_t nf = jl_svec_len(ft);
         for (size_t i = 0; i < nf; i++) {
             jl_value_t *elt = jl_svecref(ft, i);
@@ -1771,8 +1774,9 @@ JL_CALLABLE(jl_f__typebody)
             // able to compute the layout of the object before needing to
             // publish it, so we must assume it cannot be inlined, if that
             // check passes, then we also still need to check the fields too.
+            int mayinlinealloc = 0;
             if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
-                int mayinlinealloc = 1;
+                mayinlinealloc = 1;
                 size_t i;
                 for (i = 0; i < nf; i++) {
                     jl_value_t *fld = jl_svecref(ft, i);
@@ -1781,8 +1785,13 @@ JL_CALLABLE(jl_f__typebody)
                         break;
                     }
                 }
-                dt->name->mayinlinealloc = mayinlinealloc;
             }
+            if (forceinline) {
+                if (forceinline != jl_false && !mayinlinealloc)
+                    jl_error("Cannot apply @inline to this struct which is self-referential or mutable");
+                mayinlinealloc = forceinline != jl_false;
+            }
+            dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
 
