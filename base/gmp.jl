@@ -705,7 +705,7 @@ function prod(arr::AbstractArray{BigInt})
     foldl(MPZ.mul!, arr; init)
 end
 
-factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
+factorial(n::BigInt) = !isneg(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
 
 function binomial(n::BigInt, k::Integer)
     k < 0 && return BigInt(0)
