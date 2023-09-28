@@ -822,8 +822,8 @@ end
     d2 = replace(d1, (1=>2) => (1=>"a"))
     @test d2 == Dict(1=>"a", 3=>4)
     @test d2 isa Dict{Int, Any}
-    replace!(d1, (1=>2) => (1=>-2))
-    @test d1 == GenericDict(Dict(1=>-2, 3=>4))
+    @test d1 === replace!(d1, (1=>2) => (1=>-2))
+    @test d1 == Dict(1=>-2, 3=>4)
 
     dd = Dict(1=>2, 3=>1, 5=>1, 7=>1)
     for d1 in (dd, GenericDict(dd))
