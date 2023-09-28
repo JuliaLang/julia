@@ -660,7 +660,6 @@ static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
     FnAttrs.addAttribute(Attribute::NoUnwind);
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
     auto RetAttrs = AttrBuilder(C);
-    RetAttrs.addAttribute(Attribute::NoAlias);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
     RetAttrs.addAlignmentAttr(Align(alignof(void*)));
@@ -677,7 +676,6 @@ static AttributeList get_attrs_box_sext(LLVMContext &C, unsigned nbytes)
     FnAttrs.addAttribute(Attribute::NoUnwind);
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
     auto RetAttrs = AttrBuilder(C);
-    RetAttrs.addAttribute(Attribute::NoAlias);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addAttribute(Attribute::getWithDereferenceableBytes(C, nbytes));
     RetAttrs.addDereferenceableAttr(nbytes);
@@ -695,7 +693,6 @@ static AttributeList get_attrs_box_zext(LLVMContext &C, unsigned nbytes)
     FnAttrs.addAttribute(Attribute::NoUnwind);
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
     auto RetAttrs = AttrBuilder(C);
-    RetAttrs.addAttribute(Attribute::NoAlias);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
     RetAttrs.addAlignmentAttr(Align(alignof(void*)));
