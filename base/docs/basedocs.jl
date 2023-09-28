@@ -69,7 +69,7 @@ the module. See the [manual section about modules](@ref modules) for details.
 
 !!! compat "Julia 1.11"
     The public keyword was added in Julia 1.11. Prior to this the notion 
-    of publicity was less explicit.
+    of publicness was less explicit.
 """
 kw"public"
 
