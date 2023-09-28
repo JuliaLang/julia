@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 
+#include "llvm/IR/Attributes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -124,6 +125,11 @@ namespace jl_intrinsics {
     // The allocation size is set to the first argument.
     static Function *addGCAllocAttributes(Function *target)
     {
+        auto FnAttrs = AttrBuilder(target->getContext());
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        target->addFnAttrs(FnAttrs);
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
         return target;
