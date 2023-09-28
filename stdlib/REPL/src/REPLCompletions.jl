@@ -555,14 +555,13 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                              sv::CC.InferenceState)
 end
 
-function resolve_toplevel_symbols!(mod::Module, src::Core.CodeInfo)
-    newsrc = copy(src)
+function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_globals_in_ir(
-        #=jl_array_t *stmts=# newsrc.code::Any,
+        #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
         #=int binding_effects=# 0::Int)::Cvoid
-    return newsrc
+    return src
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
@@ -588,7 +587,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     mi.specTypes = Tuple{}
 
     mi.def = context_module
-    src = resolve_toplevel_symbols!(context_module, src)
+    resolve_toplevel_symbols!(src, context_module)
     @atomic mi.uninferred = src
 
     result = CC.InferenceResult(mi)
