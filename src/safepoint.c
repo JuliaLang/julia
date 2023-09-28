@@ -30,8 +30,8 @@ char *jl_safepoint_pages = NULL;
 // so that both safepoint load and pending signal load falls in this page.
 // The initialization of the `safepoint` pointer is done `ti_initthread`
 // in `threading.c`.
-// The fourth page is always disabled, so not tracked here.
-uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
+// The fourth page is the count of suspended threads
+uint16_t jl_safepoint_enable_cnt[4] = {0, 0, 0, 0};
 
 // This lock should be acquired before enabling/disabling the safepoint
 // or accessing one of the following variables:
@@ -49,12 +49,12 @@ uv_cond_t safepoint_cond;
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
-    assert(0 <= idx && idx < 3);
+    assert(0 <= idx && idx <= 3);
     if (jl_safepoint_enable_cnt[idx]++ != 0) {
         // We expect this to be enabled at most twice
         // one for the GC, one for SIGINT.
         // Update this if this is not the case anymore in the future.
-        assert(jl_safepoint_enable_cnt[idx] <= 2);
+        assert(jl_safepoint_enable_cnt[idx] <= (idx == 3 ? INT16_MAX : 2));
         return;
     }
     // Now that we are requested to mprotect the page and it wasn't already.
@@ -63,14 +63,15 @@ static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
     DWORD old_prot;
     VirtualProtect(pageaddr, jl_page_size, PAGE_NOACCESS, &old_prot);
 #else
-    mprotect(pageaddr, jl_page_size, PROT_NONE);
+    int r = mprotect(pageaddr, jl_page_size, PROT_NONE);
+    (void)r; //if (r) perror("mprotect");
 #endif
 }
 
 static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
-    assert(0 <= idx && idx < 3);
+    assert(0 <= idx && idx <= 3);
     if (--jl_safepoint_enable_cnt[idx] != 0) {
         assert(jl_safepoint_enable_cnt[idx] > 0);
         return;
@@ -82,7 +83,8 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
     DWORD old_prot;
     VirtualProtect(pageaddr, jl_page_size, PAGE_READONLY, &old_prot);
 #else
-    mprotect(pageaddr, jl_page_size, PROT_READ);
+    int r = mprotect(pageaddr, jl_page_size, PROT_READ);
+    (void)r; //if (r) perror("mprotect");
 #endif
 }
 
@@ -105,13 +107,18 @@ void jl_safepoint_init(void)
         jl_gc_debug_critical_error();
         abort();
     }
-    char *pageaddr = addr + jl_page_size * 3;
-#ifdef _OS_WINDOWS_
-    DWORD old_prot;
-    VirtualProtect(pageaddr, jl_page_size, PAGE_NOACCESS, &old_prot);
-#else
-    mprotect(pageaddr, jl_page_size, PROT_NONE);
-#endif
+//    // If we able to skip past the faulting safepoint instruction conditionally,
+//    // then we can make this safepoint page unconditional. But otherwise we
+//    // only enable this page when required, though it gives us less
+//    // fine-grained control over individual resume.
+//    char *pageaddr = addr + pgsz * 3;
+//#ifdef _OS_WINDOWS_
+//    DWORD old_prot;
+//    VirtualProtect(pageaddr, pgsz, PAGE_NOACCESS, &old_prot);
+//#else
+//    int r = mprotect(pageaddr, pgsz, PROT_NONE);
+//    (void)r; //if (r) perror("mprotect");
+//#endif
     // The signal page is for the gc safepoint.
     // The page before it is the sigint pending flag.
     jl_safepoint_pages = addr;
@@ -223,8 +230,10 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
     uv_mutex_lock(&ptls2->sleep_lock);
     int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count) + 1;
     jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count);
-    if (suspend_count == 1) // first to suspend
+    if (suspend_count == 1) { // first to suspend
+        jl_safepoint_enable(3);
         jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 3 + sizeof(void*)));
+    }
     uv_mutex_unlock(&ptls2->sleep_lock);
     if (waitstate) {
         // wait for suspend (or another thread to call resume)
@@ -248,6 +257,7 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
 }
 
 // return old suspend count on success, 0 on failure
+// n.b. threads often do not resume until after all suspended threads have been resumed!
 int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
 {
     if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
@@ -268,8 +278,11 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
         jl_safepoint_resume_thread_mach(ptls2, tid);
 #endif
     }
-    if (suspend_count != 0)
+    if (suspend_count != 0) {
         jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count - 1);
+        if (suspend_count == 1)
+            jl_safepoint_disable(3);
+    }
     uv_mutex_unlock(&ptls2->sleep_lock);
 #  ifdef _OS_DARWIN_
     uv_mutex_unlock(&safepoint_lock);
