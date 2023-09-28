@@ -345,7 +345,7 @@ e.g. `rand(default_rng())`.
 
 !!! note
     The type of the default RNG is an implementation detail. Across different versions of
-    Julia, you should not expect the default RNG to have always the same type, nor that it will
+    Julia, you should not expect the default RNG to always have the same type, nor that it will
     produce the same stream of random numbers for a given seed.
 
 !!! compat "Julia 1.3"
