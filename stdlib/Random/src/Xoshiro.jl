@@ -4,7 +4,7 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro(seed)
+    Xoshiro(seed::Integer)
     Xoshiro()
 
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
@@ -21,7 +21,6 @@ multiple interleaved xoshiro instances).
 The virtual PRNGs are discarded once the bulk request has been serviced (and should cause
 no heap allocations).
 
-The `seed` may be an integer or a vector of `UInt32` integers.
 If no seed is provided, a randomly generated one is created (using entropy from the system).
 See the [`seed!`](@ref) function for reseeding an already existing `Xoshiro` object.
 
@@ -200,7 +199,7 @@ Using or seeding the RNG of any other task than the one returned by `current_tas
 is undefined behavior: it will work most of the time, and may sometimes fail silently.
 
 When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
-may be an integer or a vector of `UInt32` integers.
+may be any integer.
 
 !!! compat "Julia 1.11"
     Seeding `TaskLocalRNG()` with a negative integer seed requires at least Julia 1.11.

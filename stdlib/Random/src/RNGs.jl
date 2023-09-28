@@ -303,15 +303,12 @@ This is an internal function, subject to change.
 """
 function make_seed(n::Integer)
     neg = signbit(n)
-    n = abs(n) # n can still be negative, e.g. n == typemin(Int)
-    if n < 0
-        # we assume that `unsigned` can be called on integers `n` for which `abs(n)` is
-        # negative; `unsigned` is necessary for `n & 0xffffffff` below, which would
-        # otherwise propagate the sign bit of `n` for types smaller than UInt32
-        n = unsigned(n)
+    if neg
+        n = ~n
     end
+    @assert n >= 0
     seed = UInt32[]
-    # we directly encode the bit pattern of `abs(n)` into the resulting vector `seed`;
+    # we directly encode the bit pattern of `n` into the resulting vector `seed`;
     # to greatly limit breaking the streams of random numbers, we encode the sign bit
     # as the upper bit of `seed[end]` (i.e. for most positive seeds, `make_seed` returns
     # the same vector as when we didn't encode the sign bit)
@@ -333,7 +330,7 @@ function from_seed(a::Vector{UInt32})::BigInt
     neg = !iszero(a[end] & 0x80000000)
     seed = sum((i == length(a) ? a[i] & 0x7fffffff : a[i]) * big(2)^(32*(i-1))
                for i in 1:length(a))
-    neg ? -seed : seed
+    neg ? ~seed : seed
 end
 
 
