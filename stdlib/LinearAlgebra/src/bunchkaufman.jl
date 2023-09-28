@@ -154,10 +154,10 @@ The following functions are available for `BunchKaufman` objects:
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 2 3]
-2×2 Matrix{Int64}:
- 1  2
- 2  3
+julia> A = Float64.([1 2; 2 3])
+2×2 Matrix{Float64}:
+ 1.0  2.0
+ 2.0  3.0
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
 BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
