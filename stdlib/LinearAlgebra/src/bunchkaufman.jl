@@ -255,8 +255,7 @@ function getproperty(B::BunchKaufman{TS},
         return Matrix{TS}(I, n, n)[:,invperm(B.p)]
     elseif d === :L || d === :U || d === :D
         if d === :D
-            _, od, md = generic_syconv!(getfield(B, :uplo), getfield(B, :LD),
-                getfield(B, :ipiv), B.rook, false)
+            _, od, md = generic_syconv(B, false)
         elseif typeof(B) <: BunchKaufman{T,<:StridedMatrix} where {T<:BlasFloat}
             # We use LAPACK whenever we can
             if getfield(B, :rook)
@@ -267,8 +266,7 @@ function getproperty(B::BunchKaufman{TS},
                     getfield(B, :ipiv))
             end
         else
-            LUD, _ = generic_syconv!(getfield(B, :uplo), copy(getfield(B, :LD)),
-                getfield(B, :ipiv), B.rook)
+            LUD, _ = generic_syconv(B)
         end
         if d === :D
             if getfield(B, :uplo) == 'L'
@@ -459,7 +457,7 @@ transpose , i.e. `adjoint(y)`.
 the matrix is stored in the upper triangular part (`uplo=='U'`), the
 lower triangular part (`uplo=='L'`), or the full storage space is used
 (`uplo=='F'`). If `uplo!='F'` then only the corresponding triangular
-part is updated. The values `'U'` or `'L'` can onlt be used when A is
+part is updated. The values `'U'` or `'L'` can only be used when A is
 square (`N==M`).
 
 `syhe` is a character, either `'S'` or `'H'`, indicating whether the
@@ -519,14 +517,14 @@ end
 """
 generic_mvpv!(trans, alpha, A, x, beta, y) -> nothing
 
-`generic_mvpv!` performs one of the following matrix-vector operation:
+`generic_mvpv!` performs the following matrix-vector operation:
 
 `y[1:K] = alpha*A'*x[1:L] + beta*y[1:K]`
 
 in-place, where `alpha` and `beta` are scalars, `x` is a vector with at
 least L elements, `y` is a vector with at least K elements, and `A` is
 an `NxM` matrix. `A'` can denote the transpose, i.e. `transpose(A)` or
-the conjugate transpose , i.e. `adjoint(A)`, and then `M==K && N==L`.
+the conjugate transpose, i.e. `adjoint(A)`, and then `M==K && N==L`.
 `A'` can also denote no adjoining at all, i.e. `A'==A`, and then
 `N==K && M==L`.
 
@@ -675,20 +673,20 @@ end
 generic_bunchkaufman!(uplo, A, syhe, rook::Bool=false) ->
 LD<:AbstractMatrix, ipiv<:AbstractVector{Integer}, info::BlasInt
 
-Compute the Bunch-Kaufman factorization of a symmetric or
-Hermitian matrix `A` of size `NxN` as `P'*U*D*U'*P` or `P'*L*D*L'*P`,
-depending on which triangle is stored in `A`. Note that if `A` is
-complex symmetric then `U'` and `L'` denote the unconjugated
-transposes, i.e. `transpose(U)` and `transpose(L)`. The resulting
-`U` or `L` and D are store in-place in `A`, LAPACK style. `LD` is just
-a reference to `A` (that is, `LD===A`). `ipiv` stores the permutation
-information of the algorithm in LAPACK format. `info` indicates whether
-the factorization was sucessful and non-singular when `info==0`, or
-else `info` takes a different value. The outputs `LD`, `ipiv`, `info`
-follow the format of the LAPACK functions of the Bunch-Kaufman
-factorization (`dsytrf`, `csytrf`, `chetrf`, etc.), so this function
-can (ideally) be used interchangeably with its LAPACK counterparts
-`LAPACK.sytrf!`, `LAPACK.sytrf_rook!`, etc.
+Computes the Bunch-Kaufman factorization of a symmetric or Hermitian
+matrix `A` of size `NxN` as `P'*U*D*U'*P` or `P'*L*D*L'*P`, depending on
+which triangle is stored in `A`. Note that if `A` is complex symmetric
+then `U'` and `L'` denote the unconjugated transposes, i.e.
+`transpose(U)` and `transpose(L)`. The resulting `U` or `L` and D are
+stored in-place in `A`, LAPACK style. `LD` is just a reference to `A`
+(that is, `LD===A`). `ipiv` stores the permutation information of the
+algorithm in LAPACK format. `info` indicates whether the factorization
+was sucessful and non-singular when `info==0`, or else `info` takes a
+different value. The outputs `LD`, `ipiv`, `info` follow the format of
+the LAPACK functions of the Bunch-Kaufman factorization (`dsytrf`,
+`csytrf`, `chetrf`, etc.), so this function can (ideally) be used
+interchangeably with its LAPACK counterparts `LAPACK.sytrf!`,
+`LAPACK.sytrf_rook!`, etc.
 
 `uplo` is a character, either `'U'` or `'L'`, indicating whether the
 matrix is stored in the upper triangular part (`uplo=='U'`) or in the
@@ -701,10 +699,10 @@ Bunch-Kaufman factorization is performed) or complex hermitian
 performed).
 
 If `rook` is `true`, rook pivoting is used (also called bounded
-Bunch-Kaufman factorization). If `rook` is false, rook pivoting is not
-used (standard Bunch-Kaufman factorization). Rook pivoting can require
-up to `~N^3/6` extra comparisons in adition to the `~N^3/3` additions
-and `~N^3/3` multiplications of the standard Bunch-Kaufman
+Bunch-Kaufman factorization). If `rook` is `false`, rook pivoting is
+not used (standard Bunch-Kaufman factorization). Rook pivoting can
+require up to `~N^3/6` extra comparisons in adition to the `~N^3/3`
+additions and `~N^3/3` multiplications of the standard Bunch-Kaufman
 factorization. However, rook pivoting guarantees that the entries of
 `U` or `L` are bounded.
 
@@ -1039,76 +1037,46 @@ end
 
 
 """
-generic_syconv!(uplo, A, ipiv; gettri::Bool=true) ->
-TLU<:AbstractMatrix, e<:AbstractVector, d<:Union{AbstractVector,Nothing}
+generic_syconv(F, gettri::Bool=true) ->
+(TLU<:Union{AbstractMatrix,Nothing}, e<:AbstractVector,
+    d<:Union{AbstractVector,Nothing})
 
-`generic_syconv!` takes the Bunch-Kaufman factorization compact
-result `A` and returns the block-diagonal factor `D`, and the triangular
-factor `L` (or `U`) if requested. `ipiv` contains the permutations applied
-during the factorization, and is required in order to compute `D` and `L`
-(or `U`). If the `L` or `U` factor is requested then both `L` (or `U`) and
-the main diagonal of `D` will be stored in-place in `A`, following LAPACK
-format, and `d` will be set to `nothing`. `TLU` is just a reference for `A`
-(`TLU===A`). `e` contains the first subdiagonal of `D`. If the triangular
-factor is not requested, then `A` will not be modified, and the main
-diagonal of `D` will be stored in `d`. All inputs are assumed to follow
-the format of the LAPACK functions of the Bunch-Kaufman factorization
-(`dsytrf`, `csytrf`, `chetrf`, etc.).
+`generic_syconv` takes the Bunch-Kaufman object `F` and returns the
+block-diagonal factor `D`, and the triangular factor `L` (or `U`) if
+requested. If the `L` or `U` factor is requested then both `L` (or `U`) and
+the main diagonal of `D` will be stored in `TLU`, following LAPACK format,
+and `d` will be set to `nothing`. `e` contains the first subdiagonal of
+`D`. If the triangular factor is not requested, then `TLU` will not be set
+to `nothing`, and the main diagonal of `D` will be stored in `d`.
 
-`uplo` is a character, either `'U'` or `'L'`, indicating whether the
-matrix is stored in the upper triangular part (`uplo=='U'`) or in the
-lower triangular part (`uplo=='L'`).
-
-`gettri` is a Bool, indicating whether the `L` (or `U`) triangular factor
+`gettri` is a `Bool`, indicating whether the `L` (or `U`) triangular factor
 should be computed (`gettri==true`) or not (`gettri==false`). If the
-triangular factor is not computed, `A` will not be modified, but `TLU`
-will still be a reference for `A` (`TLU===A`).
-
-`rook` is a logical value, indicating whether the factorization was
-performed using rook pivoting (`rook==true`) or the standard diagonal
-pivoting (`rook==false`).
-
-This function implements the conversion entirely in native Julia, so it
-supports any number type representing real or complex numbers.
+triangular factor is required, a copy of `A.LD` will be created, and the
+triangular factor will be computed in-place in said copy.
 """
-function generic_syconv!(
-    uplo::AbstractChar,
-    A::AbstractMatrix{TS},
-    ipiv::AbstractVector{<:Integer},
-    rook::Bool,
+function generic_syconv(
+    F::BunchKaufman{TS},
     gettri::Bool=true
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
 
     # Inputs must be 1-indexed; bounds may not be checked.
-    Base.require_one_based_indexing(A, ipiv)
+    Base.require_one_based_indexing(F.LD, F.ipiv)
+
+    # Extract necessary variables
+    A, ipiv, rook = gettri ? deepcopy(F.LD) : F.LD, F.ipiv, F.rook
 
     # Get size of matrix
-    N, N2 = size(A)
-
-    # Initialize info integer as 0
-    info = 0::BlasInt
-
-    # Check input correctness
-    if uplo != 'U' && uplo != 'L'
-        info = (-1)::BlasInt
-    elseif N != N2
-        info = (-2)::BlasInt
-    elseif length(ipiv) != N
-        info = (-3)::BlasInt
-    end
-    if info < 0
-        arg_illegal("generic_syconv!", -info, 'E')
-    end
+    N = size(A)[1]
 
     # Intialize off-diagonal and diagonal vector
     e = Vector{TS}(undef, N)
     d = gettri ? nothing : diag(A, 0)
 
     #   Quick return if possible
-    if N == 0; return A, e, d; end
+    if N == 0; return gettri ? A : nothing, e, d; end
 
     # Main loops
-    upper = (uplo == 'U')
+    upper = (F.uplo == 'U')
     @inline icond_d = upper ? i -> i > 1 : i -> i < N
     @inline icond_T = upper ? i -> i >= 1 : i -> i <= N
     @inline inext = upper ? i -> i - 1 : i -> i + 1
@@ -1144,45 +1112,26 @@ function generic_syconv!(
             if upper; i -= 1; else; i += 1; end
         end; end
     end
-    return A, e, d
+    return gettri ? A : nothing, e, d
 end
 
 
 """
-generic_bksolve!(uplo, A, ipiv, B, syhe) -> X<:AbstractMatrix
+generic_bksolve!(F, B) -> X<:AbstractVecOrMat
 
-`generic_bksolve!` solves a system of linear equations `M*X = B` with
-a matrix M whose Bunch-Kaufman factorization compact result is
-stored in `A`, and stores the solution `X` in place of `B`. `ipiv`
-stores the permutation information of the Bunch-Kaufman factorization
-of `M`. `X` is just a reference to `B` (that is, `X===B`).
-
-`uplo` is a character, either `'U'` or `'L'`, indicating whether the
-matrix is stored in the upper triangular part (`uplo=='U'`) or in the
-lower triangular part (`uplo=='L'`).
-
-`syhe` is a character, either `'S'` or `'H'`, indicating whether the
-matrix is real/complex symmetric (`syhe=='S'`) or complex hermitian
-(`syhe=='H'`).
-
-`rook` is a logical value, indicating whether the factorization was
-performed using rook pivoting (`rook==true`) or the standard diagonal
-pivoting (`rook==false`).
+`generic_bksolve!` solves a system of linear equations `A*X = B` where
+the Bunch-Kaufman factorization of `A` is provided by `F`.
 """
 function generic_bksolve!(
-    uplo::AbstractChar,
-    A::AbstractMatrix{TS},
-    ipiv::AbstractVector{<:Integer},
+    F::BunchKaufman{TS},
     B0::AbstractVecOrMat{TS},
-    syhe::AbstractChar,
-    rook::Bool
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
 
     # Inputs must be 1-indexed; bounds may not be checked.
-    Base.require_one_based_indexing(A, ipiv, B0)
+    Base.require_one_based_indexing(F.LD, F.ipiv, B0)
 
     # Get size of matrices
-    N, N2 = size(A)
+    N = size(F.LD)[1]
     if typeof(B0) <: AbstractVector
         N3 = size(B0)[1]
         M = 1
@@ -1196,16 +1145,8 @@ function generic_bksolve!(
     info = 0::BlasInt
 
     # Check input correctness
-    if uplo != 'U' && uplo != 'L'
-        info = (-1)::BlasInt
-    elseif N != N2
+    if N3 != N
         info = (-2)::BlasInt
-    elseif length(ipiv) != N
-        info = (-3)::BlasInt
-    elseif N3 != N
-        info = (-4)::BlasInt
-    elseif syhe != 'S' && syhe != 'H'
-        info = (-5)::BlasInt
     end
     if info < 0
         arg_illegal("generic_bksolve!", -info, 'E')
@@ -1214,118 +1155,112 @@ function generic_bksolve!(
     #   Quick return if possible
     if N == 0 || M == 0; return B; end
 
+    # Extract necessary variables
+    A, ipiv, symm, rook = F.LD, F.ipiv, issymmetric(F), F.rook
+
     # Load the requested adjoining operator
-    adj_op = syhe == 'S' ? identity : conj
+    adj_op = symm ? identity : conj
 
     R1 = TR(1)
-    upper = (uplo == 'U')
+    upper = (F.uplo == 'U')
     @inline kcond1 = upper ? k -> k >= 1 : k -> k <= N
     @inline kcond2 = upper ? k -> k <= N : k -> k >= 1
     @inline knext = upper ? k -> k - 1 : k -> k + 1
     @inline knext2 = upper ? k -> k + 1 : k -> k - 1
-    # if uplo == 'U'
-        # Upper triangular case
-        #   Solve A*X = B, where A = U*D*U'.
-        #   First solve U*D*X = B, overwriting B with X.
-        #   k is the main loop index, decreasing from N to 1 in steps of
-        #   1 or 2, depending on the size of the diagonal blocks.
-        k = upper ? N : 1
-        while kcond1(k); @inbounds begin
-            kp = ipiv[k]
-            if kp > 0
-                #   1 x 1 diagonal block
-                #   Interchange rows K and IPIV(K).
-                Base.swaprows!(B, k, kp)
-                #   Multiply by inv(U(K)), where U(K) is the transformation
-                #   stored in column K of A.
-                Aview = upper ? view(A, 1:(k-1), k) : view(A, (k+1):N, k)
-                Bview = upper ? B : view(B, (k+1):N, :)
-                generic_adr1!('F', -R1, Aview, view(B, k, :), Bview, 'S')
-                #   Multiply by the inverse of the diagonal block.
-                s = syhe == 'S' ? 1 / A[k,k] : 1 / real(A[k,k])
-                for j in 1:M; B[k,j] *= s; end
-                if upper; k -= 1; else; k += 1; end
-            else
-                #   2 x 2 diagonal block
-                #   Interchange rows K and -IPIV(K) THEN K-1 and -IPIV(K-1)
-                # The first interchange is only needed when rook pivoting is used
-                if rook; Base.swaprows!(B, k, -kp); end
-                kx = knext(k)
-                Base.swaprows!(B, kx, -ipiv[kx])
-                #   Multiply by inv(U(K)), where U(K) is the transformation
-                #   stored in columns K-1 and K of A.
-                Aview = upper ? view(A, 1:(k-2), k) : view(A, (k+2):N, k)
-                Bview = upper ? B : view(B, (k+2):N, :)
-                generic_adr1!('F', -R1, Aview, view(B, k, :), Bview, 'S')
-                Aview = upper ? view(A, 1:(k-2), kx) : view(A, (k+2):N, kx)
-                generic_adr1!('F', -R1, Aview, view(B, kx, :), Bview, 'S')
-                #   Multiply by the inverse of the diagonal block.
-                axk = A[kx,k]
-                axx = A[kx,kx] / axk
-                akk = A[k,k] / adj_op(axk)
-                denom = axx*akk - 1
-                for j in 1:M
-                    bx = B[kx,j] / axk
-                    bk = B[k,j] / adj_op(axk)
-                    B[kx,j] = (akk*bx - bk) / denom
-                    B[k,j] = (axx*bk - bx) / denom
-                end
-                if upper; k -= 2; else; k += 2; end
-            end
-        end; end
-        #   Next solve U'*X = B, overwriting B with X.
-        #   K is the main loop index, increasing from 1 to N in steps of
-        #   1 or 2, depending on the size of the diagonal blocks.
-        k = upper ? 1 : N
-        while kcond2(k); @inbounds begin
+    k = upper ? N : 1
+    while kcond1(k); @inbounds begin
+        kp = ipiv[k]
+        if kp > 0
+            #   1 x 1 diagonal block
+            #   Interchange rows K and IPIV(K).
+            Base.swaprows!(B, k, kp)
+            #   Multiply by inv(U(K)), where U(K) is the transformation
+            #   stored in column K of A.
             Aview = upper ? view(A, 1:(k-1), k) : view(A, (k+1):N, k)
-            Bview = upper ? view(B, 1:(k-1), :) : view(B, (k+1):N, :)
-            B_row = view(B, k, :)
-            kp = ipiv[k]
-            if kp > 0
-                #   1 x 1 diagonal block
-                #   Multiply by inv(U**T(K)), where U(K) is the transformation
-                #   stored in column K of A.
-                if syhe == 'S'
-                    generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
-                else
-                    conj!(B_row)
-                    generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
-                    conj!(B_row)
-                end
-                #   Interchange rows K and IPIV(K).
-                Base.swaprows!(B, k, kp)
-                if upper; k += 1; else; k -= 1; end
-            else
-                #   2 x 2 diagonal block
-                #   Multiply by inv(U**T(K+1)), where U(K+1) is the transformation
-                #   stored in columns K and K+1 of A.
-                kx = knext2(k)
-                if syhe == 'S'
-                    generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
-                    Aview = upper ? view(A, 1:(k-1), kx) : view(A, (k+1):N, kx)
-                    B_row = view(B, kx, :)
-                    generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
-                elseif k > 1
-                    conj!(B_row)
-                    generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
-                    conj!(B_row)
-                    Aview = upper ? view(A, 1:(k-1), kx) : view(A, (k+1):N, kx)
-                    B_row = view(B, kx, :)
-                    conj!(B_row)
-                    generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
-                    conj!(B_row)
-                end
-                #   Interchange rows K and -IPIV(K) THEN K+1 and -IPIV(K+1).
-                # The second interchange is only needed when rook pivoting is used
-                Base.swaprows!(B, k, -kp)
-                if rook; Base.swaprows!(B, kx, -ipiv[kx]); end
-                if upper; k += 2; else; k -= 2; end
+            Bview = upper ? B : view(B, (k+1):N, :)
+            generic_adr1!('F', -R1, Aview, view(B, k, :), Bview, 'S')
+            #   Multiply by the inverse of the diagonal block.
+            s = symm ? 1 / A[k,k] : 1 / real(A[k,k])
+            for j in 1:M; B[k,j] *= s; end
+            if upper; k -= 1; else; k += 1; end
+        else
+            #   2 x 2 diagonal block
+            #   Interchange rows K and -IPIV(K) THEN K-1 and -IPIV(K-1)
+            # The first interchange is only needed when rook pivoting is used
+            if rook; Base.swaprows!(B, k, -kp); end
+            kx = knext(k)
+            Base.swaprows!(B, kx, -ipiv[kx])
+            #   Multiply by inv(U(K)), where U(K) is the transformation
+            #   stored in columns K-1 and K of A.
+            Aview = upper ? view(A, 1:(k-2), k) : view(A, (k+2):N, k)
+            Bview = upper ? B : view(B, (k+2):N, :)
+            generic_adr1!('F', -R1, Aview, view(B, k, :), Bview, 'S')
+            Aview = upper ? view(A, 1:(k-2), kx) : view(A, (k+2):N, kx)
+            generic_adr1!('F', -R1, Aview, view(B, kx, :), Bview, 'S')
+            #   Multiply by the inverse of the diagonal block.
+            axk = A[kx,k]
+            axx = A[kx,kx] / axk
+            akk = A[k,k] / adj_op(axk)
+            denom = axx*akk - 1
+            for j in 1:M
+                bx = B[kx,j] / axk
+                bk = B[k,j] / adj_op(axk)
+                B[kx,j] = (akk*bx - bk) / denom
+                B[k,j] = (axx*bk - bx) / denom
             end
-        end; end
-    # else
-    #     error("Lower triangular storage not supported yet.")
-    # end
+            if upper; k -= 2; else; k += 2; end
+        end
+    end; end
+    #   Next solve U'*X = B, overwriting B with X.
+    #   K is the main loop index, increasing from 1 to N in steps of
+    #   1 or 2, depending on the size of the diagonal blocks.
+    k = upper ? 1 : N
+    while kcond2(k); @inbounds begin
+        Aview = upper ? view(A, 1:(k-1), k) : view(A, (k+1):N, k)
+        Bview = upper ? view(B, 1:(k-1), :) : view(B, (k+1):N, :)
+        B_row = view(B, k, :)
+        kp = ipiv[k]
+        if kp > 0
+            #   1 x 1 diagonal block
+            #   Multiply by inv(U**T(K)), where U(K) is the transformation
+            #   stored in column K of A.
+            if symm
+                generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
+            else
+                conj!(B_row)
+                generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
+                conj!(B_row)
+            end
+            #   Interchange rows K and IPIV(K).
+            Base.swaprows!(B, k, kp)
+            if upper; k += 1; else; k -= 1; end
+        else
+            #   2 x 2 diagonal block
+            #   Multiply by inv(U**T(K+1)), where U(K+1) is the transformation
+            #   stored in columns K and K+1 of A.
+            kx = knext2(k)
+            if symm
+                generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
+                Aview = upper ? view(A, 1:(k-1), kx) : view(A, (k+1):N, kx)
+                B_row = view(B, kx, :)
+                generic_mvpv!('T', -R1, Bview, Aview, R1, B_row)
+            elseif k > 1
+                conj!(B_row)
+                generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
+                conj!(B_row)
+                Aview = upper ? view(A, 1:(k-1), kx) : view(A, (k+1):N, kx)
+                B_row = view(B, kx, :)
+                conj!(B_row)
+                generic_mvpv!('C', -R1, Bview, Aview, R1, B_row)
+                conj!(B_row)
+            end
+            #   Interchange rows K and -IPIV(K) THEN K+1 and -IPIV(K+1).
+            # The second interchange is only needed when rook pivoting is used
+            Base.swaprows!(B, k, -kp)
+            if rook; Base.swaprows!(B, kx, -ipiv[kx]); end
+            if upper; k += 2; else; k -= 2; end
+        end
+    end; end
     return B
 end
 
@@ -1535,7 +1470,7 @@ function bunchkaufman_native!(A::AbstractMatrix{TS},
     rook::Bool = false;
     check::Bool = true,
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
-    if typeof(A) <: RealHermSymComplexSym{TR}
+    if A isa RealHermSymComplexSym{TR}
         syhe = 'S'
     elseif ishermitian(A)
         syhe = 'H'
@@ -1545,12 +1480,10 @@ function bunchkaufman_native!(A::AbstractMatrix{TS},
         throw(ArgumentError("Bunch-Kaufman decomposition is only valid for " *
             "symmetric or Hermitian matrices"))
     end
-    if typeof(A) <: HermOrSym
-        # Adata = Ref(A.data)[] # explicitly referring to the original data
+    if A isa HermOrSym
         Adata = A.data
         uplo = A.uplo
     else
-        # Adata = Ref(A)[] # explicitly referring to the original data
         Adata = A
         uplo = 'U'
     end
@@ -1584,30 +1517,29 @@ function bunchkaufman(A::AbstractMatrix{TS},
     ) where TS <:Union{TI, Complex{TI}} where TI <: Integer
 
     # Identity whether matrix is symmetric or Hermitian or none
-    TA = typeof(A)
-    if TA <: Symmetric
+    if A isa Symmetric
         TA = Symmetric
-    elseif TA <: Hermitian
+    elseif A isa Hermitian
         TA = Hermitian
     else
-        TA = nothing
+        TA = Nothing
     end
 
     # Create a rational copy of input integer matrix, as the Bunch-Kaufman
     # algorithm is closed over the rationals but not over the integers.
     # We promote input to BigInt to avoid overflow problems
-    if typeof(TA) <: Nothing
+    if TA == Nothing
         if TS <: Integer
             M = Rational{BigInt}.(eigencopy_oftype(A, TS))
         else
             M = Complex{Rational{BigInt}}.(eigencopy_oftype(A, TS))
         end
     else
-        uplo = A.uplo == 'U' ? :U : :L
         if TS <: Integer
-            M = TA(Rational{BigInt}.(eigencopy_oftype(A, TS)), uplo)
+            M = TA(Rational{BigInt}.(eigencopy_oftype(A, TS)), Symbol(A.uplo))
         else
-            M = TA(Complex{Rational{BigInt}}.(eigencopy_oftype(A, TS)), uplo)
+            M = TA(Complex{Rational{BigInt}}.(eigencopy_oftype(A, TS)),
+                Symbol(A.uplo))
         end
     end
 
@@ -1617,8 +1549,7 @@ end
 function ldiv!(B::BunchKaufman{TS},
     R::AbstractVecOrMat{TS}
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
-    syhe = issymmetric(B) ? 'S' : 'H'
-    return generic_bksolve!(B.uplo, B.LD, B.ipiv, R, syhe, B.rook)
+    return generic_bksolve!(B, R)
 end
 
 function inv(B::BunchKaufman{TS}) where TS <: ClosedScalar{TR} where TR <: ClosedReal
