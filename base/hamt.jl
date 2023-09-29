@@ -1,6 +1,6 @@
 module HashArrayMappedTries
 
-export HAMT, insert, delete
+export HAMT
 
 ##
 # Implements "Ideal Hash Trees" Phil Bagwell 2000
