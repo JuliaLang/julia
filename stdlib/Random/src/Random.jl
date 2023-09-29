@@ -311,12 +311,28 @@ include("XoshiroSimd.jl")
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
 
-* an indexable collection (for example `1:9` or `('x', "y", :z)`),
-* an `AbstractDict` or `AbstractSet` object,
+* an indexable collection (for example `1:9` or `('x', "y", :z)`)
+
+* an `AbstractDict` or `AbstractSet` object
+
 * a string (considered as a collection of characters), or
-* a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
-  point numbers and to ``[0, 1)+i[0, 1)`` for complex floating point numbers;
+
+* a type from the list below, corresponding to the specified set of values
+
+  + concrete integer types sample from `typemin(S):typemax(S)` (excepting [`BigInt`](@ref) which is not supported)
+
+  + concrete floating point types sample from `[0, 1)`
+
+  + concrete complex types `Complex{T}` if `T` is a sampleable type take their real and imaginary components
+    independently from the set of values corresponding to `T`, but are not supported if `T` is not sampleable.
+
+  + all `<:AbstractChar` types sample from the set of valid Unicode scalars
+
+  + a user-defined type and set of values; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
+
+  + `S` can also be a tuple type of known size and where each parameter of `S` is itself a sampleable type; return a value of type `S`.
+    Note that tuple types such as `Tuple{Vararg{T}}` (unknown size) and `Tuple{1:2}` (parameterized with a value) are not supported.
+
 
 `S` defaults to [`Float64`](@ref).
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
@@ -327,6 +343,9 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
 
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
+
+!!! compat "Julia 1.11"
+    Support for `S` as a `Tuple` type requires at least Julia 1.11.
 
 # Examples
 ```julia-repl

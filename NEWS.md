@@ -50,6 +50,7 @@ Standard library changes
 #### Profile
 
 #### Random
+* `rand` now supports sampling over `Tuple` types ([#50251]).
 
 * When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
 

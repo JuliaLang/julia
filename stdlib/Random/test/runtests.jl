@@ -285,9 +285,13 @@ end
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Base.BitInteger_types..., cftypes...]
+    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., cftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
+
+    randwidetup = Tuple{Bool, Char, Vararg{Tuple{Int, Float64}, 14}}
+    @inferred rand(rng..., randwidetup)
+
     collections = [BitSet(rand(1:100, 20))          => Int,
                    randset                          => Int,
                    GenericSet(randset)              => Int,
@@ -319,7 +323,9 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
             a3 = f(rng..., T, b2, u3) ::Array{T, 2}
             a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
-            @test size(a0) == ()
+            if T <: Number
+                @test size(a0) == ()
+            end
             @test size(a1) == (5,)
             @test size(a2) == size(a3) == size(a4) == (2, 3)
             if T <: AbstractFloat && f === rand
@@ -359,6 +365,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
+            (T <: Tuple) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
@@ -405,6 +412,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         @test_throws MethodError r(rng..., Number, (2,3))
         @test_throws MethodError r(rng..., Any, 1)
     end
+
+    # Test that you cannot call rand with a tuple type of unknown size or with isbits parameters
+    @test_throws ArgumentError rand(rng..., Tuple{Vararg{Int}})
+    @test_throws TypeError rand(rng..., Tuple{1:2})
 end
 
 function hist(X, n)
