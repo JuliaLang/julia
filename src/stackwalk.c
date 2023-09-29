@@ -662,7 +662,7 @@ void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_entry) JL_NOTSAFEPOI
     if (sig != -1) {
         snprintf(sig_str, 32, "signal (%d) ", sig);
     }
-    snprintf(pre_str, 64, "%sthread (%d) ", sig_str, jl_threadid());
+    snprintf(pre_str, 64, "%sthread (%d) ", sig_str, jl_threadid() + 1);
 
     if (jl_bt_is_native(bt_entry)) {
         jl_print_native_codeloc(pre_str, bt_entry[0].uintptr);
@@ -1118,7 +1118,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
     char pre_str[64];
-    snprintf(pre_str, 64, "thread (%d) ", jl_threadid());
+    snprintf(pre_str, 64, "thread (%d) ", jl_threadid() + 1);
     jl_print_native_codeloc(pre_str, (uintptr_t)ip);
 }
 
