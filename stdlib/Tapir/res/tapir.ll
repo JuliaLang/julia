@@ -23,6 +23,9 @@ declare i32 @__rts_loop_grainsize_32(i32)
 
 declare i64 @__rts_loop_grainsize_64(i64)
 
+; These two need to be defined here,
+; Global is external, but doesn't have external or weak linkage!
+; i32 ()* @__rts_get_num_workers
 define i32 @__rts_get_num_workers()
 {
   ret i32 0;

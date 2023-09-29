@@ -83,12 +83,13 @@ end
   tg = Base.unsafe_load(sf).tg::TaskGroup
   # If this contains GC pointers it's UB
   buf = Vector{UInt8}(undef, sz)
+  @assert reinterpret(Int, pointer(buf)) % align == 0
   GC.@preserve buf begin
     Base.Libc.memcpy(pointer(buf), data, sz)
   end
   t = Base.Task(TapirTask(func, buf))
   t.sticky = false
-  Base.schedule(t)
+  Base.yield(t) # unfair form of schedule; child-first
   push!(tg, t)
   return nothing
 end
