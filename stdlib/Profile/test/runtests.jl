@@ -295,3 +295,4 @@ end
 end
 
 include("allocs.jl")
+include("heapsnapshot_reassemble.jl")

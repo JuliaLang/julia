@@ -40,25 +40,25 @@ Base.length(n::Nodes) = length(n.type)
 
 # Like Base.dec, but doesn't allocate a string and writes directly to the io object
 # We know all of the numbers we're about to write fit into a UInt and are non-negative
-let _digits_buf = zeros(UInt8, ndigits(typemax(UInt))),
-    _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
     global _write_decimal_number
-    _write_decimal_number(io, x::Integer, a=_digits_buf) = _write_decimal_number(io, unsigned(x), a)
-    function _write_decimal_number(io, x::Unsigned, a=_digits_buf)
+    _write_decimal_number(io, x::Integer, buf) = _write_decimal_number(io, unsigned(x), buf)
+    function _write_decimal_number(io, x::Unsigned, digits_buf)
+        buf = digits_buf
         n = ndigits(x)
         i = n
         @inbounds while i >= 2
             d, r = divrem(x, 0x64)
             d100 = _dec_d100[(r % Int)::Int + 1]
-            a[i-1] = d100 % UInt8
-            a[i] = (d100 >> 0x8) % UInt8
+            buf[i-1] = d100 % UInt8
+            buf[i] = (d100 >> 0x8) % UInt8
             x = oftype(x, d)
             i -= 2
         end
         if i > 0
-            @inbounds a[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
+            @inbounds buf[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
         end
-        write(io, @view a[max(i, 1):n])
+        write(io, @view buf[max(i, 1):n])
     end
 end
 
@@ -67,6 +67,8 @@ function assemble_snapshot(in_prefix, out_file::AbstractString)
         assemble_snapshot(in_prefix, io)
     end
 end
+# Manually parse and write the .json files, given that we don't have JSON import/export in
+# julia's stdlibs.
 function assemble_snapshot(in_prefix, io::IO)
     preamble = read(string(in_prefix, ".json"), String)
     pos = last(findfirst("node_count\":", preamble)) + 1
