@@ -3127,7 +3127,6 @@ end
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"

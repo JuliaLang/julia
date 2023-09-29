@@ -3,6 +3,10 @@ Julia v1.11 Release Notes
 
 New language features
 ---------------------
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module. ([#50105])
 * `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes

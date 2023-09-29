@@ -1832,6 +1832,32 @@ let s = "Some(Issue36437(42)).value."
     end
 end
 
+some_issue36437 = Some(Issue36437(42))
+
+let s = "some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# get completions for :toplevel/:tuple expressions
+let s = "some_issue36437.value.a, some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+let s = "@show some_issue36437.value.a; some_issue36437.value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
     c, r, res = test_complete_context(s, @__MODULE__)
@@ -1840,6 +1866,36 @@ let s = "Ref(Issue36437(42))[]."
         @test n in c
     end
     @test "v" ∉ c
+end
+
+# concrete evaluation through `getindex`ing dictionary
+global_dict = Dict{Symbol, Any}(:r => r"foo")
+let s = "global_dict[:r]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
+let s = "global_dict_nested[:g][:r]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+
+# dict completions through nested `getindex`ing
+let s = "global_dict_nested["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":g]" in c
+end
+let s = "global_dict_nested[:g]["
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test ":r]" in c
 end
 
 const global_xs = [Some(42)]

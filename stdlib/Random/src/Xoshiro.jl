@@ -70,6 +70,108 @@ end
 
 rng_native_52(::Xoshiro) = UInt64
 
+# Jump functions from: https://xoshiro.di.unimi.it/xoshiro256plusplus.c
+
+for (fname, JUMP) in ((:jump_128, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c)),
+                      (:jump_192, (0x76e15d3efefdcbbf, 0xc5004e441c522fb3, 0x77710069854ee241, 0x39109bb02acbe635)))
+    local fname! = Symbol(fname, :!)
+    @eval function $fname!(rng::Xoshiro)
+        _s0 = 0x0000000000000000
+        _s1 = 0x0000000000000000
+        _s2 = 0x0000000000000000
+        _s3 = 0x0000000000000000
+        s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
+        for j in $JUMP
+            for b in 0x0000000000000000:0x000000000000003f
+                if (j & 0x0000000000000001 << b) != 0
+                    _s0 ⊻= s0
+                    _s1 ⊻= s1
+                    _s2 ⊻= s2
+                    _s3 ⊻= s3
+                end
+                t = s1 << 17
+                s2 = xor(s2, s0)
+                s3 = xor(s3, s1)
+                s1 = xor(s1, s2)
+                s0 = xor(s0, s3)
+                s2 = xor(s2, t)
+                s3 = s3 << 45 | s3 >> 19
+            end
+        end
+        setstate!(rng, (_s0, _s1, _s2, _s3, nothing))
+    end
+    @eval $fname(rng::Xoshiro) = $fname!(copy(rng))
+
+    @eval function $fname!(rng::Xoshiro, n::Integer)
+        n < 0 && throw(DomainError(n, "the number of jumps must be ≥ 0"))
+        i = zero(n)
+        while i < n
+            $fname!(rng)
+            i += one(n)
+        end
+        rng
+    end
+
+    @eval $fname(rng::Xoshiro, n::Integer) = $fname!(copy(rng), n)
+end
+
+for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
+    local fname! = Symbol(fname, :!)
+    local see_other = Symbol(fname === :jump_128 ? :jump_192 : :jump_128)
+    local see_other! = Symbol(see_other, :!)
+    local seq_pow = 256 - sz
+    @eval begin
+        """
+            $($fname!)(rng::Xoshiro, [n::Integer=1])
+
+        Jump forward, advancing the state equivalent to `2^$($sz)` calls which consume
+        8 bytes (i.e. a full `UInt64`) each.
+
+        If `n > 0` is provided, the state is advanced equivalent to `n * 2^$($sz)` calls; if `n = 0`,
+        the state remains unchanged.
+
+        This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
+
+        See also: [`$($fname)`](@ref), [`$($see_other!)`](@ref)
+
+        # Examples
+        ```julia-repl
+        julia> $($fname!)($($fname!)(Xoshiro(1))) == $($fname!)(Xoshiro(1), 2)
+        true
+        ```
+        """
+        function $fname! end
+    end
+
+    @eval begin
+        """
+            $($fname)(rng::Xoshiro, [n::Integer=1])
+
+        Return a copy of `rng` with the state advanced equivalent to `n * 2^$($sz)` calls which consume
+        8 bytes (i.e. a full `UInt64`) each; if `n = 0`, the state of the returned copy will be
+        identical to `rng`.
+
+        This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
+
+        See also: [`$($fname!)`](@ref), [`$($see_other)`](@ref)
+
+        # Examples
+        ```julia-repl
+        julia> x = Xoshiro(1);
+
+        julia> $($fname)($($fname)(x)) == $($fname)(x, 2)
+        true
+
+        julia> $($fname)(x, 0) == x
+        true
+
+        julia> $($fname)(x, 0) === x
+        false
+        ```
+        """
+        function $fname end
+    end
+end
 
 ## Task local RNG
 

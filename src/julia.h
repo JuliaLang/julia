@@ -1054,6 +1054,11 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 
+void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;
+size_t mtarraylist_length(small_arraylist_t *_a) JL_NOTSAFEPOINT;
+void mtarraylist_add(small_arraylist_t *_a, void *elt, size_t idx) JL_NOTSAFEPOINT;
+void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
+
 // object accessors -----------------------------------------------------------
 
 #define jl_svec_len(t)              (((jl_svec_t*)(t))->length)
@@ -1564,7 +1569,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1);
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2);
 JL_DLLEXPORT jl_datatype_t *jl_apply_modify_type(jl_value_t *dt);
 JL_DLLEXPORT jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt);
-JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params);
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params, int check); // if uncertain, set check=1
 JL_DLLEXPORT jl_value_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
                                             jl_module_t *module,

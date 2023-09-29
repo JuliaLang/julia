@@ -921,8 +921,13 @@ result_is_constabi(interp::AbstractInterpreter, run_optimizer::Bool, result::Inf
     run_optimizer && may_discard_trees(interp) && is_result_constabi_eligible(result)
 
 # compute an inferred AST and return type
-function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
-    frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
+typeinf_code(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(match), run_optimizer)
+typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+             run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
+function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
+    frame = typeinf_frame(interp, mi, run_optimizer)
     frame === nothing && return nothing, Any
     is_inferred(frame) || return nothing, Any
     if result_is_constabi(interp, run_optimizer, frame.result)
@@ -935,25 +940,26 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
 end
 
 """
-    typeinf_ircode(
-        interp::AbstractInterpreter,
-        method::Method,
-        atype,
-        sparams::SimpleVector,
-        optimize_until::Union{Integer,AbstractString,Nothing},
-    ) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter,
+                   method::Method, atype, sparams::SimpleVector,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
 
 Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
-function typeinf_ircode(
-    interp::AbstractInterpreter,
-    method::Method,
-    @nospecialize(atype),
-    sparams::SimpleVector,
-    optimize_until::Union{Integer,AbstractString,Nothing},
-)
+typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(match), optimize_until)
+typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(method, atype, sparams), optimize_until)
+function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                        optimize_until::Union{Integer,AbstractString,Nothing})
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-    frame = typeinf_frame(interp, method, atype, sparams, false)
+    frame = typeinf_frame(interp, mi, false)
     if frame === nothing
         ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
         return nothing, Any
@@ -967,10 +973,11 @@ function typeinf_ircode(
 end
 
 # compute an inferred frame
-function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
-    mi = specialize_method(method, atype, sparams)::MethodInstance
-    return typeinf_frame(interp, mi, run_optimizer)
-end
+typeinf_frame(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(match), run_optimizer)
+typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+              run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     result = InferenceResult(mi, typeinf_lattice(interp))

@@ -1084,29 +1084,68 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
     if istuple
+        if n == 0
+            print(io, "Tuple{}")
+            return
+        end
+
+        # find the length of the homogeneous tail
         max_n = 3
         taillen = 1
-        for i in (n-1):-1:1
-            if parameters[i] === parameters[n]
-                taillen += 1
+        pn = parameters[n]
+        fulln = n
+        vakind = :none
+        vaN = 0
+        if pn isa Core.TypeofVararg
+            if isdefined(pn, :N)
+                vaN = pn.N
+                if vaN isa Int
+                    taillen = vaN
+                    fulln += taillen - 1
+                    vakind = :fixed
+                else
+                    vakind = :bound
+                end
             else
-                break
+                vakind = :unbound
+            end
+            pn = unwrapva(pn)
+        end
+        if !(pn isa TypeVar || pn isa Type)
+            # prefer Tuple over NTuple if it contains something other than types
+            # (e.g. if the user has switched the N and T accidentally)
+            taillen = 0
+        elseif vakind === :none || vakind === :fixed
+            for i in (n-1):-1:1
+                if parameters[i] === pn
+                    taillen += 1
+                else
+                    break
+                end
             end
         end
-        if n == taillen > max_n
-            print(io, "NTuple{", n, ", ")
-            show(io, parameters[1])
+
+        # prefer NTuple over Tuple if it is a Vararg without a fixed length
+        # and prefer Tuple for short lists of elements
+        if (vakind == :bound && n == 1 == taillen) || (vakind === :fixed && taillen == fulln > max_n) ||
+           (vakind === :none && taillen == fulln > max_n)
+            print(io, "NTuple{")
+            vakind === :bound ? show(io, vaN) : print(io, fulln)
+            print(io, ", ")
+            show(io, pn)
             print(io, "}")
         else
             print(io, "Tuple{")
-            for i = 1:(taillen > max_n ? n-taillen : n)
+            headlen = (taillen > max_n ? fulln - taillen : fulln)
+            for i = 1:headlen
                 i > 1 && print(io, ", ")
-                show(io, parameters[i])
+                show(io, vakind === :fixed && i >= n ? pn : parameters[i])
             end
-            if taillen > max_n
-                print(io, ", Vararg{")
-                show(io, parameters[n])
-                print(io, ", ", taillen, "}")
+            if headlen < fulln
+                headlen > 0 && print(io, ", ")
+                print(io, "Vararg{")
+                show(io, pn)
+                print(io, ", ", fulln - headlen, "}")
             end
             print(io, "}")
         end

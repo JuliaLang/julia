@@ -109,7 +109,7 @@ typedef struct {
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
-typedef DWORD jl_thread_t;
+typedef HANDLE jl_thread_t;
 #else
 typedef pthread_t jl_thread_t;
 #endif
@@ -140,10 +140,10 @@ typedef struct {
 
 typedef struct {
     // variable for tracking weak references
-    arraylist_t weak_refs;
+    small_arraylist_t weak_refs;
     // live tasks started on this thread
     // that are holding onto a stack from the pool
-    arraylist_t live_tasks;
+    small_arraylist_t live_tasks;
 
     // variables for tracking malloc'd arrays
     struct _mallocarray_t *mallocarrays;
@@ -170,7 +170,7 @@ typedef struct {
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 
 #define JL_N_STACK_POOLS 16
-    arraylist_t free_stacks[JL_N_STACK_POOLS];
+    small_arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
 typedef struct {
