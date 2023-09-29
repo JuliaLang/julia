@@ -55,7 +55,7 @@ void print_str_escape_json(ios_t *stream, StringRef s)
 struct Edge {
     size_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
-    size_t from_node;
+    size_t from_node;  // This is a deviation from the .heapsnapshot format to support streaming.
     size_t to_node;
 };
 
