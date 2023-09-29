@@ -19,8 +19,8 @@ Base.length(n::Edges) = length(n.type)
 
 # trace_node_id and detachedness are always 0 in the snapshots Julia produces so we don't store them
 struct Nodes
-    type::Vector{Int8}         # index in index into `snapshot.meta.node_types`
-    name_index::Vector{UInt32} # index in `snapshot.strings`
+    type::Vector{Int8}         # index into `snapshot.meta.node_types`
+    name_index::Vector{UInt32} # index into `snapshot.strings`
     id::Vector{UInt}           # unique id, in julia it is the address of the object
     self_size::Vector{Int}     # size of the object itself, not including the size of its fields
     edge_count::Vector{UInt32} # number of outgoing edges
