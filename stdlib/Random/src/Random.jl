@@ -136,11 +136,9 @@ the amount of precomputation, if applicable.
 *types* and *values*, respectively. [`Random.SamplerSimple`](@ref) can be used to store
 pre-computed values without defining extra types for only this purpose.
 """
-Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof_rng(rng), x, r)
+Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
 Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
-    Sampler(typeof_rng(rng), X, r)
-
-typeof_rng(rng::AbstractRNG) = typeof(rng)
+    Sampler(typeof(rng), X, r)
 
 # this method is necessary to prevent rand(rng::AbstractRNG, X) from
 # recursively constructing nested Sampler types.

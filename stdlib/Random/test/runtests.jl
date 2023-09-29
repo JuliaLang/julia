@@ -711,31 +711,13 @@ end
         Random.seed!(seed)
         @test Random.GLOBAL_SEED === seed
     end
-    # two separate loops as otherwise we are no sure that the second call (with GLOBAL_RNG)
-    # actually sets GLOBAL_SEED
-    for seed=seeds
-        Random.seed!(Random.GLOBAL_RNG, seed)
-        @test Random.GLOBAL_SEED === seed
+
+    for ii = 1:8
+        iseven(ii) ? Random.seed!(nothing) : Random.seed!()
+        push!(seeds, Random.GLOBAL_SEED)
+        @test Random.GLOBAL_SEED isa UInt128 # could change, but must not be nothing
     end
-
-    Random.seed!(nothing)
-    seed1 = Random.GLOBAL_SEED
-    @test seed1 isa Vector{UInt64} # could change, but must not be nothing
-
-    Random.seed!(Random.GLOBAL_RNG, nothing)
-    seed2 = Random.GLOBAL_SEED
-    @test seed2 isa Vector{UInt64}
-    @test seed2 != seed1
-
-    Random.seed!()
-    seed3 = Random.GLOBAL_SEED
-    @test seed3 isa Vector{UInt64}
-    @test seed3 != seed2
-
-    Random.seed!(Random.GLOBAL_RNG)
-    seed4 = Random.GLOBAL_SEED
-    @test seed4 isa Vector{UInt64}
-    @test seed4 != seed3
+    @test allunique(seeds)
 end
 
 struct RandomStruct23964 end
@@ -800,9 +782,9 @@ end
 end
 
 @testset "GLOBAL_RNG" begin
+    @test VERSION < v"2" # deprecate this in v2 (GLOBAL_RNG must go)
     local GLOBAL_RNG = Random.GLOBAL_RNG
     local LOCAL_RNG = Random.default_rng()
-    @test VERSION < v"2" # deprecate this in v2
 
     @test Random.seed!(GLOBAL_RNG, nothing) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG, UInt32[0]) === LOCAL_RNG
