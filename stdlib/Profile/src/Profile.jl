@@ -1213,7 +1213,6 @@ end
 
 
 """
-    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
     Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
 
@@ -1226,24 +1225,21 @@ full file path, or IO stream.
 If `all_one` is true, then report the size of every object as one so they can be easily
 counted. Otherwise, report the actual size.
 """
-function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot_streaming, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
-end
-function stream_snapshot()
-    now = Dates.now()
-    open("./$now.nodes", "w") do nodes
-        open("./$now.edges", "w") do edges
-            open("./$now.strings", "w") do strings
-                open("./$now.json", "w") do json
-                    @Base._lock_ios(nodes,
-                    @Base._lock_ios(edges,
-                    @Base._lock_ios(strings,
-                    @Base._lock_ios(json,
-                        ccall(:jl_gc_take_heap_snapshot_streaming,
+function take_heap_snapshot(filepath::String, all_one::Bool=false)
+    name = filepath
+    open("$name.nodes", "w") do nodes
+        open("$name.edges", "w") do edges
+            open("$name.strings", "w") do strings
+                open("$name.json", "w") do json
+                    Base.@_lock_ios(nodes,
+                    Base.@_lock_ios(edges,
+                    Base.@_lock_ios(strings,
+                    Base.@_lock_ios(json,
+                        ccall(:jl_gc_take_heap_snapshot,
                             Cvoid,
                             (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
                             nodes.handle, edges.handle, strings.handle, json.handle,
-                            Cchar(0))
+                            Cchar(all_one))
                     )
                     )
                     )
@@ -1252,13 +1248,7 @@ function stream_snapshot()
             end
         end
     end
-    println("Recorded heap snapshot: $now")
-end
-
-function take_heap_snapshot(filepath::String, all_one::Bool=false)
-    open(filepath, "w") do io
-        take_heap_snapshot(io, all_one)
-    end
+    println("Recorded heap snapshot: $name")
     return filepath
 end
 function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
