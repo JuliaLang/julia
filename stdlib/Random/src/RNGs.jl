@@ -92,19 +92,17 @@ See the [`seed!`](@ref) function for reseeding an already existing `MersenneTwis
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> rng = MersenneTwister(123);
 
 julia> x1 = rand(rng, 2)
 2-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
+ 0.37453777969575874
+ 0.8735343642013971
 
-julia> rng = MersenneTwister(1234);
-
-julia> x2 = rand(rng, 2)
+julia> x2 = rand(MersenneTwister(123), 2)
 2-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
+ 0.37453777969575874
+ 0.8735343642013971
 
 julia> x1 == x2
 true

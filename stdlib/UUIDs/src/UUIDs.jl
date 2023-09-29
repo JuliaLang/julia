@@ -103,10 +103,10 @@ detail that may change in the future.
 ```jldoctest
 julia> using Random
 
-julia> rng = MersenneTwister(1234);
+julia> rng = Xoshiro(123);
 
 julia> uuid4(rng)
-UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
+UUID("856e446e-0c6a-472a-9638-f7b8557cd282")
 ```
 """
 function uuid4(rng::AbstractRNG=Random.RandomDevice())
@@ -129,13 +129,13 @@ as specified by RFC 4122.
 ```jldoctest
 julia> using Random
 
-julia> rng = MersenneTwister(1234);
+julia> rng = Xoshiro(123);
 
 julia> u4 = uuid4(rng)
-UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
+UUID("856e446e-0c6a-472a-9638-f7b8557cd282")
 
 julia> u5 = uuid5(u4, "julia")
-UUID("086cc5bb-2461-57d8-8068-0aed7f5b5cd1")
+UUID("2df91e3f-da06-5362-a6fe-03772f2e14c9")
 ```
 """
 function uuid5(ns::UUID, name::String)
