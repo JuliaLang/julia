@@ -68,7 +68,7 @@ public API of the module . For example: `public foo` indicates that the name
 the module. See the [manual section about modules](@ref modules) for details.
 
 !!! compat "Julia 1.11"
-    The public keyword was added in Julia 1.11. Prior to this the notion 
+    The public keyword was added in Julia 1.11. Prior to this the notion
     of publicness was less explicit.
 """
 kw"public"
