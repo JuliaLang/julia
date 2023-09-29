@@ -1213,8 +1213,8 @@ end
 
 
 """
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false, streaming=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; dir::String, streaming=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1224,13 +1224,41 @@ full file path, or IO stream.
 
 If `all_one` is true, then report the size of every object as one so they can be easily
 counted. Otherwise, report the actual size.
+
+If `streaming` is true, we will stream the snapshot data out into four files, using filepath
+as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
+used for any setting where your memory is constrained. These files can then be reassembled
+by calling [`Profile.HeapSnapshot.assemble_snapshot(filepath; out_file)`](@ref), which can
+be done offline.
 """
-function take_heap_snapshot(filepath::String, all_one::Bool=false)
-    name = filepath
-    open("$name.nodes", "w") do nodes
-        open("$name.edges", "w") do edges
-            open("$name.strings", "w") do strings
-                open("$name.json", "w") do json
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
+    if streaming
+        _stream_heap_snapshot(filepath, all_one)
+        println("Finished streaming heap snapshot parts to prefix: $filepath")
+    else
+        # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
+        # then reassembling it after we're done.
+        dir = tempdir()
+        prefix = joinpath(dir, "snapshot")
+        _stream_heap_snapshot(prefix, all_one)
+        Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        println("Recorded heap snapshot: $filepath")
+    end
+    return filepath
+end
+function take_heap_snapshot(io::IO, all_one::Bool=false)
+    # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
+    # then reassembling it after we're done.
+    dir = tempdir()
+    prefix = joinpath(dir, "snapshot")
+    _stream_heap_snapshot(prefix, all_one)
+    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+end
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
+    open("$prefix.nodes", "w") do nodes
+        open("$prefix.edges", "w") do edges
+            open("$prefix.strings", "w") do strings
+                open("$prefix.json", "w") do json
                     Base.@_lock_ios(nodes,
                     Base.@_lock_ios(edges,
                     Base.@_lock_ios(strings,
@@ -1248,8 +1276,6 @@ function take_heap_snapshot(filepath::String, all_one::Bool=false)
             end
         end
     end
-    println("Recorded heap snapshot: $name")
-    return filepath
 end
 function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
@@ -1271,6 +1297,7 @@ end
 
 
 include("Allocs.jl")
+include("heapsnapshot_reassemble.jl")
 include("precompile.jl")
 
 end # module
