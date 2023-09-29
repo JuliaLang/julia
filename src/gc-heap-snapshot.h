@@ -97,7 +97,8 @@ static inline void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* t
 // ---------------------------------------------------------------------
 // Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
-JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one);
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
+    ios_t *strings, ios_t *json, char all_one);
 
 
 #ifdef __cplusplus
