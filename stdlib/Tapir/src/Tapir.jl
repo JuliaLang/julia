@@ -81,12 +81,9 @@ end
 
 @ccallable function __rts_spawn(sf::Ptr{StackFrame}, func::Ptr{Cvoid}, data::Ptr{Cvoid}, sz::Int, align::Int)::Cvoid
   tg = Base.unsafe_load(sf).tg::TaskGroup
-  # If this contains GC pointers it's UB
-  buf = Vector{UInt8}(undef, sz)
-  @assert reinterpret(Int, pointer(buf)) % align == 0
-  GC.@preserve buf begin
-    Base.Libc.memcpy(pointer(buf), data, sz)
-  end
+  buf = ccall(:aligned_alloc, Ptr{Cvoid}, (Csize_t, Csize_t), align, sz)
+  Base.Libc.memcpy(buf, data, sz)
+  buf = Base.unsafe_wrap(Vector{UInt8}, Base.unsafe_convert(Ptr{UInt8}, buf), sz; own = true)
   t = Base.Task(TapirTask(func, buf))
   t.sticky = false
   Base.yield(t) # unfair form of schedule; child-first
