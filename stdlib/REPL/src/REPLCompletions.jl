@@ -196,7 +196,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
                 push!(suggestions, PropertyCompletion(val, property))
             end
         end
-    else
+    elseif field_completion_eligible(t)
         # Looking for a member of a type
         add_field_completions!(suggestions, name, t)
     end
@@ -207,23 +207,30 @@ function add_field_completions!(suggestions::Vector{Completion}, name::String, @
     if isa(t, Union)
         add_field_completions!(suggestions, name, t.a)
         add_field_completions!(suggestions, name, t.b)
-    elseif t isa DataType && t != Any
-        # Check for cases like Type{typeof(+)}
-        if Base.isType(t)
-            t = typeof(t.parameters[1])
-        end
-        # Only look for fields if this is a concrete type
-        if isconcretetype(t)
-            fields = fieldnames(t)
-            for field in fields
-                isa(field, Symbol) || continue # Tuple type has ::Int field name
-                s = string(field)
-                if startswith(s, name)
-                    push!(suggestions, FieldCompletion(t, field))
-                end
+    else
+        @assert isconcretetype(t)
+        fields = fieldnames(t)
+        for field in fields
+            isa(field, Symbol) || continue # Tuple type has ::Int field name
+            s = string(field)
+            if startswith(s, name)
+                push!(suggestions, FieldCompletion(t, field))
             end
         end
     end
+end
+
+const GENERIC_PROPERTYNAMES_METHOD = which(propertynames, (Any,))
+
+function field_completion_eligible(@nospecialize t)
+    if isa(t, Union)
+        return field_completion_eligible(t.a) && field_completion_eligible(t.b)
+    end
+    isconcretetype(t) || return false
+    # field completion is correct only when `getproperty` fallbacks to `getfield`
+    match = Base._which(Tuple{typeof(propertynames),t}; raise=false)
+    match === nothing && return false
+    return match.method === GENERIC_PROPERTYNAMES_METHOD
 end
 
 function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
