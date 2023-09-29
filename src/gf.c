@@ -1266,7 +1266,7 @@ static jl_method_instance_t *cache_method(
     intptr_t max_varargs = get_max_varargs(definition, kwmt, mt, NULL);
     jl_compilation_sig(tt, sparams, definition, max_varargs, &newparams);
     if (newparams) {
-        temp2 = jl_apply_tuple_type(newparams);
+        temp2 = jl_apply_tuple_type(newparams, 1);
         // Now there may be a problem: the widened signature is more general
         // than just the given arguments, so it might conflict with another
         // definition that does not have cache instances yet. To fix this, we
@@ -1389,7 +1389,7 @@ static jl_method_instance_t *cache_method(
         }
     }
     if (newparams) {
-        simplett = (jl_datatype_t*)jl_apply_tuple_type(newparams);
+        simplett = (jl_datatype_t*)jl_apply_tuple_type(newparams, 1);
         temp2 = (jl_value_t*)simplett;
     }
 
@@ -2130,7 +2130,10 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 int replaced_edge;
                                 if (invokeTypes) {
                                     // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
-                                    replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
+                                    if (jl_egal(invokeTypes, caller->def.method->sig))
+                                        replaced_edge = 0; // if invokeTypes == m.sig, then the only way to change this invoke is to replace the method itself
+                                    else
+                                        replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
                                 }
                                 else {
                                     replaced_edge = replaced_dispatch;
@@ -2576,7 +2579,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_compilation_sig(ti, env, m, max_varargs, &newparams);
     int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple;
     if (newparams) {
-        tt = (jl_datatype_t*)jl_apply_tuple_type(newparams);
+        tt = (jl_datatype_t*)jl_apply_tuple_type(newparams, 1);
         if (!is_compileable) {
             // compute new env, if used below
             jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)m->sig, &newparams);
@@ -2831,7 +2834,7 @@ jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_v
     jl_svecset(tt, 0, ft);
     for (size_t i = 0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
-    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
+    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt, 1);
     tt = jl_rewrap_unionall_(tt, types0);
     JL_GC_POP();
     return tt;

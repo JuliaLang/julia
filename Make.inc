@@ -492,10 +492,10 @@ JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
-# AArch64 needs this flag to generate the .eh_frame used by libunwind
+# These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON)
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
+JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
 JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
@@ -898,8 +898,8 @@ ISX86:=0
 endif
 
 
-#If nothing is set default to native
-ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+#If nothing is set default to native unless we are cross-compiling
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
 ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
 MCPU=native
 else
@@ -1190,7 +1190,7 @@ endif
 
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
 
 # If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w

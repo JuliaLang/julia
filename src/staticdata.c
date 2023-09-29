@@ -99,7 +99,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    158
+#define NUM_TAGS    159
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -177,6 +177,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_emptytuple_type);
         INSERT_TAG(jl_array_symbol_type);
         INSERT_TAG(jl_array_uint8_type);
+        INSERT_TAG(jl_array_uint32_type);
         INSERT_TAG(jl_array_int32_type);
         INSERT_TAG(jl_array_uint64_type);
         INSERT_TAG(jl_int32_type);
@@ -568,6 +569,9 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
     return RUNNING_ON_VALGRIND;
 }
 
+void *system_image_data_unavailable;
+extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_data;
+extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_size;
 static void jl_load_sysimg_so(void)
 {
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
@@ -579,9 +583,17 @@ static void jl_load_sysimg_so(void)
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
     }
     const char *sysimg_data;
-    jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
+    if (jl_sysimg_handle == jl_exe_handle &&
+            &jl_system_image_data != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
+        sysimg_data = (const char*)&jl_system_image_data;
+    else
+        jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
     size_t *plen;
-    jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    if (jl_sysimg_handle == jl_exe_handle &&
+            &jl_system_image_size != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
+        plen = (size_t *)&jl_system_image_size;
+    else
+        jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
@@ -1984,7 +1996,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     if (fvars.base == NULL)
         return;
 
-    memcpy(image->small_typeof, &small_typeof, sizeof(small_typeof));
+    memcpy(image->jl_small_typeof, &jl_small_typeof, sizeof(jl_small_typeof));
 
     int img_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
@@ -2533,8 +2545,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
             JL_STDERR,
-            "ERROR: system image too large: sysimg.size is %jd but the limit is %" PRIxPTR "\n",
-            (intmax_t)sysimg.size,
+            "ERROR: system image too large: sysimg.size is 0x%" PRIxPTR " but the limit is 0x%" PRIxPTR "\n",
+            (uintptr_t)sysimg.size,
             ((uintptr_t)1 << RELOC_TAG_OFFSET)
         );
         jl_exit(1);
@@ -2542,8 +2554,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (const_data.size / sizeof(void*) > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
             JL_STDERR,
-            "ERROR: system image too large: const_data.size is %jd but the limit is %" PRIxPTR "\n",
-            (intmax_t)const_data.size,
+            "ERROR: system image too large: const_data.size is 0x%" PRIxPTR " but the limit is 0x%" PRIxPTR "\n",
+            (uintptr_t)const_data.size,
             ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
         );
         jl_exit(1);
@@ -2819,9 +2831,11 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
     void* *jl_RTLD_DEFAULT_handle_pointer;
-    int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
-    if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
-        jl_error("System image file failed consistency check: maybe opened the wrong version?");
+    if (handle != jl_RTLD_DEFAULT_handle) {
+        int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
+        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
+            jl_error("System image file failed consistency check: maybe opened the wrong version?");
+    }
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
@@ -2838,7 +2852,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 #endif
 
 extern void rebuild_image_blob_tree(void);
-extern void export_small_typeof(void);
+extern void export_jl_small_typeof(void);
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
@@ -2914,10 +2928,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             *tag = jl_read_value(&s);
         }
 #define XX(name) \
-        small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type;
+        ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
         JL_SMALL_TYPEOF(XX)
 #undef XX
-        export_small_typeof();
+        export_jl_small_typeof();
         jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;

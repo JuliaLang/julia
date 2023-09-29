@@ -17,7 +17,6 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
@@ -246,34 +245,4 @@ PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-
-struct LowerExcHandlersLegacy : public FunctionPass {
-    static char ID;
-    LowerExcHandlersLegacy() : FunctionPass(ID)
-    {}
-    bool runOnFunction(Function &F) {
-        bool modified = lowerExcHandlers(F);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyLLVMIR(F));
-#endif
-        return modified;
-    }
-};
-
-char LowerExcHandlersLegacy::ID = 0;
-static RegisterPass<LowerExcHandlersLegacy> X("LowerExcHandlers", "Lower Julia Exception Handlers",
-                                         false /* Only looks at CFG */,
-                                         false /* Analysis Pass */);
-
-Pass *createLowerExcHandlersPass()
-{
-    return new LowerExcHandlersLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLowerExcHandlersPass());
 }

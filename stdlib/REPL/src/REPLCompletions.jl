@@ -19,6 +19,10 @@ struct KeywordCompletion <: Completion
     keyword::String
 end
 
+struct KeyvalCompletion <: Completion
+    keyval::String
+end
+
 struct PathCompletion <: Completion
     path::String
 end
@@ -99,6 +103,7 @@ end
 
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::KeyvalCompletion) = c.keyval
 _completion_text(c::PathCompletion) = c.path
 _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
@@ -131,6 +136,7 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -220,24 +226,30 @@ function add_field_completions!(suggestions::Vector{Completion}, name::String, @
     end
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export", "false",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "true", "try", "using", "while"]
-
-function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
+function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+    r = searchsorted(list, s)
     i = first(r)
-    n = length(sorted_keywords)
-    while i <= n && startswith(sorted_keywords[i],s)
+    n = length(list)
+    while i <= n && startswith(list[i],s)
         r = first(r):i
         i += 1
     end
-    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
+    Completion[T(kw) for kw in list[r]]
 end
+
+const sorted_keywords = [
+    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "const", "continue", "do", "else", "elseif", "end", "export",
+    "finally", "for", "function", "global", "if", "import",
+    "let", "local", "macro", "module", "mutable struct",
+    "primitive type", "quote", "return", "struct",
+    "try", "using", "while"]
+
+complete_keyword(s::Union{String,SubString{String}}) = complete_from_list(KeywordCompletion, sorted_keywords, s)
+
+const sorted_keyvals = ["false", "true"]
+
+complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
 
 function complete_path(path::AbstractString, pos::Int;
                        use_envpath=false, shell_escape=false,
@@ -344,13 +356,10 @@ end
 # Returns a range that includes the method name in front of the first non
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
-    braces = 0
     r = reverse(s)
     i = firstindex(r)
-    in_single_quotes = false
-    in_double_quotes = false
-    in_back_ticks = false
-    in_comment = 0
+    braces = in_comment = 0
+    in_single_quotes = in_double_quotes = in_back_ticks = false
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -429,7 +438,7 @@ function get_code_cache()
     #     that those produced by `NativeInterpreter`, will leak into the native code cache,
     #     potentially causing runtime slowdown.
     #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if (@ccall jl_generating_output()::Cint) == 1
+    if Base.generating_output()
         return REPLInterpreterCache()
     else
         return REPL_INTERPRETER_CACHE
@@ -445,7 +454,8 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     code_cache::REPLInterpreterCache
     function REPLInterpreter(repl_frame::CC.InferenceResult;
                              world::UInt = Base.get_world_counter(),
-                             inf_params::CC.InferenceParams = CC.InferenceParams(),
+                             inf_params::CC.InferenceParams = CC.InferenceParams(;
+                                unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                              code_cache::REPLInterpreterCache = get_code_cache())
@@ -545,18 +555,21 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                              sv::CC.InferenceState)
 end
 
-function resolve_toplevel_symbols!(mod::Module, src::Core.CodeInfo)
-    newsrc = copy(src)
+function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_globals_in_ir(
-        #=jl_array_t *stmts=# newsrc.code::Any,
+        #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
         #=int binding_effects=# 0::Int)::Cvoid
-    return newsrc
+    return src
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module)
+    if isexpr(ex, :toplevel) || isexpr(ex, :tuple)
+        # get the inference result for the last expression
+        ex = ex.args[end]
+    end
     lwr = try
         Meta.lower(context_module, ex)
     catch # macro expansion failed, etc.
@@ -574,7 +587,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     mi.specTypes = Tuple{}
 
     mi.def = context_module
-    src = resolve_toplevel_symbols!(context_module, src)
+    resolve_toplevel_symbols!(src, context_module)
     @atomic mi.uninferred = src
 
     result = CC.InferenceResult(mi)
@@ -834,20 +847,18 @@ function dict_identifier_key(str::String, tag::Symbol, context_module::Module=Ma
     else
         str_close = str
     end
-
     frange, end_of_identifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    obj = context_module
-    for name in split(str[frange[1]:end_of_identifier], '.')
-        Base.isidentifier(name) || return (nothing, nothing, nothing)
-        sym = Symbol(name)
-        isdefined(obj, sym) || return (nothing, nothing, nothing)
-        obj = getfield(obj, sym)
-    end
-    (isa(obj, AbstractDict) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
+    objstr = str[1:end_of_identifier]
+    objex = Meta.parse(objstr, raise=false, depwarn=false)
+    objt = repl_eval_ex(objex, context_module)
+    isa(objt, Core.Const) || return (nothing, nothing, nothing)
+    obj = objt.val
+    isa(obj, AbstractDict) || return (nothing, nothing, nothing)
+    length(obj)::Int < 1_000_000 || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
-    return (obj::AbstractDict, str[begin_of_key:end], begin_of_key)
+    return (obj, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
@@ -926,6 +937,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
     append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+    append!(suggestions, complete_keyval(last_word))
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -948,7 +960,10 @@ end
 
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
     ex = nothing
-    comp_keywords && append!(suggestions, complete_keyword(name))
+    if comp_keywords
+        append!(suggestions, complete_keyword(name))
+        append!(suggestions, complete_keyval(name))
+    end
     if dotpos > 1 && string[dotpos] == '.'
         s = string[1:dotpos-1]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.

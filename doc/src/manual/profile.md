@@ -457,7 +457,7 @@ Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profil
 Depending on the tool you choose, compile with `USE_INTEL_JITEVENTS`, `USE_OPROFILE_JITEVENTS` and
 `USE_PERF_JITEVENTS` set to 1 in `Make.user`. Multiple flags are supported.
 
-Before running Julia set the environment variable `ENABLE_JITPROFILING` to 1.
+Before running Julia set the environment variable [`ENABLE_JITPROFILING`](@ref ENABLE_JITPROFILING) to 1.
 
 Now you have a multitude of ways to employ those tools!
 For example with `OProfile` you can try a simple recording :

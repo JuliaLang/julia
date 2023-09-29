@@ -19,7 +19,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/ModuleSlotTracker.h>
@@ -312,23 +311,6 @@ struct State {
     State(Function &F) : F(&F), DT(nullptr), MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
 };
 
-
-
-struct LateLowerGCFrameLegacy: public FunctionPass {
-    static char ID;
-    LateLowerGCFrameLegacy() : FunctionPass(ID) {}
-
-protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
-
-private:
-    bool runOnFunction(Function &F) override;
-};
 
 struct LateLowerGCFrame:  private JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
@@ -2528,17 +2510,28 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         if (CFGModified) {
             *CFGModified = true;
         }
+        auto DebugInfoMeta = F.getParent()->getModuleFlag("julia.debug_level");
+        int debug_info = 1;
+        if (DebugInfoMeta != nullptr) {
+            debug_info = cast<ConstantInt>(cast<ConstantAsMetadata>(DebugInfoMeta)->getValue())->getZExtValue();
+        }
+
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), 3);
-        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED);
+        setName(parBits, "parent_bits", debug_info);
+        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED));
+        setName(parOldMarked, "parent_old_marked", debug_info);
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
+        setName(mayTrigTerm->getParent(), "may_trigger_wb", debug_info);
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), 1);
-            Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), GC_MARKED);
+            setName(chldBit, "child_bit", debug_info);
+            Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0),"child_not_marked");
+            setName(chldNotMarked, "child_not_marked", debug_info);
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
         assert(anyChldNotMarked); // handled by all_of test above
@@ -2546,6 +2539,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         SmallVector<uint32_t, 2> Weights{1, 9};
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
+        setName(trigTerm->getParent(), "trigger_wb", debug_info);
         builder.SetInsertPoint(trigTerm);
         if (CI->getCalledOperand() == write_barrier_func) {
             builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
@@ -2777,18 +2771,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     return true;
 }
 
-bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
-    auto GetDT = [this]() -> DominatorTree & {
-        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    };
-    auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
-    bool modified = lateLowerGCFrame.runOnFunction(F);
-#ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(F));
-#endif
-    return modified;
-}
-
 PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     auto GetDT = [&AM, &F]() -> DominatorTree & {
@@ -2808,18 +2790,4 @@ PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
         }
     }
     return PreservedAnalyses::all();
-}
-
-
-char LateLowerGCFrameLegacy::ID = 0;
-static RegisterPass<LateLowerGCFrameLegacy> X("LateLowerGCFrame", "Late Lower GCFrame Pass", false, false);
-
-Pass *createLateLowerGCFramePass() {
-    return new LateLowerGCFrameLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLateLowerGCFramePass());
 }

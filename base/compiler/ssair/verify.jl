@@ -20,7 +20,8 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_value_pos_expr_head(head::Symbol) = head === :boundscheck
+is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
+is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
@@ -70,7 +71,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "Left over SSA marker"
         error("")
-    elseif isa(op, UnoptSlot)
+    elseif isa(op, SlotNumber)
         @verify_error "Left over slot detected in converted IR"
         error("")
     end
@@ -292,7 +293,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             continue
         end
 
-        if is_phinode_block && isa(stmt, Union{Expr, UpsilonNode, PhiCNode, SSAValue})
+        if is_phinode_block && !is_valid_phiblock_stmt(stmt)
             if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
                 # Go back and check that all non-PhiNodes are valid value-position
                 for validate_idx in firstidx:(lastphi-1)

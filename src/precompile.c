@@ -147,7 +147,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        z, targets);
+                        z, targets, NULL);
         jl_postoutput_hook();
     }
 

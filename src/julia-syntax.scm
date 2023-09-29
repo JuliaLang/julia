@@ -2364,7 +2364,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -3708,7 +3708,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export inline noinline)))
+         error gc_preserve_begin gc_preserve_end import using export public inline noinline)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -4256,7 +4256,7 @@ f(x) = yt(x)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck)))))
+                                 slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
@@ -4400,7 +4400,7 @@ f(x) = yt(x)
       (if (null? lst) '()
           (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref boundscheck)))))
+                                                     (memq (car x) '(quote inert top core globalref outerref)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -4415,7 +4415,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core boundscheck))))
+                                                   (memq (car arg) '(quote inert top core))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
                                          (not (and (or (symbol? arg)
@@ -4834,7 +4834,7 @@ f(x) = yt(x)
                val))
 
             ;; other top level expressions
-            ((import using export)
+            ((import using export public)
              (check-top-level e)
              (emit e)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))

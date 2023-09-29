@@ -475,6 +475,8 @@ or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
+
+See also [`pkgdir`](@ref).
 """
 function pathof(m::Module)
     @lock require_lock begin
@@ -506,6 +508,8 @@ julia> pkgdir(Foo)
 julia> pkgdir(Foo, "src", "file.jl")
 "/path/to/Foo.jl/src/file.jl"
 ```
+
+See also [`pathof`](@ref).
 
 !!! compat "Julia 1.7"
     The optional argument `paths` requires at least Julia 1.7.
@@ -996,11 +1000,14 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
-cache_file_entry(pkg::PkgId) = joinpath(
-    "compiled",
-    "v$(VERSION.major).$(VERSION.minor)",
-    pkg.uuid === nothing ? ""       : pkg.name),
-    pkg.uuid === nothing ? pkg.name : package_slug(pkg.uuid)
+function cache_file_entry(pkg::PkgId)
+    uuid = pkg.uuid
+    return joinpath(
+        "compiled",
+        "v$(VERSION.major).$(VERSION.minor)",
+        uuid === nothing ? ""       : pkg.name),
+        uuid === nothing ? pkg.name : package_slug(uuid)
+end
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
@@ -1703,7 +1710,7 @@ If a module or file is *not* safely precompilable, it should call `__precompile_
 order to throw an error if Julia attempts to precompile it.
 """
 @noinline function __precompile__(isprecompilable::Bool=true)
-    if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
+    if !isprecompilable && generating_output()
         throw(PrecompilableError())
     end
     nothing
@@ -1811,9 +1818,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-        if uuidkey == REPL_PKGID
-            REPL_MODULE_REF[] = newm
-        end
     else
         newm = root_module(uuidkey)
     end
@@ -1843,7 +1847,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
-            if (0 != ccall(:jl_generating_output, Cint, ())) && (JLOptions().incremental != 0)
+            if generating_output(#=incremental=#true)
                 error("Replacing module `$(key.name)`")
             else
                 @warn "Replacing module `$(key.name)`"
@@ -1894,7 +1898,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
     if path !== nothing
         # Pkg needs access to the version of packages in the sysimage.
-        if Core.Compiler.generating_sysimg()
+        if generating_output(#=incremental=#false)
             pkgorigin.version = get_pkgversion_from_path(joinpath(dirname(path), ".."))
         end
     end
@@ -1949,12 +1953,12 @@ function _require(pkg::PkgId, env=nothing)
         end
 
         if JLOptions().use_compiled_modules == 1
-            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+            if !generating_output(#=incremental=#false)
                 if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
                     finally
                         lock(require_lock)
                     end
@@ -2968,11 +2972,13 @@ global parse_pidfile_hook
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
 # Allows processes to wait if another process is precompiling a given source already.
-# The lock file is deleted and precompilation will proceed after `stale_age` seconds if
+# The lock file mtime will be updated when held every `stale_age/2` seconds.
+# After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
+# precompilation will proceed if
 #  - the locking process no longer exists
 #  - the lock is held by another host, since processes cannot be checked remotely
 # or after `stale_age * 25` seconds if the process does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
@@ -3121,7 +3127,6 @@ end
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"

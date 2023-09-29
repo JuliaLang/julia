@@ -346,33 +346,33 @@ macro noinline(x)
 end
 
 """
-    @constprop setting [ex]
+    Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.
 
 Two `setting`s are supported:
 
-- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
+- `Base.@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
+- `Base.@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 
-`@constprop` can be applied immediately before a function definition or within a function body.
+`Base.@constprop` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
-@constprop :aggressive function longdef(x)
-  ...
+Base.@constprop :aggressive function longdef(x)
+    ...
 end
 
 # annotate short-form definition
-@constprop :aggressive shortdef(x) = ...
+Base.@constprop :aggressive shortdef(x) = ...
 
 # annotate anonymous function that a `do` block creates
 f() do
-    @constprop :aggressive
+    Base.@constprop :aggressive
     ...
 end
 ```
@@ -401,7 +401,7 @@ function constprop_setting(@nospecialize setting)
 end
 
 """
-    @assume_effects setting... [ex]
+    Base.@assume_effects setting... [ex]
 
 Override the compiler's effect modeling for the given method or foreign call.
 `@assume_effects` can be applied immediately before a function definition or within a function body.
@@ -412,23 +412,22 @@ It can also be applied immediately before a `@ccall` expression.
 
 # Examples
 ```jldoctest
-julia> Base.@assume_effects :terminates_locally function pow(x)
-           # this :terminates_locally allows `pow` to be constant-folded
+julia> Base.@assume_effects :terminates_locally function fact(x)
+           # this :terminates_locally allows `fact` to be constant-folded
            res = 1
-           1 < x < 20 || error("bad pow")
+           0 ≤ x < 20 || error("bad fact")
            while x > 1
                res *= x
                x -= 1
            end
            return res
        end
-pow (generic function with 1 method)
+fact (generic function with 1 method)
 
 julia> code_typed() do
-           pow(12)
-       end
-1-element Vector{Any}:
- CodeInfo(
+           fact(12)
+       end |> only
+CodeInfo(
 1 ─     return 479001600
 ) => Int64
 
@@ -437,16 +436,15 @@ julia> code_typed() do
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
-               1 < x < 20 || error("bad pow")
+               0 ≤ x < 20 || error("bad fact")
                while x > 1
                    res *= x
                    x -= 1
                end
                return res
            end
-       end
-1-element Vector{Any}:
- CodeInfo(
+       end |> only
+CodeInfo(
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 
@@ -455,7 +453,7 @@ Vector{Int64} (alias for Array{Int64, 1})
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,

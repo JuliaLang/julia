@@ -134,6 +134,7 @@ precompile_test_harness(false) do dir
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
+              public foo, Bar
               module Inner
                   import $FooBase_module.hash
                   using ..$Foo_module
@@ -150,6 +151,7 @@ precompile_test_harness(false) do dir
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
+                  public bar
                   include_dependency("bar.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
@@ -244,6 +246,9 @@ precompile_test_harness(false) do dir
               const abigint_f() = big"123"
               const abigint_x = big"124"
 
+              # issue #51111
+              abigfloat_to_f32() = Float32(big"1.5")
+
               # issue #31488
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
@@ -298,6 +303,9 @@ precompile_test_harness(false) do dir
         @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
         @test Foo.abigint_f()::BigInt == big"123"
         @test Foo.abigint_x::BigInt + 1 == big"125"
+
+        # Issue #51111
+        @test Foo.abigfloat_to_f32() == 1.5f0
 
         @test Foo.x28297.result === missing
 
@@ -388,25 +396,31 @@ precompile_test_harness(false) do dir
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test Dict(modules) == merge(
+        modules_ok = merge(
             Dict(let m = Base.PkgId(s)
                     m => Base.module_build_id(Base.root_module(m))
                  end for s in
                  [ "Base", "Core", "Main",
-                   string(Foo2_module), string(FooBase_module) ]),
+                   string(Foo2_module), string(FooBase_module),]),
             # plus modules included in the system image
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
-                 end for s in
-                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
-                 :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
-                 :TOML, :Tar, :Test, :UUIDs, :Unicode,
-                 :nghttp2_jll]
-            ),
+                 end for s in [Symbol(x.name) for x in Base._sysimage_modules if !(x.name in ["Base", "Core", "Main"])]),
+            # plus test module,
+            Dict(Base.PkgId(Base.root_module(Base, :Test)) => Base.module_build_id(Base.root_module(Base, :Test))),
+            # plus dependencies of test module
+            Dict(Base.PkgId(Base.root_module(Base, :InteractiveUtils)) => Base.module_build_id(Base.root_module(Base, :InteractiveUtils))),
+            Dict(Base.PkgId(Base.root_module(Base, :Logging)) => Base.module_build_id(Base.root_module(Base, :Logging))),
+            Dict(Base.PkgId(Base.root_module(Base, :Random)) => Base.module_build_id(Base.root_module(Base, :Random))),
+            Dict(Base.PkgId(Base.root_module(Base, :Serialization)) => Base.module_build_id(Base.root_module(Base, :Serialization))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
+            Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
+        @test Dict(modules) == modules_ok
+
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]

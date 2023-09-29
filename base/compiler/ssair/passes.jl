@@ -521,8 +521,7 @@ end
 function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -538,28 +537,26 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     else
         return
     end
-    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
     val = args[2]
-    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, idx, 𝕃ₒ)
 end
 
 function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
@@ -570,14 +567,12 @@ end
 
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
-    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
-    𝕃ₒ::AbstractLattice)
+    idx::Int, 𝕃ₒ::AbstractLattice)
     typeconstraint = widenconst(argextype(val, compact))
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
-
 
     leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
@@ -599,8 +594,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
 
     # perform lifting
     lifted_val = perform_lifting!(compact,
-        visited_philikes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
+        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
 
     compact[idx] = lifted_val.val
 end
@@ -655,7 +649,6 @@ end
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
-        lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
         @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
         lazydomtree::Union{LazyDomtree,Nothing})
     reverse_mapping = IdDict{AnySSAValue, Int}()
@@ -704,19 +697,6 @@ function perform_lifting!(compact::IncrementalCompact,
         old_ssa = visited_philikes[i]
         old_inst = compact[old_ssa]
         old_node = old_inst[:stmt]::Union{PhiNode,Expr}
-        # FIXME this cache is broken somehow
-        # ckey = Pair{AnySSAValue, Any}(old_ssa, cache_key)
-        # cached = ckey in keys(lifting_cache)
-        cached = false
-        if cached
-            ssa = lifting_cache[ckey]
-            if isa(old_node, PhiNode)
-                lifted_philikes[i] = LiftedPhilike(ssa, old_node, false)
-            else
-                lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(old_node), false)
-            end
-            continue
-        end
         if isa(old_node, PhiNode)
             new_node = PhiNode()
             ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
@@ -734,7 +714,6 @@ function perform_lifting!(compact::IncrementalCompact,
             ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
         end
-        # lifting_cache[ckey] = ssa
     end
 
     # Fix up arguments
@@ -952,15 +931,36 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
 end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    inst = compact[SSAValue(idx)]
+    if (inst[:flag] & (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)) == (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)
+        return # already accurate
+    end
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_CONSISTENT
+        inst[:flag] |= IR_FLAG_CONSISTENT
     end
     if effect_free_and_nothrow
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     elseif nothrow
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
+        inst[:flag] |= IR_FLAG_NOTHROW
     end
+    return nothing
+end
+
+function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    length(stmt.args) == 4 || return false
+    condarg = stmt.args[2]
+    condtyp = argextype(condarg, compact)
+    if isa(condtyp, Const)
+        if condtyp.val === true
+            compact[idx] = stmt.args[3]
+            return true
+        elseif condtyp.val === false
+            compact[idx] = stmt.args[4]
+            return true
+        end
+    end
+    return false
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -997,8 +997,6 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
-    lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
-    def_lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
     for ((_, idx), stmt) in compact
@@ -1089,10 +1087,12 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_call(stmt, Core._svec_ref, compact)
                 lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
-                lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+                lift_comparison!(===, compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
-                lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
-            elseif isexpr(stmt, :new) && (compact[SSAValue(idx)][:flag] & IR_FLAG_NOTHROW) == 0x00
+                lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_call(stmt, Core.ifelse, compact)
+                fold_ifelse!(compact, idx, stmt)
+            elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
@@ -1108,7 +1108,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         struct_argtyp = argument_datatype(struct_typ)
         if struct_argtyp === nothing
             if isa(struct_typ, Union) && is_isdefined
-                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+                lift_comparison!(isdefined, compact, idx, stmt, 𝕃ₒ)
             end
             continue
         end
@@ -1168,7 +1168,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         lifted_val = perform_lifting!(compact,
-            visited_philikes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
+            visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
 
         # Insert the undef check if necessary
         if any_undef
@@ -1180,7 +1180,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
                 def_val = perform_lifting!(compact,
-                    visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree).val
+                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree).val
             end
             insert_node!(compact, SSAValue(idx), NewInstruction(
                 Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing))
@@ -1756,7 +1756,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         else
             if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
                 # nullify safe `typeassert` calls
-                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
                     compact[idx] = nothing
                     continue

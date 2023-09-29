@@ -443,8 +443,8 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
-toms(c::Nanosecond)  = div(value(c), 1000000)
-toms(c::Microsecond) = div(value(c), 1000)
+toms(c::Nanosecond)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microsecond) = div(value(c), 1000, RoundNearest)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000 * value(c)
 toms(c::Minute)      = 60000 * value(c)

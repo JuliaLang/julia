@@ -550,6 +550,8 @@ static Value *julia_to_native(
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, to);
+    unsigned align = julia_alignment(jlto);
+    cast<AllocaInst>(slot)->setAlignment(Align(align));
     setName(ctx.emission_context, slot, "native_convert_buffer");
     if (!jvinfo.ispointer()) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
@@ -557,7 +559,7 @@ static Value *julia_to_native(
     }
     else {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
-        emit_memcpy(ctx, slot, ai, jvinfo, jl_datatype_size(jlto), julia_alignment(jlto));
+        emit_memcpy(ctx, slot, ai, jvinfo, jl_datatype_size(jlto), align, align);
     }
     return slot;
 }
@@ -1826,7 +1828,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, ctx.types().T_size, src, (jl_value_t*)jl_voidpointer_type),
                     getInt8PtrTy(ctx.builder.getContext())),
-                MaybeAlign(0),
+                MaybeAlign(1),
                 emit_unbox(ctx, ctx.types().T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();
@@ -2077,6 +2079,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
+    else if (!ctx.params->use_jlplt) {
+        if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
+              (symarg.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+              (symarg.f_lib == JL_LIBJULIA_DL_LIBNAME))) || symarg.lib_expr) {
+            emit_error(ctx, "ccall: Had library expression, but symbol lookup was disabled");
+        }
+        llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
+    }
     else {
         assert(symarg.f_name != NULL);
         PointerType *funcptype = PointerType::get(functype, 0);
@@ -2163,7 +2173,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     slot->setAlignment(Align(boxalign));
                     ctx.builder.CreateAlignedStore(result, slot, Align(boxalign));
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-                    emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign);
+                    emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
                 }
                 else {
                     init_bits_value(ctx, strct, result, tbaa, boxalign);
