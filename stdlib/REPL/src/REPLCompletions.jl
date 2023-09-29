@@ -1045,12 +1045,14 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         end
     end
 
+    is_dict = false
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
     if identifier !== nothing
         matches = find_dict_matches(identifier, partial_key)
         length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')
         length(matches)>0 && return Completion[DictCompletion(identifier, match) for match in sort!(matches)], loc::Int:pos, true
+        is_dict = true
     end
 
     ffunc = Returns(true)
@@ -1084,7 +1086,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                                           shell_escape=true)
 
         return sort!(paths, by=p->p.path), r, success
-    elseif inc_tag === :string
+    elseif inc_tag === :string && !is_dict # if we know we're in a dict key string don't complete as a path
         # Find first non-escaped quote
         m = match(r"\"(?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
