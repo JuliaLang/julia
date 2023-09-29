@@ -395,7 +395,7 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
 
-Note that the target `result` must not share memory with any of the sources `c`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))

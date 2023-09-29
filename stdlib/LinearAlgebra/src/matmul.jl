@@ -214,7 +214,7 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`, overwriting the existing value of `Y`,
+Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 

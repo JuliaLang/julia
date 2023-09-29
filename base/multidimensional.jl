@@ -1179,7 +1179,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
-Note that the target `dest` must not share memory with the source `src`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 See also [`circshift`](@ref).
 """
@@ -1237,7 +1237,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
-Note that the target `dest` must not share memory with the source `src`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 See also: [`circshift`](@ref).
 

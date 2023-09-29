@@ -448,7 +448,7 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
@@ -528,7 +528,7 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -603,7 +603,7 @@ prod(f, A::AbstractArray; dims)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -682,7 +682,7 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -761,7 +761,7 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -828,7 +828,7 @@ extrema(f, A::AbstractArray; dims)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
-Note that the target `dest` must not share memory with the source `src`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -905,7 +905,7 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -980,7 +980,7 @@ any(::Function, ::AbstractArray; dims)
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
 
-Note that the target `r` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
@@ -1100,7 +1100,7 @@ Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
 
-Note that the targets `rval` and `rind` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1173,7 +1173,7 @@ Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
 
-Note that the targets `rval` and `rind` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)

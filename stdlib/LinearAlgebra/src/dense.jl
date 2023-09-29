@@ -360,8 +360,6 @@ _kronsize(A::AbstractVector, B::AbstractMatrix) = (length(A)*size(B, 1), size(B,
 Computes the Kronecker product of `A` and `B` and stores the result in `C`,
 overwriting the existing content of `C`. This is the in-place version of [`kron`](@ref).
 
-Note that the target `C` must not share memory with any of the sources `A` and `B`, otherwise the result is undefined.
-
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """

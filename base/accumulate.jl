@@ -43,7 +43,7 @@ end
 
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
 
-Note that the target `B` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
@@ -153,7 +153,7 @@ cumsum(itr) = accumulate(add_sum, itr)
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
 
-Note that the target `B` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
@@ -164,7 +164,7 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 
-Note that the target `y` must not share memory with the source `x`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 """
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
 
@@ -307,7 +307,7 @@ Cumulative operation `op` on `A` along the dimension `dims`, storing the result 
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
 value is used to instantiate the accumulation.
 
-Note that the target `B` must not share memory with the source `A`, otherwise the result is undefined.
+Behavior is undefined when any mutated argument shares memory with any other argument.
 
 See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 
