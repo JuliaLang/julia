@@ -624,9 +624,7 @@ end
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
-    # RNGs do not share their seed in randjump
     let r2 = Future.randjump(r, big(10)^20)
-        @test  r.seed !== r2.seed
         Random.seed!(r2)
         @test seed == r.seed != r2.seed
     end
@@ -911,9 +909,9 @@ end
         @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
 
         m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
+        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)"
         rand(m, Int64)
-        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
+        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
         @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
 
         m = MersenneTwister(0); rand(m, Int64); rand(m)
@@ -1148,10 +1146,10 @@ end
     end
 end
 
-@testset "seed! and make_seed" begin
+@testset "seed! and hash_seed" begin
     # Test that:
-    # 1) if n == m, then make_seed(n) == make_seed(m)
-    # 2) if n != m, then make_seed(n) != make_seed(m)
+    # 1) if n == m, then hash_seed(n) == hash_seed(m)
+    # 2) if n != m, then hash_seed(n) != hash_seed(m)
     rngs = (Xoshiro(0), TaskLocalRNG(), MersenneTwister(0))
     seeds = Any[]
     for T = Base.BitInteger_types
@@ -1161,12 +1159,12 @@ end
         T <: Signed && push!(seeds, T(0), T(1), T(2), T(-1), T(-2))
     end
 
-    vseeds = Dict{Vector{UInt32}, BigInt}()
+    vseeds = Dict{Vector{UInt8}, BigInt}()
     for seed = seeds
         bigseed = big(seed)
-        vseed = Random.make_seed(bigseed)
+        vseed = Random.hash_seed(bigseed)
         # test property 1) above
-        @test Random.make_seed(seed) == vseed
+        @test Random.hash_seed(seed) == vseed
         # test property 2) above
         @test bigseed == get!(vseeds, vseed, bigseed)
         # test that the property 1) is actually inherited by `seed!`
@@ -1176,4 +1174,9 @@ end
             @test rng == rng2
         end
     end
+
+    seed32 = rand(UInt32, rand(1:9))
+    hash32 = Random.hash_seed(seed32)
+    @test Random.hash_seed(map(UInt64, seed32)) == hash32
+    @test hash32 ∉ keys(vseeds)
 end

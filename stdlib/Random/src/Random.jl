@@ -356,8 +356,8 @@ julia> rand(Int, 2)
 
 julia> using Random
 
-julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
-1=>2
+julia> rand(Xoshiro(0), Dict(1=>2, 3=>4))
+3 => 4
 
 julia> rand((2, 3))
 3
@@ -389,15 +389,13 @@ but without allocating a new array.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> rand!(rng, zeros(5))
+julia> rand!(Xoshiro(123), zeros(5))
 5-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
- 0.5662374165061859
- 0.4600853424625171
- 0.7940257103317943
+ 0.521213795535383
+ 0.5868067574533484
+ 0.8908786980927811
+ 0.19090669902576285
+ 0.5256623915420473
 ```
 """
 rand!
@@ -452,6 +450,11 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
+seed!(rng::AbstractRNG) = seed!(rng, nothing)
+#=
+We have this generic definition instead of the alternative option
+`seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)`
+because it would lead too easily to ambiguities, e.g. when we define `seed!(::Xoshiro, seed)`.
+=#
 
 end # module

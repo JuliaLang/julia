@@ -126,8 +126,8 @@ Random.SamplerSimple
 Decoupling pre-computation from actually generating the values is part of the API, and is also available to the user. As an example, assume that `rand(rng, 1:20)` has to be called repeatedly in a loop: the way to take advantage of this decoupling is as follows:
 
 ```julia
-rng = MersenneTwister()
-sp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister, 1:20)
+rng = Xoshiro()
+sp = Random.Sampler(rng, 1:20) # or Random.Sampler(Xoshiro, 1:20)
 for x in X
     n = rand(rng, sp) # similar to n = rand(rng, 1:20)
     # use n
@@ -159,8 +159,8 @@ Scalar and array methods for `Die` now work as expected:
 julia> rand(Die)
 Die(5)
 
-julia> rand(MersenneTwister(0), Die)
-Die(11)
+julia> rand(Xoshiro(0), Die)
+Die(10)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
