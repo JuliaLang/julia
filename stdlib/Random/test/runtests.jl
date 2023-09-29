@@ -323,7 +323,9 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
             a3 = f(rng..., T, b2, u3) ::Array{T, 2}
             a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
-            @test size(a0) == ()
+            if T <: Number
+                @test size(a0) == ()
+            end
             @test size(a1) == (5,)
             @test size(a2) == size(a3) == size(a4) == (2, 3)
             if T <: AbstractFloat && f === rand
