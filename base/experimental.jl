@@ -377,6 +377,4 @@ adding them to the global method table.
 """
 :@MethodTable
 
-include("tapir.jl")
-
 end
