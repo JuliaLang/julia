@@ -154,7 +154,7 @@ end
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -1817,7 +1817,7 @@ function Base.getproperty(v::Issue36437, s::Symbol)
 end
 
 let s = "Issue36437(42)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1825,7 +1825,7 @@ let s = "Issue36437(42)."
 end
 
 let s = "Some(Issue36437(42)).value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1835,7 +1835,7 @@ end
 some_issue36437 = Some(Issue36437(42))
 
 let s = "some_issue36437.value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1844,14 +1844,14 @@ end
 
 # get completions for :toplevel/:tuple expressions
 let s = "some_issue36437.value.a, some_issue36437.value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
     end
 end
 let s = "@show some_issue36437.value.a; some_issue36437.value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1860,7 +1860,7 @@ end
 
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1871,7 +1871,7 @@ end
 # concrete evaluation through `getindex`ing dictionary
 global_dict = Dict{Symbol, Any}(:r => r"foo")
 let s = "global_dict[:r]."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for fname in fieldnames(Regex)
         @test String(fname) in c
@@ -1879,7 +1879,7 @@ let s = "global_dict[:r]."
 end
 global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
 let s = "global_dict_nested[:g][:r]."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for fname in fieldnames(Regex)
         @test String(fname) in c
@@ -1888,19 +1888,19 @@ end
 
 # dict completions through nested `getindex`ing
 let s = "global_dict_nested["
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test ":g]" in c
 end
 let s = "global_dict_nested[:g]["
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test ":r]" in c
 end
 
 const global_xs = [Some(42)]
 let s = "pop!(global_xs)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c
 end
@@ -1930,23 +1930,36 @@ let s = "`abc`.e"
     @test c == Any["env", "exec"]
 end
 
+# suppress false positive field completions (when `getproperty`/`propertynames` is overloaded)
+struct Issue51499_2
+    inner::Dict{Symbol,Any}
+end
+Base.getproperty(issue51499::Issue51499_2, name::Symbol) = getfield(issue51499, :inner)[name]
+Base.propertynames(issue51499::Issue51499_2) = keys(getfield(issue51499, :inner))
+const issue51499_2_1 = Issue51499_2(Dict(:a => nothing))
+const issue51499_2_2 = Issue51499_2(Dict(:b => nothing))
+let s = "(rand(Bool) ? issue51499_2_1 : issue51499_2_2)."
+    c, r, res = test_complete_context(s)
+    @test "inner" ∉ c
+end
+
 # Test completion for a case when type inference returned `Union` of the same types
 union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
 let s = "union_somes(1, 1.0)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c
 end
 union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
 let s = "union_some_ref(1, 1.0)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c && "x" in c
 end
 
 Issue49892(x) = x
 let s = "Issue49892(fal"
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("false", "falses")
         @test n in c
