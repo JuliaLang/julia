@@ -1857,6 +1857,11 @@ let s = "@show some_issue36437.value.a; some_issue36437.value."
         @test n in c
     end
 end
+# https://github.com/JuliaLang/julia/issues/51505
+let s = "()."
+    c, r, res = test_complete_context(s)
+    @test res
+end
 
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
