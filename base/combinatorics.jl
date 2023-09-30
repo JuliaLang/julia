@@ -169,7 +169,7 @@ it is even faster to write into a pre-allocated output array with `u .= @view v[
 (Even though `permute!` overwrites `v` in-place, it internally requires some allocation
 to keep track of which elements have been moved.)
 
-Behavior is undefined when any mutated argument shares memory with any other argument.
+Behavior can be unexpected when any mutated argument shares memory with any other argument.
 
 See also [`invpermute!`](@ref).
 
@@ -224,7 +224,7 @@ Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
 it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
 allocates a copy of the data.)
 
-Behavior is undefined when any mutated argument shares memory with any other argument.
+Behavior can be unexpected when any mutated argument shares memory with any other argument.
 
 # Examples
 ```jldoctest
