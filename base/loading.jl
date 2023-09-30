@@ -2604,28 +2604,25 @@ function replace_depot_path(path::AbstractString)
     return path
 end
 
-# Attempt to resolve all leading `@depot` tags from the included files if they
-# can all be located in one and the same depot.
-# Returns true if tags could be resolved.
-function resolve_depot_paths!(includes::Vector{CacheHeaderIncludes})
+# Find depot in DEPOT_PATH for which all @depot tags from the `includes`
+# can be replaced so that they point to a file on disk each.
+# Return nothing when no depot matched.
+function resolve_depot(includes)
     if any(includes) do inc
-            !startswith(inc.filename, "@depot")
+            !startswith(inc, "@depot")
         end
-        return
+        return nothing
     end
     for depot in DEPOT_PATH
-        all_in_depot = all(includes) do inc
-            isfile(replace(inc.filename, r"^@depot" => depot))
-        end
-        if all_in_depot
-            for inc in includes
-                inc.filename = replace(inc.filename, r"^@depot" => depot)
+        if all(includes) do inc
+                isfile(replace(inc, r"^@depot" => depot))
             end
-            return true
+            return depot
         end
     end
-    return false
+    return nothing
 end
+
 
 function parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)
@@ -2707,27 +2704,30 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
-    resolved = resolve_depot_paths!(includes)
-    if !isnothing(resolved) && !resolved
-        @debug "Failed to resolve @depot tags for includes listed in cache file $cachefile."
+    # determine path for @depot replacement from srctext files only, e.g. ignore any include_dependency files
+    srcfiles = srctext_files(f, srctextpos, includes)
+    depot = resolve_depot(srcfiles)
+    keepidx = Int[]
+    for (i, chi) in enumerate(includes)
+        chi.filename ∈ srcfiles && push!(keepidx, i)
     end
+    if isnothing(depot)
+        @debug "Failed to determine depot from srctext files in cache file $cachefile."
+    else
+        for inc in includes
+            inc.filename = replace(inc.filename, r"^@depot" => depot)
+        end
+    end
+    includes_srcfiles_only = includes[keepidx]
 
-    return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
+    return modules, (includes, includes_srcfiles_only, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
 end
 
-function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
+function parse_cache_header(cachefile::String)
     io = open(cachefile, "r")
     try
         iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
-        _, (includes, _), _, srctextpos, _... = ret
-        srcfiles_only || return ret
-        srcfiles = srctext_files(io, srctextpos, includes)
-        delidx = Int[]
-        for (i, chi) in enumerate(includes)
-            chi.filename ∈ srcfiles || push!(delidx, i)
-        end
-        deleteat!(includes, delidx)
         return ret
     finally
         close(io)
@@ -2748,7 +2748,7 @@ function preferences_hash(cachefile::String)
 end
 
 function cache_dependencies(f::IO, cachefile::AbstractString)
-    _, (includes, _), modules, _... = parse_cache_header(f, cachefile)
+    _, (includes, _, _), modules, _... = parse_cache_header(f, cachefile)
     return modules, map(chi -> chi.filename, includes)  # return just filename
 end
 
@@ -2763,7 +2763,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
-    _, (includes, _), _, srctextpos, _, _, _, _ = parse_cache_header(io, cachefile)
+    _, (includes, _, _), _, srctextpos, _, _, _, _ = parse_cache_header(io, cachefile)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename, includes)
@@ -2809,18 +2809,9 @@ function srctext_files(f::IO, srctextpos::Int64, includes::Vector{CacheHeaderInc
     while !eof(f)
         filenamelen = read(f, Int32)
         filenamelen == 0 && break
-        depotfn = String(read(f, filenamelen))
+        filename = String(read(f, filenamelen))
         len = read(f, UInt64)
-        fn = if !startswith(depotfn, "@depot")
-            depotfn
-        else
-            basefn = replace(depotfn, r"^@depot" => "")
-            idx = findfirst(includes) do inc
-                endswith(inc.filename, basefn)
-            end
-            isnothing(idx) ? depotfn : includes[idx].filename
-        end
-        push!(files, fn)
+        push!(files, filename)
         seek(f, position(f) + len)
     end
     return files
@@ -3163,7 +3154,7 @@ end
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end
