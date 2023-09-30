@@ -22,6 +22,7 @@ havebb = false
 
 if Sys.iswindows()
     busybox = joinpath(@__DIR__, "deps", "busybox.exe")
+    havebb = true
 
     yescmd = `$busybox yes`
     echocmd = `$busybox echo`
@@ -845,13 +846,6 @@ end
     @test setenv(cmd, Dict("FOO"=>"foo"); dir=dir2).dir == dir2
     @test setenv(cmd, Dict("FOO"=>"foo"); dir="").dir == ""
 end
-
-
-# clean up busybox download
-if Sys.iswindows()
-    rm(busybox, force=true)
-end
-
 
 # test (t)csh escaping if tcsh is installed
 cshcmd = "/bin/tcsh"
