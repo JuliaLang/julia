@@ -712,7 +712,7 @@ end
 # Execute backtrace once before checking formatting, see #38858
 backtrace()
 
-# This test set should be run on all systems, this if statement
+# This test set should be run on all systems. This if statement
 # is a hack and should be removed once #51524 is fixed.
 if !Sys.islinux()
     # issue #28442
