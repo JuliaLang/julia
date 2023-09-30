@@ -576,7 +576,7 @@ end
 
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module)
-    if isexpr(ex, :toplevel) || isexpr(ex, :tuple)
+    if (isexpr(ex, :toplevel) || isexpr(ex, :tuple)) && !isempty(ex.args)
         # get the inference result for the last expression
         ex = ex.args[end]
     end
