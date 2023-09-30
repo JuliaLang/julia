@@ -30,6 +30,8 @@
 *.jl.*.mem
 *.ji
 
+!busybox.exe
+
 /perf*
 .DS_Store
 .idea/*
