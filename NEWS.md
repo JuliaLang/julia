@@ -43,8 +43,6 @@ New library features
 Standard library changes
 ------------------------
 
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
-
 #### Package Manager
 
 #### LinearAlgebra
@@ -54,6 +52,9 @@ Standard library changes
 #### Profile
 
 #### Random
+* `rand` now supports sampling over `Tuple` types ([#50251]).
+
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
 
 #### REPL
 
@@ -74,6 +75,8 @@ Standard library changes
 * Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
