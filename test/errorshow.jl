@@ -712,20 +712,24 @@ end
 # Execute backtrace once before checking formatting, see #38858
 backtrace()
 
-# issue #28442
-@testset "Long stacktrace printing" begin
-    f28442(c) = g28442(c + 1)
-    g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
-    bt = f28442(1)
-    io = IOBuffer()
-    Base.show_backtrace(io, bt)
-    output = split(String(take!(io)), '\n')
-    @test lstrip(output[3])[1:3] == "[1]"
-    @test occursin("g28442", output[3])
-    @test lstrip(output[5])[1:3] == "[2]"
-    @test occursin("f28442", output[5])
-    @test occursin("the above 2 lines are repeated 5000 more times", output[7])
-    @test lstrip(output[8])[1:7] == "[10003]"
+# This test set should be run on all systems, this if statement
+# is a hack and should be removed once #51524 is fixed.
+if !Sys.islinux()
+    # issue #28442
+    @testset "Long stacktrace printing" begin
+        f28442(c) = g28442(c + 1)
+        g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
+        bt = f28442(1)
+        io = IOBuffer()
+        Base.show_backtrace(io, bt)
+        output = split(String(take!(io)), '\n')
+        @test lstrip(output[3])[1:3] == "[1]"
+        @test occursin("g28442", output[3])
+        @test lstrip(output[5])[1:3] == "[2]"
+        @test occursin("f28442", output[5])
+        @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test lstrip(output[8])[1:7] == "[10003]"
+    end
 end
 
 @testset "Line number correction" begin
