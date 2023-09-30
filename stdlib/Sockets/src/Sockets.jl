@@ -548,7 +548,7 @@ julia> server = listen(9000);
 julia> socket = connect(9000)
 TCPSocket(RawFD(25) open, 0 bytes waiting)
 
-julia> close(socket)
+julia> close(socket) # cleanup open socket so that it can be reused
 
 julia> close(server)
 ```
@@ -629,10 +629,8 @@ reject them. The default value of `backlog` is 511.
 
 # Examples
 ```jldoctest
-julia> server = listen(9000)
+julia> server = listen(9876)
 Sockets.TCPServer(RawFD(24) active)
-
-julia> close(server);
 ```
 """
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
