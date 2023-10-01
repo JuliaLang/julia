@@ -444,8 +444,8 @@ Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on succe
 
 `mkfifo` is supported only in Unix platforms.
 
-!!! compat "Julia 1.8"
-    `mkfifo` requires at least Julia 1.8.
+!!! compat "Julia 1.11"
+    `mkfifo` requires at least Julia 1.11.
 """
 function mkfifo(
     path::AbstractString,
