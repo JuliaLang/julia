@@ -675,6 +675,7 @@ end
         @test Random.seed!(m..., typemax(UInt)) === m2
         @test Random.seed!(m..., typemax(UInt128)) === m2
         @test Random.seed!(m..., "a random seed") === m2
+        @test Random.seed!(m..., Random.default_rng()) === m2
     end
 end
 
@@ -728,7 +729,7 @@ end
     @test rand(m, Int) ∉ (a, b, c, d)
 end
 
-@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
+@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister, Xoshiro)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), randstring(), randstring(), rand(UInt128, 3)...]
     if RNG == Xoshiro
         push!(seeds, rand(UInt64, rand(1:4)))
@@ -739,6 +740,11 @@ end
         Random.seed!(m, seed)
         @test a == [rand(m) for _=1:100]
     end
+    # rng as a seed
+    m = RNG(Xoshiro(0))
+    a = [rand(m) for _=1:100]
+    Random.seed!(m, Xoshiro(0))
+    @test a == [rand(m) for _=1:100]
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin

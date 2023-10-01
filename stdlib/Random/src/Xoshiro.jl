@@ -243,10 +243,10 @@ copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = se
 # use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
 hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
-    # as we get good randomness from RandomDevice, we can skip hashing
-    initstate!(rng, rand(RandomDevice(), NTuple{4, UInt64}))
-end
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
+    initstate!(rng, rand(seeder, NTuple{4, UInt64}))
+
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing) = @invoke seed!(rng::AbstractRNG, nothing::Any)
 
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
     initstate!(rng, reinterpret(UInt64, hash_seed(seed)))

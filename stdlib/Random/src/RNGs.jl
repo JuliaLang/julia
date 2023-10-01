@@ -365,12 +365,13 @@ function initstate!(r::MersenneTwister, data::StridedVector, seed)
 end
 
 # When a seed is not provided, we generate one via `RandomDevice()` rather
-# than calling directly `initstate!` with `rand(RandomDevice(), UInt32, whatever)` because the
+# than calling directly `initstate!` with `rand(RandomDevice(), UInt32, 8)` because the
 # seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
-# small overhead compared to `initstate!`, so this simple solution is fine.
-# A random seed with 128 bits is a good compromise for almost surely always getting distinct
+# small overhead compared to `initstate!`.
+# A random seed with 128 bits is a good compromise for almost surely getting distinct
 # seeds, while having them printed reasonably tersely.
-seed!(r::MersenneTwister, ::Nothing) = seed!(r, rand(RandomDevice(), UInt128))
+seed!(r::MersenneTwister, seeder::AbstractRNG) = seed!(r, rand(seeder, UInt128))
+seed!(r::MersenneTwister, ::Nothing) = seed!(r, RandomDevice())
 seed!(r::MersenneTwister, seed) = initstate!(r, hash_seed(seed), seed)
 
 
