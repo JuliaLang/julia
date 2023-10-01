@@ -247,12 +247,8 @@ copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = se
 hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
-    initstate!(rng, rand(seeder, NTuple{4, UInt64}))
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing) = @invoke seed!(rng::AbstractRNG, nothing::Any)
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
-    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
+    initstate!(rng, bswap.(rand(seeder, NTuple{4, UInt64})))
+# bswap used above only to avoid breaking random streams in v1.13
 
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
