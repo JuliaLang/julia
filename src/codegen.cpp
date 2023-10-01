@@ -1668,8 +1668,7 @@ public:
     int nvargs = -1;
     bool is_opaque_closure = false;
 
-    Value *pgcstack = NULL;
-    Instruction *topalloca = NULL;
+    std::stack<Instruction *> PGCStacks;
 
     bool use_cache = false;
     bool external_linkage = false;
@@ -1873,10 +1872,12 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
     return gv;
 }
 
+static Instruction *current_pgcstack(jl_codectx_t &ctx); // Forward declare
+
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
+    return new AllocaInst(lty, current_pgcstack(ctx)->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/current_pgcstack(ctx));
 }
 
 static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -4287,7 +4288,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         idx++;
     }
     if (gcstack_arg) {
-        argvals[idx] = ctx.pgcstack;
+        argvals[idx] = current_pgcstack(ctx);
         idx++;
     }
     for (size_t i = 0; i < nargs; i++) {
@@ -5910,14 +5911,30 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
 {
     // allocate a placeholder gc instruction
     // this will require the runtime, but it gets deleted later if unused
-    ctx.topalloca = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
-    ctx.pgcstack = ctx.topalloca;
-    ctx.pgcstack->setName("pgcstack");
+    Instruction *pgcstack = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
+    pgcstack->setName("pgcstack");
+    ctx.PGCStacks.push(pgcstack);
+}
+
+static Instruction *current_pgcstack(jl_codectx_t &ctx)
+{
+    return ctx.PGCStacks.top();
+}
+
+static void push_pgcstack(jl_codectx_t &ctx)
+{
+    Instruction *pgcstack = ctx.builder.CreateCall(prepare_call(jlpgcstack_func));
+    pgcstack->setName("pgcstack");
+    ctx.PGCStacks.push(pgcstack);
+}
+
+static void pop_pgcstack(jl_codectx_t &ctx){
+    ctx.PGCStacks.pop();
 }
 
 static Value *get_current_task(jl_codectx_t &ctx)
 {
-    return get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, ctx.pgcstack);
+    return get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, current_pgcstack(ctx));
 }
 
 // Get PTLS through current task.
@@ -6506,7 +6523,7 @@ static Function* gen_cfun_wrapper(
             args.push_back(return_roots);
         }
         if (gcstack_arg)
-            args.push_back(ctx.pgcstack);
+            args.push_back(current_pgcstack(ctx));
         for (size_t i = 0; i < nargs + 1; i++) {
             // figure out how to repack the arguments
             jl_cgval_t &inputarg = inputargs[i];
@@ -6948,7 +6965,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     }
     bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
     if (gcstack_arg) {
-        args[idx] = ctx.pgcstack;
+        args[idx] = current_pgcstack(ctx);
         idx++;
     }
     bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
@@ -7729,10 +7746,10 @@ static jl_llvm_functions_t
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), nullptr, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), nullptr, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/current_pgcstack(ctx));
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
-                SI->insertAfter(ctx.topalloca);
+                SI->insertAfter(current_pgcstack(ctx));
             }
             varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa().tbaa_stack);
             alloc_def_flag(ctx, varinfo);
@@ -7749,9 +7766,9 @@ static jl_llvm_functions_t
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
-                nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+                nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/current_pgcstack(ctx));
             StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
-            SI->insertAfter(ctx.topalloca);
+            SI->insertAfter(current_pgcstack(ctx));
             varinfo.boxroot = av;
             if (debug_enabled && varinfo.dinfo) {
                 DIExpression *expr;
@@ -8510,6 +8527,7 @@ static jl_llvm_functions_t
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             ctx.builder.CreateDetach(BB[cursor+2], BB[lname], syncregion.V);
             find_next_stmt(cursor + 1);
+            push_pgcstack(ctx);
             continue;
         }
         if (jl_is_reattachnode(stmt)) {
@@ -8524,6 +8542,7 @@ static jl_llvm_functions_t
             int lname = jl_reattachnode_label(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             ctx.builder.CreateReattach(BB[lname], syncregion.V);
+            pop_pgcstack(ctx); // assumes ordered codegen
             find_next_stmt(lname - 1);
             continue;
         }
