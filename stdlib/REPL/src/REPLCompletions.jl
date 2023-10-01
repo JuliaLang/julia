@@ -453,20 +453,19 @@ function get_code_cache()
 end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
-    repl_frame::CC.InferenceResult
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
     code_cache::REPLInterpreterCache
-    function REPLInterpreter(repl_frame::CC.InferenceResult;
-                             world::UInt = Base.get_world_counter(),
-                             inf_params::CC.InferenceParams = CC.InferenceParams(;
-                                unoptimize_throw_blocks=false),
-                             opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                             code_cache::REPLInterpreterCache = get_code_cache())
-        return new(repl_frame, world, inf_params, opt_params, inf_cache, code_cache)
+    function REPLInterpreter(; world::UInt = Base.get_world_counter(),
+                               inf_params::CC.InferenceParams = CC.InferenceParams(;
+                                   aggressive_constant_propagation=true,
+                                   unoptimize_throw_blocks=false),
+                               opt_params::CC.OptimizationParams = CC.OptimizationParams(),
+                               inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
+                               code_cache::REPLInterpreterCache = get_code_cache())
+        return new(world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
@@ -490,25 +489,31 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # Aggressive binding resolution poses challenges for the inference cache validation
 # (until https://github.com/JuliaLang/julia/issues/40399 is implemented).
 # To avoid the cache validation issues, `REPLInterpreter` only allows aggressive binding
-# resolution for top-level frame representing REPL input code (`repl_frame`) and for child
-# `getproperty` frames that are constant propagated from the `repl_frame`. This works, since
-# a.) these frames are never cached, and
-# b.) their results are only observed by the non-cached `repl_frame`.
+# resolution for top-level frame representing REPL input code and for child uncached frames
+# that are constant propagated from the top-level frame ("repl-frame"s). This works, even if
+# those global bindings are not constant and may be mutated in the future, since:
+# a.) "repl-frame"s are never cached, and
+# b.) mutable values are never observed by any cached frames.
 #
 # `REPLInterpreter` also aggressively concrete evaluate `:inconsistent` calls within
-# `repl_frame` to provide reasonable completions for lines like `Ref(Some(42))[].|`.
+# "repl-frame" to provide reasonable completions for lines like `Ref(Some(42))[].|`.
 # Aggressive concrete evaluation allows us to get accurate type information about complex
 # expressions that otherwise can not be constant folded, in a safe way, i.e. it still
 # doesn't evaluate effectful expressions like `pop!(xs)`.
 # Similarly to the aggressive binding resolution, aggressive concrete evaluation doesn't
-# present any cache validation issues because `repl_frame` is never cached.
+# present any cache validation issues because "repl-frame" is never cached.
 
-is_repl_frame(interp::REPLInterpreter, sv::CC.InferenceState) = interp.repl_frame === sv.result
+function is_call_graph_uncached(sv::CC.AbsIntState)
+    sv isa CC.InferenceState && sv.cached && return false
+    parent = sv.parent
+    parent === nothing && return true
+    return is_call_graph_uncached(parent)
+end
 
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if is_call_graph_uncached(sv)
         if CC.isdefined_globalref(g)
             return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
         end
@@ -518,18 +523,10 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(interp::REPLInterpreter, sv::CC.InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false
-    def.name === :getproperty || return false
-    sv.cached && return false
-    return is_repl_frame(interp, sv.parent)
-end
-
 # aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
 function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
                               argtypes::Vector{Any}, sv::CC.InferenceState)
-    if f === Core.getglobal && is_repl_frame_getproperty(interp, sv)
+    if f === Core.getglobal && is_call_graph_uncached(sv)
         if length(argtypes) == 2
             a1, a2 = argtypes
             if isa(a1, Const) && isa(a2, Const)
@@ -552,7 +549,7 @@ end
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if is_call_graph_uncached(sv)
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
@@ -560,6 +557,12 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
     return @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                              result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                              sv::CC.InferenceState)
+end
+
+# allow constant propagation for mutable constants
+function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    any(@nospecialize(a)->isa(a, Const), arginfo.argtypes) && return true # even if mutable
+    return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
 end
 
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
@@ -573,7 +576,7 @@ end
 
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module)
-    if isexpr(ex, :toplevel) || isexpr(ex, :tuple)
+    if (isexpr(ex, :toplevel) || isexpr(ex, :tuple)) && !isempty(ex.args)
         # get the inference result for the last expression
         ex = ex.args[end]
     end
@@ -597,9 +600,9 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     resolve_toplevel_symbols!(src, context_module)
     @atomic mi.uninferred = src
 
+    interp = REPLInterpreter()
     result = CC.InferenceResult(mi)
-    interp = REPLInterpreter(result)
-    frame = CC.InferenceState(result, src, #=cache=#:no, interp)::CC.InferenceState
+    frame = CC.InferenceState(result, src, #=cache=#:no, interp)
 
     # NOTE Use the fixed world here to make `REPLInterpreter` robust against
     #      potential invalidations of `Core.Compiler` methods.

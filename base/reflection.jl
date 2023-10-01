@@ -1761,13 +1761,13 @@ This function will return an `Effects` object with information about the computa
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
-                       world = get_world_counter(),
-                       interp = Core.Compiler.NativeInterpreter(world))
+                       world::UInt=get_world_counter(),
+                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        argtypes = Any[Core.Const(f), types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
         return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
             Core.Compiler.ArgInfo(nothing, argtypes), rt)

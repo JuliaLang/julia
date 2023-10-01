@@ -495,7 +495,7 @@ end
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
+    @test only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -566,7 +566,7 @@ end
 let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
 
 # method completions with kwargs
@@ -1857,6 +1857,11 @@ let s = "@show some_issue36437.value.a; some_issue36437.value."
         @test n in c
     end
 end
+# https://github.com/JuliaLang/julia/issues/51505
+let s = "()."
+    c, r, res = test_complete_context(s)
+    @test res
+end
 
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
@@ -1905,6 +1910,66 @@ let s = "pop!(global_xs)."
     @test "value" in c
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# https://github.com/JuliaLang/julia/issues/51499
+# allow aggressive concrete evaluation for child uncached frames
+struct Issue51499CompletionDict
+    inner::Dict{Symbol,Any}
+    leaf_func # Function that gets invoked on leaf objects before being returned.
+    function Issue51499CompletionDict(inner::Dict, leaf_func=identity)
+        inner = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in inner)
+        return new(inner, leaf_func)
+    end
+end
+function Base.getproperty(tcd::Issue51499CompletionDict, name::Symbol)
+    prop = getfield(tcd, :inner)[name]
+    isa(prop, Issue51499CompletionDict) && return prop
+    return getfield(tcd, :leaf_func)(prop)
+end
+Base.propertynames(tcd::Issue51499CompletionDict) = keys(getfield(tcd, :inner))
+
+const issue51499 = Ref{Any}(nothing)
+tcd3 = Issue51499CompletionDict(
+    Dict(:a => 1.0, :b => 2.0),
+    function (x)
+        issue51499[] = x
+        return sin(x)
+    end)
+tcd2 = Issue51499CompletionDict(
+    Dict(:v => tcd3, :w => 1.0))
+tcd1 = Issue51499CompletionDict(
+    Dict(:x => tcd2, :y => 1.0))
+let (c, r, res) = test_complete_context("tcd1.")
+    @test res
+    @test "x" in c && "y" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.")
+    @test res
+    @test "v" in c && "w" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.v.")
+    @test res
+    @test "a" in c && "b" in c
+    @test isnothing(issue51499[])
+end
+@test tcd1.x.v.a == sin(1.0)
+@test issue51499[] == 1.0
+
+# aggressive constant propagation for mutable `Const`s
+mutable_const_prop = Dict{Symbol,Any}(:key => Any[Some(r"x")])
+getkeyelem(d) = d[:key][1]
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).")
+    @test res
+    @test "value" in c
+end
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
+    @test res
+    for name in fieldnames(Regex)
+        @test String(name) in c
+    end
+end
 
 # Test completion of var"" identifiers (#49280)
 let s = "var\"complicated "
