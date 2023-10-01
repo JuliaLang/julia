@@ -13,7 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
-import SHA
+using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 import Base: copymutable, copy, copy!, ==, hash, convert,
@@ -457,11 +457,14 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-function seed!(rng::AbstractRNG, seed=nothing)
+function seed!(rng::AbstractRNG, seed::Any=nothing)
     if seed === nothing
         seed!(rng, RandomDevice())
-    else
+    elseif seed isa AbstractRNG
+        # avoid getting into an infinite recursive call from the other branches
         throw(MethodError(seed!, (rng, seed)))
+    else
+        seed!(rng, SeedHasher(seed))
     end
 end
 

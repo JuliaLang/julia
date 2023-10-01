@@ -246,11 +246,6 @@ hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
     initstate!(rng, rand(seeder, NTuple{4, UInt64}))
 
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing) = @invoke seed!(rng::AbstractRNG, nothing::Any)
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
-    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
-
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
     s0, s1, s2, s3 = getstate(x)
