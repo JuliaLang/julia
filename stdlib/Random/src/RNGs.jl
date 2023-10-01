@@ -318,10 +318,14 @@ end
 
 function hash_seed(str::AbstractString)
     ctx = SHA.SHA2_256_CTX()
-    for chr in str
-        SHA.update!(ctx, reinterpret(NTuple{4, UInt8}, UInt32(chr)))
-    end
-    SHA.update!(ctx, (0x05,))
+    # convert to String such that `codeunits(str)` below is consistent between equal
+    # strings of different types
+    str = String(str)
+    SHA.update!(ctx, codeunits(str))
+    # signature for strings: so far, all hash_seed functions end-up hashing a multiple
+    # of 4 bytes of data, and add the signature (1 byte) at the end; so hash as many
+    # 0x05 bytes as necessary to have a total number of hashed bytes equal to 1 mod 4
+    SHA.update!(ctx, ntuple(Returns(0x05), 5 - mod1(ncodeunits(str), 4)))
     SHA.digest!(ctx)
 end
 
