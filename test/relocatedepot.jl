@@ -1,23 +1,57 @@
 using Test
+using Logging
 
 
 include("testenv.jl")
 
 
-@testset "compile and load relocated pkg" begin
-    pkg = Base.identify_package("DelimitedFiles")
-    if !test_relocated_depot
-        # precompile
-        Base.require(Main, :DelimitedFiles)
-        @test Base.root_module_exists(pkg) == true
-    else
-        path = Base.locate_package(pkg)
-        iscached = @lock Base.require_lock begin
-            m = Base._require_search_from_serialized(pkg, path, UInt128(0))
-            m isa Module
+if !test_relocated_depot
+
+    @testset "precompile RelocationTestPkg" begin
+        load_path = copy(LOAD_PATH)
+        depot_path = copy(DEPOT_PATH)
+        push!(LOAD_PATH, @__DIR__)
+        push!(DEPOT_PATH, @__DIR__)
+        try
+            pkg = Base.identify_package("RelocationTestPkg")
+            cachefiles = Base.find_all_in_cache_path(pkg)
+            rm.(cachefiles, force=true)
+            rm(joinpath(@__DIR__, "RelocationTestPkg", "src", "foo.txt"), force=true)
+            @test Base.isprecompiled(pkg) == false # include_dependency foo.txt is missing
+            Base.require(pkg) # precompile
+            @test Base.isprecompiled(pkg, ignore_loaded=true) == false # foo.txt still missing
+            touch(joinpath(@__DIR__, "RelocationTestPkg", "src", "foo.txt"))
+            @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+        finally
+            copy!(LOAD_PATH, load_path)
+            copy!(DEPOT_PATH, depot_path)
         end
-        @test iscached == true # can load from cache
-        Base.require(Main, :DelimitedFiles)
-        @test Base.root_module_exists(pkg) == true
     end
+
+else
+
+    @testset "load stdlib from test/relocatedepot" begin
+        # stdlib should be already precompiled
+        pkg = Base.identify_package("DelimitedFiles")
+        @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+    end
+
+    @testset "load RelocationTestPkg from test/relocatedepot" begin
+        load_path = copy(LOAD_PATH)
+        depot_path = copy(DEPOT_PATH)
+        # moved source and depot into test/relocatedepot
+        push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
+        push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+        try
+            pkg = Base.identify_package("RelocationTestPkg")
+            rm(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg", "src", "foo.txt"), force=true)
+            @test Base.isprecompiled(pkg, ignore_loaded=true) == false # foo.txt missing
+            touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg", "src", "foo.txt"))
+            @test Base.isprecompiled(pkg) == true
+        finally
+            copy!(LOAD_PATH, load_path)
+            copy!(DEPOT_PATH, depot_path)
+        end
+    end
+
 end

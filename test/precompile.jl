@@ -422,7 +422,6 @@ precompile_test_harness(false) do dir
         @test Dict(modules) == modules_ok
 
         @test discard_module.(deps) == deps1
-        # modules, (_, deps, requires), required_modules, _... = Base.parse_cache_header(cachefile; srcfiles_only=true)
         modules, (_, deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         @test map(x -> x.filename, deps) == [Foo_file]
 
