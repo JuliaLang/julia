@@ -2763,6 +2763,13 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
         return CleanupIR(F, nullptr, CFGModified);
 
     pgcstack = getPGCstack(F);
+#ifdef USE_TAPIR
+    // Outlined Tapir functions may need a GC frame.
+    if (!pgcstack && F.hasFnAttribute(Attribute::Stealable)) {
+        pgcstack = CallInst::Create(pgcstack_getter);
+        pgcstack->insertBefore(F.getEntryBlock().getTerminator());
+    }
+#endif
     if (!pgcstack)
         return CleanupIR(F, nullptr, CFGModified);
 
