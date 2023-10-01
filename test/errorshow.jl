@@ -720,6 +720,7 @@ backtrace()
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
+    length(output) >= 8 || println(output) # for better errors when this fails
     @test lstrip(output[3])[1:3] == "[1]"
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
