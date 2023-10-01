@@ -414,8 +414,10 @@ sequence of numbers if and only if a `seed` is provided. Some RNGs
 don't accept a seed, like `RandomDevice`.
 After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
+
 The types of accepted seeds depend on the type of `rng`, but in general,
-integer seeds should work.
+integer seeds should work. Providing `nothing` as the seed should be
+equivalent to not providing one.
 
 If `rng` is not specified, it defaults to seeding the state of the
 shared task-local generator.
@@ -455,11 +457,12 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-seed!(rng::AbstractRNG) = seed!(rng, nothing)
-#=
-We have this generic definition instead of the alternative option
-`seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)`
-because it would lead too easily to ambiguities, e.g. when we define `seed!(::Xoshiro, seed)`.
-=#
+function seed!(rng::AbstractRNG, seed=nothing)
+    if seed === nothing
+        seed!(rng, RandomDevice())
+    else
+        throw(MethodError(seed!, (rng, seed)))
+    end
+end
 
 end # module
