@@ -1,6 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/Triple.h>
+
+#include <llvm/Analysis/TargetLibraryInfo.h>
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
@@ -573,3 +576,10 @@ void optimizeDLSyms(Module &M);
 #include "passes.h"
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+
+static inline std::unique_ptr<llvm::TargetLibraryInfoImpl> createTLII(llvm::Triple TargetTriple) {
+    llvm::TargetLibraryInfoImpl *TLII = new llvm::TargetLibraryInfoImpl(TargetTriple);
+    // We could add VecLib here, or disable all builtins and replace them with our own.
+    // TLII->disableAllFunctions();
+    return std::unique_ptr<llvm::TargetLibraryInfoImpl>(TLII);
+}

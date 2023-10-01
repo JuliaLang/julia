@@ -1777,7 +1777,7 @@ void jl_dump_native_impl(void *native_code,
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
 {
-    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(new TargetLibraryInfoWrapperPass(*createTLII(triple)));
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 

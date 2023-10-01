@@ -710,7 +710,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         });
         // Register our TargetLibraryInfoImpl.
         FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
+        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(*createTLII(TM.getTargetTriple())); });
         return FAM;
     }
 
