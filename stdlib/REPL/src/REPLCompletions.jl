@@ -1234,6 +1234,20 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         name, pos, dotpos, startpos, comp_keywords)
 end
 
+function common_tail(s1, s2)
+    i = ncodeunits(s1) + 1
+    itr = Iterators.Stateful(Iterators.reverse(pairs(s1)))
+    for ((_i, c1), c2) in zip(itr, Iterators.reverse(s2))
+        if c1 == '\\'
+            isempty(itr) && break
+            _i, c1 = popfirst!(itr)
+        end
+        c1 == c2 || break
+        i = _i
+    end
+    return SubString(s1, i)
+end
+
 function shell_completions(string, pos, mod)
     # First parse everything up to the current position
     scs = string[1:pos]
@@ -1282,10 +1296,11 @@ function shell_completions(string, pos, mod)
                 end
                 # Interpolation may return multiple args, always choose the last one
                 isempty(expanded) && @goto ret
-                arg = expanded[end]
+                evaled_args *= expanded[end]
+            else
+                arg isa AbstractString || @goto ret
+                evaled_args *= String(arg)::String
             end
-            arg isa AbstractString || @goto ret
-            evaled_args *= String(arg)::String
         end
     end
 
@@ -1293,8 +1308,10 @@ function shell_completions(string, pos, mod)
 
     # Only replace literal user input - not interpolations - with the available completion
     should_complete = false
-    if last_arg isa AbstractString
-        head, tail = splitdir(String(last_arg)::String)
+    if ignore_last_word
+        should_complete = true
+    else
+        head, tail = splitdir(common_tail(scs, evaled_args))
         if !isempty(head)
             last_parse = nextind(string, last(last_parse))-ncodeunits(tail):last(last_parse)
             should_complete = true
