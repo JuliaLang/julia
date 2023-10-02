@@ -324,10 +324,14 @@ function hash_seed(str::AbstractString)
     SHA.update!(ctx, codeunits(str))
     # signature for strings: so far, all hash_seed functions end-up hashing a multiple
     # of 4 bytes of data, and add the signature (1 byte) at the end; so hash as many
-    # 0x05 bytes as necessary to have a total number of hashed bytes equal to 1 mod 4
-    a = 4 - mod(ncodeunits(str), 4)
-    SHA.update!(ctx, (0x05, ntuple(Returns(UInt8(a)),  a)...))
-    SHA.digest!(ctx)
+    # bytes as necessary to have a total number of hashed bytes equal to 0 mod 4 (padding),
+    # and then hash the signature 0x05; in order for strings of different lengths to have
+    # different hashes, padding bytes are set equal to the number of padding bytes
+    pad = 4 - mod(ncodeunits(str), 4)
+    for _=1:pad
+        SHA.update!(ctx, (pad % UInt8,))
+    end
+    SHA.update!(ctx, (0x05,))
 end
 
 
