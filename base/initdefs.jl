@@ -377,8 +377,7 @@ global _atexit_hooks_finished::Bool = false
     atexit(f)
 
 Register a zero- or one-argument function `f()` to be called at process exit.
-`atexit()` hooks are called in last in first out (LIFO) order and run before
-object finalizers.
+`atexit()` hooks are called in last in first out (LIFO) order.
 
 If `f` has a method defined for one integer argument, it will be called as
 `f(n::Int32)`, where `n` is the current exit code, otherwise it will be called

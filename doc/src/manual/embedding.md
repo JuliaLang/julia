@@ -32,7 +32,6 @@ int main(int argc, char *argv[])
     /* strongly recommended: notify Julia that the
          program is about to terminate. this allows
          Julia time to cleanup pending write requests
-         and run all finalizers
     */
     jl_atexit_hook(0);
     return 0;
@@ -166,7 +165,6 @@ int main(int argc, char *argv[])
     /* strongly recommended: notify Julia that the
          program is about to terminate. this allows
          Julia time to cleanup pending write requests
-         and run all finalizers
     */
     jl_atexit_hook(0);
     return 0;

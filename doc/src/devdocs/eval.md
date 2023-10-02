@@ -57,7 +57,7 @@ The 10,000 foot view of the whole process is as follows:
     method returns.
 14. Just before exiting, `main()` calls [`jl_atexit_hook(exit_code)`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
     This calls `Base._atexit()` (which calls any functions registered to [`atexit()`](@ref) inside
-    Julia). Then it calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c).
+    Julia).
     Finally, it gracefully cleans up all `libuv` handles and waits for them to flush and close.
 
 ## [Parsing](@id dev-parsing)

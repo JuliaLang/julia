@@ -218,8 +218,11 @@ the stack now rapidly unwinds back to `main()`.
 ## `jl_atexit_hook()`
 
 `main()` calls [`jl_atexit_hook()`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
-This calls `Base._atexit`, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
-and cleans up libuv handles.
+This calls `Base._atexit` and cleans up libuv handles.
+
+!!! compat "Julia 1.11"
+
+    Note that as of Julia 1.11, finalizers are no longer run unconditionally at exit.
 
 ## `julia_save()`
 
