@@ -1234,7 +1234,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         name, pos, dotpos, startpos, comp_keywords)
 end
 
-function shell_completions(string, pos)
+function shell_completions(string, pos, mod)
     # First parse everything up to the current position
     scs = string[1:pos]
     local args, last_parse
@@ -1247,26 +1247,64 @@ function shell_completions(string, pos)
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 0:-1, false
     arg = ex.args[end]
-    if all(s -> isa(s, AbstractString), ex.args)
-        arg = arg::AbstractString
-        # Treat this as a path
-
-        # As Base.shell_parse throws away trailing spaces (unless they are escaped),
-        # we need to special case here.
-        # If the last char was a space, but shell_parse ignored it search on "".
-        ignore_last_word = arg != " " && scs[end] == ' '
-        prefix = ignore_last_word ? "" : join(ex.args)
-
-        # Also try looking into the env path if the user wants to complete the first argument
-        use_envpath = !ignore_last_word && length(args.args) < 2
-
-        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
-    elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
+    if isexpr(arg, :incomplete) || isexpr(arg, :error)
         partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
         range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
+
+    # Try to evaluate interpolation
+    evaled_args = ""
+    for arg in ex.args
+        if mod !== nothing
+            t = repl_eval_ex(arg, mod)
+            t isa Const || @goto ret
+            (; val) = t
+            # For the first arg non-default Cmd flags are allowed
+            if length(args.args) == 1 && val isa Cmd
+                val = val.exec
+            end
+            expanded = try
+                Base.arg_gen(val)::Vector{String}
+            catch
+                @goto ret
+            end
+            # Interpolation may return multiple args, always choose the last one
+            isempty(expanded) && @goto ret
+            arg = expanded[end]
+        end
+        arg isa AbstractString || @goto ret
+        evaled_args *= String(arg)::String
+    end
+
+    # Treat this as a path
+
+    # As Base.shell_parse throws away trailing spaces (unless they are escaped),
+    # we need to special case here.
+    # If the last char was a space, but shell_parse ignored it search on "".
+    ignore_last_word = arg isa AbstractString && arg != " " && scs[end] == ' '
+    prefix = ignore_last_word ? "" : evaled_args
+
+    # Also try looking into the env path if the user wants to complete the first argument
+    use_envpath = !ignore_last_word && length(args.args) < 2
+
+    ret, _, _ = complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
+    should_complete = false
+    # Only replace literal user input - not interpolations - with the available completion
+    if arg isa AbstractString
+        head, tail = splitdir(arg)
+        if !isempty(head)
+            last_parse = nextind(string, last(last_parse))-ncodeunits(tail):last(last_parse)
+            should_complete = true
+        elseif length(ex.args) == 1
+            should_complete = true
+        end
+    end
+
+    return ret, last_parse, should_complete
+
+    @label ret
     return Completion[], 0:-1, false
 end
 

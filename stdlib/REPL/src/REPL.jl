@@ -562,11 +562,11 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::ShellCompletionProvider, s::PromptState)
+function complete_line(c::ShellCompletionProvider, s::PromptState, mod::Module=nothing)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = shell_completions(full, lastindex(partial))
+    ret, range, should_complete = shell_completions(full, lastindex(partial), mod)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 

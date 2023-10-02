@@ -22,7 +22,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     s = rstrip_shell(lstrip(s))
 
     # N.B.: This is used by REPLCompletions
-    last_parse = 0:-1
+    last_parse = 1:0
     isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
@@ -63,6 +63,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 isspace(c) || break
                 popfirst!(st)
             end
+            last_parse = i:i
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
@@ -77,7 +78,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # use parseatom instead of parse to respect filename (#28188)
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            last_parse = (stpos:prevind(s, j)) .+ s.offset
+            if j > lastindex(s) && last(s) != ')'
+                last_parse = (stpos+(c=='('):lastindex(s)) .+ s.offset
+            end
             push_nonempty!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
@@ -123,6 +126,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
 
     push_nonempty!(arg, s[i:end])
     append_2to1!(args, arg)
+    last_parse = first(last_parse):lastindex(parent(s))
 
     interpolate || return args, last_parse
 
