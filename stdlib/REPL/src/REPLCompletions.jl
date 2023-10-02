@@ -1254,44 +1254,45 @@ function shell_completions(string, pos, mod)
         return ret, range, true
     end
 
-    # Try to evaluate interpolation
-    evaled_args = ""
-    for arg in ex.args
-        if mod !== nothing
-            t = repl_eval_ex(arg, mod)
-            t isa Const || @goto ret
-            (; val) = t
-            # For the first arg non-default Cmd flags are allowed
-            if length(args.args) == 1 && val isa Cmd
-                val = val.exec
-            end
-            expanded = try
-                Base.arg_gen(val)::Vector{String}
-            catch
-                @goto ret
-            end
-            # Interpolation may return multiple args, always choose the last one
-            isempty(expanded) && @goto ret
-            arg = expanded[end]
-        end
-        arg isa AbstractString || @goto ret
-        evaled_args *= String(arg)::String
-    end
-
     # Treat this as a path
 
     # As Base.shell_parse throws away trailing spaces (unless they are escaped),
     # we need to special case here.
     # If the last char was a space, but shell_parse ignored it search on "".
-    ignore_last_word = arg isa AbstractString && arg != " " && scs[end] == ' '
-    prefix = ignore_last_word ? "" : evaled_args
-
+    ignore_last_word = isempty(last_parse)
     # Also try looking into the env path if the user wants to complete the first argument
-    use_envpath = !ignore_last_word && length(args.args) < 2
+    is_first_arg = !ignore_last_word && length(args.args) < 2
 
-    ret, _, _ = complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
-    should_complete = false
+    # Try to evaluate interpolation
+    evaled_args = ""
+    if !ignore_last_word
+        for arg in ex.args
+            if mod !== nothing
+                t = repl_eval_ex(arg, mod)
+                t isa Const || @goto ret
+                (; val) = t
+                # For the first arg non-default Cmd flags are allowed
+                if is_first_arg && val isa Cmd
+                    val = val.exec
+                end
+                expanded = try
+                    Base.arg_gen(val)::Vector{String}
+                catch
+                    @goto ret
+                end
+                # Interpolation may return multiple args, always choose the last one
+                isempty(expanded) && @goto ret
+                arg = expanded[end]
+            end
+            arg isa AbstractString || @goto ret
+            evaled_args *= String(arg)::String
+        end
+    end
+
+    ret, _, _ = complete_path(evaled_args, pos; use_envpath=is_first_arg, shell_escape=true)
+
     # Only replace literal user input - not interpolations - with the available completion
+    should_complete = false
     if arg isa AbstractString
         head, tail = splitdir(arg)
         if !isempty(head)

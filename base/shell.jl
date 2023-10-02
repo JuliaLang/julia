@@ -4,22 +4,10 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-# strips the end but respects the space when the string ends with "\\ "
-function rstrip_shell(s::AbstractString)
-    c_old = nothing
-    for (i, c) in Iterators.reverse(pairs(s))
-        i::Int; c::AbstractChar
-        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
-        isspace(c) || return SubString(s, 1, i)
-        c_old = c
-    end
-    SubString(s, 1, 0)
-end
-
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
     s = SubString(str, firstindex(str))
-    s = rstrip_shell(lstrip(s))
+    s = lstrip(s)
 
     # N.B.: This is used by REPLCompletions
     last_parse = 1:0
@@ -57,13 +45,11 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
-                # We've made sure above that we don't end in whitespace,
-                # so updating `i` here is ok
                 (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
             end
-            last_parse = i:i
+            last_parse = (i:i-1) .+ s.offset
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
@@ -125,7 +111,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     if in_double_quotes; error("unterminated double quote"); end
 
     push_nonempty!(arg, s[i:end])
-    append_2to1!(args, arg)
+    if !isempty(arg)
+        push!(args, arg)
+    end
     last_parse = first(last_parse):lastindex(parent(s))
 
     interpolate || return args, last_parse
