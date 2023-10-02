@@ -975,7 +975,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
         append!(suggestions, complete_keyval(name))
     end
     if dotpos > 1 && string[dotpos] == '.'
-        s = string[1:dotpos-1]
+        s = string[1:prevind(string, dotpos)]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.
         ex = Meta.parse(s, raise=false, depwarn=false)
         if isexpr(ex, :incomplete)
