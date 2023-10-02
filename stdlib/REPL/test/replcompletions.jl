@@ -155,7 +155,7 @@ function map_completion_text(completions)
 end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
-test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+test_scomplete(s, m=@__MODULE__) =  map_completion_text(@inferred(shell_completions(s, lastindex(s), m)))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)

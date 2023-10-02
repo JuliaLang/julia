@@ -661,7 +661,12 @@ let p = run(`$sleepcmd 100`, wait=false)
 end
 
 # Second argument of shell_parse
-let s = "   \$abc   "
+let
+    s = "   \$abc   "
+    @test s[Base.shell_parse(s)[2]] == ""
+    @test first(Base.shell_parse(s)[2]) == nextind(s, lastindex(s))
+
+    s = "   \$abc"
     @test s[Base.shell_parse(s)[2]] == "abc"
 end
 
