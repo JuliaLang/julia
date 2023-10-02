@@ -443,7 +443,7 @@ end
 
 #### Writing Tests for `greeting_tests.jl`
 
-Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+Using our knowledge of `Test.jl`, here are some example tests we could add to `greeting_tests.jl`:
 
 ```julia
 @testset "Testset 3" begin
