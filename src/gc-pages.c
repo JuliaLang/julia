@@ -178,7 +178,6 @@ exit:
 // return a page to the freemap allocator
 void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-    free(pg->ages);
     void *p = pg->data;
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);
     // tell the OS we don't need these pages right now

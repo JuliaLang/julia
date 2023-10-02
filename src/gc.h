@@ -118,10 +118,7 @@ typedef struct _jl_gc_chunk_t {
 JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t **prev; // pointer to the next field of the prev entry
-    union {
-        size_t sz;
-        uintptr_t age : 2;
-    };
+    size_t sz;
 #ifdef _P64 // Add padding so that the value is 64-byte aligned
     // (8 pointers of 8 bytes each) - (4 other pointers in struct)
     void *_padding[8 - 4];
@@ -177,12 +174,11 @@ typedef struct _jl_gc_pagemeta_t {
     // number of free objects in this page.
     // invalid if pool that owns this page is allocating objects from this page.
     uint16_t nfree;
-    uint16_t osize; // size of each object in this page
+    uint16_t osize;           // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
-    uint8_t *ages;
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
