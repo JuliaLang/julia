@@ -1243,7 +1243,7 @@ _coscu(x::Union{Float64,ComplexF64}) =
     fastabs(x) < 0.44 ? x*evalpoly(x^2, (-0.3333333333333333, 0.03333333333333333, -0.0011904761904761906, 2.2045855379188714e-5, -2.505210838544172e-7, 1.9270852604185937e-9)) :
     isinf_real(x) ? zero(x) : ((s,c)=sincos(x); (x*c-s)/(x^2))
 _coscu(x::Union{Float32,ComplexF32}) =
-    fastabs(x) < 0.817f0 ? x*evalpoly(x^2, (-0.333333335, 0.033333335, -0.0011904762, 2.2045855f-5)) :
+    fastabs(x) < 0.817f0 ? x*evalpoly(x^2, (-0.333333335f0, 0.033333335f0, -0.0011904762f0, 2.2045855f-5)) :
     isinf_real(x) ? zero(x) : ((s,c)=sincos(x); (x*c-s)/(x^2))
 _coscu(x::Float16) = Float16(_coscu(Float32(x)))
 _coscu(x::ComplexF16) = ComplexF16(_coscu(ComplexF32(x)))
