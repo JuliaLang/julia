@@ -1113,6 +1113,7 @@ The type of flag in the above mentioned syntax would be a `String` with contents
 ## Generated functions
 
 A very special macro is [`@generated`](@ref), which allows you to define so-called *generated functions*.
+See also [GeneralizedGenerated.jl](https://github.com/JuliaStaging/GeneralizedGenerated.jl) package.
 These have the capability to generate specialized code depending on the types of their arguments
 with more flexibility and/or less code than what can be achieved with multiple dispatch. While
 macros work with expressions at parse time and cannot access the types of their inputs, a generated
