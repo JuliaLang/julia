@@ -500,6 +500,11 @@ end
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
+@testset "Handling heterogeneous iterators in flatten (#48249)" begin
+    @test eltype(flatten(((1,), [2]))) == Int
+    @test Base.IteratorEltype(flatten(((1,), [2]))) == Base.HasEltype()
+end
+
 @testset "IteratorSize trait for flatten" begin
     @test Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1)) == Base.SizeUnknown()
     @test Base.IteratorSize(Base.Flatten((1,2))) == Base.HasLength()
