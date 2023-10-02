@@ -73,7 +73,21 @@ static bool have_fp16(Function &caller, const Triple &TT) {
 }
 
 static bool have_bf16(Function &caller, const Triple &TT) {
-    // TODO
+    Attribute FSAttr = caller.getFnAttribute("target-features");
+    StringRef FS = "";
+    if (FSAttr.isValid())
+        FS = FSAttr.getValueAsString();
+    else if (jl_ExecutionEngine)
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    // else probably called from opt, just do nothing
+    if (TT.getArch() == Triple::x86_64) {
+        if (FS.find("+avx512bf16") != llvm::StringRef::npos){
+            return true;
+        }
+    }
+    if (caller.hasFnAttribute("julia.hasbf16")) {
+        return true;
+    }
     return false;
 }
 
