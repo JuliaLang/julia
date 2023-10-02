@@ -22,9 +22,16 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     st = Iterators.Stateful(pairs(s))
 
     function push_nonempty!(list, x)
-        if !isa(x,AbstractString) || !isempty(x)
-            push!(list, x)
+        if !isempty(list)
+            y = last(list)
+            if isa(y, AbstractString) && isempty(y)
+                list[end] = x
+                return nothing
+            elseif isa(x, AbstractString) && isempty(x)
+                return nothing
+            end
         end
+        push!(list, x)
         return nothing
     end
     function consume_upto!(list, s, i, j)
@@ -32,9 +39,10 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
     end
     function append_2to1!(list, innerlist)
-        if isempty(innerlist); push!(innerlist, ""); end
-        push!(list, copy(innerlist))
-        empty!(innerlist)
+        if !isempty(innerlist)
+            push!(list, copy(innerlist))
+            empty!(innerlist)
+        end
     end
 
     C = eltype(str)
@@ -48,6 +56,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
+                i += 1
             end
             last_parse = (i:i-1) .+ s.offset
         elseif interpolate && !in_single_quotes && c == '$'
@@ -110,10 +119,10 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    push_nonempty!(arg, s[i:end])
-    if !isempty(arg)
-        push!(args, arg)
+    if i <= lastindex(s)
+        push_nonempty!(arg, s[i:end])
     end
+    append_2to1!(args, arg)
     last_parse = first(last_parse):lastindex(parent(s))
 
     interpolate || return args, last_parse

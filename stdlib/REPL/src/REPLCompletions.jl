@@ -1246,8 +1246,8 @@ function shell_completions(string, pos, mod)
     ex = args.args[end]::Expr
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 0:-1, false
-    arg = ex.args[end]
-    if isexpr(arg, :incomplete) || isexpr(arg, :error)
+    last_arg = ex.args[end]
+    if isexpr(last_arg, :incomplete) || isexpr(last_arg, :error)
         partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
         range = range .+ (first(last_parse) - 1)
@@ -1293,8 +1293,8 @@ function shell_completions(string, pos, mod)
 
     # Only replace literal user input - not interpolations - with the available completion
     should_complete = false
-    if arg isa AbstractString
-        head, tail = splitdir(arg)
+    if last_arg isa AbstractString
+        head, tail = splitdir(String(last_arg)::String)
         if !isempty(head)
             last_parse = nextind(string, last(last_parse))-ncodeunits(tail):last(last_parse)
             should_complete = true
