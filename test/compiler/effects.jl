@@ -1115,3 +1115,8 @@ end
 @test Base.infer_effects((Base.RefValue{Any},)) do y
     post_opt_refine_effect_free(y, true)
 end |> Core.Compiler.is_effect_free
+
+# constant folding of Cmd construction
+@test Core.Compiler.is_foldable(Base.infer_effects(() -> `a b c`))
+@test Core.Compiler.is_foldable(Base.infer_effects(() -> `a a$("bb")a $("c")`))
+@test !Core.Compiler.is_foldable(Base.infer_effects(x -> `a $x`, (Any,)))

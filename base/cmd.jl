@@ -481,6 +481,10 @@ function cmd_gen(parsed)
     end
 end
 
+@assume_effects :foldable function cmd_gen(parsed::Tuple{Vararg{Tuple{Vararg{Union{String, SubString{String}}}}}})
+    return @invoke cmd_gen(parsed::Any)
+end
+
 """
     @cmd str
 
