@@ -17,6 +17,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
+* Stop running finalizers at exit ([51466]).
 
 Command-line option changes
 ---------------------------
