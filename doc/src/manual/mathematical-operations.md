@@ -587,7 +587,10 @@ These are all single-argument functions, with [`atan`](@ref) also accepting two 
 corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
-of [`sin(pi * x)`](@ref) and [`cos(pi * x)`](@ref) respectively.
+of [`sin(pi * x)`](@ref) and [`cos(pi * x)`](@ref) respectively.  Similarly, [`sincpi(x)`](@ref),
+[`coscpi(x)`](@ref), [`sincu(x)`](@ref), and [`coscu(x)`](@ref) are provided to reduce the ambiguity
+around the naming of the `sinc` and `cosc` functions, as well as to increase the accuracy or speed
+of their respective computations.
 
 In order to compute trigonometric functions with degrees instead of radians, suffix the function
 with `d`. For example, [`sind(x)`](@ref) computes the sine of `x` where `x` is specified in degrees.

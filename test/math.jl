@@ -556,7 +556,7 @@ end
     @test ismissing(scdm[2])
 end
 
-@testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin
+@testset "Integer and Inf args for sinpi/cospi/tanpi/sincpi/coscpi" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) === 0.0
         @test sinpi(-1) === -0.0
@@ -568,20 +568,20 @@ end
     @test tanpi(-1) === 0.0
     @test tanpi(2) === 0.0
     @test tanpi(-2) === -0.0
-    @test sinc(1) == 0
-    @test sinc(complex(1,0)) == 0
-    @test sinc(0) == 1
-    @test sinc(Inf) == 0
-    @test cosc(1) == -1
-    @test cosc(0) == 0
-    @test cosc(complex(1,0)) == -1
-    @test cosc(Inf) == 0
+    @test sincpi(1) == 0
+    @test sincpi(complex(1,0)) == 0
+    @test sincpi(0) == 1
+    @test sincpi(Inf) == 0
+    @test coscpi(1) == -1
+    @test coscpi(0) == 0
+    @test coscpi(complex(1,0)) == -1
+    @test coscpi(Inf) == 0
 
-    @test sinc(Inf + 3im) == 0
-    @test cosc(Inf + 3im) == 0
+    @test sincpi(Inf + 3im) == 0
+    @test coscpi(Inf + 3im) == 0
 
-    @test isequal(sinc(Inf + Inf*im), NaN + NaN*im)
-    @test isequal(cosc(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(sincpi(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(coscpi(Inf + Inf*im), NaN + NaN*im)
 end
 
 # issue #37227
@@ -592,14 +592,18 @@ end
                 for x in (0, 1e-5, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
                     if x < eps(R)
                         @test sinc(T(x)) == 1
+                        @test sincu(T(x)) == 1
                     end
                     @test cosc(T(x)) ≈ pi*(-R(x)*pi)/3 rtol=max(eps(R)*100, (pi*R(x))^2)
+                    @test coscu(T(x)) ≈ -R(x)/3 rtol=max(eps(R)*100, R(x)^2)
                 end
             end
         end
     end
     @test @inferred(sinc(0//1)) ⩲ 1.0
     @test @inferred(cosc(0//1)) ⩲ -0.0
+    @test @inferred(sincu(0//1)) ⩲ 1.0
+    @test @inferred(coscu(0//1)) ⩲ -0.0
 
     # test right before/after thresholds of Taylor series
     @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
@@ -618,6 +622,41 @@ end
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
     end
+    @test sincu(0.0031) ≈ 0.999998398334103 rtol=1e-15
+    @test sincu(0.003099) ≈ 0.9999983993672686 rtol=1e-15
+    @test sincu(0.1571f0) ≈ 0.9958916713735202 rtol=1e-7
+    @test sincu(0.157099f0) ≈ 0.9958917236108922 rtol=1e-7
+    if has_fma[Float64]
+        @test coscu(0.44) ≈ -0.14384676265090754 rtol=1e-15
+    else
+        @test coscu(0.44) ≈ -0.14384676265090754 rtol=1e-14
+    end
+    @test coscu(0.4399) ≈ -0.1438153426892389 rtol=1e-14
+    @test coscu(0.817f0) ≈ -0.25458340903155546 rtol=5e-7
+    @test coscu(0.81699f0) ≈ -0.2545807171138472 rtol=5e-7
+    setprecision(256) do
+        @test coscu(big"1.57") ≈ big"-0.405188628340291005395122936427490335657851237958700298842336541844283076600689" rtol=1e-76
+        @test coscu(big"1.5699") ≈ big"-0.4051765493273549699073488058473548791943893394125344517041388832025916185964456" rtol=1e-76
+    end
+end
+
+@testset "sincpi/sincu and coscpi/coscu consistency" begin
+    for R in (BigFloat, Float16, Float32, Float64)
+        ϵ = eps(R)
+        for T in (R, Complex{R})
+            for z in (0.0, 0.001, 0.05, 0.14, 0.26, 0.5, 0.9, 1, 1.5, 2)
+                for y in (R(z), prevfloat(R(z)))
+                    for sign in (-1, 1)
+                        x = sign*T(y)
+                        @test sincpi(x) ≈ sincu(x*pi) rtol=5ϵ atol=(!iszero(x)&&isinteger(z))*ϵ
+                        @test sincpi(x/pi) ≈ sincu(x) rtol=5ϵ
+                        @test coscpi(x) ≈ coscu(x*pi)*pi rtol=12ϵ atol=(!iszero(x)&&isinteger(z))*ϵ
+                        @test coscpi(x/pi)/pi ≈ coscu(x) rtol=12ϵ
+                    end
+                end
+            end
+        end
+    end
 end
 
 @testset "Irrational args to sinpi/cospi/tanpi/sinc/cosc" begin
@@ -629,10 +668,10 @@ end
             @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
         end
         @test tanpi(x) ≈ Float64(tanpi(big(x)))
-        @test sinc(x)  ≈ Float64(sinc(big(x)))
-        @test cosc(x)  ≈ Float64(cosc(big(x)))
-        @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
-        @test cosc(complex(x, x))  ≈ ComplexF64(cosc(complex(big(x),  big(x))))
+        @test sincpi(x) ≈ Float64(sincpi(big(x)))
+        @test coscpi(x) ≈ Float64(coscpi(big(x)))
+        @test sincpi(complex(x, x)) ≈ ComplexF64(sincpi(complex(big(x),  big(x))))
+        @test coscpi(complex(x, x)) ≈ ComplexF64(coscpi(complex(big(x),  big(x))))
     end
 end
 

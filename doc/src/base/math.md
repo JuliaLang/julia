@@ -102,7 +102,11 @@ Base.Math.asech(::Number)
 Base.Math.acsch(::Number)
 Base.Math.acoth(::Number)
 Base.Math.sinc
+Base.Math.sincpi
+Base.Math.sincu
 Base.Math.cosc
+Base.Math.coscpi
+Base.Math.coscu
 Base.Math.deg2rad
 Base.Math.rad2deg
 Base.Math.hypot
