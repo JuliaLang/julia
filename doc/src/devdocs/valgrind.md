@@ -1,18 +1,18 @@
 # Using Valgrind with Julia
 
-[Valgrind](https://valgrind.org/) is a tool for memory debugging, memory leak detection, and profiling.
+[Valgrind](https://valgrind.org/) is a tool for memory-debugging, memory leak detection, and profiling.
  This section describes things to keep in mind when using Valgrind to debug memory issues with
 Julia.
 
 ## General considerations
 
-By default, Valgrind assumes that there is no self modifying code in the programs it runs.  This
+By default, Valgrind assumes that, there is no self modifying code in the programs it runs.  This
 assumption works fine in most instances but fails miserably for a just-in-time compiler like
 `julia`.  For this reason it is crucial to pass `--smc-check=all-non-file` to `valgrind`, else
 code may crash or behave unexpectedly (often in subtle ways).
 
-In some cases, to better detect memory errors using Valgrind it can help to compile `julia` with
-memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools in Julia, and
+In some cases, to better detect memory errors using Valgrind, it can help to compile `julia` with
+memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools in Julia and
 `MEMDEBUG2` disables memory pools in FemtoLisp.  To build `julia` with both flags, add the following
 line to `Make.user`:
 
@@ -20,7 +20,7 @@ line to `Make.user`:
 CFLAGS = -DMEMDEBUG -DMEMDEBUG2
 ```
 
-Another thing to note: if your program uses multiple workers processes, it is likely that you
+Another thing to note: if your program uses multiple worker processes, it is likely that you
 want all such worker processes to run under Valgrind, not just the parent process.  To do this,
 pass `--trace-children=yes` to `valgrind`.
 
@@ -57,7 +57,7 @@ to `valgrind` as well.
 
 ## Additional spurious warnings
 
-This section covers Valgrind warnings which cannot be added to the
+This section covers Valgrind warnings that cannot be added to the
 suppressions file yet are nonetheless safe to ignore.
 
 ### Unhandled rr system calls
@@ -73,18 +73,18 @@ when julia tries to detect whether it is running under rr:
 --xxxxxx-- WARNING: unhandled amd64-linux syscall: 1008
 --xxxxxx-- You may be able to write your own handler.
 --xxxxxx-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
---xxxxxx-- Nevertheless we consider this a bug.  Please report
+--xxxxxx-- Nevertheless, we consider this a bug.  Please report
 --xxxxxx-- it at http://valgrind.org/support/bug_reports.html.
 ```
 
 This issue
 [has been reported](https://bugs.kde.org/show_bug.cgi?id=446401)
-to the Valgrind developers as they have requested.
+to the Valgrind developers they have requested.
 
 ## Caveats
 
 Valgrind currently [does not support multiple rounding modes](https://bugs.kde.org/show_bug.cgi?id=136779),
-so code that adjusts the rounding mode will behave differently when run under Valgrind.
+so code that adjusts the rounding mode will behave differently, when run under Valgrind.
 
 In general, if after setting `--smc-check=all-non-file` you find that your program behaves differently
 when run under Valgrind, it may help to pass `--tool=none` to `valgrind` as you investigate further.
