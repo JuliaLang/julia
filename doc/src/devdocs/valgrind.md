@@ -84,7 +84,7 @@ to the Valgrind developers as they have requested.
 ## Caveats
 
 Valgrind currently [does not support multiple rounding modes](https://bugs.kde.org/show_bug.cgi?id=136779),
-so code that adjusts the rounding mode will behave differently, when run under Valgrind.
+so code that adjusts the rounding mode will behave differently when run under Valgrind.
 
 In general, if after setting `--smc-check=all-non-file` you find that your program behaves differently
 when run under Valgrind, it may help to pass `--tool=none` to `valgrind` as you investigate further.

@@ -1035,7 +1035,7 @@ julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length
  7
 ```
 
-When combining pipes with anonymous functions, it is mandatory to use parentheses if the subsequent pipes are not to parse as part of the private function's body. Compare:
+When combining pipes with anonymous functions, parentheses must be used if subsequent pipes are not to be parsed as part of the anonymous function's body. Compare:
 
 ```jldoctest
 julia> 1:3 .|> (x -> x^2) |> sum |> sqrt
