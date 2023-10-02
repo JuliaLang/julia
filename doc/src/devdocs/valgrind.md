@@ -6,13 +6,13 @@ Julia.
 
 ## General considerations
 
-By default, Valgrind assumes that, there is no self modifying code in the programs it runs.  This
+By default, Valgrind assumes that there is no self modifying code in the programs it runs.  This
 assumption works fine in most instances but fails miserably for a just-in-time compiler like
 `julia`.  For this reason it is crucial to pass `--smc-check=all-non-file` to `valgrind`, else
 code may crash or behave unexpectedly (often in subtle ways).
 
 In some cases, to better detect memory errors using Valgrind, it can help to compile `julia` with
-memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools in Julia and
+memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools in Julia, and
 `MEMDEBUG2` disables memory pools in FemtoLisp.  To build `julia` with both flags, add the following
 line to `Make.user`:
 
@@ -79,7 +79,7 @@ when julia tries to detect whether it is running under rr:
 
 This issue
 [has been reported](https://bugs.kde.org/show_bug.cgi?id=446401)
-to the Valgrind developers they have requested.
+to the Valgrind developers as they have requested.
 
 ## Caveats
 
