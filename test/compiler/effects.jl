@@ -1116,7 +1116,17 @@ end
     post_opt_refine_effect_free(y, true)
 end |> Core.Compiler.is_effect_free
 
-# constant folding of Cmd construction
-@test Core.Compiler.is_foldable(Base.infer_effects(() -> `a b c`))
-@test Core.Compiler.is_foldable(Base.infer_effects(() -> `a a$("bb")a $("c")`))
-@test !Core.Compiler.is_foldable(Base.infer_effects(x -> `a $x`, (Any,)))
+# effects for Cmd construction
+for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_terminates(effects)
+    @test Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects(x -> `a $x`, (Any,))
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_terminates(effects)
+    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end

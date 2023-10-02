@@ -2084,3 +2084,8 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
     c, r = test_complete(s)
     @test only(c) == compl
 end
+
+let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__)
+    @test t isa Core.Const
+    @test t.val == `a b`
+end
