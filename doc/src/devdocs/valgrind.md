@@ -1,6 +1,6 @@
 # Using Valgrind with Julia
 
-[Valgrind](https://valgrind.org/) is a tool for memory-debugging, memory leak detection, and profiling.
+[Valgrind](https://valgrind.org/) is a tool for memory debugging, memory leak detection, and profiling.
  This section describes things to keep in mind when using Valgrind to debug memory issues with
 Julia.
 
