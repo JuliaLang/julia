@@ -1,0 +1,3 @@
+## source build
+# libffi (we don't ship this or even use a JLL, we just always build it)
+LIBFFI_VER := 3.4.4
