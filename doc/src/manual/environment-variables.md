@@ -378,7 +378,7 @@ should have at the terminal.
 
 ## System and Package Image Building
 
-### `JULIA_CPU_TARGET`
+### [`JULIA_CPU_TARGET`](@id JULIA_CPU_TARGET)
 
 Modify the target machine architecture for (pre)compiling
 [system](@ref sysimg-multi-versioning) and [package images](@ref pkgimgs-multi-versioning).

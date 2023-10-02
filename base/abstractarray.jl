@@ -1584,10 +1584,12 @@ replace_in_print_matrix(A::AbstractVector,i::Integer,j::Integer,s::AbstractStrin
 eltypeof(x) = typeof(x)
 eltypeof(x::AbstractArray) = eltype(x)
 
-promote_eltypeof() = Bottom
+promote_eltypeof() = error()
+promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
 
-promote_eltype() = Bottom
+promote_eltype() = error()
+promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK

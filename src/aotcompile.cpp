@@ -650,6 +650,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
+    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -660,6 +661,7 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
+    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1406,6 +1408,13 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
+    // for any of our other symbols that we insert during compilation.
+    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
+        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
+        return 1;
+    }
+
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
@@ -1612,10 +1621,10 @@ void jl_dump_native_impl(void *native_code,
 
             // let the compiler know we are going to internalize a copy of this,
             // if it has a current usage with ExternalLinkage
-            auto small_typeof_copy = dataM.getGlobalVariable("small_typeof");
-            if (small_typeof_copy) {
-                small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-                small_typeof_copy->setDSOLocal(true);
+            auto jl_small_typeof_copy = dataM.getGlobalVariable("jl_small_typeof");
+            if (jl_small_typeof_copy) {
+                jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+                jl_small_typeof_copy->setDSOLocal(true);
             }
         }
 
@@ -1689,13 +1698,13 @@ void jl_dump_native_impl(void *native_code,
             auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
             auto ptls = emit_ptls_table(metadataM, T_size, T_psize);
             auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
-            auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
-            auto small_typeof_copy = new GlobalVariable(metadataM, AT, false,
+            auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
+            auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
                                                         Constant::getNullValue(AT),
-                                                        "small_typeof");
-            small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
-            small_typeof_copy->setDSOLocal(true);
+                                                        "jl_small_typeof");
+            jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+            jl_small_typeof_copy->setDSOLocal(true);
             AT = ArrayType::get(T_psize, 5);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
@@ -1703,7 +1712,7 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(header, T_psize),
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
-                                                    ConstantExpr::getBitCast(small_typeof_copy, T_psize),
+                                                    ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize)
                                             }),
                                             "jl_image_pointers");

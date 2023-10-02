@@ -817,8 +817,8 @@ end
 function compileable_specialization(mi::MethodInstance, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi_invoke = mi
+    method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
     if compilesig_invokes
-        method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
@@ -836,7 +836,8 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
             return nothing
         end
     end
-    add_inlining_backedge!(et, mi)
+    add_inlining_backedge!(et, mi) # to the dispatch lookup
+    push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call
     return InvokeCase(mi_invoke, effects, info)
 end
 
