@@ -836,8 +836,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             continue;
         if (!canPartition(G))
             continue;
-        G.setLinkage(GlobalValue::ExternalLinkage);
-        G.setVisibility(GlobalValue::HiddenVisibility);
+        // Currently ccallable global aliases have extern linkage, we only want to make the
+        // internally linked functions/global variables extern+hidden
+        if (G.hasLocalLinkage()) {
+            G.setLinkage(GlobalValue::ExternalLinkage);
+            G.setVisibility(GlobalValue::HiddenVisibility);
+        }
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
