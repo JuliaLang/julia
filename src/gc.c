@@ -3434,7 +3434,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         thrash_counter += 1;
     else if (thrash_counter > 0)
         thrash_counter -= 1;
-    double alpha = 1;
+    double alpha = 2.0/3.0;
     target_allocs = alpha * heap_size;
 #endif
     uint64_t target_heap = (uint64_t)target_allocs + heap_size;
