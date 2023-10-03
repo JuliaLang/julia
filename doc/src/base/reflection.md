@@ -54,6 +54,7 @@ the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 julia> subtypes(AbstractFloat)
 4-element Vector{Any}:
  BigFloat
+ Core.BFloat16
  Float16
  Float32
  Float64
