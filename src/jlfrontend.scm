@@ -140,7 +140,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module import using export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
