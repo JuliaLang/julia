@@ -1671,11 +1671,8 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-            fsize, hash = if isfile(path)
-                UInt64(filesize(path)), open(_crc32c, path, "r")
-            else
-                UInt64(0), UInt32(0)
-            end
+            fsize = filesize(path)
+            hash = isfile(path) ? open(_crc32c, path, "r") : UInt32(0)
             push!(_require_dependencies, (mod, path, fsize, hash))
         end
     end
@@ -1687,7 +1684,7 @@ end
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if its file contents change.
+to be recompiled if the file's size changes.
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
