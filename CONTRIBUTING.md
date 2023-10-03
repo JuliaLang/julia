@@ -22,13 +22,13 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 * [Fork Julia](https://github.com/JuliaLang/julia/fork).
 
-* Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
+* Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed but are less frequently updated than Julia itself.
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
 
-* Learn to use [git](https://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
+* Learn to use [git](https://git-scm.com), the version control system used by GitHub, and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
 
-* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
+* Review the discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
@@ -47,12 +47,12 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
-3. When filing a bug report, provide where possible:
+3. When filing a bug report, please provide the following information wherever possible:
   - The full error message, including the backtrace.
-  - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
-  - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(verbose = true)` may be useful also, especially if the issue is related to a specific package.
+  - A minimal working example, i.e., the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
+  - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(verbose = true)` may be useful, especially if the issue is related to a specific package.
 
-4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown) for more formatting tricks.
+4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. Refer to [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown) for more formatting tricks.
 
 ## Submitting contributions
 
@@ -60,11 +60,11 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 There are never enough tests. Track [code coverage at Codecov](https://codecov.io/github/JuliaLang/julia), and help improve it.
 
-1. Go visit https://codecov.io/github/JuliaLang/julia.
+1. Visit https://codecov.io/github/JuliaLang/julia.
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/v1/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality. You can add your test to one of the existing files or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/v1/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -92,7 +92,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 >
 > When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
 
-Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
+Below outlined are the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
 #### Modifying files in `doc/src/`
 
@@ -109,11 +109,11 @@ Most of the source text for the Julia Manual is located in `doc/src/`. To update
 
 To add a **new file** to `doc/src/` rather than updating a file replace step `1` above with
 
-1. add the file to the appropriate subdirectory in `doc/src/` and also add the file path to the `PAGES` vector in `doc/make.jl`.
+1. Add the file to the appropriate subdirectory in `doc/src/`. Also add the file path to the `PAGES` vector in `doc/make.jl`.
 
 #### Modifying an existing docstring in `base/`
 
-All docstrings are written inline above the methods or types they are associated with and can be found by clicking on the `source` link that appears below each docstring in the HTML file. The steps needed to make a change to an existing docstring are listed below:
+All docstrings are written inline above the methods or types they are associated with and can be found by clicking on the `source` link that appears below each docstring in the HTML file. The steps needed to update an existing docstring are listed below:
 
 1. find the docstring in `base/`;
 2. update the text in the docstring;
@@ -164,7 +164,7 @@ To run doctests you need to run `make -C doc doctest=true` from the root directo
 
 #### News-worthy changes
 
-For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross-reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.  We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
+For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross-reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number. We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
 
 #### Annotations for new features, deprecations and behavior changes
 
@@ -187,22 +187,22 @@ At the moment, this should always be done with the following `compat` admonition
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
 
-Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
-i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
+Issues and pull requests should have self-explanatory titles so that they can be understood from the list of PRs and Issues,
+i.e., `Add {feature}` and `Fix {bug}` are good; `Fix #12345. Corrects the bug.` is bad.
 
-You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+You can make pull requests for incomplete features to get the code reviewed. The convention is to open a draft PR and prefix
 the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
 for merging. This will prevent accidental merging of work that is in progress.
 
-Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
+Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse Forum](https://discourse.julialang.org) or in a GitHub issue. It's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, it is most likely present in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization is present in `cli/`.
 
- 2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
+ 2. Add new file(s) to `sysimg.jl` to build them into the Julia system image.
 
- 3. Add any necessary export symbols in `exports.jl`.
+ 3. Add necessary export symbols in `exports.jl`.
 
  4. Include your tests in `test/Makefile` and `test/choosetests.jl`.
 
