@@ -3393,9 +3393,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
-    double min_interval = default_collect_interval;
+
 #ifdef MEMBALANCER
     if (collection == JL_GC_AUTO) {
+        double min_interval = default_collect_interval;
         uint64_t alloc_diff = before_free_heap_size - old_heap_size;
         uint64_t freed_diff = before_free_heap_size - heap_size;
         double alloc_smooth_factor = 0.95;
@@ -3433,9 +3434,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         thrash_counter += 1;
     else if (thrash_counter > 0)
         thrash_counter -= 1;
-    target_allocs =  2*sqrt((double)heap_size/min_interval);
+    double alpha = 1;
+    target_allocs = alpha * heap_size;
 #endif
-    uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
+    uint64_t target_heap = (uint64_t)target_allocs + heap_size;
     if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
         target_heap = max_total_memory;
     else if (target_heap < default_collect_interval)
