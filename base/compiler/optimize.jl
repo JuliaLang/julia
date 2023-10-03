@@ -834,7 +834,12 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             if el.head === :enter
                 tgt = el.args[1]::Int
-                el.args[1] = tgt + labelchangemap[tgt]
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    body[i] = nothing
+                else
+                    el.args[1] = tgt + labelchangemap[tgt]
+                end
             elseif !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)

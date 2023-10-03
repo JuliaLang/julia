@@ -5061,10 +5061,12 @@ end |> only === String
 # JET.test_call(s::AbstractString->Base._string(s, 'c'))
 
 # Don't visit the catch block for empty try/catch
-@test Base.return_types() do
+function completely_dead_try_catch()
     try
     catch
         return 2.0
     end
     return 1
-end |> only === Int
+end
+@test Base.return_types(completely_dead_try_catch) |> only === Int
+@test fully_eliminated(completely_dead_try_catch)

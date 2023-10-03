@@ -1341,6 +1341,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = nothing
                 return result_idx
             end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
         end
         ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:inst] = stmt

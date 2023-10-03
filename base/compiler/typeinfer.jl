@@ -728,6 +728,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     elseif !was_reached(sv, expr.dest)
                         expr = nothing
                     end
+                elseif isexpr(expr, :enter)
+                    if !was_reached(sv, expr.args[1])
+                        expr = nothing
+                    end
                 end
             end
             stmts[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
