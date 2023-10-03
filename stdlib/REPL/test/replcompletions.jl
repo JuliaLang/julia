@@ -2059,6 +2059,9 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    ("-CompletionFoo.Test_y(3).", "yy"),
                    ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
                    ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
                    ("foo'CompletionFoo.test!1", "test!12"))
     c, r = test_complete(s)
     @test only(c) == compl
