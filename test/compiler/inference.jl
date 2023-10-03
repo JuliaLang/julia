@@ -5070,3 +5070,14 @@ function completely_dead_try_catch()
 end
 @test Base.return_types(completely_dead_try_catch) |> only === Int
 @test fully_eliminated(completely_dead_try_catch)
+
+function nothrow_try_catch()
+    try
+        1+1
+    catch
+        return 2.0
+    end
+    return 1
+end
+@test Base.return_types(nothrow_try_catch) |> only === Int
+@test fully_eliminated(nothrow_try_catch)

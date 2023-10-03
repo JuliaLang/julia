@@ -3066,7 +3066,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             # Process non control-flow statements
             (; changes, type) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
-            propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
+            if (get_curr_ssaflag(frame) & IR_FLAG_NOTHROW) != IR_FLAG_NOTHROW
+                propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
+            end
             if type === Bottom
                 ssavaluetypes[currpc] = Bottom
                 @goto find_next_bb
