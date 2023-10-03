@@ -362,6 +362,20 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         # TODO: these are not yet linearized
                         continue
                     end
+                elseif stmt.head === :leave
+                    for i in 1:length(stmt.args)
+                        arg = stmt.args[i]
+                        if !isa(arg, Union{Nothing, SSAValue})
+                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                            error()
+                        elseif isa(arg, SSAValue)
+                            enter_stmt = ir[arg::SSAValue][:stmt]
+                            if !isa(enter_stmt, Nothing) && !isexpr(enter_stmt, :enter)
+                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                                error()
+                            end
+                        end
+                    end
                 end
             end
             n = 1
