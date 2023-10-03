@@ -2608,7 +2608,7 @@ function resolve_depot(includes)
     if any(includes) do inc
             !startswith(inc, "@depot")
         end
-        return nothing
+        return :missing_tag
     end
     for depot in DEPOT_PATH
         if all(includes) do inc
@@ -2617,7 +2617,7 @@ function resolve_depot(includes)
             return depot
         end
     end
-    return nothing
+    return :no_depot
 end
 
 
@@ -2708,8 +2708,10 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     for (i, chi) in enumerate(includes)
         chi.filename ∈ srcfiles && push!(keepidx, i)
     end
-    if isnothing(depot)
+    if depot === :no_depot
         @debug "Failed to determine depot from srctext files in cache file $cachefile."
+    elseif depot === :missing_tag
+        @debug "Missing @depot tag for include dependencies in cache file $cachefile."
     else
         for inc in includes
             inc.filename = replace(inc.filename, r"^@depot" => depot)
