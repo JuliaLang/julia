@@ -222,12 +222,12 @@ You can also use the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `t
 [Revise](https://github.com/timholy/Revise.jl) is a package that
 tracks changes in source files and automatically updates function
 definitions in your running Julia session. Using it, you can make
-extensive changes to Base without needing to rebuild in order to test
+extensive changes to `Base` without needing to rebuild in order to test
 your changes.
 
 Here is the standard procedure:
 
-1. If you are planning changes to any types or macros, make those
+1. If you are planning to change any types or macros, make those
    changes and build julia using `make`. (This is
    necessary because `Revise` cannot handle changes to type
    definitions or macros.) Unless it's
@@ -302,9 +302,9 @@ The process of [creating a patch release](https://docs.julialang.org/en/v1/devdo
 7. Open a pull request that bumps the version of the relevant minor release to the
    next prerelease patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
 
-Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
+Step 2 above, i.e., backporting commits to the `backports-release-X.Y` branch, has largely
 been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
-searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
+searches for merged pull requests with the relevant `backport-X.Y` tag and attempts to
 cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
 Some commits apply successfully without intervention, others not so much. The latter
 commits require "manual" backporting, with which help is generally much appreciated.
@@ -348,7 +348,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
 
  - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
  - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
- - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
+ - If any conflicts arise due to changes in Julia's `master`, we prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
  - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a URL that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
