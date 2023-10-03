@@ -3273,13 +3273,14 @@ end
                     return true
                 end
                 fsize = filesize(f)
-                if fsize != chi.fsize
-                    @debug "Rejecting stale cache file $cachefile (file size $fsize_req) because file $f (file size $fsize) has changed"
+                @debug (f,fsize)
+                if fsize != fsize_req
+                    @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                     return true
                 end
                 hash = open(_crc32c, f, "r")
-                if hash != chi.hash
-                    @debug "Rejecting stale cache file $cachefile (hash $hash_req) because file $f (hash $hash) has changed"
+                if hash != hash_req
+                    @debug "Rejecting stale cache file $cachefile because file size of $f has changed (hash $hash, before $hash_req)"
                     return true
                 end
             end
