@@ -3393,7 +3393,7 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
         else if (isy)
             res = (jl_value_t*)yd;
         else if (p)
-            res = jl_apply_tuple_type(p);
+            res = jl_apply_tuple_type(p, 1);
         else
             res = jl_apply_tuple_type_v(params, np);
     }
@@ -4130,7 +4130,7 @@ static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
         ts[1] = jl_tparam(b, i);
         jl_svecset(vec, i, jl_type_union(ts, 2));
     }
-    jl_value_t *ans = jl_apply_tuple_type(vec);
+    jl_value_t *ans = jl_apply_tuple_type(vec, 1);
     JL_GC_POP();
     return ans;
 }

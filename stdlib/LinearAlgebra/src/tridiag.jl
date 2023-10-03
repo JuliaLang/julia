@@ -876,3 +876,77 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
     T = choltype(eltype(S))
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end
+
+# See dgtsv.f
+"""
+    ldiv!(A::Tridiagonal, B::AbstractVecOrMat) -> B
+
+Compute `A \\ B` in-place by Gaussian elimination with partial pivoting and store the result
+in `B`, returning the result. In the process, the diagonals of `A` are overwritten as well.
+
+!!! compat "Julia 1.11"
+    `ldiv!` for `Tridiagonal` left-hand sides requires at least Julia 1.11.
+"""
+function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
+    LinearAlgebra.require_one_based_indexing(B)
+    n = size(A, 1)
+    if n != size(B,1)
+        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
+    nrhs = size(B, 2)
+
+    # Initialize variables
+    dl = A.dl
+    d = A.d
+    du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
+
+    @inbounds begin
+        for i in 1:n-1
+            # pivot or not?
+            if abs(d[i]) >= abs(dl[i])
+                # No interchange
+                if d[i] != 0
+                    fact = dl[i]/d[i]
+                    d[i+1] -= fact*du[i]
+                    for j in 1:nrhs
+                        B[i+1,j] -= fact*B[i,j]
+                    end
+                else
+                    checknonsingular(i, RowMaximum())
+                end
+                i < n-1 && (dl[i] = 0)
+            else
+                # Interchange
+                fact = d[i]/dl[i]
+                d[i] = dl[i]
+                tmp = d[i+1]
+                d[i+1] = du[i] - fact*tmp
+                du[i] = tmp
+                if i < n-1
+                    dl[i] = du[i+1]
+                    du[i+1] = -fact*dl[i]
+                end
+                for j in 1:nrhs
+                    temp = B[i,j]
+                    B[i,j] = B[i+1,j]
+                    B[i+1,j] = temp - fact*B[i+1,j]
+                end
+            end
+        end
+        iszero(d[n]) && checknonsingular(n, RowMaximum())
+        # backward substitution
+        for j in 1:nrhs
+            B[n,j] /= d[n]
+            if n > 1
+                B[n-1,j] = (B[n-1,j] - du[n-1]*B[n,j])/d[n-1]
+            end
+            for i in n-2:-1:1
+                B[i,j] = (B[i,j] - du[i]*B[i+1,j] - dl[i]*B[i+2,j]) / d[i]
+            end
+        end
+    end
+    return B
+end

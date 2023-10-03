@@ -211,10 +211,9 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     return nothing
 end
 
-function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
-                                (; fully_covered, #=atype,=# cases, bbs)::UnionSplit,
-                                state::CFGInliningState,
-                                params::OptimizationParams)
+function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
+                                state::CFGInliningState, params::OptimizationParams)
+    (; fully_covered, #=atype,=# cases, bbs) = union_split
     inline_into_block!(state, block_for_inst(ir, idx))
     from_bbs = Int[]
     delete!(state.split_targets, length(state.new_cfg_blocks))
@@ -234,9 +233,7 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int,
             end
         end
         push!(from_bbs, length(state.new_cfg_blocks))
-        # TODO: Right now we unconditionally generate a fallback block
-        # in case of subtyping errors - This is probably unnecessary.
-        if i != length(cases) || (!fully_covered)
+        if !(i == length(cases) && fully_covered)
             # This block will have the next condition or the final else case
             push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
             push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
@@ -507,50 +504,45 @@ end
 """
     ir_inline_unionsplit!
 
-The core idea of this function is to simulate the dispatch semantics by generating
-(flat) `isa`-checks corresponding to the signatures of union-split dispatch candidates,
-and then inline their bodies into each `isa`-conditional block.
-This `isa`-based virtual dispatch requires few pre-conditions to hold in order to simulate
-the actual semantics correctly.
+The primary purpose of this function is to emulate the dispatch behavior by generating flat
+`isa`-checks that correspond to the signatures of union-split dispatch candidates.
+These checks allow us to inline the method bodies into respective `isa`-conditional blocks.
 
-The first one is that these dispatch candidates need to be processed in order of their specificity,
-and the corresponding `isa`-checks should reflect the method specificities, since now their
-signatures are not necessarily concrete.
-For example, given the following definitions:
+Note that two pre-conditions are required for this emulation to work correctly:
+
+1. Ordered Dispatch Candidates
+
+The dispatch candidates must be processed in order of their specificity.
+The generated `isa`-checks should reflect this order,
+especially since the method signatures may not be concrete.
+For instance, with the methods:
 
     f(x::Int)    = ...
     f(x::Number) = ...
     f(x::Any)    = ...
 
-and a callsite:
-
-    f(x::Any)
-
-then a correct `isa`-based virtual dispatch would be:
+A correct `isa`-based dispatch emulation for the call site `f(x::Any)` would look like:
 
     if isa(x, Int)
         [inlined/resolved f(x::Int)]
     elseif isa(x, Number)
         [inlined/resolved f(x::Number)]
-    else # implies `isa(x, Any)`, which fully covers this call signature,
-         # otherwise we need to insert a fallback dynamic dispatch case also
+    else
         [inlined/resolved f(x::Any)]
     end
 
-Fortunately, `ml_matches` should already sorted them in that way, except cases when there is
-any ambiguity, from which we already bail out at this point.
+`ml_matches` should already sort the matched method candidates correctly,
+except in ambiguous cases, which we've already excluded at this state.
 
-Another consideration is type equality constraint from type variables: the `isa`-checks are
-not enough to simulate the dispatch semantics in cases like:
-Given a definition:
+2. Type Equality Constraints
+
+Another factor is the type equality constraint imposed by type variables.
+Simple `isa`-checks are insufficient to capture the semantics in some cases.
+For example, given the following method definition:
 
     g(x::T, y::T) where T<:Integer = ...
 
-transform a callsite:
-
-    g(x::Any, y::Any)
-
-into the optimized form:
+it is _invalid_ to optimize a cal site like `g(x::Any, y::Any)` into:
 
     if isa(x, Integer) && isa(y, Integer)
         [inlined/resolved g(x::Integer, y::Integer)]
@@ -558,11 +550,14 @@ into the optimized form:
         g(x, y) # fallback dynamic dispatch
     end
 
-But again, we should already bail out from such cases at this point, essentially by
-excluding cases where `case.sig::UnionAll`.
+since we also need to check that `x` and `y` are equal types.
 
-In short, here we can process the dispatch candidates in order, assuming we haven't changed
-their order somehow somewhere up to this point.
+But, we've already excluded such cases at this point,
+mainly by filtering out `case.sig::UnionAll`,
+so there is no need to worry about type equality at this point.
+
+In essence, we can process the dispatch candidates sequentially,
+assuming their order stays the same post-discovery in `ml_matches`.
 """
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                                union_split::UnionSplit, boundscheck::Symbol,
@@ -582,7 +577,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         cond = true
         nparams = fieldcount(atype)
         @assert nparams == fieldcount(mtype)
-        if i != ncases || !fully_covered
+        if !(i == ncases && fully_covered)
             for i = 1:nparams
                 a, m = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
@@ -1205,7 +1200,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
 end
 
 function invoke_signature(argtypes::Vector{Any})
-    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]))[1]
+    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]), false)[1]
     return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
 end
 
@@ -1475,7 +1470,7 @@ function handle_match!(cases::Vector{InliningCase},
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
-    !allow_typevars && _any(case->case.sig === spec_types, cases) && return true
+    !allow_typevars && any(case::InliningCase->case.sig === spec_types, cases) && return true
     item = analyze_method!(match, argtypes, info, flag, state; allow_typevars)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))

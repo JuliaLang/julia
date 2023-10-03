@@ -5,7 +5,7 @@ import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
-using InteractiveUtils: code_llvm
+using InteractiveUtils
 
 include("irutils.jl")
 
@@ -3290,7 +3290,10 @@ end
 call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
 @test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
 @test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
-@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+let (src, rt) = only(code_typed(my_ntuple, Tuple{Any, Val}))
+    @test src isa CodeInfo
+    @test rt == Tuple
+end
 
 @generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
 @test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
@@ -5230,3 +5233,47 @@ end |> only == Val{false}
 @test Base.return_types((Bool,)) do b
     Val(Core.Intrinsics.or_int(true, b))
 end |> only == Val{true}
+
+# https://github.com/JuliaLang/julia/issues/51310
+@test code_typed() do
+    b{c} = d...
+end |> only |> first isa Core.CodeInfo
+
+abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)
+@test only(Base.return_types(abstract_call_unionall_vararg)) !== Union{}
+let TV = TypeVar(:T)
+    t = Vector{TV}
+    some = Some{Any}((TV, t))
+    @test abstract_call_unionall_vararg(some) isa UnionAll
+end
+
+# use `Vararg` type constraints
+use_vararg_constrant1(args::Vararg{T,N}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant1, Tuple{Int,Int})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant2(args::Vararg{T,N}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant2, Tuple{Vararg{Int}})) == Tuple{Val{Int},Int}
+use_vararg_constrant3(args::NTuple{N,T}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant3, Tuple{Tuple{Int,Int}})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant4(args::NTuple{N,T}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant4, Tuple{NTuple{N,Int}} where N)) == Tuple{Val{Int},Int}
+
+# issue 51228
+global whatever_unknown_value51228
+f51228() = f51228(whatever_unknown_value51228)
+f51228(x) = 1
+f51228(::Vararg{T,T}) where {T} = "2"
+@test only(Base.return_types(f51228, ())) == Int
+
+struct A51317
+    b::Tuple{1}
+    A1() = new()
+end
+struct An51317
+    a::Int
+    b::Tuple{1}
+    An51317() = new()
+end
+@test only(Base.return_types((x,f) -> getfield(x, f), (A51317, Symbol))) === Union{}
+@test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
+@test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
+@test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}

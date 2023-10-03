@@ -147,3 +147,45 @@ function commit(repo::GitRepo, msg::AbstractString;
     end
     return commit_id
 end
+
+"""
+    parentcount(c::GitCommit)
+
+Get the number of parents of this commit.
+
+See also [`parent`](@ref), [`parent_id`](@ref).
+"""
+parentcount(c::GitCommit) =
+    Int(ccall((:git_commit_parentcount, libgit2), Cuint, (Ptr{Cvoid},), c))
+
+"""
+    parent(c::GitCommit, n)
+
+Get the `n`-th (1-based) parent of the commit.
+
+See also [`parentcount`](@ref), [`parent_id`](@ref).
+"""
+function parent(c::GitCommit, n)
+    ptr_ref = Ref{Ptr{Cvoid}}()
+    @check ccall((:git_commit_parent, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cuint), ptr_ref, c, n - 1)
+    return GitCommit(c.owner, ptr_ref[])
+end
+
+"""
+    parent_id(c::GitCommit, n)
+
+Get the oid of the `n`-th (1-based) parent for a commit.
+
+See also [`parentcount`](@ref), [`parent`](@ref).
+"""
+function parent_id(c::GitCommit, n)
+    oid_ptr = ccall((:git_commit_parent_id, libgit2), Ptr{GitHash},
+                    (Ptr{Cvoid}, Cuint), c, n - 1)
+    if oid_ptr == C_NULL
+        # 0-based indexing mimicking the error message from libgit2
+        throw(GitError(Error.Invalid, Error.ENOTFOUND,
+                       "parent $(n - 1) does not exist"))
+    end
+    return unsafe_load(oid_ptr)
+end

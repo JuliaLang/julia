@@ -1028,7 +1028,7 @@ struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
 
 # Fields
 ```
-a :: Tuple{Vararg{T<:Integer, N}}
+a :: NTuple{N, T<:Integer}
 b :: Array{Int64, N}
 c :: Int64
 ```
@@ -1052,7 +1052,7 @@ struct $(curmod_prefix)Undocumented.st4{T, N}
 # Fields
 ```
 a :: T
-b :: Tuple{Vararg{T, N}}
+b :: NTuple{N, T}
 ```
 
 # Supertype Hierarchy

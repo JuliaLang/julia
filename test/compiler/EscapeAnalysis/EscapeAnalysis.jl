@@ -71,15 +71,22 @@ function is_load_forwardable(x::EscapeInfo)
     return isa(AliasInfo, IndexableFields) || isa(AliasInfo, IndexableElements)
 end
 
+@testset "EAUtils" begin
+    @test_throws "everything has been constant folded" code_escapes() do; sin(42); end
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
+end
+
 @testset "basics" begin
     let # arg return
         result = code_escapes((Any,)) do a # return to caller
-            Base.donotdelete(1) # TODO #51143
+            println("prevent ConstABI")
             return nothing
         end
         @test has_arg_escape(result.state[Argument(2)])
         # return
         result = code_escapes((Any,)) do a
+            println("prevent ConstABI")
             return a
         end
         i = only(findall(isreturn, result.ir.stmts.stmt))
@@ -114,9 +121,9 @@ end
     end
     let # :gc_preserve_begin / :gc_preserve_end
         result = code_escapes((String,)) do s
-            Base.donotdelete(1) # TODO #51143
             m = SafeRef(s)
             GC.@preserve m begin
+                println(s)
                 return nothing
             end
         end
@@ -125,7 +132,7 @@ end
         @test has_no_escape(result.state[SSAValue(i)])
     end
     let # :isdefined
-        result = code_escapes((String, Bool, )) do a, b
+        result = code_escapes((String, Bool,)) do a, b
             if b
                 s = Ref(a)
             end
@@ -510,7 +517,7 @@ end
         end
         i = only(findall(isnew, result.ir.stmts.stmt))
         r = only(findall(isreturn, result.ir.stmts.stmt))
-        @test_broken !has_return_escape(result.state[SSAValue(i)], r)
+        @test_broken !has_return_escape(result.state[SSAValue(i)], r) # TODO? see `escape_exception!`
     end
     let # sequential: escape information imposed on `err1` and `err2 should propagate separately
         result = @eval M $code_escapes() do
@@ -537,7 +544,7 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_all_escape(result.state[SSAValue(i1)])
         @test has_return_escape(result.state[SSAValue(i2)], r)
-        @test_broken !has_all_escape(result.state[SSAValue(i2)])
+        @test_broken !has_all_escape(result.state[SSAValue(i2)]) # TODO? see `escape_exception!`
     end
     let # nested: escape information imposed on `inner` shouldn't propagate to `s`
         result = @eval M $code_escapes() do
@@ -2252,7 +2259,7 @@ end
 # end
 
 # interprocedural analysis
-# ------------------------
+# ========================
 
 # propagate escapes imposed on call arguments
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
@@ -2345,18 +2352,32 @@ let result = code_escapes() do
     @test has_no_escape(result.state[SSAValue(i)])
 end
 
+function with_self_aliased(from_bb::Int, succs::Vector{Int})
+    worklist = Int[from_bb]
+    visited = BitSet(from_bb)
+    function visit!(bb::Int)
+        if bb ∉ visited
+            push!(visited, bb)
+            push!(worklist, bb)
+        end
+    end
+    while !isempty(worklist)
+        foreach(visit!, succs)
+    end
+    return visited
+end
+@test code_escapes(with_self_aliased) isa EAUtils.EscapeResult
+
 # accounts for ThrownEscape via potential MethodError
 
 # no method error
 @noinline identity_if_string(x::SafeRef) = (println("preventing inlining"); nothing)
 let result = code_escapes((SafeRef{String},)) do x
-        Base.donotdelete(1) # TODO #51143
         identity_if_string(x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((Union{SafeRef{String},Nothing},)) do x
-        Base.donotdelete(1) # TODO #51143
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))

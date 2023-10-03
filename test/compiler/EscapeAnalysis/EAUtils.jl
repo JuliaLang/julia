@@ -41,10 +41,16 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       world::UInt = get_world_counter(),
                       debuginfo::Symbol = :none)
     tt = Base.signature_type(f, types)
-    interp = EscapeAnalyzer(world, tt)
-    results = Base.code_typed_by_type(tt; optimize=true, world, interp)
-    isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.estate, interp.mi, debuginfo === :source, interp)
+    match = Base._which(tt; world, raise=true)
+    mi = Core.Compiler.specialize_method(match)::MethodInstance
+    interp = EscapeAnalyzer(world, mi)
+    frame = Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
+    isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
+    slotnames = let src = frame.src
+        src isa CodeInfo ? src.slotnames : nothing
+    end
+    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi,
+                        slotnames, debuginfo === :source, interp)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -64,7 +70,7 @@ using .CC:
     InferenceResult, OptimizationState, IRCode, copy as cccopy,
     @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, sroa_pass!,
     adce_pass!, JLOptions, verify_ir, verify_linetable
-using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState, is_ipo_profitable
+using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
 struct CodeCache
     cache::IdDict{MethodInstance,CodeInstance}
@@ -86,6 +92,12 @@ end
 EscapeCache() = EscapeCache(IdDict{MethodInstance,EscapeCacheInfo}())
 const GLOBAL_ESCAPE_CACHE = EscapeCache()
 
+struct EscapeResultForEntry
+    ir::IRCode
+    estate::EscapeState
+    mi::MethodInstance
+end
+
 mutable struct EscapeAnalyzer <: AbstractInterpreter
     const world::UInt
     const inf_params::InferenceParams
@@ -93,17 +105,15 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const inf_cache::Vector{InferenceResult}
     const code_cache::CodeCache
     const escape_cache::EscapeCache
-    const entry_tt
-    ir::IRCode
-    estate::EscapeState
-    mi::MethodInstance
-    function EscapeAnalyzer(world::UInt, @nospecialize(tt),
+    const entry_mi::MethodInstance
+    result::EscapeResultForEntry
+    function EscapeAnalyzer(world::UInt, entry_mi::MethodInstance,
                             code_cache::CodeCache=GLOBAL_CODE_CACHE,
                             escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, tt)
+        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, entry_mi)
     end
 end
 
@@ -210,14 +220,12 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
         @timeit "EA" estate = analyze_escapes(ir, nargs, get_escape_cache)
     catch err
         @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
-        @eval Main failed_escapeanalysis = $(FailedAnalysis(ir, nargs, get_escape_cache))
+        Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
         rethrow(err)
     end
-    if caller.linfo.specTypes === interp.entry_tt
+    if caller.linfo === interp.entry_mi
         # return back the result
-        interp.ir = cccopy(ir)
-        interp.estate = estate
-        interp.mi = sv.linfo
+        interp.result = EscapeResultForEntry(cccopy(ir), estate, sv.linfo)
     end
     record_escapes!(interp, caller, estate, ir)
     return ir
@@ -281,13 +289,15 @@ struct EscapeResult
     ir::IRCode
     state::EscapeState
     mi::Union{Nothing,MethodInstance}
+    slotnames::Union{Nothing,Vector{Symbol}}
     source::Bool
     interp::Union{Nothing,EscapeAnalyzer}
     function EscapeResult(ir::IRCode, state::EscapeState,
                           mi::Union{Nothing,MethodInstance}=nothing,
+                          slotnames::Union{Nothing,Vector{Symbol}}=nothing,
                           source::Bool=false,
                           interp::Union{Nothing,EscapeAnalyzer}=nothing)
-        return new(ir, state, mi, source, interp)
+        return new(ir, state, mi, slotnames, source, interp)
     end
 end
 Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
@@ -297,7 +307,8 @@ Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
 Base.show(io::IO, cached::EscapeCacheInfo) = show(io, EscapeResult(cached.ir, cached.state))
 
 # adapted from https://github.com/JuliaDebug/LoweredCodeUtils.jl/blob/4612349432447e868cf9285f647108f43bd0a11c/src/codeedges.jl#L881-L897
-function print_with_info(io::IO, (; ir, state, mi, source)::EscapeResult)
+function print_with_info(io::IO, result::EscapeResult)
+    (; ir, state, mi, slotnames, source) = result
     # print escape information on SSA values
     function preprint(io::IO)
         ft = ir.argtypes[1]
@@ -310,7 +321,8 @@ function print_with_info(io::IO, (; ir, state, mi, source)::EscapeResult)
             arg = state[Argument(i)]
             i == 1 && continue
             c, color = get_name_color(arg, true)
-            printstyled(io, c, ' ', '_', i, "::", ir.argtypes[i]; color)
+            slot = isnothing(slotnames) ? "_$i" : slotnames[i]
+            printstyled(io, c, ' ', slot, "::", ir.argtypes[i]; color)
             i ≠ state.nargs && print(io, ", ")
         end
         print(io, ')')
