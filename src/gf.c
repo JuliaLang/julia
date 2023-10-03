@@ -2331,7 +2331,7 @@ jl_mutex_t precomp_statement_out_lock;
 ios_t f_precompile;
 static JL_STREAM* s_precompile = NULL;
 
-static void init_precompile_output()
+static void init_precompile_output(void)
 {
     const char *t = jl_options.trace_compile;
     if (!strncmp(t, "stderr", 6)) {
@@ -2366,7 +2366,7 @@ static void record_precompile_statement(jl_method_instance_t *mi)
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 
-void jl_write_precompile_statement(char* statement)
+JL_DLLEXPORT void jl_write_precompile_statement(char* statement)
 {
     if (jl_options.trace_compile == NULL)
         return;
