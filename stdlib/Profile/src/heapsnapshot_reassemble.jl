@@ -5,7 +5,7 @@ module HeapSnapshot
 # SoA layout to reduce padding
 struct Edges
     type::Vector{Int8}       # index into `snapshot.meta.edge_types`
-    name_index::Vector{UInt} # index into `snapshot.strings`
+    name_or_index::Vector{UInt} # Either an index into `snapshot.strings`, or the index in an array, depending on edge_type
     to_pos::Vector{UInt32}   # index into `snapshot.nodes`
 end
 function init_edges(n::Int)
@@ -20,7 +20,7 @@ Base.length(n::Edges) = length(n.type)
 # trace_node_id and detachedness are always 0 in the snapshots Julia produces so we don't store them
 struct Nodes
     type::Vector{Int8}         # index into `snapshot.meta.node_types`
-    name_index::Vector{UInt32} # index into `snapshot.strings`
+    name_idx::Vector{UInt32} # index into `snapshot.strings`
     id::Vector{UInt}           # unique id, in julia it is the address of the object
     self_size::Vector{Int}     # size of the object itself, not including the size of its fields
     edge_count::Vector{UInt32} # number of outgoing edges
@@ -62,7 +62,7 @@ let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
     end
 end
 
-function assemble_snapshot(in_prefix, out_file::AbstractString)
+function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
     open(out_file, "w") do io
         assemble_snapshot(in_prefix, io)
     end
@@ -88,7 +88,7 @@ function assemble_snapshot(in_prefix, io::IO)
         x, s = iterate(iter)
         node_type = parse(Int8, x)
         x, s = iterate(iter, s)
-        node_name_index = parse(UInt32, x)
+        node_name_idx = parse(UInt32, x)
         x, s = iterate(iter, s)
         id = parse(UInt, x)
         x, s = iterate(iter, s)
@@ -102,7 +102,7 @@ function assemble_snapshot(in_prefix, io::IO)
         @assert parse(Int8, x) == 0 # detachedness
 
         nodes.type[i] = node_type
-        nodes.name_index[i] = node_name_index
+        nodes.name_idx[i] = node_name_idx
         nodes.id[i] = id
         nodes.self_size[i] = self_size
         nodes.edge_count[i] = edge_count
@@ -115,16 +115,16 @@ function assemble_snapshot(in_prefix, io::IO)
         x, s = iterate(iter)
         edge_type = parse(Int8, x)
         x, s = iterate(iter, s)
-        edge_name_index = parse(UInt, x)
-        x, s = iterate(iter, s)
-        to_node = parse(UInt32, x)
+        edge_name_or_index = parse(UInt, x)
         x, s = iterate(iter, s)
         from_node = parse(Int,  x)
+        x, s = iterate(iter, s)
+        to_node = parse(UInt32, x)
 
         nodes.edges.type[i] = edge_type
-        nodes.edges.name_index[i] = edge_name_index
+        nodes.edges.name_or_index[i] = edge_name_or_index
         nodes.edges.to_pos[i] = to_node * 7 # 7 fields per node, the streaming format doesn't multiply the offset by 7
-        nodes.edge_count[from_node] += UInt32(1)
+        nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
     end
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
@@ -134,7 +134,7 @@ function assemble_snapshot(in_prefix, io::IO)
         i > 1 && println(io, ",")
         _write_decimal_number(io, nodes.type[i], _digits_buf)
         print(io, ",")
-        _write_decimal_number(io, nodes.name_index[i], _digits_buf)
+        _write_decimal_number(io, nodes.name_idx[i], _digits_buf)
         print(io, ",")
         _write_decimal_number(io, nodes.id[i], _digits_buf)
         print(io, ",")
@@ -148,7 +148,7 @@ function assemble_snapshot(in_prefix, io::IO)
         i > 1 && println(io, ",")
         _write_decimal_number(io, nodes.edges.type[i], _digits_buf)
         print(io, ",")
-        _write_decimal_number(io, nodes.edges.name_index[i], _digits_buf)
+        _write_decimal_number(io, nodes.edges.name_or_index[i], _digits_buf)
         print(io, ",")
         _write_decimal_number(io, nodes.edges.to_pos[i], _digits_buf)
     end
