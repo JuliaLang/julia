@@ -54,4 +54,20 @@ else
         end
     end
 
+
+    @testset "throw when failed to find a depot for RelocationTestPkg" begin
+        load_path = copy(LOAD_PATH)
+        push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
+        try
+            pkg = Base.identify_package("RelocationTestPkg")
+            touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg", "src", "foo.txt"))
+            cachefile = only(Base.find_all_in_cache_path(pkg))
+            @test_throws ArgumentError("""
+              Failed to determine depot from srctext files in cache file $cachefile.
+              - Make sure you have adjusted DEPOT_PATH in case you relocated depots.""") Base.isprecompiled(pkg)
+        finally
+            copy!(LOAD_PATH, load_path)
+        end
+    end
+
 end
