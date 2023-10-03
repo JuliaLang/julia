@@ -695,11 +695,13 @@ static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
 // heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
+#ifdef MEMBALANCER
 static uint64_t old_pause_time = 0;
 static uint64_t old_mut_time = 0;
 static uint64_t old_heap_size = 0;
 static uint64_t old_alloc_diff = 0;
 static uint64_t old_freed_diff = 0;
+#endif
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
 static int thrashing = 0;
@@ -3212,7 +3214,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t gc_start_time = jl_hrtime();
     uint64_t mutator_time = gc_start_time - gc_end_time;
+#ifdef MEMBALANCER
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+#endif
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
@@ -3390,6 +3394,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
     double min_interval = default_collect_interval;
+#ifdef MEMBALANCER
     if (collection == JL_GC_AUTO) {
         uint64_t alloc_diff = before_free_heap_size - old_heap_size;
         uint64_t freed_diff = before_free_heap_size - heap_size;
@@ -3423,6 +3428,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result || /*Always do the default to avoid issues with the algorithm*/ 1) // If we are thrashing go back to default
         target_allocs =  2*sqrt((double)heap_size/min_interval);
+#else
+    if ((pause > (mutator_time * 95)) && !(thrash_counter < 4))
+        thrash_counter += 1;
+    else if (thrash_counter > 0)
+        thrash_counter -= 1;
+    target_allocs =  2*sqrt((double)heap_size/min_interval);
+#endif
     uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
     if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
         target_heap = max_total_memory;
