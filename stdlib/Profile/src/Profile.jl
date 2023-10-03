@@ -1263,10 +1263,12 @@ function take_heap_snapshot(io::IO, all_one::Bool=false)
     Profile.HeapSnapshot.assemble_snapshot(prefix, io)
 end
 function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
+    # Nodes and edges are binary files
     open("$prefix.nodes", "w") do nodes
         open("$prefix.edges", "w") do edges
-            open("$prefix.strings", "w") do strings
-                open("$prefix.json", "w") do json
+            # The other two files are json data
+            open("$prefix.strings.json", "w") do strings
+                open("$prefix.metadata.json", "w") do json
                     Base.@_lock_ios(nodes,
                     Base.@_lock_ios(edges,
                     Base.@_lock_ios(strings,

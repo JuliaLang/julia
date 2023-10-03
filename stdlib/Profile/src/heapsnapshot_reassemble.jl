@@ -6,13 +6,13 @@ module HeapSnapshot
 struct Edges
     type::Vector{Int8}       # index into `snapshot.meta.edge_types`
     name_or_index::Vector{UInt} # Either an index into `snapshot.strings`, or the index in an array, depending on edge_type
-    to_pos::Vector{UInt32}   # index into `snapshot.nodes`
+    to_pos::Vector{UInt}   # index into `snapshot.nodes`
 end
 function init_edges(n::Int)
     Edges(
         Vector{Int8}(undef, n),
         Vector{UInt}(undef, n),
-        Vector{UInt32}(undef, n),
+        Vector{UInt}(undef, n),
     )
 end
 Base.length(n::Edges) = length(n.type)
@@ -23,7 +23,7 @@ struct Nodes
     name_idx::Vector{UInt32} # index into `snapshot.strings`
     id::Vector{UInt}           # unique id, in julia it is the address of the object
     self_size::Vector{Int}     # size of the object itself, not including the size of its fields
-    edge_count::Vector{UInt32} # number of outgoing edges
+    edge_count::Vector{UInt} # number of outgoing edges
     edges::Edges               # outgoing edges
     # This is the main complexity of the .heapsnapshot format, and it's the reason we need
     # to read in all the data before writing it out. The edges vector contains all edges,
@@ -77,7 +77,7 @@ end
 # Manually parse and write the .json files, given that we don't have JSON import/export in
 # julia's stdlibs.
 function assemble_snapshot(in_prefix, io::IO)
-    preamble = read(string(in_prefix, ".json"), String)
+    preamble = read(string(in_prefix, ".metadata.json"), String)
     pos = last(findfirst("node_count\":", preamble)) + 1
     endpos = findnext(==(','), preamble, pos) - 1
     node_count = parse(Int, String(@view preamble[pos:endpos]))
@@ -98,31 +98,21 @@ function assemble_snapshot(in_prefix, io::IO)
     # end
 
     # Parse nodes with empty edge counts that we need to fill later
-    # TODO: preallocate line buffer
-    for (i, line) in enumerate(eachline(string(in_prefix, ".nodes")))
+    nodes_file = open(string(in_prefix, ".nodes"), "r")
+    for i in 1:length(nodes)
         shouldlog(i) && println("Parsing node $i")
-        iter = eachsplit(line, ',')
-        x, s = iterate(iter)
-        node_type = parse(Int8, x)
-        x, s = iterate(iter, s)
-        node_name_idx = parse(UInt32, x)
-        x, s = iterate(iter, s)
-        id = parse(UInt, x)
-        x, s = iterate(iter, s)
-        self_size = parse(Int,  x)
-        x, s = iterate(iter, s)
-        edge_count = parse(UInt, x)
-        @assert edge_count == 0
-        x, s = iterate(iter, s)
-        @assert parse(Int8, x) == 0 # trace_node_id
-        x, s = iterate(iter, s)
-        @assert parse(Int8, x) == 0 # detachedness
+        node_type = read(nodes_file, Int8)
+        node_name_idx = read(nodes_file, UInt)
+        id = read(nodes_file, UInt)
+        self_size = read(nodes_file, Int)
+        @assert read(nodes_file, Int) == 0 # trace_node_id
+        @assert read(nodes_file, Int8) == 0 # detachedness
 
         nodes.type[i] = node_type
         nodes.name_idx[i] = node_name_idx
         nodes.id[i] = id
         nodes.self_size[i] = self_size
-        nodes.edge_count[i] = edge_count
+        nodes.edge_count[i] = 0 # edge_count
 
         shouldlog(i) && begin
             println("Parsed node $i")
@@ -135,17 +125,12 @@ function assemble_snapshot(in_prefix, io::IO)
     end
 
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
-    # TODO: preallocate line buffer
-    for (i, line) in enumerate(eachline(string(in_prefix, ".edges")))
-        iter = eachsplit(line, ',')
-        x, s = iterate(iter)
-        edge_type = parse(Int8, x)
-        x, s = iterate(iter, s)
-        edge_name_or_index = parse(UInt, x)
-        x, s = iterate(iter, s)
-        from_node = parse(Int,  x)
-        x, s = iterate(iter, s)
-        to_node = parse(UInt32, x)
+    edges_file = open(string(in_prefix, ".edges"), "r")
+    for i in 1:length(nodes.edges)
+        edge_type = read(edges_file, Int8)
+        edge_name_or_index = read(edges_file, UInt)
+        from_node = read(edges_file, UInt)
+        to_node = read(edges_file, UInt)
 
         nodes.edges.type[i] = edge_type
         nodes.edges.name_or_index[i] = edge_name_or_index
@@ -196,7 +181,7 @@ function assemble_snapshot(in_prefix, io::IO)
         end
     end
     println(io, "],")
-    open(string(in_prefix, ".strings"), "r") do strings_io
+    open(string(in_prefix, ".strings.json"), "r") do strings_io
         skip(strings_io, 2) # skip "{\n"
         write(io, strings_io) # strings contain the trailing "}" so we close out what we opened in preamble
     end

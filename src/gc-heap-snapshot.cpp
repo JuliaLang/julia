@@ -53,7 +53,7 @@ void print_str_escape_json(ios_t *stream, StringRef s)
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2598-L2601
 
 struct Edge {
-    size_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
+    uint8_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t from_node;  // This is a deviation from the .heapsnapshot format to support streaming.
     size_t to_node;
@@ -66,14 +66,14 @@ struct Edge {
 
 const int k_node_number_of_fields = 7;
 struct Node {
-    size_t type; // index into snapshot->node_types
+    uint8_t type; // index into snapshot->node_types
     size_t name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the from_node is attached or dettached from the main application state
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
-    int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
+    uint8_t detachedness;  // 0 - unknown, 1 - attached, 2 - detached
 
     ~Node() JL_NOTSAFEPOINT = default;
 };
@@ -117,8 +117,12 @@ struct HeapSnapshot {
     Node internal_root;
 
     // Used for streaming
+    // Since nodes and edges are just one giant array of integers, we stream them as
+    // *BINARY DATA*: a sequence of bytes, each of which is a 64-bit integer (big enough to
+    // fit the pointer ids).
     ios_t *nodes;
     ios_t *edges;
+    // These files are written out as json data.
     ios_t *strings;
     ios_t *json;
 
@@ -172,25 +176,26 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 void serialize_node(HeapSnapshot *snapshot, const Node &node)
 {
     // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-    ios_printf(snapshot->nodes, "%zu,%zu,%zu,%zu,%zu,%zu,%d\n",
-                            node.type,
-                            node.name,
-                            node.id,
-                            node.self_size,
-                            0,  // fake edge count for now
-                            node.trace_node_id,
-                            node.detachedness);
+    ios_write(snapshot->nodes, (char*)&node.type, sizeof(node.type));
+    ios_write(snapshot->nodes, (char*)&node.name, sizeof(node.name));
+    ios_write(snapshot->nodes, (char*)&node.id, sizeof(node.id));
+    ios_write(snapshot->nodes, (char*)&node.self_size, sizeof(node.self_size));
+    // NOTE: We don't write edge_count, since it's always 0. It will be reconstructed in
+    // post-processing.
+    ios_write(snapshot->nodes, (char*)&node.trace_node_id, sizeof(node.trace_node_id));
+    ios_write(snapshot->nodes, (char*)&node.detachedness, sizeof(node.detachedness));
 
     g_snapshot->num_nodes += 1;
 }
 void serialize_edge(HeapSnapshot *snapshot, const Edge &edge)
 {
     // ["type","name_or_index","to_node"]
-    ios_printf(snapshot->edges, "%zu,%zu,%zu,%zu\n",
-                            edge.type,
-                            edge.name_or_index,
-                            edge.from_node, // NOTE: Row number (not adjusted for k_node_number_of_fields)
-                            edge.to_node); // NOTE: Row number (not adjusted for k_node_number_of_fields)
+    ios_write(snapshot->edges, (char*)&edge.type, sizeof(edge.type));
+    ios_write(snapshot->edges, (char*)&edge.name_or_index, sizeof(edge.name_or_index));
+    // NOTE: Row numbers for nodes (not adjusted for k_node_number_of_fields)
+    ios_write(snapshot->edges, (char*)&edge.from_node, sizeof(edge.from_node));
+    ios_write(snapshot->edges, (char*)&edge.to_node, sizeof(edge.to_node));
+
     g_snapshot->num_edges += 1;
 }
 
@@ -199,7 +204,7 @@ void serialize_edge(HeapSnapshot *snapshot, const Edge &edge)
 void _add_internal_root(HeapSnapshot *snapshot)
 {
     snapshot->internal_root = Node{
-        snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.find_or_create_string_id(""), // name
         0, // id
         0, // size
@@ -285,7 +290,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     }
 
     auto node = Node{
-        g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
+        (uint8_t)g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
         g_snapshot->names.find_or_create_string_id(name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
@@ -310,7 +315,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
     }
 
     auto node = Node{
-        g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
+        (uint8_t)g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
         g_snapshot->names.find_or_create_string_id(name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
@@ -375,7 +380,7 @@ size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEP
     }
 
     auto node = Node{
-        snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.find_or_create_string_id("(stack frame)"), // name
         (size_t)frame, // id
         1, // size
@@ -489,7 +494,7 @@ static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
 void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
 {
     auto edge = Edge{
-        g_snapshot->edge_types.find_or_create_string_id(edge_type),
+        (uint8_t)g_snapshot->edge_types.find_or_create_string_id(edge_type),
         name_or_idx, // edge label
         from_idx, // from
         to_idx // to
