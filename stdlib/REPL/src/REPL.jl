@@ -22,7 +22,7 @@ function __init__()
     # during precompilation of REPL, can load a valid cache-file.
     # We need to replay the statements such that the parent process
     # can also include those. See JuliaLang/julia#51532
-    if JLOptions().trace_compile !== C_NULL && !isempty(PRECOMPILE_STATEMENTS)
+    if Base.JLOptions().trace_compile !== C_NULL && !isempty(PRECOMPILE_STATEMENTS)
         for statement in PRECOMPILE_STATEMENTS
             ccall(:jl_write_precompile_statement, Cvoid, (Cstring,), statement)
         end
