@@ -1255,7 +1255,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be,
-for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+for example, an `Int`, an [`AbstractRange`](@ref), a [`Vector`](@ref), or a [`CartesianIndex`](@ref).
 See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
@@ -1278,6 +1278,12 @@ julia> getindex(A, 2:4)
  3
  2
  4
+
+julia> getindex(A, 2, 1)
+3
+ 
+julia> getindex(A, CartesianIndex(2, 1))
+3
 ```
 """
 function getindex(A::AbstractArray, I...)
