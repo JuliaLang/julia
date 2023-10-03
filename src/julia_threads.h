@@ -109,7 +109,7 @@ typedef struct {
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
-typedef DWORD jl_thread_t;
+typedef HANDLE jl_thread_t;
 #else
 typedef pthread_t jl_thread_t;
 #endif
@@ -130,20 +130,20 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
-    _Atomic(int64_t) freed;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
     _Atomic(uint64_t) poolalloc;
     _Atomic(uint64_t) bigalloc;
-    _Atomic(uint64_t) freecall;
+    _Atomic(int64_t) free_acc;
+    _Atomic(uint64_t) alloc_acc;
 } jl_thread_gc_num_t;
 
 typedef struct {
     // variable for tracking weak references
-    arraylist_t weak_refs;
+    small_arraylist_t weak_refs;
     // live tasks started on this thread
     // that are holding onto a stack from the pool
-    arraylist_t live_tasks;
+    small_arraylist_t live_tasks;
 
     // variables for tracking malloc'd arrays
     struct _mallocarray_t *mallocarrays;
@@ -170,7 +170,7 @@ typedef struct {
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 
 #define JL_N_STACK_POOLS 16
-    arraylist_t free_stacks[JL_N_STACK_POOLS];
+    small_arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
 typedef struct {
@@ -198,6 +198,11 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+struct _jl_gc_pagemeta_t;
+
+typedef struct {
+    _Atomic(struct _jl_gc_pagemeta_t *) bottom;
+} jl_gc_page_stack_t;
 
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
@@ -260,9 +265,12 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    jl_gc_page_stack_t page_metadata_allocd;
+    jl_gc_page_stack_t page_metadata_buffered;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
+    _Atomic(int64_t) gc_sweeps_requested;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;

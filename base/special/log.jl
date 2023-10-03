@@ -155,10 +155,10 @@ logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
 logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 # Procedure 1
-# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# XXX we want to mark :noub here so that this function can be concrete-folded,
 # because the effect analysis currently can't prove it in the presence of `@inbounds` or
 # `:boundscheck`, but still the access to `t_log_Float64` is really safe here
-Base.@assume_effects :consistent @inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,base=Val(:ℯ))
+Base.@assume_effects :consistent :noub @inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,base=Val(:ℯ))
     jp = unsafe_trunc(Int,128.0*F)-127
 
     ## Steps 1 and 2
@@ -216,10 +216,10 @@ end
 end
 
 # Procedure 1
-# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# XXX we want to mark :noub here so that this function can be concrete-folded,
 # because the effect analysis currently can't prove it in the presence of `@inbounds` or
 # `:boundscheck`, but still the access to `t_log_Float32` is really safe here
-Base.@assume_effects :consistent @inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
+Base.@assume_effects :consistent :noub @inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
     jp = unsafe_trunc(Int,128.0f0*F)-127
 
     ## Steps 1 and 2
@@ -260,14 +260,14 @@ end
     Float32(logb(Float32, base)*(u64 + q))
 end
 
-log2(x::Float32)  = _log(x, Val(2),  :log2)
-log(x::Float32)   = _log(x, Val(:ℯ), :log)
-log10(x::Float32) = _log(x, Val(10), :log10)
-log2(x::Float64)  = _log(x, Val(2),  :log2)
-log(x::Float64)   = _log(x, Val(:ℯ), :log)
-log10(x::Float64) = _log(x, Val(10), :log10)
+@noinline log2(x::Float32)  = _log(x, Val(2),  :log2)
+@noinline log(x::Float32)   = _log(x, Val(:ℯ), :log)
+@noinline log10(x::Float32) = _log(x, Val(10), :log10)
+@noinline log2(x::Float64)  = _log(x, Val(2),  :log2)
+@noinline log(x::Float64)   = _log(x, Val(:ℯ), :log)
+@noinline log10(x::Float64) = _log(x, Val(10), :log10)
 
-function _log(x::Float64, base, func)
+@inline function _log(x::Float64, base, func)
     if x > 0.0
         x == Inf && return x
 
@@ -302,7 +302,7 @@ function _log(x::Float64, base, func)
     end
 end
 
-function _log(x::Float32, base, func)
+@inline function _log(x::Float32, base, func)
     if x > 0f0
         x == Inf32 && return x
 

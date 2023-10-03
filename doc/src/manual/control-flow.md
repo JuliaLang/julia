@@ -397,7 +397,7 @@ julia> while i <= 3
 3
 ```
 
-The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
+The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long it remains
 `true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
 when the `while` loop is first reached, the body is never evaluated.
 
@@ -637,11 +637,11 @@ julia> struct MyCustomException <: Exception end
 ### The [`throw`](@ref) function
 
 Exceptions can be created explicitly with [`throw`](@ref). For example, a function defined only
-for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
+for non-negative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
 ```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
-julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
+julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be non-negative"))
 f (generic function with 1 method)
 
 julia> f(1)
@@ -649,7 +649,7 @@ julia> f(1)
 
 julia> f(-1)
 ERROR: DomainError with -1:
-argument must be nonnegative
+argument must be non-negative
 Stacktrace:
  [1] f(::Int64) at ./none:1
 ```

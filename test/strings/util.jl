@@ -89,6 +89,10 @@ end
     @test rstrip(isnumeric, "abc0123") == "abc"
     @test lstrip("ello", ['e','o']) == "llo"
     @test rstrip("ello", ['e','o']) == "ell"
+
+    @test_throws ArgumentError strip("", "")
+    @test_throws ArgumentError lstrip("", "")
+    @test_throws ArgumentError rstrip("", "")
 end
 
 @testset "partition" begin
@@ -333,6 +337,28 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # tests for io::IO API (in addition to internals exercised above):
+    let buf = IOBuffer()
+        replace(buf, "aaa", 'a' => 'z', count=0)
+        replace(buf, "aaa", 'a' => 'z', count=1)
+        replace(buf, "bbb", 'a' => 'z')
+        replace(buf, "aaa", 'a' => 'z')
+        @test String(take!(buf)) == "aaazaabbbzzz"
+    end
+    let tempfile = tempname()
+        try
+            open(tempfile, "w") do f
+                replace(f, "aaa", 'a' => 'z', count=0)
+                replace(f, "aaa", 'a' => 'z', count=1)
+                replace(f, "bbb", 'a' => 'z')
+                replace(f, "aaa", 'a' => 'z')
+                print(f, "\n")
+            end
+            @test read(tempfile, String) == "aaazaabbbzzz\n"
+        finally
+            rm(tempfile, force=true)
+        end
+    end
 end
 
 @testset "replace many" begin

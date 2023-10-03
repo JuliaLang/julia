@@ -5,7 +5,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 
-    function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+    function Symmetric{T,S}(data, uplo::Char) where {T,S<:AbstractMatrix{<:T}}
         require_one_based_indexing(data)
         (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,S}(data, uplo)
@@ -98,7 +98,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 
-    function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+    function Hermitian{T,S}(data, uplo::Char) where {T,S<:AbstractMatrix{<:T}}
         require_one_based_indexing(data)
         (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,S}(data, uplo)
@@ -222,7 +222,6 @@ const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
-size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function Base.isassigned(A::HermOrSym, i::Int, j::Int)
     @boundscheck checkbounds(Bool, A, i, j) || return false

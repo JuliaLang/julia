@@ -299,7 +299,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     jl_gc_wb(li, li->code);
     size_t n = jl_array_len(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
-    li->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, n);
+    li->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, n);
     jl_gc_wb(li, li->ssaflags);
     int inbounds_depth = 0; // number of stacked inbounds
     // isempty(inline_flags): no user annotation
@@ -328,7 +328,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 7) {
+                    if (jl_expr_nargs(ma) == 8) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
@@ -336,6 +336,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
                         li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
+                        li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
                     }
                 }
                 else
@@ -380,6 +381,10 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             }
             bd[j] = jl_nothing;
         }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_boundscheck_sym) {
+            // Don't set IR_FLAG_INBOUNDS on boundscheck at the same level
+            is_flag_stmt = 1;
+        }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
@@ -387,16 +392,16 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             li->has_fcall = 1;
         }
         if (is_flag_stmt)
-            jl_array_uint8_set(li->ssaflags, j, 0);
+            jl_array_uint32_set(li->ssaflags, j, 0);
         else {
             uint8_t flag = 0;
             if (inbounds_depth > 0)
-                flag |= 1 << 0;
+                flag |= IR_FLAG_INBOUNDS;
             if (inline_flags->len > 0) {
                 void* inline_flag = inline_flags->items[inline_flags->len - 1];
                 flag |= 1 << (inline_flag ? 1 : 2);
             }
-            jl_array_uint8_set(li->ssaflags, j, flag);
+            jl_array_uint32_set(li->ssaflags, j, flag);
         }
     }
     assert(inline_flags->len == 0); // malformed otherwise
@@ -993,7 +998,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_PUSH3(&f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
 
-    argtype = jl_apply_tuple_type(atypes);
+    argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))
         jl_error("invalid type in method definition (Union{})");
 
@@ -1039,9 +1044,16 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        int isvalid = jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt);
-        if (elt == jl_bottom_type || (jl_is_vararg(elt) && jl_unwrap_vararg(elt) == jl_bottom_type))
-            isvalid = 0;
+        if (jl_is_vararg(elt)) {
+            if (i < na-1)
+                jl_exceptionf(jl_argumenterror_type,
+                              "Vararg on non-final argument in method definition for %s at %s:%d",
+                              jl_symbol_name(name),
+                              jl_symbol_name(file),
+                              line);
+            elt = jl_unwrap_vararg(elt);
+        }
+        int isvalid = (jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt)) && elt != jl_bottom_type;
         if (!isvalid) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == jl_unused_sym)
@@ -1059,12 +1071,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(file),
                               line);
         }
-        if (jl_is_vararg(elt) && i < na-1)
-            jl_exceptionf(jl_argumenterror_type,
-                          "Vararg on non-final argument in method definition for %s at %s:%d",
-                          jl_symbol_name(name),
-                          jl_symbol_name(file),
-                          line);
     }
     for (i = jl_svec_len(tvars); i > 0; i--) {
         jl_value_t *tv = jl_svecref(tvars, i - 1);

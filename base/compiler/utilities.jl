@@ -489,8 +489,7 @@ end
 # using a function to ensure we can infer this
 @inline function slot_id(s)
     isa(s, SlotNumber) && return s.id
-    isa(s, Argument) && return s.n
-    return (s::TypedSlot).id
+    return (s::Argument).n
 end
 
 ###########
@@ -501,7 +500,7 @@ is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
-    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
         m = moduleroot(m)

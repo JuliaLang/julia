@@ -1,0 +1,187 @@
+From 7ae19a08467254f0b3d7a513ef82651b283f38a9 Mon Sep 17 00:00:00 2001
+From: Tim Besard <tim.besard@gmail.com>
+Date: Wed, 27 Sep 2023 12:51:59 +0000
+Subject: [PATCH] Revert "Fix unwinding of pre-linked libraries"
+
+This reverts commit a4014f33775321b4106a1134b89020a7774902dd,
+which regresses unwinding on FreeBSD (JuliaLang/julia#51467).
+---
+ include/dwarf.h                 |  2 --
+ include/libunwind-dynamic.h     |  1 -
+ src/dwarf/Gfind_proc_info-lsb.c | 42 +++++++--------------------------
+ src/dwarf/Gfind_unwind_table.c  |  1 -
+ 4 files changed, 8 insertions(+), 38 deletions(-)
+
+diff --git a/include/dwarf.h b/include/dwarf.h
+index dd9014b7..312166cd 100644
+--- a/include/dwarf.h
++++ b/include/dwarf.h
+@@ -371,8 +371,6 @@ struct unw_debug_frame_list
+     /* The start (inclusive) and end (exclusive) of the described region.  */
+     unw_word_t start;
+     unw_word_t end;
+-    /* ELF load offset */
+-    unw_word_t load_offset;
+     /* The debug frame itself.  */
+     char *debug_frame;
+     size_t debug_frame_size;
+diff --git a/include/libunwind-dynamic.h b/include/libunwind-dynamic.h
+index a26f2c99..c902ccd9 100644
+--- a/include/libunwind-dynamic.h
++++ b/include/libunwind-dynamic.h
+@@ -141,7 +141,6 @@ typedef struct unw_dyn_info
+     unw_word_t gp;              /* global-pointer in effect for this entry */
+     int32_t format;             /* real type: unw_dyn_info_format_t */
+     int32_t pad;
+-    unw_word_t load_offset;     /* ELF load offset */
+     union
+       {
+         unw_dyn_proc_info_t pi;
+diff --git a/src/dwarf/Gfind_proc_info-lsb.c b/src/dwarf/Gfind_proc_info-lsb.c
+index 8ead48f0..154e9b5a 100644
+--- a/src/dwarf/Gfind_proc_info-lsb.c
++++ b/src/dwarf/Gfind_proc_info-lsb.c
+@@ -108,17 +108,13 @@ linear_search (unw_addr_space_t as, unw_word_t ip,
+ 
+ static int
+ load_debug_frame (const char *file, char **buf, size_t *bufsize, int is_local,
+-                  unw_word_t segbase, unw_word_t *load_offset)
++                  unw_word_t segbase)
+ {
+   struct elf_image ei;
+-  Elf_W (Ehdr) *ehdr;
+-  Elf_W (Phdr) *phdr;
+   Elf_W (Shdr) *shdr;
+-  int i;
+   int ret;
+ 
+   ei.image = NULL;
+-  *load_offset = 0;
+ 
+   ret = elf_w (load_debuglink) (file, &ei, is_local);
+   if (ret != 0)
+@@ -193,20 +189,6 @@ load_debug_frame (const char *file, char **buf, size_t *bufsize, int is_local,
+ #if defined(SHF_COMPRESSED)
+     }
+ #endif
+-
+-  ehdr = ei.image;
+-  phdr = (Elf_W (Phdr) *) ((char *) ei.image + ehdr->e_phoff);
+-
+-  for (i = 0; i < ehdr->e_phnum; ++i)
+-    if (phdr[i].p_type == PT_LOAD)
+-      {
+-        *load_offset = segbase - phdr[i].p_vaddr;
+-
+-        Debug (4, "%s load offset is 0x%zx\n", file, *load_offset);
+-
+-        break;
+-      }
+-
+   munmap(ei.image, ei.size);
+   return 0;
+ }
+@@ -259,7 +241,6 @@ locate_debug_info (unw_addr_space_t as, unw_word_t addr, unw_word_t segbase,
+   int err;
+   char *buf;
+   size_t bufsize;
+-  unw_word_t load_offset;
+ 
+   /* First, see if we loaded this frame already.  */
+ 
+@@ -287,7 +268,7 @@ locate_debug_info (unw_addr_space_t as, unw_word_t addr, unw_word_t segbase,
+     name = (char*) dlname;
+ 
+   err = load_debug_frame (name, &buf, &bufsize, as == unw_local_addr_space,
+-                          segbase, &load_offset);
++                          segbase);
+ 
+   if (!err)
+     {
+@@ -300,7 +281,6 @@ locate_debug_info (unw_addr_space_t as, unw_word_t addr, unw_word_t segbase,
+ 
+       fdesc->start = start;
+       fdesc->end = end;
+-      fdesc->load_offset = load_offset;
+       fdesc->debug_frame = buf;
+       fdesc->debug_frame_size = bufsize;
+       fdesc->index = NULL;
+@@ -497,7 +477,6 @@ dwarf_find_debug_frame (int found, unw_dyn_info_t *di_debug, unw_word_t ip,
+   di->format = UNW_INFO_FORMAT_TABLE;
+   di->start_ip = fdesc->start;
+   di->end_ip = fdesc->end;
+-  di->load_offset = fdesc->load_offset;
+   di->u.ti.name_ptr = (unw_word_t) (uintptr_t) obj_name;
+   di->u.ti.table_data = (unw_word_t *) fdesc;
+   di->u.ti.table_len = sizeof (*fdesc) / sizeof (unw_word_t);
+@@ -960,14 +939,12 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+     ip_base = segbase;
+   }
+ 
+-  Debug (6, "lookup IP 0x%lx\n", (long) (ip - ip_base - di->load_offset));
+-
+ #ifndef UNW_REMOTE_ONLY
+   if (as == unw_local_addr_space)
+     {
+-      e = lookup (table, table_len, ip - ip_base - di->load_offset);
++      e = lookup (table, table_len, ip - ip_base);
+       if (e && &e[1] < &table[table_len / sizeof (unw_word_t)])
+-	last_ip = e[1].start_ip_offset + ip_base + di->load_offset;
++	last_ip = e[1].start_ip_offset + ip_base;
+       else
+ 	last_ip = di->end_ip;
+     }
+@@ -975,7 +952,7 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+ #endif
+     {
+ #ifndef UNW_LOCAL_ONLY
+-      int32_t last_ip_offset = di->end_ip - ip_base - di->load_offset;
++      int32_t last_ip_offset = di->end_ip - ip_base;
+       segbase = di->u.rti.segbase;
+       if ((ret = remote_lookup (as, (uintptr_t) table, table_len,
+                                 ip - ip_base, &ent, &last_ip_offset, arg)) < 0)
+@@ -983,7 +960,7 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+       if (ret)
+ 	{
+ 	  e = &ent;
+-	  last_ip = last_ip_offset + ip_base + di->load_offset;
++	  last_ip = last_ip_offset + ip_base;
+ 	}
+       else
+         e = NULL;       /* no info found */
+@@ -997,8 +974,8 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+          unwind info.  */
+       return -UNW_ENOINFO;
+     }
+-  Debug (15, "ip=0x%lx, load_offset=0x%lx, start_ip=0x%lx\n",
+-         (long) ip, (long) di->load_offset, (long) (e->start_ip_offset));
++  Debug (15, "ip=0x%lx, start_ip=0x%lx\n",
++         (long) ip, (long) (e->start_ip_offset));
+   if (debug_frame_base)
+     fde_addr = e->fde_offset + debug_frame_base;
+   else
+@@ -1022,9 +999,6 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+       pi->flags = UNW_PI_FLAG_DEBUG_FRAME;
+     }
+ 
+-  pi->start_ip += di->load_offset;
+-  pi->end_ip += di->load_offset;
+-
+ #if defined(NEED_LAST_IP)
+   pi->last_ip = last_ip;
+ #else
+diff --git a/src/dwarf/Gfind_unwind_table.c b/src/dwarf/Gfind_unwind_table.c
+index fb20fea0..62feb26c 100644
+--- a/src/dwarf/Gfind_unwind_table.c
++++ b/src/dwarf/Gfind_unwind_table.c
+@@ -193,7 +193,6 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi, unw_addr_space_t as,
+ 
+       edi->di_cache.start_ip = start_ip;
+       edi->di_cache.end_ip = end_ip;
+-      edi->di_cache.load_offset = 0;
+       edi->di_cache.format = UNW_INFO_FORMAT_REMOTE_TABLE;
+       edi->di_cache.u.rti.name_ptr = 0;
+       /* two 32-bit values (ip_offset/fde_offset) per table-entry: */
+-- 
+2.41.0
+

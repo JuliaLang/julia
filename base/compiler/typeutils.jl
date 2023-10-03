@@ -95,12 +95,13 @@ end
 
 has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
 
-# determine whether x is a valid lattice element tag
+# determine whether x is a valid lattice element
 # For example, Type{v} is not valid if v is a value
-# Accepts TypeVars also, since it assumes the user will rewrap it correctly
-function valid_as_lattice(@nospecialize(x))
+# Accepts TypeVars and has_free_typevar also, since it assumes the user will rewrap it correctly
+# If astag is true, then also requires that it be a possible type tag for a valid object
+function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
-    x isa TypeVar && return valid_as_lattice(x.ub)
+    x isa TypeVar && return valid_as_lattice(x.ub, astag)
     x isa UnionAll && (x = unwrap_unionall(x))
     if x isa Union
         # the Union constructor ensures this (and we'll recheck after
@@ -111,6 +112,9 @@ function valid_as_lattice(@nospecialize(x))
         if isType(x)
             p = x.parameters[1]
             p isa Type || p isa TypeVar || return false
+        elseif astag && isstructtype(x)
+            datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
+            return has_concrete_subtype(x)
         end
         return true
     end
@@ -139,16 +143,17 @@ valid_tparam(@nospecialize(x)) = valid_typeof_tparam(typeof(x))
 
 function compatible_vatuple(a::DataType, b::DataType)
     vaa = a.parameters[end]
-    vab = a.parameters[end]
+    vab = b.parameters[end]
     if !(isvarargtype(vaa) && isvarargtype(vab))
         return isvarargtype(vaa) == isvarargtype(vab)
     end
-    (isdefined(vaa, :N) == isdefined(vab, :N)) || return false
-    !isdefined(vaa, :N) && return true
+    isdefined(vaa, :N) || return !isdefined(vab, :N)
+    isdefined(vab, :N) || return false
     return vaa.N === vab.N
 end
 
 # return an upper-bound on type `a` with type `b` removed
+# and also any contents that are not valid type tags on any objects
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::Int)
     if a <: b && isnotbrokensubtype(a, b)
@@ -158,13 +163,12 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     if isa(ua, Union)
         uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
         uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
-        return Union{valid_as_lattice(uua) ? uua : Union{},
-                     valid_as_lattice(uub) ? uub : Union{}}
+        return Union{valid_as_lattice(uua, true) ? uua : Union{},
+                     valid_as_lattice(uub, true) ? uub : Union{}}
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
-            if a.name === ub.name === Tuple.name &&
-                    length(a.parameters) == length(ub.parameters)
+            if a.name === ub.name === Tuple.name && length(a.parameters) == length(ub.parameters)
                 if 1 < unionsplitcost(JLTypeLattice(), a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
@@ -292,7 +296,7 @@ end
 unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
 function _unioncomplexity(@nospecialize x)
     if isa(x, DataType)
-        x.name === Tuple.name || isvarargtype(x) || return 0
+        x.name === Tuple.name || return 0
         c = 0
         for ti in x.parameters
             c = max(c, unioncomplexity(ti))
@@ -303,7 +307,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, UnionAll)
         return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
     elseif isa(x, TypeofVararg)
-        return isdefined(x, :T) ? unioncomplexity(x.T) : 0
+        return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
         return 0
     end
@@ -316,24 +320,6 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
         ua = ua.body
     end
     return depth
-end
-
-# convert a Union of Tuple types to a Tuple of Unions
-function unswitchtupleunion(u::Union)
-    ts = uniontypes(u)
-    n = -1
-    for t in ts
-        if t isa DataType && t.name === Tuple.name && length(t.parameters) != 0 && !isvarargtype(t.parameters[end])
-            if n == -1
-                n = length(t.parameters)
-            elseif n != length(t.parameters)
-                return u
-            end
-        else
-            return u
-        end
-    end
-    Tuple{Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]...}
 end
 
 function unwraptv_ub(@nospecialize t)

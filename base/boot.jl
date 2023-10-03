@@ -163,7 +163,7 @@
 #    result::Any
 #    exception::Any
 #    backtrace::Any
-#    logstate::Any
+#    scope::Any
 #    code::Any
 #end
 
@@ -249,11 +249,25 @@ macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
 
-TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    return _is_internal(__module__) && _expr(:meta, _expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
+end
 
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+# n.b. the effects and model of these is refined in inference abstractinterpretation.jl
+TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
+TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
+TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
+UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
@@ -328,9 +342,8 @@ TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
     TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
-    T  # Type
-    val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
+    args
+    InexactError(f::Symbol, @nospecialize(args...)) = (@noinline; new(f, args))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -453,19 +466,6 @@ function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
 
-_is_internal(__module__) = __module__ === Core
-# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
-macro _foldable_meta()
-    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
-        #=:consistent=#true,
-        #=:effect_free=#true,
-        #=:nothrow=#false,
-        #=:terminates_globally=#true,
-        #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
-end
-
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 ## primitive Array constructors
@@ -510,9 +510,11 @@ end)
 
 function Symbol(s::String)
     @_foldable_meta
+    @noinline
     return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
 end
 function Symbol(a::Array{UInt8,1})
+    @noinline
     return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
@@ -525,7 +527,7 @@ export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
@@ -627,8 +629,6 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
-
 function is_top_bit_set(x)
     @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
@@ -638,6 +638,9 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     @inline
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
+
+#TODO delete this function (but see #48097):
+throw_inexacterror(args...) = throw(InexactError(args...))
 
 function check_top_bit(::Type{To}, x) where {To}
     @inline

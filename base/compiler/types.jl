@@ -247,10 +247,6 @@ Parameters that control optimizer operation.
   generating `:invoke` expression based on the [`@nospecialize`](@ref) annotation,
   in order to avoid over-specialization.
 ---
-- `opt_params.trust_inference::Bool = false`\\
-  If `false`, the inliner will unconditionally generate a fallback block when union-splitting
-  a callsite, in case of existing subtyping bugs. This option may be removed in the future.
----
 - `opt_params.assume_fatal_throw::Bool = false`\\
   If `true`, gives the optimizer license to assume that any `throw` is fatal and thus the
   state after a `throw` is not externally observable. In particular, this gives the
@@ -266,7 +262,6 @@ struct OptimizationParams
     inline_error_path_cost::Int
     max_tuple_splat::Int
     compilesig_invokes::Bool
-    trust_inference::Bool
     assume_fatal_throw::Bool
 
     function OptimizationParams(
@@ -277,7 +272,6 @@ struct OptimizationParams
         inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
-        trust_inference::Bool,
         assume_fatal_throw::Bool)
         return new(
             inlining,
@@ -287,7 +281,6 @@ struct OptimizationParams
             inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
-            trust_inference,
             assume_fatal_throw)
     end
 end
@@ -300,7 +293,6 @@ function OptimizationParams(
         #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
-        #=trust_inference::Bool=# false,
         #=assume_fatal_throw::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
@@ -309,7 +301,6 @@ function OptimizationParams(
     inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
-    trust_inference::Bool = params.trust_inference,
     assume_fatal_throw::Bool = params.assume_fatal_throw)
     return OptimizationParams(
         inlining,
@@ -319,7 +310,6 @@ function OptimizationParams(
         inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
-        trust_inference,
         assume_fatal_throw)
 end
 
@@ -465,15 +455,15 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
 typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    OptimizerLattice(InferenceLattice(SimpleInferenceLattice.instance)) :
+    InferenceLattice(SimpleInferenceLattice.instance) :
     InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
     InferenceLattice(SimpleInferenceLattice.instance) :
     InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+optimizer_lattice(interp::NativeInterpreter) = SimpleInferenceLattice.instance
 
 """
     switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter

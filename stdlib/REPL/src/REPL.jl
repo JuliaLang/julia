@@ -14,6 +14,10 @@ REPL.run_repl(repl)
 """
 module REPL
 
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+end
+
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
@@ -248,11 +252,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -285,6 +287,19 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     end
     return nothing
 end
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limitflag[]
+        print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    return nothing
+end
+
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -294,7 +309,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             if iserr
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -317,7 +332,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
                     setglobal!(Base.MainInclude, :err, excs)
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    repl_display_error(errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -505,6 +520,8 @@ end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
+
+setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
@@ -1098,6 +1115,31 @@ function setup_interface(
                 edit_insert(s, '?')
             end
         end,
+        ']' => function (s::MIState,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                    Pkg = Base.require(pkgid)
+                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
+                    pkg_mode = nothing
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                            pkg_mode = mode
+                            break
+                        end
+                    end
+                    # TODO: Cache the `pkg_mode`?
+                    if pkg_mode !== nothing
+                        buf = copy(LineEdit.buffer(s))
+                        transition(s, pkg_mode) do
+                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        end
+                        return
+                    end
+                end
+            end
+            edit_insert(s, ']')
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1418,6 +1460,7 @@ function out_transform(@nospecialize(x), n::Ref{Int})
 end
 
 function get_usings!(usings, ex)
+    ex isa Expr || return usings
     # get all `using` and `import` statements which are at the top level
     for (i, arg) in enumerate(ex.args)
         if Base.isexpr(arg, :toplevel)
@@ -1491,5 +1534,14 @@ Base.MainInclude.Out
 end
 
 import .Numbered.numbered_prompt!
+
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+# Needs to occur after this module is finished.
+Base.REPL_MODULE_REF[] = REPL
+
+if Base.generating_output()
+    include("precompile.jl")
+end
 
 end # module
