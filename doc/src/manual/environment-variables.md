@@ -523,3 +523,8 @@ Arguments to be passed to the LLVM backend.
 ### `JULIA_FALLBACK_REPL`
 
 Forces the fallback repl instead of REPL.jl.
+
+
+### [`JULIA_GC_HEAP_RATIO`](@id JULIA_GC_HEAP_RATIO)
+
+Defines how much the heap has to grow to trigger a garbage collection. The default is 67
