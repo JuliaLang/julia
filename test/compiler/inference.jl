@@ -5059,3 +5059,12 @@ end
     refine_partial_struct2(42, s)
 end |> only === String
 # JET.test_call(s::AbstractString->Base._string(s, 'c'))
+
+# Don't visit the catch block for empty try/catch
+@test Base.return_types() do
+    try
+    catch
+        return 2.0
+    end
+    return 1
+end |> only === Int
