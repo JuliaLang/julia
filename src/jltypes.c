@@ -3409,7 +3409,7 @@ void post_boot_hooks(void)
     jl_number_type  = (jl_datatype_t*)core("Number");
     jl_signed_type  = (jl_datatype_t*)core("Signed");
     jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
-    jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
+    jl_integer_type = (jl_datatype_t*)core("Integer");
 
     jl_bool_type->super = jl_integer_type;
     jl_uint8_type->super = jl_unsigned_type;

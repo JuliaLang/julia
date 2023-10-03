@@ -1123,7 +1123,8 @@ std::string generate_func_sig(const char *fname)
             isboxed = false;
         }
         else {
-            if (jl_is_primitivetype(tti)) {
+            if (jl_is_primitivetype(tti) &&
+                jl_integer_type && jl_subtype(tti, (jl_value_t*)jl_integer_type)) {
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
