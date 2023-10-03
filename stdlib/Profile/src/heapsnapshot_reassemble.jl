@@ -90,7 +90,7 @@ function assemble_snapshot(in_prefix, io::IO)
 
     shouldlog(i) = false
     # N = 100000
-    # shouldlog(i) = i % N == 0
+    # shouldlog(i) = i % 10000 == 0
     #     N *= 10
     #     return true
     # else
@@ -171,6 +171,7 @@ function assemble_snapshot(in_prefix, io::IO)
         print(io, ",0,0")
     end
     print(io, "],\"edges\":[")
+    shouldloge(i) = i % 10000 == 0
     e = 1
     for n in 1:length(nodes)
         count = nodes.edge_count[n]
@@ -186,6 +187,10 @@ function assemble_snapshot(in_prefix, io::IO)
             _write_decimal_number(io, nodes.edges.to_pos[i], _digits_buf)
             if !(nodes.edges.to_pos[i] % 7 == 0)
                 @warn "Bug in to_pos for edge $i from node $n: $(nodes.edges.to_pos[i])"
+            end
+            shouldloge(i) && println("Edge $i: type $(nodes.edges.type[i])")
+            if nodes.edges.type[i] == 2 # "element" (array index)
+                println("Array Edge $i: index $(nodes.edges.name_or_index[i])")
             end
             e += 1
         end
