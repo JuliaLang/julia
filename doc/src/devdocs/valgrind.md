@@ -73,7 +73,7 @@ when julia tries to detect whether it is running under rr:
 --xxxxxx-- WARNING: unhandled amd64-linux syscall: 1008
 --xxxxxx-- You may be able to write your own handler.
 --xxxxxx-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
---xxxxxx-- Nevertheless, we consider this a bug.  Please report
+--xxxxxx-- Nevertheless we consider this a bug.  Please report
 --xxxxxx-- it at http://valgrind.org/support/bug_reports.html.
 ```
 
