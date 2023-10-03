@@ -1,4 +1,4 @@
-# TODO(PR): This code hasn't been reviewed yet.
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module HeapSnapshot
 
@@ -88,19 +88,9 @@ function assemble_snapshot(in_prefix, io::IO)
 
     nodes = init_nodes(node_count, edge_count)
 
-    shouldlog(i) = false
-    # N = 100000
-    # shouldlog(i) = i % 10000 == 0
-    #     N *= 10
-    #     return true
-    # else
-    #     return false
-    # end
-
     # Parse nodes with empty edge counts that we need to fill later
     nodes_file = open(string(in_prefix, ".nodes"), "r")
     for i in 1:length(nodes)
-        shouldlog(i) && println("Parsing node $i")
         node_type = read(nodes_file, Int8)
         node_name_idx = read(nodes_file, UInt)
         id = read(nodes_file, UInt)
@@ -113,15 +103,6 @@ function assemble_snapshot(in_prefix, io::IO)
         nodes.id[i] = id
         nodes.self_size[i] = self_size
         nodes.edge_count[i] = 0 # edge_count
-
-        shouldlog(i) && begin
-            println("Parsed node $i")
-            @show node_type
-            @show node_name_idx
-            @show id
-            @show self_size
-            @show edge_count
-        end
     end
 
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
@@ -156,7 +137,6 @@ function assemble_snapshot(in_prefix, io::IO)
         print(io, ",0,0")
     end
     print(io, "],\"edges\":[")
-    shouldloge(i) = i % 10000 == 0
     e = 1
     for n in 1:length(nodes)
         count = nodes.edge_count[n]
@@ -173,10 +153,6 @@ function assemble_snapshot(in_prefix, io::IO)
             if !(nodes.edges.to_pos[i] % 7 == 0)
                 @warn "Bug in to_pos for edge $i from node $n: $(nodes.edges.to_pos[i])"
             end
-            # shouldloge(i) && println("Edge $i: type $(nodes.edges.type[i])")
-            # if nodes.edges.type[i] == 2 # "element" (array index)
-            #     println("Array Edge $i: index $(nodes.edges.name_or_index[i])")
-            # end
             e += 1
         end
     end
