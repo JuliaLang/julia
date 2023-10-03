@@ -1230,16 +1230,24 @@ as the prefix, to avoid having to hold the entire snapshot in memory. This optio
 used for any setting where your memory is constrained. These files can then be reassembled
 by calling [`Profile.HeapSnapshot.assemble_snapshot(filepath; out_file)`](@ref), which can
 be done offline.
+
+NOTE: We strongly recommend setting streaming=true for performance reasons. Reconstructing
+the snapshot from the parts requires holding the entire snapshot in memory, so if the
+snapshot is large, you can run out of memory while processing it. Streaming allows you to
+reconstruct the snapshot offline, after your workload is done running.
+If you do attempt to collect a snapshot with streaming=false (the default, for
+backwards-compatibility) and your process is killed, note that this will always save the
+parts in the same directory as your provided filepath, so you can still reconstruct the
+snapshot after the fact, via `assemble_snapshot()`.
 """
 function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
     if streaming
         _stream_heap_snapshot(filepath, all_one)
         println("Finished streaming heap snapshot parts to prefix: $filepath")
     else
-        # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
-        # then reassembling it after we're done.
-        dir = tempdir()
-        prefix = joinpath(dir, "snapshot")
+        # Support the legacy, non-streaming mode, by first streaming the parts, then
+        # reassembling it after we're done.
+        prefix = filepath
         _stream_heap_snapshot(prefix, all_one)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
         println("Recorded heap snapshot: $filepath")
