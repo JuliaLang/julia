@@ -1257,10 +1257,7 @@ end
 Return a subset of array `A` as selected by the indices `inds`
 
 Each index may be any [supported index type](@ref man-supported-index-types), such
-as [`Int`](@ref)s, [`CartesianIndex`](@ref)es, or [ranges](ref `range`) or other [arrays](@ref man-multi-dim-arrays) of supported indices.
-
-For more details, see the entire manual section on [array indexing](@ref man-array-indexing).
-for example, an `Int`, an [`AbstractRange`](@ref), a [`Vector`](@ref), or a [`CartesianIndex`](@ref).
+as [`Integer`](@ref)s, [`CartesianIndex`](@ref)es, [ranges](ref `range`), or [arrays](@ref man-multi-dim-arrays) of supported indices.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
@@ -1291,7 +1288,7 @@ julia> getindex(A, 2:4)
 
 julia> getindex(A, 2, 1)
 3
- 
+
 julia> getindex(A, CartesianIndex(2, 1))
 3
 ```
