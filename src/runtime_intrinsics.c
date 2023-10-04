@@ -227,12 +227,7 @@ JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
         uint32_t bits = *((uint32_t*) &param);
 
         // round to nearest even
-        uint32_t bit_above_round = (bits >> 17) & 1;
-        uint32_t round_bit = (bits >> 16) & 1;
-        uint32_t sticky_bit = (bits & 0xFFFF) != 0;
-        if (round_bit && (sticky_bit || bit_above_round))
-            bits += 0x10000; // Add 1 to bit just above the target bits
-
+        bits += 0x7fff + ((bits >> 16) & 1);
         result = (uint16_t)(bits >> 16);
     }
 
@@ -249,10 +244,8 @@ JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
     uint32_t resi;
     memcpy(&resi, &res, sizeof(res));
 
-    // Handle subnormals: If this logic is activated, it indicates that when we
-    // cast our double to a float, the float is a subnormal number. However,
     // bfloat16 uses the same exponent as float32, so we don't need special handling
-    // for subnormals when truncating to bfloat16.
+    // for subnormals when truncating float64 to bfloat16.
 
     if ((resi & 0x1ffu) == 0x100u) { // if we are halfway between 2 bfloat16 values
         // adjust the value by 1 ULP in the direction that will make bfloat16(res) give the right answer
