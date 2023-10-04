@@ -599,7 +599,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
 
     result = CC.InferenceResult(mi)
     interp = REPLInterpreter(result)
-    frame = CC.InferenceState(result, src, #=cache=#:no, interp)::CC.InferenceState
+    frame = CC.InferenceState(result, src, #=cache=#:no, interp)
 
     # NOTE Use the fixed world here to make `REPLInterpreter` robust against
     #      potential invalidations of `Core.Compiler` methods.

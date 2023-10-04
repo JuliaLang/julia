@@ -1918,6 +1918,66 @@ let s = "pop!(global_xs)."
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
 
+# https://github.com/JuliaLang/julia/issues/51499
+# allow aggressive concrete evaluation for child uncached frames
+struct Issue51499CompletionDict
+    inner::Dict{Symbol,Any}
+    leaf_func # Function that gets invoked on leaf objects before being returned.
+    function Issue51499CompletionDict(inner::Dict, leaf_func=identity)
+        inner = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in inner)
+        return new(inner, leaf_func)
+    end
+end
+function Base.getproperty(tcd::Issue51499CompletionDict, name::Symbol)
+    prop = getfield(tcd, :inner)[name]
+    isa(prop, Issue51499CompletionDict) && return prop
+    return getfield(tcd, :leaf_func)(prop)
+end
+Base.propertynames(tcd::Issue51499CompletionDict) = keys(getfield(tcd, :inner))
+
+const issue51499 = Ref{Any}(nothing)
+tcd3 = Issue51499CompletionDict(
+    Dict(:a => 1.0, :b => 2.0),
+    function (x)
+        issue51499[] = x
+        return sin(x)
+    end)
+tcd2 = Issue51499CompletionDict(
+    Dict(:v => tcd3, :w => 1.0))
+tcd1 = Issue51499CompletionDict(
+    Dict(:x => tcd2, :y => 1.0))
+let (c, r, res) = test_complete_context("tcd1.")
+    @test res
+    @test "x" in c && "y" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.")
+    @test res
+    @test_broken "v" in c && "w" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.v.")
+    @test res
+    @test_broken "a" in c && "b" in c
+    @test isnothing(issue51499[])
+end
+@test tcd1.x.v.a == sin(1.0)
+@test issue51499[] == 1.0
+
+# aggressive constant propagation for mutable `Const`s
+mutable_const_prop = Dict{Symbol,Any}(:key => Any[Some(r"x")])
+getkeyelem(d) = d[:key][1]
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).")
+    @test res
+    @test_broken "value" in c
+end
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
+    @test res
+    for name in fieldnames(Regex)
+        @test_broken String(name) in c
+    end
+end
+
 # Test completion of var"" identifiers (#49280)
 let s = "var\"complicated "
     c, r = test_complete_foo(s)
