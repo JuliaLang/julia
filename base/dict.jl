@@ -672,6 +672,7 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     h.ndel += ndel
     h.count -= 1
     h.age += 1
+    h.maxprobe = max(h.maxprobe, h.size-1)
     return h
     end
 end
