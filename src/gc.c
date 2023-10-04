@@ -3692,14 +3692,16 @@ void jl_gc_init(void)
     jl_gc_init_page();
     jl_gc_debug_init();
     char* env_value = getenv("JULIA_GC_HEAP_RATIO");
-    errno = 0;
-    int percentage = strtol(env_value, NULL, 10);
+    if (env_value != NULL) {
+        errno = 0;
+        int percentage = strtol(env_value, NULL, 10);
 
-    // Check for parsing errors
-    if (errno != 0 || percentage < 0)
-        jl_safe_printf("Error: Invalid GC Ratio, falling back to default\n");
-    else
-        alpha = (double)percentage / 100;
+        // Check for parsing errors
+        if (errno != 0 || percentage < 0)
+            jl_safe_printf("Error: Invalid GC Ratio, falling back to default\n");
+        else
+            alpha = (double)percentage / 100;
+    }
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
