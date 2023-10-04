@@ -8,7 +8,7 @@ Interfaces to LAPACK subroutines.
 using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
 using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
-    SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
+    SingularException, PosDefException, chkstride1, checksquare, triu, tril, dot
 
 using Base: iszero, require_one_based_indexing
 
@@ -554,13 +554,12 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function getrf!(A::AbstractMatrix{$elty}; check = true)
+        function getrf!(A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}; check::Bool=true)
             require_one_based_indexing(A)
             check && chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
-            ipiv = similar(A, BlasInt, min(m,n))
             info = Ref{BlasInt}()
             ccall((@blasfunc($getrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
@@ -679,15 +678,13 @@ Returns `A` and `tau` modified in-place.
 gerqf!(A::AbstractMatrix, tau::AbstractVector)
 
 """
-    getrf!(A) -> (A, ipiv, info)
+    getrf!(A, ipiv) -> (A, ipiv, info)
 
-Compute the pivoted `LU` factorization of `A`, `A = LU`.
-
-Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
-code which indicates success (`info = 0`), a singular value in `U`
-(`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
+Compute the pivoted `LU` factorization of `A`, `A = LU`. `ipiv` contains the pivoting
+information and `info` a code which indicates success (`info = 0`), a singular value
+in `U` (`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
 """
-getrf!(A::AbstractMatrix, tau::AbstractVector)
+getrf!(A::AbstractMatrix, ipiv::AbstractVector; check::Bool=true)
 
 """
     gelqf!(A) -> (A, tau)
@@ -750,6 +747,17 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 gerqf!(A::AbstractMatrix{<:BlasFloat}) = ((m,n) = size(A); gerqf!(A, similar(A, min(m, n))))
+
+"""
+    getrf!(A) -> (A, ipiv, info)
+
+Compute the pivoted `LU` factorization of `A`, `A = LU`.
+
+Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
+code which indicates success (`info = 0`), a singular value in `U`
+(`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
+"""
+getrf!(A::AbstractMatrix{T}; check::Bool=true) where {T <: BlasFloat} = ((m,n) = size(A); getrf!(A, similar(A, BlasInt, min(m, n)); check))
 
 ## Tools to compute and apply elementary reflectors
 for (larfg, elty) in

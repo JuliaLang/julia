@@ -22,7 +22,7 @@ lscmd = `ls`
 havebb = false
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
-    cache_url = "https://cache.julialang.org/foo/$(desired_url)"
+    cache_url = "https://cache.julialang.org/$(desired_url)"
     cache_output_filename = joinpath(mktempdir(), "myfile")
     cache_response = Downloads.request(
         cache_url;
