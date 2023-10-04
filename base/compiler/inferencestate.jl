@@ -196,6 +196,11 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+struct TryCatchFrame
+    exct
+    leaveblock
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -211,7 +216,8 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handler_at::Vector{Int} # current exception handler info
+    handlers::Vector{TryCatchFrame}
+    handler_at::Vector{Tuple{Int, Int}} # tuple of current (handler, excecption stack) value at the pc
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
@@ -231,6 +237,7 @@ mutable struct InferenceState
     result::InferenceResult # remember where to put the result
     valid_worlds::WorldRange
     bestguess #::Type
+    exc_bestguess
     ipo_effects::Effects
 
     #= flags =#
@@ -258,6 +265,7 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
+        handlers = Vector{HandlerState}()
         handler_at = compute_trycatch(code, BitSet())
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
@@ -287,6 +295,7 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
+        exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
         insert_coverage = should_insert_coverage(mod, src)
@@ -304,9 +313,9 @@ mutable struct InferenceState
 
         return new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
-            result, valid_worlds, bestguess, ipo_effects,
+            result, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cached, insert_coverage,
             interp)
     end
@@ -329,16 +338,19 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     empty!(ip)
     ip.offset = 0 # for _bits_findnext
     push!(ip, n + 1)
-    handler_at = fill(0, n)
+    handler_at = fill((0, 0), n)
+    handlers = TryCatchFrame[]
 
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
         if isexpr(stmt, :enter)
             l = stmt.args[1]::Int
-            handler_at[pc + 1] = pc
+            push!(handlers, TryCatchFrame(l))
+            handler_id = length(handlers)
+            handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = pc
+            handler_at[l] = (0, handler_id)
             push!(ip, l)
         end
     end

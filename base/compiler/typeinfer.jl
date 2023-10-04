@@ -329,7 +329,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
-        widenconst(result_type), rettype_const, inferred_result,
+        widenconst(result_type), Any, rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
         encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
@@ -523,7 +523,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
     bestguess = me.bestguess = cycle_fix_limited(me.bestguess, me)
-    limited_ret = bestguess isa LimitedAccuracy
+    exc_bestguess = me.exc_bestguess = cycle_fix_limited(me.exc_bestguess, me)
+    limited_ret = bestguess isa LimitedAccuracy || exc_bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
         gt = me.ssavaluetypes
@@ -560,6 +561,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
+    me.result.exc_result = exc_bestguess
     me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
@@ -852,13 +854,14 @@ generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions()
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 struct EdgeCallResult
-    rt #::Type
+    rt
+    exct 
     edge::Union{Nothing,MethodInstance}
     effects::Effects
-    function EdgeCallResult(@nospecialize(rt),
+    function EdgeCallResult(@nospecialize(rt), @nospecialize(exct),
                             edge::Union{Nothing,MethodInstance},
                             effects::Effects)
-        return new(rt, edge, effects)
+        return new(rt, exct, edge, effects)
     end
 end
 
@@ -893,14 +896,14 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     rettype = Const(rettype_const)
                 end
             end
-            return EdgeCallResult(rettype, mi, effects)
+            return EdgeCallResult(rettype, code.exctype, mi, effects)
         end
     else
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
         add_remark!(interp, caller, "Inference is disabled for the target module")
-        return EdgeCallResult(Any, nothing, Effects())
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
@@ -926,15 +929,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         typeinf(interp, frame)
         update_valid_age!(caller, frame.valid_worlds)
         edge = is_inferred(frame) ? mi : nothing
-        return EdgeCallResult(frame.bestguess, edge, frame.ipo_effects) # effects are adjusted already within `finish`
+        return EdgeCallResult(frame.bestguess, frame.exc_bestguess, edge, frame.ipo_effects) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
-        return EdgeCallResult(Any, nothing, Effects())
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
+    return EdgeCallResult(frame.bestguess, frame.exc_bestguess, nothing, adjust_effects(frame))
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
