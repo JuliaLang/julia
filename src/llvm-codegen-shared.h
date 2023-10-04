@@ -8,10 +8,29 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
+
+#if JL_LLVM_VERSION >= 160000
+#include <llvm/Support/ModRef.h>
+#endif
+
 #include "julia.h"
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
+
+#if JL_LLVM_VERSION >= 160000
+
+#include <optional>
+
+template<typename T>
+using Optional = std::optional<T>;
+static constexpr std::nullopt_t None = std::nullopt;
+
+#else
+
+#include <llvm/ADT/Optional.h>
+
+#endif
 
 enum AddressSpace {
     Generic = 0,
@@ -149,9 +168,11 @@ static inline llvm::MDNode *get_tbaa_const(llvm::LLVMContext &ctxt) {
 
 static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst)
 {
+    using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
-    if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext()))
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), llvm::None));
+    if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), None));
+    }
     return inst;
 }
 
@@ -241,7 +262,11 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
             auto T_psize = T_size->getPointerTo();
             FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_psize}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
+#if JL_LLVM_VERSION >= 160000
+            F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             F->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
         }
         builder.CreateCall(F, {signal_page});
     }

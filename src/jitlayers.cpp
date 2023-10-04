@@ -34,7 +34,6 @@
 
 using namespace llvm;
 
-#include "llvm-codegen-shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "processor.h"
@@ -861,8 +860,11 @@ public:
         PendingObjs.erase(&MR);
         return Error::success();
     }
-
+#if JL_LLVM_VERSION >= 160000
+    Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
+#else
     Error notifyRemovingResources(ResourceKey K) override
+#endif
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
         RegisteredObjs.erase(K);
@@ -870,7 +872,11 @@ public:
         return Error::success();
     }
 
+#if JL_LLVM_VERSION >= 160000
+    void notifyTransferringResources(JITDylib &JD, ResourceKey DstKey, ResourceKey SrcKey) override
+#else
     void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
+#endif
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
         auto SrcIt = RegisteredObjs.find(SrcKey);
@@ -929,11 +935,21 @@ public:
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
         return Error::success();
     }
-    Error notifyRemovingResources(orc::ResourceKey K) override {
+#if JL_LLVM_VERSION >= 160000
+    Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
+#else
+    Error notifyRemovingResources(orc::ResourceKey K) override
+#endif
+    {
         return Error::success();
     }
+#if JL_LLVM_VERSION >= 160000
+    void notifyTransferringResources(JITDylib &JD, orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
+#else
     void notifyTransferringResources(orc::ResourceKey DstKey,
                                      orc::ResourceKey SrcKey) override {}
+#endif
 
     void modifyPassConfig(orc::MaterializationResponsibility &,
                           jitlink::LinkGraph &,
@@ -950,7 +966,11 @@ public:
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
                 }
+#if JL_LLVM_VERSION >= 160000
+                if ((section.getMemProt() & orc::MemProt::Exec) == orc::MemProt::None) {
+#else
                 if ((section.getMemProt() & jitlink::MemProt::Exec) == jitlink::MemProt::None) {
+#endif
                     data_size += secsize;
                 } else {
                     code_size += secsize;
@@ -984,8 +1004,10 @@ public:
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
 #if JL_LLVM_VERSION < 150000
     return cantFail(jitlink::InProcessMemoryManager::Create());
-#else
+#elif JL_LLVM_VERSION < 160000
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
+#else
+    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
 #endif
 }
 
@@ -1032,6 +1054,13 @@ public:
                                      bool IsReadOnly) override {
         return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
     }
+#if JL_LLVM_VERSION >= 160000
+    virtual void reserveAllocationSpace(uintptr_t CodeSize, Align CodeAlign,
+                                        uintptr_t RODataSize, Align RODataAlign,
+                                        uintptr_t RWDataSize, Align RWDataAlign) override {
+        return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
+    }
+#else
     virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
                                         uintptr_t RODataSize,
                                         uint32_t RODataAlign,
@@ -1039,6 +1068,7 @@ public:
                                         uint32_t RWDataAlign) override {
         return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
     }
+#endif
     virtual bool needsToReserveAllocationSpace() override {
         return MemMgr->needsToReserveAllocationSpace();
     }
@@ -1169,6 +1199,8 @@ namespace {
 #else
             None;
 #endif
+        if (TheTriple.isAArch64())
+            codemodel = CodeModel::Small;
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
                 TheTriple.getTriple(), TheCPU, FeaturesStr,
@@ -1180,11 +1212,7 @@ namespace {
                 );
         assert(TM && "Failed to select target machine -"
                      " Is the LLVM backend for this CPU enabled?");
-        if (!TheTriple.isARM() && !TheTriple.isPPC64()) {
-            // FastISel seems to be buggy for ARM. Ref #13321
-            if (jl_options.opt_level < 2)
-                TM->setFastISel(true);
-        }
+        fixupTM(*TM);
         return std::unique_ptr<TargetMachine>(TM);
     }
 } // namespace
@@ -1210,7 +1238,9 @@ namespace {
             : JTMB(createJTMBFromTM(TM, optlevel)) {}
 
         std::unique_ptr<TargetMachine> operator()() JL_NOTSAFEPOINT {
-            return cantFail(JTMB.createTargetMachine());
+            auto TM = cantFail(JTMB.createTargetMachine());
+            fixupTM(*TM);
+            return TM;
         }
     };
 
@@ -1222,7 +1252,9 @@ namespace {
             : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
-            auto NPM = std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            auto TM = cantFail(JTMB.createTargetMachine());
+            fixupTM(*TM);
+            auto NPM = std::make_unique<NewPM>(std::move(TM), O);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
                 NPM->printTimers();
@@ -1609,6 +1641,16 @@ void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
+void fixupTM(TargetMachine &TM){
+    auto TheTriple = TM.getTargetTriple();
+    if (jl_options.opt_level < 2) {
+        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+            TM.setFastISel(true);
+        else    // FastISel seems to be buggy Ref #13321
+            TM.setFastISel(false);
+    }
+}
+
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
@@ -1865,7 +1907,7 @@ Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
     auto Sym = ES.lookup(SearchOrder, Name);
     if (Sym)
         return *Sym;
@@ -1880,7 +1922,7 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 Expected<JITEvaluatedSymbol> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
     auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
     return Sym;
 }
@@ -2134,7 +2176,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
 {
-    return std::unique_ptr<TargetMachine>(getTarget()
+    auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
             getTargetTriple().str(),
             getTargetCPU(),
@@ -2143,6 +2185,8 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
             TM->getRelocationModel(),
             TM->getCodeModel(),
             TM->getOptLevel()));
+    fixupTM(*NewTM);
+    return NewTM;
 }
 
 const Triple& JuliaOJIT::getTargetTriple() const {
