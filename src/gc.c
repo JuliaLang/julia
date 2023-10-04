@@ -3429,6 +3429,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
     if (target_allocs == 0.0 || thrashing || bad_result || /*Always do the default to avoid issues with the algorithm*/ 1) // If we are thrashing go back to default
         target_allocs =  2*sqrt((double)heap_size/min_interval);
+    target_allocs = target_allocs * min_interval;
 #else
     if ((pause > (mutator_time * 95)) && !(thrash_counter < 4))
         thrash_counter += 1;
