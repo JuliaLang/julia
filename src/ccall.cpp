@@ -1123,8 +1123,11 @@ std::string generate_func_sig(const char *fname)
             isboxed = false;
         }
         else {
-            if (jl_is_primitivetype(tti) &&
-                jl_integer_type && jl_subtype(tti, (jl_value_t*)jl_integer_type)) {
+            t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
+            if (t == getVoidTy(LLVMCtx)) {
+                return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
+            }
+            if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
@@ -1134,11 +1137,6 @@ std::string generate_func_sig(const char *fname)
                     else
                         ab.addAttribute(Attribute::ZExt);
                 }
-            }
-
-            t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
-            if (t == getVoidTy(LLVMCtx)) {
-                return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
             }
         }
 

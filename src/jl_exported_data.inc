@@ -50,7 +50,6 @@
     XX(jl_gotoifnot_type) \
     XX(jl_gotonode_type) \
     XX(jl_initerror_type) \
-    XX(jl_integer_type) \
     XX(jl_int16_type) \
     XX(jl_int32_type) \
     XX(jl_int64_type) \

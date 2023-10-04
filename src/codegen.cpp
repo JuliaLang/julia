@@ -7149,8 +7149,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         else if (isboxed && jl_is_immutable_datatype(jt)) {
             param.addAttribute(Attribute::ReadOnly);
         }
-        else if (jl_is_primitivetype(jt) && jl_integer_type &&
-                 jl_subtype(jt, (jl_value_t*)jl_integer_type)) {
+        else if (jl_is_primitivetype(jt) && ty->isIntegerTy()) {
             bool issigned = jl_signed_type && jl_subtype(jt, (jl_value_t*)jl_signed_type);
             Attribute::AttrKind attr = issigned ? Attribute::SExt : Attribute::ZExt;
             param.addAttribute(attr);
