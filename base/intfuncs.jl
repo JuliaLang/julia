@@ -1095,7 +1095,7 @@ julia> factorial(big(21))
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
 """
 function factorial(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
+    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     f::typeof(n*n) = 1
     for i::typeof(n*n) = 2:n
         f *= i

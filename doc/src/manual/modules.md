@@ -106,7 +106,9 @@ modules. We will see how to manage name clashes below.
 
 To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
 one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
-but does not have any namespace implications.
+but does not have any namespace implications. The `public` keyword is only availiable in Julia 1.11
+and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
+[Compat](https://github.com/JuliaLang/Compat.jl) package.
 
 ### Standalone `using` and `import`
 
@@ -148,7 +150,7 @@ As we will see in the next section `import .NiceStuff` is equivalent to `using .
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
-julia> using LinearAlgebra, Statistics
+julia> using LinearAlgebra, Random
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods

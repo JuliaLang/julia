@@ -9,7 +9,7 @@ not ship with a precompiled system image file, one can be generated from the sou
 in Julia's `DATAROOTDIR/julia/base` folder.
 
 Julia will by default generate its system image on half of the available system threads. This
-may be controlled by the [`JULIA_IMAGE_THREADS`](@ref env-image-threads) environment variable.
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
 
 This operation is useful for multiple reasons.  A user may:
 
@@ -34,7 +34,7 @@ based on available CPU features.
 ### Specifying multiple system image targets
 
 A multi-microarchitecture system image can be enabled by passing multiple targets
-during system image compilation. This can be done either with the `JULIA_CPU_TARGET` make option
+during system image compilation. This can be done either with the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) make option
 or with the `-C` command line option when running the compilation command manually.
 Multiple targets are separated by `;` in the option string.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.

@@ -1689,8 +1689,8 @@ logabsdet(a::Number) = log(abs(a)), sign(a)
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
-increased accuracy and/or speed.
+Logarithm of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and avoids overflow/underflow.
 
 # Examples
 ```jldoctest

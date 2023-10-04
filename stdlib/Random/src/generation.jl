@@ -167,6 +167,20 @@ function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
+### random tuples
+
+function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
+    tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
+    SamplerTag{T}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+end
+
+function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
+    SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+end
+
+function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
+    ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
+end
 
 ## Generate random integer within a range
 

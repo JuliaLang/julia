@@ -539,6 +539,13 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
                     ty = fieldtype(linfo.specTypes, j)
                     @goto ty_computed
+                elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                    # then `vᵢ` is known to be `Int`
+                    if isdefined(va, :N) && va.N === vᵢ
+                        ty = Int
+                        @goto ty_computed
+                    end
                 end
             end
             ub = unwraptv_ub(v)
@@ -568,6 +575,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 constrains_param(v, sig, #=covariant=#true)
             end)
         elseif isvarargtype(v)
+            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # so the type is known to be `Int`
             ty = Int
             undef = false
         else
@@ -579,16 +588,28 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     return sptypes
 end
 
+function va_from_vatuple(@nospecialize(t))
+    @_foldable_meta
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        if n > 0
+            va = t.parameters[n]
+            if isvarargtype(va)
+               return va
+            end
+        end
+    end
+    return nothing
+end
+
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
 
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
-        # typically, we expect that old ⊑ new (that output information only
-        # gets less precise with worse input information), but to actually
-        # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
+    if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
+        ssavaluetypes[ssa_id] = new
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
@@ -877,8 +898,14 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
     return true
 end
 function should_infer_for_effects(sv::InferenceState)
+    def = sv.linfo.def
+    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
     effects = sv.ipo_effects
-    return is_terminates(effects) && is_effect_free(effects)
+    override = decode_effects_override(def.purity)
+    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
+    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
+    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
+    return true
 end
 should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 

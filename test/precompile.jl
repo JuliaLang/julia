@@ -407,7 +407,17 @@ precompile_test_harness(false) do dir
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in [Symbol(x.name) for x in Base._sysimage_modules if !(x.name in ["Base", "Core", "Main"])]),
             # plus test module,
-            Dict(Base.PkgId(Base.root_module(Base, :Test)) => Base.module_build_id(Base.root_module(Base, :Test)))
+            Dict(Base.PkgId(Base.root_module(Base, :Test)) => Base.module_build_id(Base.root_module(Base, :Test))),
+            # plus dependencies of test module
+            Dict(Base.PkgId(Base.root_module(Base, :InteractiveUtils)) => Base.module_build_id(Base.root_module(Base, :InteractiveUtils))),
+            Dict(Base.PkgId(Base.root_module(Base, :Logging)) => Base.module_build_id(Base.root_module(Base, :Logging))),
+            Dict(Base.PkgId(Base.root_module(Base, :Random)) => Base.module_build_id(Base.root_module(Base, :Random))),
+            Dict(Base.PkgId(Base.root_module(Base, :Serialization)) => Base.module_build_id(Base.root_module(Base, :Serialization))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
+            Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
         @test Dict(modules) == modules_ok
 

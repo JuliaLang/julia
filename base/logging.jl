@@ -492,31 +492,23 @@ end
 
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
+const CURRENT_LOGSTATE = ScopedValue{LogState}()
+
 function current_logstate()
-    logstate = current_task().logstate
-    return (logstate !== nothing ? logstate : _global_logstate)::LogState
+    maybe = @inline Base.ScopedValues.get(CURRENT_LOGSTATE)
+    return something(maybe, _global_logstate)::LogState
 end
 
 # helper function to get the current logger, if enabled for the specified message type
 @noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
-    logstate = current_logstate()
+    logstate = @inline current_logstate()
     if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
         return logstate.logger
     end
     return nothing
 end
 
-function with_logstate(f::Function, logstate)
-    @nospecialize
-    t = current_task()
-    old = t.logstate
-    try
-        t.logstate = logstate
-        f()
-    finally
-        t.logstate = old
-    end
-end
+with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering

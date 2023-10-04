@@ -1589,11 +1589,10 @@ function testset_beginend_call(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
+        local oldrng = copy(default_rng())
         local oldseed = Random.GLOBAL_SEED
         try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
+            # default RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(Random.GLOBAL_SEED)
             let
                 $(esc(tests))
@@ -1609,7 +1608,7 @@ function testset_beginend_call(args, tests, source)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
-            copy!(RNG, oldrng)
+            copy!(default_rng(), oldrng)
             Random.set_global_seed!(oldseed)
             pop_testset()
             ret = finish(ts)
@@ -1677,7 +1676,7 @@ function testset_forloop(args, testloop, source)
             finish_errored = false
 
             # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(RNG, tmprng)
+            copy!(default_rng(), tmprng)
 
         end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
@@ -1704,11 +1703,10 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local finish_errored = false
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
+        local oldrng = copy(default_rng())
         local oldseed = Random.GLOBAL_SEED
         Random.seed!(Random.GLOBAL_SEED)
-        local tmprng = copy(RNG)
+        local tmprng = copy(default_rng())
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1719,7 +1717,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(RNG, oldrng)
+            copy!(default_rng(), oldrng)
             Random.set_global_seed!(oldseed)
         end
         arr
@@ -2130,6 +2128,8 @@ for G in (GenericSet, GenericDict)
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+Base.pop!(s::GenericDict, k) = pop!(s.s, k)
+Base.setindex!(s::GenericDict, v, k) = setindex!(s.s, v, k)
 
 """
 The `GenericArray` can be used to test generic array APIs that program to

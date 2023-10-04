@@ -375,15 +375,15 @@ end
 
 function check_for_hint(s::MIState)
     st = state(s)
-    options(st).hint_tab_completes || return false
-    if !eof(buffer(st)) # only generate hints if at the end of the line
+    if !options(st).hint_tab_completes || !eof(buffer(st))
+        # only generate hints if enabled and at the end of the line
         # TODO: maybe show hints for insertions at other positions
         # Requires making space for them earlier in refresh_multi_line
-        return false
+        return clear_hint(st)
     end
     completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
-    length(partial) < 2 && return false # Don't complete for single chars, given e.g. `x` completes to `xor`
-    if should_complete
+    # Don't complete for single chars, given e.g. `x` completes to `xor`
+    if length(partial) > 1 && should_complete
         if length(completions) == 1
             hint = only(completions)[sizeof(partial)+1:end]
             if !isempty(hint) # completion on a complete name returns itself so check that there's something to hint
@@ -401,9 +401,13 @@ function check_for_hint(s::MIState)
             end
         end
     end
-    if !isnothing(st.hint)
-        st.hint = "" # don't set to nothing here. That will be done in `maybe_show_hint`
-        return true
+    return clear_hint(st)
+end
+
+function clear_hint(s::ModeState)
+    if !isnothing(s.hint)
+        s.hint = "" # don't set to nothing here. That will be done in `maybe_show_hint`
+        return true # indicate maybe_show_hint has work to do
     else
         return false
     end

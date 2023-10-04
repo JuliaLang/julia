@@ -89,6 +89,10 @@ end
     @test rstrip(isnumeric, "abc0123") == "abc"
     @test lstrip("ello", ['e','o']) == "llo"
     @test rstrip("ello", ['e','o']) == "ell"
+
+    @test_throws ArgumentError strip("", "")
+    @test_throws ArgumentError lstrip("", "")
+    @test_throws ArgumentError rstrip("", "")
 end
 
 @testset "partition" begin
