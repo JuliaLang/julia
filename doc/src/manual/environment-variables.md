@@ -240,6 +240,13 @@ If set to `true`, Pkg operations which use the git protocol will use an external
 
 The accuracy of the package resolver. This should be a positive integer, the default is `1`.
 
+### [`JULIA_PKG_DISABLE_AUTO_GC`](@id JULIA_PKG_DISABLE_AUTO_GC)
+
+If set to `true`, this will disable automatic garbage collection: see [`Pkg.gc`](https://pkgdocs.julialang.org/v1/api/#Pkg.gc) for more details.
+
+!!! compat "Julia 1.11"
+    This environment variable is only supported on Julia 1.11 and above.
+
 ## Network transport
 
 ### [`JULIA_NO_VERIFY_HOSTS`](@id JULIA_NO_VERIFY_HOSTS)
