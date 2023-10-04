@@ -1254,7 +1254,7 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as selected by the indices `inds`
+Return a subset of array `A` as selected by the indices `inds`.
 
 Each index may be any [supported index type](@ref man-supported-index-types), such
 as [`Integer`](@ref)s, [`CartesianIndex`](@ref)es, [ranges](ref `range`), or [arrays](@ref man-multi-dim-arrays) of supported indices.
