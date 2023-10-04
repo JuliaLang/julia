@@ -1718,6 +1718,31 @@ JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase);
 
 #ifdef __cplusplus
 }
+
+// version of std::vector that's bounds checked when assertions are enabled
+#include <vector>
+template <typename T>
+struct checked_vector : private std::vector<T>
+{
+    using std::vector<T>::vector;
+
+    // stl containers aren't designed to be inherited from publicly,
+    // so we need to re-expose the methods we want to use
+    using std::vector<T>::begin;
+    using std::vector<T>::end;
+    using std::vector<T>::at;
+    using std::vector<T>::push_back;
+    using std::vector<T>::assign;
+    using std::vector<T>::resize;
+
+#ifndef JL_NDEBUG
+    T& operator[](typename std::vector<T>::size_type i) { return this->at(i); }
+    const T& operator[](typename std::vector<T>::size_type i) const { return this->at(i); }
+#else
+    using std::vector<T>::operator[];
+#endif
+};
+
 #endif
 
 #pragma GCC visibility pop

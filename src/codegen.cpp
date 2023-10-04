@@ -1643,12 +1643,12 @@ public:
     Function *f = NULL;
     MDNode* LoopID = NULL;
     // local var info. globals are not in here.
-    std::vector<jl_varinfo_t> slots;
+    checked_vector<jl_varinfo_t> slots;
     std::map<int, jl_varinfo_t> phic_slots;
-    std::vector<jl_cgval_t> SAvalues;
-    std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
-    std::vector<bool> ssavalue_assigned;
-    std::vector<int> ssavalue_usecount;
+    checked_vector<jl_cgval_t> SAvalues;
+    checked_vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
+    checked_vector<bool> ssavalue_assigned;
+    checked_vector<int> ssavalue_usecount;
     jl_module_t *module = NULL;
     jl_typecache_t type_cache;
     jl_tbaacache_t tbaa_cache;
@@ -1678,7 +1678,7 @@ public:
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
-    std::vector<std::unique_ptr<Module>> llvmcall_modules;
+    checked_vector<std::unique_ptr<Module>> llvmcall_modules;
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
@@ -2759,7 +2759,7 @@ static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
     return av;
 }
 
-static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slots)
+static void mark_volatile_vars(jl_array_t *stmts, checked_vector<jl_varinfo_t> &slots)
 {
     size_t slength = jl_array_dim0(stmts);
     for (int i = 0; i < (int)slength; i++) {
