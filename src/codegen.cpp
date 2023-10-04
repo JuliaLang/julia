@@ -5845,7 +5845,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
-        std::vector<Value*> vals;
+        checked_vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
             const jl_cgval_t &ai = argv[i];
             if (ai.constant || ai.typ == jl_bottom_type)
@@ -5860,7 +5860,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
-            : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals);
+            : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals.as_vector());
         jl_cgval_t tok(token, (jl_value_t*)jl_nothing_type, NULL);
         return tok;
     }
@@ -6165,13 +6165,13 @@ static Function* gen_cfun_wrapper(
     if (nest) {
         // add nest parameter (pointer to jl_value_t* data array) after sret arg
         assert(closure_types);
-        std::vector<Type*> fargt_sig(sig.fargt_sig);
+        checked_vector<Type*> fargt_sig(sig.fargt_sig);
 
         fargt_sig.insert(fargt_sig.begin() + sig.sret, JuliaType::get_pprjlvalue_ty(M->getContext()));
 
         // Shift LLVM attributes for parameters one to the right, as
         // we are adding the extra nest parameter after sret arg.
-        std::vector<std::pair<unsigned, AttributeSet>> newAttributes;
+        checked_vector<std::pair<unsigned, AttributeSet>> newAttributes;
         newAttributes.reserve(attributes.getNumAttrSets() + 1);
         auto it = *attributes.indexes().begin();
         const auto it_end = *attributes.indexes().end();
@@ -6209,8 +6209,8 @@ static Function* gen_cfun_wrapper(
         }
 
         // Create the new AttributeList
-        attributes = AttributeList::get(M->getContext(), newAttributes);
-        functype = FunctionType::get(sig.sret ? getVoidTy(M->getContext()) : sig.prt, fargt_sig, /*isVa*/false);
+        attributes = AttributeList::get(M->getContext(), newAttributes.as_vector());
+        functype = FunctionType::get(sig.sret ? getVoidTy(M->getContext()) : sig.prt, fargt_sig.as_vector(), /*isVa*/false);
     }
     else {
         functype = sig.functype(M->getContext());
@@ -6473,7 +6473,7 @@ static Function* gen_cfun_wrapper(
         jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
 
         // TODO: Can use use emit_call_specfun_other here?
-        std::vector<Value*> args;
+        checked_vector<Value*> args;
         Value *result;
         if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
             // fuse the two sret together, or emit an alloca to hold it
@@ -6550,7 +6550,7 @@ static Function* gen_cfun_wrapper(
         assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl.getFunctionType()));
         CallInst *call = ctx.builder.CreateCall(
             returninfo.decl.getFunctionType(),
-            theFptr, ArrayRef<Value*>(args));
+            theFptr, ArrayRef<Value*>(args.as_vector()));
         call->setAttributes(returninfo.attrs);
         if (gcstack_arg)
             call->setCallingConv(CallingConv::Swift);
@@ -7223,13 +7223,13 @@ static DISubroutineType *
 get_specsig_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *rt, jl_value_t *sig, DIBuilder &dbuilder)
 {
     size_t nargs = jl_nparams(sig); // TODO: if this is a Varargs function, our debug info for the `...` var may be misleading
-    std::vector<Metadata*> ditypes(nargs + 1);
+    checked_vector<Metadata*> ditypes(nargs + 1);
     ditypes[0] = julia_type_to_di(ctx, debuginfo, rt, &dbuilder, false);
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         ditypes[i + 1] = julia_type_to_di(ctx, debuginfo, jt, &dbuilder, false);
     }
-    return dbuilder.createSubroutineType(dbuilder.getOrCreateTypeArray(ditypes));
+    return dbuilder.createSubroutineType(dbuilder.getOrCreateTypeArray(ditypes.as_vector()));
 }
 
 /* aka Core.Compiler.tuple_tfunc */

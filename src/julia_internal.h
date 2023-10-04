@@ -1726,14 +1726,30 @@ struct checked_vector : private std::vector<T>
 {
     using std::vector<T>::vector;
 
+    // copy constructors
+    checked_vector(const std::vector<T>& vec) : std::vector<T>(vec) {}
+    checked_vector(const checked_vector<T>& other) : std::vector<T>(other) {}
+
+    // conversion to regular std::vector
+    std::vector<T>& as_vector() {
+        return *this;
+    }
+    const std::vector<T>& as_vector() const {
+        return *this;
+    }
+
     // stl containers aren't designed to be inherited from publicly,
     // so we need to re-expose the methods we want to use
     using std::vector<T>::begin;
     using std::vector<T>::end;
     using std::vector<T>::at;
     using std::vector<T>::push_back;
+    using std::vector<T>::emplace_back;
     using std::vector<T>::assign;
     using std::vector<T>::resize;
+    using std::vector<T>::reserve;
+    using std::vector<T>::empty;
+    using std::vector<T>::insert;
 
 #ifndef JL_NDEBUG
     T& operator[](typename std::vector<T>::size_type i) { return this->at(i); }
