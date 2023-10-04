@@ -453,20 +453,19 @@ function get_code_cache()
 end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
-    repl_frame::CC.InferenceResult
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
     code_cache::REPLInterpreterCache
-    function REPLInterpreter(repl_frame::CC.InferenceResult;
+    function REPLInterpreter(;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                 unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                              code_cache::REPLInterpreterCache = get_code_cache())
-        return new(repl_frame, world, inf_params, opt_params, inf_cache, code_cache)
+        return new(world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
@@ -503,12 +502,15 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # Similarly to the aggressive binding resolution, aggressive concrete evaluation doesn't
 # present any cache validation issues because `repl_frame` is never cached.
 
-is_repl_frame(interp::REPLInterpreter, sv::CC.InferenceState) = interp.repl_frame === sv.result
+# `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
+# `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
+# be employed, for instance, by `typeinf_ext_toplevel`.
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && !sv.cached
 
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if is_repl_frame(sv)
         if CC.isdefined_globalref(g)
             return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
         end
@@ -523,7 +525,7 @@ function is_repl_frame_getproperty(interp::REPLInterpreter, sv::CC.InferenceStat
     def isa Method || return false
     def.name === :getproperty || return false
     sv.cached && return false
-    return is_repl_frame(interp, sv.parent)
+    return is_repl_frame(sv.parent)
 end
 
 # aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
@@ -552,7 +554,7 @@ end
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if is_repl_frame(sv)
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
@@ -597,8 +599,8 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     resolve_toplevel_symbols!(src, context_module)
     @atomic mi.uninferred = src
 
+    interp = REPLInterpreter()
     result = CC.InferenceResult(mi)
-    interp = REPLInterpreter(result)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)
 
     # NOTE Use the fixed world here to make `REPLInterpreter` robust against
