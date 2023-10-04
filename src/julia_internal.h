@@ -622,6 +622,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_codeinst_for_src(
 jl_method_instance_t *jl_get_unspecialized_from_mi(jl_method_instance_t *method JL_PROPAGATES_ROOT);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
 
+JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
+        jl_method_instance_t *mi, jl_value_t *rettype, jl_value_t *exctype,
+        jl_value_t *inferred_const, jl_value_t *inferred,
+        int32_t const_flags, size_t min_world, size_t max_world,
+        uint32_t ipo_effects, uint32_t effects, jl_value_t *analysis_results,
+        uint8_t relocatability);
+
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);

@@ -462,14 +462,14 @@ function is_throw_call(e::Expr, code::Vector{Any})
     return false
 end
 
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
     for stmt in find_throw_blocks(src.code, handler_at)
         src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
     end
     return nothing
 end
 
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
     stmts = BitSet()
     n = length(code)
     for i in n:-1:1
@@ -482,7 +482,7 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
             elseif s.head === :return
                 # see `ReturnNode` handling
             elseif is_throw_call(s, code)
-                if handler_at[i] == 0
+                if handler_at[i][1] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts
