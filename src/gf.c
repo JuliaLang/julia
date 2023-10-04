@@ -2329,7 +2329,7 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 
 jl_mutex_t precomp_statement_out_lock;
 ios_t f_precompile;
-static JL_STREAM* s_precompile = NULL;
+JL_STREAM* s_precompile = NULL;
 
 static void init_precompile_output(void)
 {
