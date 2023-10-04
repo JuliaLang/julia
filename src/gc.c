@@ -4,6 +4,7 @@
 #include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
+#include <stdlib.h>
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
@@ -705,6 +706,7 @@ static uint64_t old_freed_diff = 0;
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
 static int thrashing = 0;
+static double alpha = 2.0/3.0;
 // global variables for GC stats
 
 // Resetting the object to a young object, this is used when marking the
@@ -3435,7 +3437,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         thrash_counter += 1;
     else if (thrash_counter > 0)
         thrash_counter -= 1;
-    double alpha = 2.0/3.0;
+
     target_allocs = alpha * heap_size;
 #endif
     uint64_t target_heap = (uint64_t)target_allocs + heap_size;
@@ -3689,6 +3691,15 @@ void jl_gc_init(void)
 
     jl_gc_init_page();
     jl_gc_debug_init();
+    char* env_value = getenv("JULIA_GC_HEAP_RATIO");
+    errno = 0;
+    int percentage = strtol(env_value, NULL, 10);
+
+    // Check for parsing errors
+    if (errno != 0 || percentage < 0)
+        jl_safe_printf("Error: Invalid GC Ratio, falling back to default\n");
+    else
+        alpha = (double)percentage / 100;
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
