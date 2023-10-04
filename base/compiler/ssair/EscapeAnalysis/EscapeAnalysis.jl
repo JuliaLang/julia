@@ -537,14 +537,14 @@ isaliased(xidx::Int, yidx::Int, estate::EscapeState) =
     in_same_set(estate.aliasset, xidx, yidx)
 
 struct ArgEscapeInfo
-    EscapeBits::UInt8
+    escape_bits::UInt8
 end
 function ArgEscapeInfo(x::EscapeInfo)
     x === ⊤ && return ArgEscapeInfo(ARG_ALL_ESCAPE)
-    EscapeBits = 0x00
-    has_return_escape(x) && (EscapeBits |= ARG_RETURN_ESCAPE)
-    has_thrown_escape(x) && (EscapeBits |= ARG_THROWN_ESCAPE)
-    return ArgEscapeInfo(EscapeBits)
+    escape_bits = 0x00
+    has_return_escape(x) && (escape_bits |= ARG_RETURN_ESCAPE)
+    has_thrown_escape(x) && (escape_bits |= ARG_THROWN_ESCAPE)
+    return ArgEscapeInfo(escape_bits)
 end
 
 const ARG_ALL_ESCAPE    = 0x01 << 0
@@ -552,9 +552,9 @@ const ARG_RETURN_ESCAPE = 0x01 << 1
 const ARG_THROWN_ESCAPE = 0x01 << 2
 
 has_no_escape(x::ArgEscapeInfo)     = !has_all_escape(x) && !has_return_escape(x) && !has_thrown_escape(x)
-has_all_escape(x::ArgEscapeInfo)    = x.EscapeBits & ARG_ALL_ESCAPE    ≠ 0
-has_return_escape(x::ArgEscapeInfo) = x.EscapeBits & ARG_RETURN_ESCAPE ≠ 0
-has_thrown_escape(x::ArgEscapeInfo) = x.EscapeBits & ARG_THROWN_ESCAPE ≠ 0
+has_all_escape(x::ArgEscapeInfo)    = x.escape_bits & ARG_ALL_ESCAPE    ≠ 0
+has_return_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_RETURN_ESCAPE ≠ 0
+has_thrown_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_THROWN_ESCAPE ≠ 0
 
 struct ArgAliasing
     aidx::Int
@@ -564,46 +564,22 @@ end
 struct ArgEscapeCache
     argescapes::Vector{ArgEscapeInfo}
     argaliases::Vector{ArgAliasing}
-end
-
-function ArgEscapeCache(estate::EscapeState)
-    nargs = estate.nargs
-    argescapes = Vector{ArgEscapeInfo}(undef, nargs)
-    argaliases = ArgAliasing[]
-    for i = 1:nargs
-        info = estate.escapes[i]
-        @assert info.AliasInfo === true
-        argescapes[i] = ArgEscapeInfo(info)
-        for j = (i+1):nargs
-            if isaliased(i, j, estate)
-                push!(argaliases, ArgAliasing(i, j))
+    function ArgEscapeCache(estate::EscapeState)
+        nargs = estate.nargs
+        argescapes = Vector{ArgEscapeInfo}(undef, nargs)
+        argaliases = ArgAliasing[]
+        for i = 1:nargs
+            info = estate.escapes[i]
+            @assert info.AliasInfo === true
+            argescapes[i] = ArgEscapeInfo(info)
+            for j = (i+1):nargs
+                if isaliased(i, j, estate)
+                    push!(argaliases, ArgAliasing(i, j))
+                end
             end
         end
+        return new(argescapes, argaliases)
     end
-    return ArgEscapeCache(argescapes, argaliases)
-end
-
-"""
-    is_ipo_profitable(ir::IRCode, nargs::Int) -> Bool
-
-Heuristically checks if there is any profitability to run the escape analysis on `ir`
-and generate IPO escape information cache. Specifically, this function examines
-if any call argument is "interesting" in terms of their escapability.
-"""
-function is_ipo_profitable(ir::IRCode, nargs::Int)
-    for i = 1:nargs
-        t = unwrap_unionall(widenconst(ir.argtypes[i]))
-        t <: IO && return false # bail out IO-related functions
-        is_ipo_profitable_type(t) && return true
-    end
-    return false
-end
-function is_ipo_profitable_type(@nospecialize t)
-    if isa(t, Union)
-        return is_ipo_profitable_type(t.a) && is_ipo_profitable_type(t.b)
-    end
-    (t === String || t === Symbol || t === Module || t === SimpleVector) && return false
-    return ismutabletype(t)
 end
 
 abstract type Change end
@@ -1116,11 +1092,9 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
 end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
-escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    escape_invoke!(astate, pc, args, first(args)::MethodInstance, 2)
-
-function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
-                        mi::MethodInstance, first_idx::Int, last_idx::Int = length(args))
+function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    mi = first(args)::MethodInstance
+    first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
     if cache === nothing
@@ -1150,7 +1124,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any},
         end
     end
     for (; aidx, bidx) in cache.argaliases
-        add_alias_change!(astate, args[aidx-(first_idx-1)], args[bidx-(first_idx-1)])
+        add_alias_change!(astate, args[aidx+(first_idx-1)], args[bidx+(first_idx-1)])
     end
     # we should disable the alias analysis on this newly introduced object
     add_escape_change!(astate, ret, EscapeInfo(retinfo, true))

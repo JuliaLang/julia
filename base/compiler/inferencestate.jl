@@ -539,6 +539,13 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
                     ty = fieldtype(linfo.specTypes, j)
                     @goto ty_computed
+                elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                    # then `vᵢ` is known to be `Int`
+                    if isdefined(va, :N) && va.N === vᵢ
+                        ty = Int
+                        @goto ty_computed
+                    end
                 end
             end
             ub = unwraptv_ub(v)
@@ -568,6 +575,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 constrains_param(v, sig, #=covariant=#true)
             end)
         elseif isvarargtype(v)
+            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # so the type is known to be `Int`
             ty = Int
             undef = false
         else
@@ -577,6 +586,21 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         sptypes[i] = VarState(ty, undef)
     end
     return sptypes
+end
+
+function va_from_vatuple(@nospecialize(t))
+    @_foldable_meta
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        if n > 0
+            va = t.parameters[n]
+            if isvarargtype(va)
+               return va
+            end
+        end
+    end
+    return nothing
 end
 
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
@@ -874,8 +898,14 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
     return true
 end
 function should_infer_for_effects(sv::InferenceState)
+    def = sv.linfo.def
+    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
     effects = sv.ipo_effects
-    return is_terminates(effects) && is_effect_free(effects)
+    override = decode_effects_override(def.purity)
+    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
+    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
+    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
+    return true
 end
 should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 

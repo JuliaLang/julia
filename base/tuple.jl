@@ -42,9 +42,9 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Creates a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples

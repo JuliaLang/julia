@@ -71,6 +71,12 @@ function is_load_forwardable(x::EscapeInfo)
     return isa(AliasInfo, IndexableFields) || isa(AliasInfo, IndexableElements)
 end
 
+@testset "EAUtils" begin
+    @test_throws "everything has been constant folded" code_escapes() do; sin(42); end
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
+    @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
+end
+
 @testset "basics" begin
     let # arg return
         result = code_escapes((Any,)) do a # return to caller
@@ -2253,7 +2259,7 @@ end
 # end
 
 # interprocedural analysis
-# ------------------------
+# ========================
 
 # propagate escapes imposed on call arguments
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
@@ -2345,6 +2351,22 @@ let result = code_escapes() do
     i = only(findall(isnew, result.ir.stmts.stmt))
     @test has_no_escape(result.state[SSAValue(i)])
 end
+
+function with_self_aliased(from_bb::Int, succs::Vector{Int})
+    worklist = Int[from_bb]
+    visited = BitSet(from_bb)
+    function visit!(bb::Int)
+        if bb ∉ visited
+            push!(visited, bb)
+            push!(worklist, bb)
+        end
+    end
+    while !isempty(worklist)
+        foreach(visit!, succs)
+    end
+    return visited
+end
+@test code_escapes(with_self_aliased) isa EAUtils.EscapeResult
 
 # accounts for ThrownEscape via potential MethodError
 

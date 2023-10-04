@@ -587,6 +587,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     handler_at = compute_trycatch(code, BitSet())
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
+    live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     new_phi_nodes = Vector{NewPhiNode2}[NewPhiNode2[] for _ = 1:length(cfg.blocks)]
     new_phic_nodes = IdDict{Int, Vector{NewPhiCNode2}}()
     for (; leave_block) in catch_entry_blocks
@@ -617,8 +618,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             end
             continue
         end
+
         @timeit "liveness" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
+            push!(live_slots[li], idx)
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
             if cidx !== nothing
                 # The slot is live-in into this block. We need to
@@ -735,7 +738,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
         # Record Pi nodes if necessary
         has_pinode = fill(false, length(sv.slottypes))
-        for slot in 1:length(sv.slottypes)
+        for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
             (ival === SSAValue(-1)) && continue
             (ival === SSAValue(-2)) && continue
