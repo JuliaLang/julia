@@ -606,14 +606,15 @@ any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @noinline
     @_total_meta
     for y in itr
         y === x && return true
     end
     return false
 end
-in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
+in(x::Symbol, itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """
