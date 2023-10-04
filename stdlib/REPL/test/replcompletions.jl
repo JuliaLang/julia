@@ -23,6 +23,8 @@ let ex = quote
         end
         type_test = Test_x(Test_y(1))
         (::Test_y)() = "", ""
+        unicode_αβγ = Test_y(1)
+
         module CompletionFoo2
 
         end
@@ -251,6 +253,11 @@ let s = "Main.CompletionFoo.type_test.x"
     @test "xx" in c
     @test r == 30:30
     @test s[r] == "x"
+end
+
+let s = "Main.CompletionFoo.unicode_αβγ.y"
+    c, r = test_complete(s)
+    @test "yy" in c
 end
 
 let s = "Main.CompletionFoo.bar.no_val_available"
@@ -1856,6 +1863,11 @@ let s = "@show some_issue36437.value.a; some_issue36437.value."
     for n in ("a", "b", "c")
         @test n in c
     end
+end
+# https://github.com/JuliaLang/julia/issues/51505
+let s = "()."
+    c, r, res = test_complete_context(s)
+    @test res
 end
 
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
