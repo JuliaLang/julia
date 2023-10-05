@@ -193,7 +193,6 @@
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
     XX(jl_gc_set_cb_notify_external_free) \
-    XX(jl_gc_set_cb_notify_gc_pressure) \
     XX(jl_gc_set_cb_post_gc) \
     XX(jl_gc_set_cb_pre_gc) \
     XX(jl_gc_set_cb_root_scanner) \

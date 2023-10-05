@@ -67,12 +67,6 @@ This scheme eliminates the need of explicitly keeping a flag to indicate a full 
 ## Heuristics
 
 GC heuristics tune the GC by changing the size of the allocation interval between garbage collections.
-
-The GC heuristics measure how big the heap size is after a collection and set the next
-collection according to the algorithm described by https://dl.acm.org/doi/10.1145/3563323,
-in summary, it argues that the heap target should have a square root relationship with the live heap, and that it should also be scaled by how fast the GC is freeing objects and how fast the mutators are allocating.
-The heuristics measure the heap size by counting the number of pages that are in use and the objects that use malloc. Previously we measured the heap size by counting
-the alive objects, but that doesn't take into account fragmentation which could lead to bad decisions, that also meant that we used thread local information (allocations) to make
-decisions about a process wide (when to GC), measuring pages means the decision is global.
-
-The GC will do full collections when the heap size reaches 80% of the maximum allowed size.
+If a GC was unproductive, then we increase the size of the allocation interval to allow objects more time to die.
+If a GC returns a lot of space we can shrink the interval. The goal is to find a steady state where we are
+allocating just about the same amount as we are collecting.

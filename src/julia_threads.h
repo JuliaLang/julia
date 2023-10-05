@@ -130,12 +130,12 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
+    _Atomic(int64_t) freed;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
     _Atomic(uint64_t) poolalloc;
     _Atomic(uint64_t) bigalloc;
-    _Atomic(int64_t) free_acc;
-    _Atomic(uint64_t) alloc_acc;
+    _Atomic(uint64_t) freecall;
 } jl_thread_gc_num_t;
 
 typedef struct {
