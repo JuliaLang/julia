@@ -491,6 +491,7 @@ operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia'
 type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
+Note that the infix use of `⊘` works because Julia has a set of symbols that are recognized to be infix operators.
 The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
 `OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
