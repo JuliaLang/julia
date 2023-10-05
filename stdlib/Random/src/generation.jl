@@ -452,6 +452,10 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
     end
 end
 
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.KeySet}) = rand(rng, sp[].dict).first
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.ValueIterator{<:Dict}}) = rand(rng, sp[].dict).second
+
 ## random values from Set
 
 Sampler(::Type{RNG}, t::Set{T}, n::Repetition) where {RNG<:AbstractRNG,T} =
