@@ -135,8 +135,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 ct = Union{}
             end
             Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
-            Qt === Any && return Type
             Qt === tt && return t
+            Qt === Any && return Type
             # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
             # enough, since this moves Qt outside of Type for is_derived_type_from_any
             Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
