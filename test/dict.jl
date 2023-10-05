@@ -1506,7 +1506,7 @@ end
 struct BadHash
     i::Int
 end
-Base.hash(::BadHash, UInt)=UInt(1)
+Base.hash(::BadHash, ::UInt)=UInt(1)
 @testset "maxprobe reset #51595" begin
     d = Dict(BadHash(i)=>nothing for i in 1:20)
     empty!(d)
