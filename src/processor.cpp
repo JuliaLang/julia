@@ -642,7 +642,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t target_idx = callback(ids, &rejection_reason);
     if (target_idx == (uint32_t)-1) {
-        jl_throw(jl_new_struct(jl_errorexception_type, rejection_reason));
+        jl_error(jl_string_ptr(rejection_reason));
     }
     JL_GC_POP();
 
