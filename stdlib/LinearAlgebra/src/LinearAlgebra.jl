@@ -465,7 +465,7 @@ wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
 wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
-function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     if tA == 'N'
         return A
     elseif tA == 'T'
