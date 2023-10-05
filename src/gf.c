@@ -2328,11 +2328,24 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 }
 
 jl_mutex_t precomp_statement_out_lock;
+ios_t f_precompile;
+JL_STREAM* s_precompile = NULL;
+
+static void init_precompile_output(void)
+{
+    const char *t = jl_options.trace_compile;
+    if (!strncmp(t, "stderr", 6)) {
+        s_precompile = JL_STDERR;
+    }
+    else {
+        if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+            jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+        s_precompile = (JL_STREAM*) &f_precompile;
+    }
+}
 
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
     jl_method_t *def = mi->def.method;
     if (jl_options.trace_compile == NULL)
         return;
@@ -2341,15 +2354,7 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
-        const char *t = jl_options.trace_compile;
-        if (!strncmp(t, "stderr", 6)) {
-            s_precompile = JL_STDERR;
-        }
-        else {
-            if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-            s_precompile = (JL_STREAM*) &f_precompile;
-        }
+        init_precompile_output();
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
         jl_printf(s_precompile, "precompile(");
@@ -2358,6 +2363,20 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
+    JL_UNLOCK(&precomp_statement_out_lock);
+}
+
+JL_DLLEXPORT void jl_write_precompile_statement(char* statement)
+{
+    if (jl_options.trace_compile == NULL)
+        return;
+    JL_LOCK(&precomp_statement_out_lock);
+    if (s_precompile == NULL) {
+        init_precompile_output();
+    }
+    jl_printf(s_precompile, "%s\n", statement);
+    if (s_precompile != JL_STDERR)
+        ios_flush(&f_precompile);
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 
