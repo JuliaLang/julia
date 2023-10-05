@@ -398,19 +398,6 @@ function load_InteractiveUtils(mod::Module=Main)
     return MainInclude.InteractiveUtils
 end
 
-"""
-    loadfaces!(facetoml::IO)
-
-Parse `facetoml` as TOML, and load all faces described.
-The loading is done with `loadfaces!`, which see.
-
-Face entries should be of the following form:
-```toml
-[face_name]
-property = "value"
-"""
-loadfaces!(facetoml::IO) = loadfaces!(TOML.parse(TOML.Parser(facetoml)))
-
 function load_REPL()
     # load interactive-only libraries
     try
@@ -433,9 +420,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     end
     # TODO cleanup REPL_MODULE_REF
-    userfaces = joinpath(first(DEPOT_PATH), "config", "faces.toml")
-    isfile(userfaces) && open(loadfaces!, userfaces)
-
     if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")

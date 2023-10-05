@@ -1204,64 +1204,30 @@ precede a quote character.
 However, the next backslash character escapes the backslash that follows it, and the
 last backslash escapes a quote, since these backslashes appear before a quote.
 
-## [Styling](@id man-styling)
 
-When working with strings, formatting and styling often appear as a secondary
-concern.
+## [Tagged Strings](@id man-tagged-strings)
 
-!!! note
-    For instance, when printing to a terminal you might want to sprinkle [ANSI
-    escape
-    sequences](https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_(Select_Graphic_Rendition)_parameters)
-    in the output, when outputting HTML styling constructs (`<span style="...">`,
-    etc.) serve a similar purpose, and so on. It is possible to simply insert the
-    raw styling constructs into the string next to the content itself, but it
-    quickly becomes apparent that this is not well suited for anything but the most
-    basic use-cases. Not all terminals support the same ANSI codes, the styling
-    constructs need to be painstakingly removed when calculating the width of
-    already-styled content, and that's before you even get into handling
-    multiple output formats.
+It is sometimes useful to be able to hold metadata relating to regions of a
+string. A [`TaggedString`](@ref Base.TaggedString) wraps another string and
+allows for regions of it to be annotated with tagged values (`:tag => value`).
+All generic string operations are applied to the underlying string. However,
+when possible, styling information is preserved. This means you can manipulate a
+[`TaggedString`](@ref Base.TaggedString) —taking substrings, padding them,
+concatenating them with other strings— and the metadata annotations will "come
+along for the ride".
 
-Instead of leaving this headache to be widely experienced downstream, it is
-tackled head-on by the introduction of a special string type
-([`StyledString`](@ref)). This string type wraps any other string type and
-allows for formating information to be applied to regions (e.g. characters 1
-through to 7 are bold and red).
+This string type is fundamental to the [StyledStrings stdlib](@ref
+stdlib-styledstrings), which uses `:face`-tagged annotations to hold styling
+information.
 
-Regions of a string are styled by applying [`Face`](@ref)s to them —a
-structure that holds styling information— (think "typeface"). As a
-convenience, it is possible to name a face in the global faces dictionary
-instead of giving the [`Face`](@ref) directly.
-
-Along with these capabilities, we also provide a convenient way for constructing
-[`StyledString`](@ref)s, detailed in [Styled String Literals](@ref man-styled-string-literals).
+When concatenating a [`TaggedString`](@ref Base.TaggedString), take care to use
+[`taggedstring`](@ref Base.taggedstring) instead of [`string`](@ref) if you want
+to keep the tagged string annotations.
 
 ```jldoctest
-julia> S"{yellow:hello} {blue:there}"
-"hello there" # prints with colour in the REPL
-```
-
-### [Styled Strings](@id man-styled-strings)
-
-[`StyledString`](@ref)s wrap another string and overlay a list of tagged
-regions. All generic string operations are applied to the underlying string.
-When possible though, styling information is maintained (e.g. when
-[`split`](@ref)ting a [`StyledString`](@ref)).
-
-To concatenate printable values and styled strings together (maintaining styling
-information), the [`styledstring`](@ref) function can be used (as a counterpart
-to [`string`](@ref)).
-
-```jldoctest
-julia> str = StyledString("hello there",
-               [(1:5, :face => :yellow), (7:11, :face => :blue)])
+julia> str = Base.TaggedString("hello there",
+               [(1:5, :word => :greeting), (7:11, :tag => 1)])
 "hello there"
-
-julia> collect(Base.eachstyle(str))
-3-element Vector{Tuple{SubString{String}, Vector{Pair{Symbol, Any}}}}:
- ("hello", [:face => :yellow])
- (" ", [])
- ("there", [:face => :blue])
 
 julia> length(str)
 11
@@ -1270,166 +1236,18 @@ julia> lpad(str, 14)
 "   hello there"
 
 julia> typeof(lpad(str, 7))
-StyledString{String}
+Base.TaggedString{String}
 
-julia> str2 = StyledString(" julia", [(2:6, :face => :magenta)])
+julia> str2 = Base.TaggedString(" julia", [(2:6, :face => :magenta)])
+" julia"
 
-julia> styledstring(str, str2)
+julia> Base.taggedstring(str, str2)
 "hello there julia"
 
-julia> str * str2 == styledstring(str, str2) # *-concatination still works
+julia> str * str2 == Base.taggedstring(str, str2) # *-concatination still works
 true
-
-julia> collect(Base.eachstyle(str * str2))
-5-element Vector{Tuple{SubString{String}, Vector{Pair{Symbol, Any}}}}:
- ("hello", [:face => :yellow])
- (" ", [])
- ("there", [:face => :blue])
- (" ", [])
- ("julia", [:face => :magenta])
 ```
 
-#### Advanced uses
-
-While styling is the focus here, the system is actually more general. It allows
-for arbitrary annotations to be added to regions of the underlying string. Each
-annotation is in the form of a `tag::Symbol => value::Any` tagged value. You can
-tag any information you want, such as source location the string was extracted
-from, or an alternative form of some text, but the most obvious use case is to
-hold styling information (which use a `:face` tag).
-
-### [Faces](@id man-faces)
-
-#### The `Face` type
-
-A [`Face`](@ref) specifies details of a typeface that text can be set in. It
-covers a set of basic attributes that generalise well across different formats,
-namely:
-
-- `height`
-- `weight`
-- `slant`
-- `foreground`
-- `background`
-- `underline`
-- `strikethrough`
-- `inverse`
-- `inherit`
-
-For details on the particular forms these attributes take, see the
-[`Face`](@ref) docstring, but of particular interest is `inherit` as it allows
-you to _inherit_ attributes from other [`Face`](@ref)s.
-
-#### The global `FACES` dictionary
-
-To make referring to particular styles more convenient, there is a global
-`Dict{Symbol, Face}` that allows for [`Face`](@ref)s to be referred to simply by
-name. Packages can add faces to this dictionary via the [`Base.addface!`](@ref)
-function, and the loaded faces can be easily [customised](@ref man-face-toml).
-
-!!! warning
-    Any package registering new faces should ensure that they are prefixed
-    by the package name, i.e. follow the format `mypackage_myface`.
-    This is important for predictability, and to prevent name clashes.
-
-There is one set of exemptions to the package-prefix rule, the set of basic
-faces that are part of the default value of the faces dictionary.
-
-##### [Basic faces](@id man-basic-faces)
-
-Basic faces are intended represent a general idea, that is widely applicable.
-
-For setting some text with a certain attribute, we have the `bold`, `italic`,
-`underline`, `strikethrough`, and `inverse` faces.
-
-There are also named faces for the 16 terminal colours: `black`, `red`, `green`,
-`yellow`, `blue`, `magenta`, `cyan`, `white`, `bright_black`/`grey`/`gray`,
-`bright_red`, `bright_green`, `bright_blue`, `bright_magenta`, `bright_cyan`,
-and `bright_white`.
-
-For shadowed text (i.e. dim but there) there is the `shadow` face. To indicate a
-selected region, there is the `region` face. Similarly for emphasis and
-highlighting the `emphasis` and `highlight` faces are defined. There is also
-`code` for code-like text.
-
-For visually indicating the severity of messages the `error`, `warning`,
-`success`, `info`, `note`, and `tip` faces are defined.
-
-#### [Customisation of faces (`Faces.toml`)](@id man-face-toml)
-
-It is good for the name faces in the global face dictionary to be customizable.
-Theming and aesthetics are nice, and it is important for accessibility reasons
-too. A TOML file can be parsed into a list of [`Face`](@ref) specifications that
-are merged with the pre-existing entry in the face dictionary.
-
-A [`Face`](@ref) is represented in TOML like so:
-
-```toml
-[facename]
-attribute = "value"
-...
-
-[package.facename]
-attribute = "value"
-```
-
-For example, if the `shadow` face is too hard to read it can be made brighter
-like so:
-
-```toml
-[shadow]
-foreground = "white"
-```
-
-#### Applying faces to a `StyledString`
-
-By convention, the `:face` attributes of a [`StyledString`](@ref) hold
-information on the [`Face`](@ref)s that currently apply. This can be given in
-multiple forms, as a single `Symbol` naming a [`Face`](@ref)s in the global face
-dictionary, a [`Face`](@ref) itself, or a vector of either.
-
-The `show(::IO, ::MIME"text/plain", ::StyledString)` and `show(::IO,
-::MIME"text/html", ::StyledString)` methods both look at the `:face` attributes
-and merge them all together when determining the overall styling.
-
-We can supply `:face` attributes to a `StyledString` during construction, add
-them to the properties list afterwards, or use the convenient [Styled String
-literals](@ref man-styled-string-literals).
-
-```jldoctest
-julia> str1 = StyledString("blue text", [(1:9, :face => Face(foreground=:blue))])
-"blue text"
-
-julia> str2 = StyledString("blue text", :face => Face(foreground=:blue))
-"blue text"
-
-julia> str1 == str2
-true
-
-julia> sprint(show, MIME("text/plain"), str1, context = :color => true)
-"\"\e[34mblue text\e[39m\""
-
-julia> sprint(show, MIME("text/html"), str1, context = :color => true)
-"<pre><span style=\"color: #000080;\">blue text</span></pre>"
-```
-
-## [Styled String Literals](@id man-styled-string-literals)
-
-To ease construction of [`StyledString`](@ref)s with [`Face`](@ref)s applied,
-the [`S"..."`](@ref @S_str) styled string literal allows for the content and
-attributes to be easily expressed together via a custom grammar.
-
-Within a [`S"..."`](@ref @S_str) literal, curly parenthesis are considered
-special characters and must be escaped in normal usage (`\{`, `\}`). This allows
-them to be used to express annotations with (nestable) `{annotations...:text}`
-constructs.
-
-The `annotations...` component is a comma-separated list of three types of annotations.
-- Face names
-- Inline `Face` expressions `(key=val,...)`
-- `key=value` pairs
-
-Interpolation is possible everywhere except for inline face keys.
-
-For more information on the grammar, see the extended help of the
-[`S"..."`](@ref @S_str) docstring.
+The annotations of a [`TaggedString`](@ref Base.TaggedString) can be accessed
+and modified via the [`annotations`](@ref Base.annotations) and
+[`annotate!`](@ref Base.annotate!) functions.

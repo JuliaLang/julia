@@ -50,7 +50,6 @@ export
     Dims,
     Enum,
     ExponentialBackOff,
-    Face,
     IndexCartesian,
     IndexLinear,
     IndexStyle,
@@ -93,8 +92,6 @@ export
     StridedMatrix,
     StridedVecOrMat,
     StridedVector,
-    StyledChar,
-    StyledString,
     SubArray,
     SubString,
     SubstitutionString,
@@ -583,7 +580,6 @@ export
     ∪,
 
 # strings
-    addface!,
     ascii,
     bitstring,
     bytes2hex,
@@ -612,7 +608,6 @@ export
     isspace,
     isuppercase,
     isxdigit,
-    loadfaces!,
     lowercase,
     lowercasefirst,
     isvalid,
@@ -634,7 +629,6 @@ export
     split,
     string,
     strip,
-    styledstring,
     textwidth,
     thisind,
     titlecase,
@@ -1018,7 +1012,6 @@ export
     @b_str,    # byte vector
     @r_str,    # regex
     @s_str,    # regex substitution string
-    @S_str,    # styled string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
@@ -1096,7 +1089,14 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    TaggedString,
+    TaggedChar,
     UUID,
+
+# Tagged strings
+    textproperties,
+    textproperty!,
+    taggedstring,
 
 # Semaphores
     Semaphore,

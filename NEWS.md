@@ -8,18 +8,11 @@ New language features
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module. ([#50105])
 * `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
-* A new `AbstractString` type, `StyledString`, is introduced that allows for
+* A new `AbstractString` type, `TaggedString`, is introduced that allows for
   (arbitrary) regional annotations to be attached to an underlying string. This is
-  very useful for allowing styling information to be encoded separately, and along
-  with `Faces` provides a much more sophisticated approach for styling that
-  `printstyled`. There is also a new `StyledChar` type, that is the equivalent
-  new `AbstractChar` type.
-* The new `Faces` struct serves as a container for text styling information
-  (think typeface), and comes with a framework to provide a convenient,
-  extensible (via `addface!`), and customisable (see `loadfaces!`) approach to
-  styled content.
-* The new `@S_str` string macro provides a convenient way of creating a
-  `StyledString` with various faces or other attributes applied.
+  very useful for allowing styling information to be encoded separately, and is
+  used extensively in the new `StyledStrings` standard library. There is also a
+  new `TaggedChar` type, that is the equivalent new `AbstractChar` type.
 
 Language changes
 ----------------
@@ -62,6 +55,16 @@ New library features
 
 Standard library changes
 ------------------------
+
+#### StyledStrings
+
+* A new standard library for handling styling in a more comprehensive and structured way.
+* The new `Faces` struct serves as a container for text styling information
+  (think typeface), and comes with a framework to provide a convenient,
+  extensible (via `addface!`), and customisable (with a user's `Faces.toml` and `loadfaces!`) approach to
+  styled content.
+* The new `@styled_str` string macro provides a convenient way of creating a
+  `TaggedString` with various faces or other attributes applied.
 
 #### Package Manager
 

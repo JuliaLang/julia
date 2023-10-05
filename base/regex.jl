@@ -427,35 +427,35 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     return result
 end
 
-function _styledmatch(m::RegexMatch{S}, str::StyledString{S}) where {S<:AbstractString}
-    RegexMatch{StyledString{S}}(
-        (@inbounds SubString{StyledString{S}}(
+function _taggedmatch(m::RegexMatch{S}, str::TaggedString{S}) where {S<:AbstractString}
+    RegexMatch{TaggedString{S}}(
+        (@inbounds SubString{TaggedString{S}}(
             str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
-        Union{Nothing,SubString{StyledString{S}}}[
+        Union{Nothing,SubString{TaggedString{S}}}[
             if !isnothing(cap)
-                (@inbounds SubString{StyledString{S}}(
+                (@inbounds SubString{TaggedString{S}}(
                     str, cap.offset, cap.ncodeunits, Val(:noshift)))
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
 
-function match(re::Regex, str::StyledString)
+function match(re::Regex, str::TaggedString)
     m = match(re, str.string)
     if !isnothing(m)
-        _styledmatch(m, str)
+        _taggedmatch(m, str)
     end
 end
 
-function match(re::Regex, str::StyledString, idx::Integer, add_opts::UInt32=UInt32(0))
+function match(re::Regex, str::TaggedString, idx::Integer, add_opts::UInt32=UInt32(0))
     m = match(re, str.string, idx, add_opts)
     if !isnothing(m)
-        _styledmatch(m, str)
+        _taggedmatch(m, str)
     end
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String type; use String(s) to convert"
+    "regex matching is only available for the String and TaggedString types; use String(s) to convert"
 ))
 
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
@@ -708,8 +708,8 @@ struct RegexMatchIterator{S <: AbstractString}
 
     RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
         new{String}(regex, String(string), ovr)
-    RegexMatchIterator(regex::Regex, string::StyledString, ovr::Bool=false) =
-        new{StyledString{String}}(regex, StyledString(String(string.string), string.properties), ovr)
+    RegexMatchIterator(regex::Regex, string::TaggedString, ovr::Bool=false) =
+        new{TaggedString{String}}(regex, TaggedString(String(string.string), string.properties), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{<:RegexMatchIterator}) = RegexMatch
