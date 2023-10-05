@@ -98,9 +98,6 @@ end
 max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
-function _maybe_sizehint!(s::Set, size::Int)
-    size*3 > length(s.dict.keys) * 2 && sizehint!(s, size)
-end
 _maybe_sizehint!(s::AbstractSet, size::Int) = sizehint!(s, size)
 function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && _maybe_sizehint!(s, length(s) + Int(length(itr))::Int)

@@ -117,6 +117,9 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
+function _maybe_sizehint!(s::Set, size::Int)
+    size*3 > length(s.dict.keys) * 2 && sizehint!(s, size)
+end
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
