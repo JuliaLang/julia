@@ -771,7 +771,11 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
-    haslength(d2) && sizehint!(d1, length(d1) + length(d2))
+    if haslength(d2)
+        newlen = length(d1) + length(d2)
+        # if we will need to rehash, do it early
+        newlen * 3 > length(d1.slots) * 2 && sizehint!(d1, newlen)
+    end
     for (k, v) in d2
         i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
