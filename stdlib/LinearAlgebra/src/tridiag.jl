@@ -552,8 +552,6 @@ function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
     end
 end
 
-AbstractMatrix{T}(A::Tridiagonal) where {T} = Tridiagonal{T}(A)
-
 size(M::Tridiagonal) = (n = length(M.d); (n, n))
 
 function Matrix{T}(M::Tridiagonal) where {T}
