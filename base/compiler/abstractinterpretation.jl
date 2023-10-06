@@ -1869,50 +1869,44 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any})
-    na = length(argtypes)
-    if isvarargtype(argtypes[end])
-        if na ≤ 2
-            return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
-        elseif na > 4
-            return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-        end
-        a2 = argtypes[2]
-        a3 = unwrapva(argtypes[3])
-        nothrow = false
-    elseif na == 3
+    if length(argtypes) == 3
+        canconst = true
         a2 = argtypes[2]
         a3 = argtypes[3]
         ⊑ᵢ = ⊑(typeinf_lattice(interp))
-        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
-    else
-        return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-    end
-    canconst = true
-    if isa(a3, Const)
-        body = a3.val
-    elseif isType(a3)
-        body = a3.parameters[1]
-        canconst = false
-    else
-        return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
-    end
-    if !(isa(body, Type) || isa(body, TypeVar))
-        return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
-    end
-    if has_free_typevars(body)
-        if isa(a2, Const)
-            tv = a2.val
-        elseif isa(a2, PartialTypeVar)
-            tv = a2.tv
+        if isvarargtype(a3)
+            a3 = unwrapva(a3)
+            nothrow = false
+        else
+            nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
+        end
+        if isa(a3, Const)
+            body = a3.val
+        elseif isType(a3)
+            body = a3.parameters[1]
             canconst = false
         else
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+        end
+        if !(isa(body, Type) || isa(body, TypeVar))
             return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
-        isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
-        body = UnionAll(tv, body)
+        if has_free_typevars(body)
+            if isa(a2, Const)
+                tv = a2.val
+            elseif isa(a2, PartialTypeVar)
+                tv = a2.tv
+                canconst = false
+            else
+                return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            end
+            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            body = UnionAll(tv, body)
+        end
+        ret = canconst ? Const(body) : Type{body}
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    ret = canconst ? Const(body) : Type{body}
-    return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+    return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::AbsIntState)
