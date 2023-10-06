@@ -506,9 +506,6 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
-function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    Tridiagonal{T,V}(A.dl, A.d, A.du)
-end
 
 """
     Tridiagonal(A)
@@ -538,20 +535,20 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = copy(A)
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = copy(A)
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(AbstractVector{T}, (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x), (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, AbstractVector{T}(A.du2))
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2))
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(dl, d, du)
     end
 end
 Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = copy(A)
 function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
     dl, d, du = map(x -> convert(V, x), (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(V, A.du2))
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2))
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T,V}(dl, d, du)
     end
 end
 
