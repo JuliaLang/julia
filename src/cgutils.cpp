@@ -653,6 +653,8 @@ Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall = false)
 {
     assert(jl_is_primitivetype(bt));
+    if (((jl_datatype_t*)bt)->llvm_constructor != NULL)
+        return (Type*) ((jl_datatype_t*)bt)->llvm_constructor(&ctxt);
     if (bt == (jl_value_t*)jl_bool_type)
         return llvmcall ? getInt1Ty(ctxt) : getInt8Ty(ctxt);
     if (bt == (jl_value_t*)jl_int32_type)

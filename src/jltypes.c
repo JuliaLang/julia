@@ -2594,8 +2594,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->n_uninitialized = 8 - 3;
-    jl_datatype_type->name->names = jl_perm_symsvec(8,
+    jl_datatype_type->name->n_uninitialized = 9 - 3;
+    jl_datatype_type->name->names = jl_perm_symsvec(9,
             "name",
             "super",
             "parameters",
@@ -2603,16 +2603,18 @@ void jl_init_types(void) JL_GC_DISABLED
             "instance",
             "layout",
             "hash",
-            "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
-    jl_datatype_type->types = jl_svec(8,
+            "flags",  // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
+            "llvm_constructor");
+    jl_datatype_type->types = jl_svec(9,
             jl_typename_type,
             jl_datatype_type,
             jl_simplevector_type,
             jl_simplevector_type,
-            jl_any_type, // instance
+            jl_any_type /*instance*/,
             jl_any_type /*jl_voidpointer_type*/,
             jl_any_type /*jl_int32_type*/,
-            jl_any_type /*jl_uint16_type*/);
+            jl_any_type /*jl_uint16_type*/,
+            jl_any_type /*jl_voidpointer_type*/);
     const static uint32_t datatype_constfields[1] = { 0x00000057 }; // (1<<0)|(1<<1)|(1<<2)|(1<<4)|(1<<6)
     const static uint32_t datatype_atomicfields[1] = { 0x00000028 }; // (1<<3)|(1<<5)
     jl_datatype_type->name->constfields = datatype_constfields;

@@ -1799,6 +1799,17 @@ JL_CALLABLE(jl_f__typebody)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f__typector)
+{
+    JL_NARGS(_typector!, 2, 2);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_TYPECHK(_typector!, datatype, (jl_value_t*)dt);
+    jl_value_t* ctor = args[1];
+    JL_TYPECHK(_typector!, pointer, ctor);
+    dt->llvm_constructor = (jl_llvm_type_constructor_t) jl_unbox_long(ctor);
+    return jl_nothing;
+}
+
 // this is a heuristic for allowing "redefining" a type to something identical
 static int equiv_type(jl_value_t *ta, jl_value_t *tb)
 {
@@ -2049,6 +2060,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_primitivetype", jl_f__primitivetype);
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
+    add_builtin_func("_typector!", jl_f__typector);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);

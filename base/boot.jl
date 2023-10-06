@@ -19,14 +19,12 @@
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
-#    names::Tuple
 #    types::Tuple
-#    ctor
 #    instance
-#    size::Int32
-#    abstract::Bool
-#    mutable::Bool
-#    pointerfree::Bool
+#    layout
+#    llvm_ctor
+#    hash::UInt32
+#    flags::UInt16
 #end
 
 #struct Union <: Type
