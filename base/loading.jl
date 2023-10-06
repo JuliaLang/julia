@@ -1801,7 +1801,7 @@ function find_unsuitable_manifests_versions()
     dev_manifests = String[]
     for env in load_path()
         project_file = env_project_file(env)
-        project_file || continue # no project file
+        project_file isa String || continue # no project file
         manifest_file = project_file_manifest_path(project_file)
         manifest_file isa String || continue # no manifest file
         m = parsed_toml(manifest_file)
@@ -1832,7 +1832,6 @@ function collect_manifest_warnings()
         - Note that the following manifests in the load path were resolved with a different
           julia version, which may be the cause of the error:
             $(join(unsuitable_manifests, "\n    "))
-
         """
     end
     if !isempty(dev_manifests)
@@ -1841,7 +1840,6 @@ function collect_manifest_warnings()
           different DEV version of the current version, which may be the cause
           of the error:
             $(join(dev_manifests, "\n    "))
-
         """
     end
     return msg
