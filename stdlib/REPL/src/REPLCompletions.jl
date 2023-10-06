@@ -1,6 +1,45 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module REPLCompletions
+# Inside the REPLCompletions module
+module REPL.REPLCompletions
+
+# ...
+
+# Initialize a variable to keep track of the tab count
+if !haskey(REPL.REPLCompletions, :tab_count)
+    REPL.REPLCompletions.tab_count = 0
+end
+
+# Function to handle tab completion
+function repl_completions(input::String)
+    # Get a list of available completions
+    completions = get_completions(input)
+
+    # Check if there's only one completion
+    if length(completions) == 1
+        # Automatically complete the input
+        input = completions[1]
+    else
+        # Increment the tab count for subsequent tabs
+        REPL.REPLCompletions.tab_count += 1
+
+        # Cycle through completions if it's the third or subsequent tab
+        if REPL.REPLCompletions.tab_count >= 3
+            current_index = REPL.REPLCompletions.tab_count % length(completions)
+            input = completions[current_index]
+        else
+            # Display all completions for the second tab
+            println("Available completions: ", join(completions, ", "))
+        end
+    end
+
+    return input
+end
+
+# ...
+
+end  # End of the REPLCompletions module
 
 export completions, shell_completions, bslash_completions, completion_text
 
