@@ -25,6 +25,7 @@ const PARALLEL_PRECOMPILATION = true
 const debug_output = devnull # or stdout
 
 CTRL_C = '\x03'
+CTRL_D = '\x04'
 CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
@@ -130,7 +131,7 @@ generate_precompile_statements() = try
                     sleep(0.1)
                 end
             end
-            write(ptm, "exit()\n")
+            write(ptm, "$CTRL_D")
             wait(tee)
             success(p) || Base.pipeline_error(p)
             close(ptm)
@@ -175,9 +176,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
-                delete!(statements, statement)
                 continue
             end
+            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)

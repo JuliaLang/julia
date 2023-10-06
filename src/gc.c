@@ -2068,7 +2068,8 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
         // the first young object before starting this chunk
         // (this also would be valid for young objects, but probably less beneficial)
         for (; obj_begin < obj_end; obj_begin += step) {
-            new_obj = *obj_begin;
+            jl_value_t **slot = obj_begin;
+            new_obj = *slot;
             if (new_obj != NULL) {
                 verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                                gc_slot_to_arrayidx(obj_parent, obj_begin));
@@ -2077,7 +2078,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
                     nptr |= 1;
                 if (!gc_marked(o->header))
                     break;
-                gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
+                gc_heap_snapshot_record_array_edge(obj_parent, slot);
             }
         }
     }
@@ -2099,13 +2100,14 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
         }
     }
     for (; obj_begin < scan_end; obj_begin += step) {
+        jl_value_t **slot = obj_begin;
         new_obj = *obj_begin;
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                         gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_assert_parent_validity(obj_parent, new_obj);
             gc_try_claim_and_push(mq, new_obj, &nptr);
-            gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
+            gc_heap_snapshot_record_array_edge(obj_parent, slot);
         }
     }
     if (too_big) {
@@ -2136,7 +2138,8 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
         for (; ary8_begin < ary8_end; ary8_begin += elsize) {
             int early_end = 0;
             for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
-                new_obj = ary8_begin[*pindex];
+                jl_value_t **slot = &ary8_begin[*pindex];
+                new_obj = *slot;
                 if (new_obj != NULL) {
                     verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary8_parent, ary8_begin));
@@ -2147,7 +2150,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary8_parent, &new_obj);
+                    gc_heap_snapshot_record_array_edge(ary8_parent, slot);
                 }
             }
             if (early_end)
@@ -2173,13 +2176,14 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     }
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
-            new_obj = ary8_begin[*pindex];
+            jl_value_t **slot = &ary8_begin[*pindex];
+            new_obj = *slot;
             if (new_obj != NULL) {
                 verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
                 gc_assert_parent_validity(ary8_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary8_parent, &new_obj);
+                gc_heap_snapshot_record_array_edge(ary8_parent, slot);
             }
         }
     }
@@ -2211,7 +2215,8 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
         for (; ary16_begin < ary16_end; ary16_begin += elsize) {
             int early_end = 0;
             for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
-                new_obj = ary16_begin[*pindex];
+                jl_value_t **slot = &ary16_begin[*pindex];
+                new_obj = *slot;
                 if (new_obj != NULL) {
                     verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary16_parent, ary16_begin));
@@ -2222,7 +2227,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary16_parent, &new_obj);
+                    gc_heap_snapshot_record_array_edge(ary16_parent, slot);
                 }
             }
             if (early_end)
@@ -2248,13 +2253,14 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     }
     for (; ary16_begin < scan_end; ary16_begin += elsize) {
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
-            new_obj = ary16_begin[*pindex];
+            jl_value_t **slot = &ary16_begin[*pindex];
+            new_obj = *slot;
             if (new_obj != NULL) {
                 verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
                 gc_assert_parent_validity(ary16_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary16_parent, &new_obj);
+                gc_heap_snapshot_record_array_edge(ary16_parent, slot);
             }
         }
     }

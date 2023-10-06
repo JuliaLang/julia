@@ -184,6 +184,7 @@ end
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
         h.ndel = 0
+        h.maxprobe = 0
         return h
     end
 
@@ -259,6 +260,7 @@ function empty!(h::Dict{K,V}) where V where K
     resize!(h.vals, sz)
     h.ndel = 0
     h.count = 0
+    h.maxprobe = 0
     h.age += 1
     h.idxfloor = sz
     return h

@@ -17,6 +17,14 @@ mul_wrappers = [
     m -> adjoint(m),
     m -> transpose(m)]
 
+@testset "wrap" begin
+    f(A) = LinearAlgebra.wrap(A, 'N')
+    A = ones(1,1)
+    @test @inferred(f(A)) === A
+    g(A) = LinearAlgebra.wrap(A, 'T')
+    @test @inferred(g(A)) === transpose(A)
+end
+
 @testset "matrices with zero dimensions" begin
     for (dimsA, dimsB, dimsC) in (
         ((0, 5), (5, 3), (0, 3)),
