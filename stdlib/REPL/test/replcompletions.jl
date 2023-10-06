@@ -1978,6 +1978,24 @@ let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
     end
 end
 
+# JuliaLang/julia/#51548
+# don't return wrong result due to mutable inconsistentcy
+function issue51548(T, a)
+    # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
+    # constant-fold `isempty(xs)::Const(true)` and return wrong result
+    xs = T[]
+    if a isa T
+        push!(xs, a)
+    end
+    return Val(isempty(xs))
+end;
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(issue51548(Any, r"issue51548")), @__MODULE__; limit_aggressive_inference=true)
+    @test !isnothing(inferred)
+    RT = Core.Compiler.widenconst(inferred)
+    @test Val{false} <: RT
+end
+
 # Test completion of var"" identifiers (#49280)
 let s = "var\"complicated "
     c, r = test_complete_foo(s)
