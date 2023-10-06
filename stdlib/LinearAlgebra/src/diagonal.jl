@@ -107,9 +107,9 @@ function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
 end
 
-Diagonal(D::Diagonal) = D
-Diagonal{T}(D::Diagonal{T}) where {T} = D
-Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
+Diagonal(D::Diagonal) = copy(D)
+Diagonal{T}(D::Diagonal{T}) where {T} = copy(D)
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(AbstractVector{T}(D.diag))
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)

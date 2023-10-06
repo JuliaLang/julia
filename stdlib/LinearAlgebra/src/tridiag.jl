@@ -110,18 +110,16 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
+SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = copy(S)
 SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
     SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
-SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
+SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = copy(S)
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
-SymTridiagonal(S::SymTridiagonal) = S
+    SymTridiagonal(AbstractVector{T}(S.dv), AbstractVector{T}(S.ev))
+SymTridiagonal(S::SymTridiagonal) = copy(S)
 
-AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
@@ -537,17 +535,27 @@ julia> Tridiagonal(A)
 """
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 
-Tridiagonal(A::Tridiagonal) = A
-Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
+Tridiagonal(A::Tridiagonal) = copy(A)
+Tridiagonal{T}(A::Tridiagonal{T}) where {T} = copy(A)
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
+    dl, d, du = map(AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal(dl, d, du, AbstractVector{T}(A.du2))
     else
         Tridiagonal(dl, d, du)
     end
 end
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = copy(A)
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    dl, d, du = map(x -> convert(V, x), (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal(dl, d, du, convert(V, A.du2))
+    else
+        Tridiagonal(dl, d, du)
+    end
+end
+
+AbstractMatrix{T}(A::Tridiagonal) where {T} = Tridiagonal{T}(A)
 
 size(M::Tridiagonal) = (n = length(M.d); (n, n))
 
