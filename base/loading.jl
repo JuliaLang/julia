@@ -1826,35 +1826,19 @@ end
 
 function collect_manifest_warnings()
     unsuitable_manifests, dev_manifests = find_unsuitable_manifests_versions()
-    msg = if isempty(unsuitable_manifests)
-        ""
-    elseif length(unsuitable_manifests) == 1
-        """
-        - Note that a manifest in the load path was resolved with a different
-          julia version, which may be the cause of the error:
-            $(only(unsuitable_manifests))
-
-        """
-    else
-        """
-        - Note that manifests in the load path were resolved with a different
+    msg = ""
+    if !isempty(unsuitable_manifests)
+        msg *= """
+        - Note that the following manifests in the load path were resolved with a different
           julia version, which may be the cause of the error:
             $(join(unsuitable_manifests, "\n    "))
 
         """
     end
-    if length(dev_manifests) == 1
+    if !isempty(dev_manifests)
         msg *= """
-        - Note that a manifest in the load path was resolved a potentially
+        - Note that the following manifests in the load path were resolved a potentially
           different DEV version of the current version, which may be the cause
-          of the error:
-            $(only(dev_manifests))
-
-        """
-    else
-        msg *= """
-        - Note that manifests in the load path were resolved with potentially
-          different DEV versions of the current version, which may be the cause
           of the error:
             $(join(dev_manifests, "\n    "))
 
