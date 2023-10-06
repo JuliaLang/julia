@@ -510,11 +510,11 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # be employed, for instance, by `typeinf_ext_toplevel`.
 is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && !sv.cached
 
-function is_call_graph_uncached(sv::CC.AbsIntState)
-    sv isa CC.InferenceState && sv.cached && return false
+function is_call_graph_uncached(sv::CC.InferenceState)
+    sv.cached && return false
     parent = sv.parent
     parent === nothing && return true
-    return is_call_graph_uncached(parent)
+    return is_call_graph_uncached(parent::CC.InferenceState)
 end
 
 # aggressive global binding resolution within `repl_frame`
@@ -569,17 +569,24 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
         result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
     end
-    return @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
-                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
-                                             sv::CC.InferenceState)
+    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
+                                            result::CC.MethodCallResult, arginfo::CC.ArgInfo,
+                                            sv::CC.InferenceState)
+    if ret === :semi_concrete_eval
+        # while the base eligibility check probably won't permit semi-concrete evaluation
+        # for `REPLInterpreter` (given it completely turns off optimization),
+        # this ensures we don't inadvertently enter irinterp
+        ret = :none
+    end
+    return ret
 end
 
 # allow constant propagation for mutable constants
-function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
     if !interp.limit_aggressive_inference
         any(@nospecialize(a)->isa(a, Const), arginfo.argtypes) && return true # even if mutable
     end
-    return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
 end
 
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
