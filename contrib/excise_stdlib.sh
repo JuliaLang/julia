@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Uses https://github.com/newren/git-filter-repo
 # Recommended use of `Github cli`
