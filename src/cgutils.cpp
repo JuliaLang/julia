@@ -665,6 +665,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
         return getFloatTy(ctxt);
     if (bt == (jl_value_t*)jl_float64_type)
         return getDoubleTy(ctxt);
+    if (bt == (jl_value_t*)jl_bfloat16_type)
+        return getBFloatTy(ctxt);
     if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
