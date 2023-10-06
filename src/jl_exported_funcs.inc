@@ -416,6 +416,8 @@
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
+    XX(jl_safepoint_suspend_thread) \
+    XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \

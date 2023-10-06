@@ -3527,6 +3527,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     if (!jl_safepoint_start_gc()) {
         // either another thread is running GC, or the GC got disabled just now.
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+        jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
         return;
     }
 
@@ -3580,6 +3581,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
+    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
