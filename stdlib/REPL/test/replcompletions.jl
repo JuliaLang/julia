@@ -502,7 +502,7 @@ end
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
+    @test only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -573,7 +573,7 @@ end
 let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
 
 # method completions with kwargs
@@ -1953,12 +1953,12 @@ let (c, r, res) = test_complete_context("tcd1.")
 end
 let (c, r, res) = test_complete_context("tcd1.x.")
     @test res
-    @test_broken "v" in c && "w" in c
+    @test "v" in c && "w" in c
     @test isnothing(issue51499[])
 end
 let (c, r, res) = test_complete_context("tcd1.x.v.")
     @test res
-    @test_broken "a" in c && "b" in c
+    @test "a" in c && "b" in c
     @test isnothing(issue51499[])
 end
 @test tcd1.x.v.a == sin(1.0)
@@ -1969,12 +1969,12 @@ mutable_const_prop = Dict{Symbol,Any}(:key => Any[Some(r"x")])
 getkeyelem(d) = d[:key][1]
 let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).")
     @test res
-    @test_broken "value" in c
+    @test "value" in c
 end
 let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
     @test res
     for name in fieldnames(Regex)
-        @test_broken String(name) in c
+        @test String(name) in c
     end
 end
 
@@ -1989,7 +1989,8 @@ function issue51548(T, a)
     end
     return Val(isempty(xs))
 end;
-let inferred = REPL.REPLCompletions.repl_eval_ex(:(issue51548(Any, r"issue51548")), @__MODULE__)
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(issue51548(Any, r"issue51548")), @__MODULE__; limit_aggressive_inference=true)
     @test !isnothing(inferred)
     RT = Core.Compiler.widenconst(inferred)
     @test Val{false} <: RT
