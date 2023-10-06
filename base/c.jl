@@ -540,7 +540,7 @@ function expand_ccallable(rt, def)
                 end
             end
             return quote
-                $(esc(def))
+                @__doc__ $(esc(def))
                 _ccallable($(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
             end
         end
