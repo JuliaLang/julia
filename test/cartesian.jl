@@ -417,11 +417,11 @@ end
         i = CartesianIndex(typemax(Int)-1, typemax(Int)-1)
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((2:typemax(Int), 2:typemax(Int)))
+        I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
         i = CartesianIndex(typemax(Int), 1)
         @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
 
-        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        I = CartesianIndices((2:2:typemax(Int), 2:2:typemax(Int)))
         i = CartesianIndex(typemax(Int)-1, 1)
         @test iterate(I, i) === (CartesianIndex(2, 3), CartesianIndex(2, 3))
 
