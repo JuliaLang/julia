@@ -43,11 +43,11 @@ $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization \
-          SharedArrays Sockets Test TOML Unicode UUIDs \
+          SharedArrays Sockets TOML Unicode UUIDs \
           $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LazyArtifacts LibCURL DelimitedFiles Downloads ArgTools \
-              Tar NetworkOptions SuiteSparse SparseArrays SHA Distributed
+              Tar NetworkOptions SuiteSparse SparseArrays SHA Distributed Test
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

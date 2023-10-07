@@ -1,0 +1,4 @@
+TEST_BRANCH = master
+TEST_SHA1 = 9ce9b6d07be85a2ba5d6e08985514e526f5fe50e
+TEST_GIT_URL := https://github.com/JuliaLang/Test.jl
+TEST_TAR_URL = https://api.github.com/repos/JuliaLang/Test.jl/tarball/$1

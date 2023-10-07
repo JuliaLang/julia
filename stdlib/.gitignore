@@ -25,6 +25,8 @@
 /LazyArtifacts
 /Distributed-*
 /Distributed
+/Test-*
+/Test
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
 /*.image
