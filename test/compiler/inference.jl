@@ -60,7 +60,8 @@ end
 # issue #42835
 @test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1) # maybe should be fixed?
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.limit_type_size(Type{Int}, Any, Union{}, 0, 0) == Type{Int}
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
@@ -80,15 +81,16 @@ end
 @test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 
 # n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
-@test  Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
 
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Type{Union{Float32,Float64}}, Core.svec(Type{Union{Float32,Float64}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
@@ -97,8 +99,8 @@ end
 @test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
-    t = Type{Type{Int}}
-    c = Type{Int}
+    t = Type{Type{Type{Int}}}
+    c = Type{Type{Int}}
     r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
     @test t !== r && t <: r
 end
