@@ -804,6 +804,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _finish_julia_init(rel, ptls, ct);
 }
 
+void jl_init_heartbeat(void);
+
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
     jl_resolve_sysimg_location(rel);
@@ -843,6 +845,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_gcthreads = 0;
     }
     jl_start_threads();
+
+    jl_init_heartbeat();
 
     jl_gc_enable(1);
 

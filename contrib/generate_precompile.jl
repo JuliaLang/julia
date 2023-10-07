@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if Threads.maxthreadid() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
+    @warn "Running this file with multiple Julia threads may lead to a build error" Base.Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
