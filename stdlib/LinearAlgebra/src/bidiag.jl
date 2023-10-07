@@ -22,9 +22,9 @@ function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbo
                convert(AbstractVector{T}, ev)::AbstractVector{T},
                uplo)
 end
-function Bidiagonal{T,V}(A::Bidiagonal) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T,V}(A.dv, A.ev, A.uplo)
-end
+# function Bidiagonal{T,V}(A::Bidiagonal) where {T,V<:AbstractVector{T}}
+#     Bidiagonal{T,V}(A.dv, A.ev, A.uplo)
+# end
 
 """
     Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector
@@ -68,9 +68,9 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
 function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, uplo)
 end
-function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T,V}(dv, ev, uplo)
-end
+# function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+#     Bidiagonal{T,V}(dv, ev, uplo)
+# end
 
 #To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
 #where T and S can be promoted
@@ -114,9 +114,9 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
 end
 
 
-Bidiagonal(A::Bidiagonal) = copy(A)
-Bidiagonal{T}(A::Bidiagonal{T}) where {T} = copy(A)
-Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(AbstractVector{T}(A.dv), AbstractVector{T}(A.ev), A.uplo)
+# Bidiagonal(A::Bidiagonal) = copy(A)
+# Bidiagonal{T}(A::Bidiagonal{T}) where {T} = copy(A)
+# Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(AbstractVector{T}(A.dv), AbstractVector{T}(A.ev), A.uplo)
 
 bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
 function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
