@@ -873,6 +873,10 @@ static void do_profile(void *ctx)
     for (int idx = nthreads; idx-- > 0; ) {
         // Stop the threads in the random order.
         int tid = randperm[idx];
+        // skip heartbeat thread
+        if (tid == heartbeat_tid) {
+            return;
+        }
         // do backtrace for profiler
         if (!profile_running)
             return;

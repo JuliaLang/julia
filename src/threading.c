@@ -1111,6 +1111,289 @@ JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
     return 0; // success
 }
 
+// Heartbeat mechanism for Julia's task scheduler
+// ---
+// Start a thread that does not participate in running Julia's tasks. This
+// thread simply sleeps until the heartbeat mechanism is enabled. When
+// enabled, the heartbeat thread enters a loop in which it blocks waiting
+// for the specified heartbeat interval. If, within that interval,
+// `jl_heartbeat()` is *not* called at least once, then the thread calls
+// `jl_print_task_backtraces(0)`.
+
+#ifdef JL_HEARTBEAT_THREAD
+
+#include <time.h>
+
+volatile int heartbeat_enabled;
+int heartbeat_tid; // Mostly used to ensure we skip this thread in the CPU profiler. XXX: not implemented on Windows
+uv_thread_t heartbeat_uvtid;
+uv_sem_t heartbeat_on_sem,              // jl_heartbeat_enable -> thread
+         heartbeat_off_sem;             // thread -> jl_heartbeat_enable
+int heartbeat_interval_s,
+    tasks_after_n,
+    reset_tasks_after_n;
+int tasks_showed, n_hbs_missed, n_hbs_recvd;
+_Atomic(int) heartbeats;
+
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
+void jl_heartbeat_threadfun(void *arg);
+
+// start the heartbeat thread with heartbeats disabled
+void jl_init_heartbeat(void)
+{
+    heartbeat_enabled = 0;
+    uv_sem_init(&heartbeat_on_sem, 0);
+    uv_sem_init(&heartbeat_off_sem, 0);
+    uv_thread_create(&heartbeat_uvtid, jl_heartbeat_threadfun, NULL);
+    uv_thread_detach(&heartbeat_uvtid);
+}
+
+int jl_inside_heartbeat_thread(void)
+{
+    uv_thread_t curr_uvtid = uv_thread_self();
+    return curr_uvtid == heartbeat_uvtid;
+}
+
+// enable/disable heartbeats
+// heartbeat_s: interval within which jl_heartbeat() must be called
+// show_tasks_after_n: number of heartbeats missed before printing task backtraces
+// reset_after_n: number of heartbeats after which to reset
+//
+// When disabling heartbeats, the heartbeat thread must wake up,
+// find out that heartbeats are now disabled, and reset. For now, we
+// handle this by preventing re-enabling of heartbeats until this
+// completes.
+JL_DLLEXPORT int jl_heartbeat_enable(int heartbeat_s, int show_tasks_after_n,
+                                     int reset_after_n)
+{
+    if (heartbeat_s <= 0) {
+        heartbeat_enabled = 0;
+        heartbeat_interval_s = tasks_after_n = reset_tasks_after_n = 0;
+    }
+    else {
+        // must disable before enabling
+        if (heartbeat_enabled) {
+            return -1;
+        }
+        // heartbeat thread must be ready
+        if (uv_sem_trywait(&heartbeat_off_sem) != 0) {
+            return -1;
+        }
+
+        jl_atomic_store_relaxed(&heartbeats, 0);
+        heartbeat_interval_s = heartbeat_s;
+        tasks_after_n = show_tasks_after_n;
+        reset_tasks_after_n = reset_after_n;
+        tasks_showed = 0;
+        n_hbs_missed = 0;
+        n_hbs_recvd = 0;
+        heartbeat_enabled = 1;
+        uv_sem_post(&heartbeat_on_sem); // wake the heartbeat thread
+    }
+    return 0;
+}
+
+// temporarily pause the heartbeat thread
+JL_DLLEXPORT int jl_heartbeat_pause(void)
+{
+    if (!heartbeat_enabled) {
+        return -1;
+    }
+    heartbeat_enabled = 0;
+    return 0;
+}
+
+// resume the paused heartbeat thread
+JL_DLLEXPORT int jl_heartbeat_resume(void)
+{
+    // cannot resume if the heartbeat thread is already running
+    if (heartbeat_enabled) {
+        return -1;
+    }
+
+    // cannot resume if we weren't paused (disabled != paused)
+    if (heartbeat_interval_s == 0) {
+        return -1;
+    }
+
+    // heartbeat thread must be ready
+    if (uv_sem_trywait(&heartbeat_off_sem) != 0) {
+        return -1;
+    }
+
+    // reset state as we've been paused
+    n_hbs_missed = 0;
+    n_hbs_recvd = 0;
+    tasks_showed = 0;
+
+    // resume
+    heartbeat_enabled = 1;
+    uv_sem_post(&heartbeat_on_sem); // wake the heartbeat thread
+    return 0;
+}
+
+// heartbeat
+JL_DLLEXPORT void jl_heartbeat(void)
+{
+    jl_atomic_fetch_add(&heartbeats, 1);
+}
+
+// sleep the thread for the specified interval
+void sleep_for(int secs, int nsecs)
+{
+    struct timespec rqtp, rmtp;
+    rqtp.tv_sec = secs;
+    rqtp.tv_nsec = nsecs;
+    rmtp.tv_sec = 0;
+    rmtp.tv_nsec = 0;
+    for (; ;) {
+        // this suspends the thread so we aren't using CPU
+        if (nanosleep(&rqtp, &rmtp) == 0) {
+            return;
+        }
+        // TODO: else if (errno == EINTR)
+        // this could be SIGTERM and we should shutdown but how to find out?
+        rqtp = rmtp;
+    }
+}
+
+// check for heartbeats and maybe report loss
+uint8_t check_heartbeats(uint8_t gc_state)
+{
+    int hb = jl_atomic_exchange(&heartbeats, 0);
+
+    if (hb <= 0) {
+        // we didn't get a heartbeat
+        n_hbs_recvd = 0;
+        n_hbs_missed++;
+
+        // if we've printed task backtraces already, do nothing
+        if (!tasks_showed) {
+            // otherwise, at least show this message
+            jl_safe_printf("==== heartbeat loss (%ds) ====\n",
+                           n_hbs_missed * heartbeat_interval_s);
+            // if we've missed enough heartbeats, print task backtraces
+            if (n_hbs_missed >= tasks_after_n) {
+                jl_task_t *ct = jl_current_task;
+                jl_ptls_t ptls = ct->ptls;
+
+                // exit GC-safe region to report then re-enter
+                jl_gc_safe_leave(ptls, gc_state);
+                jl_print_task_backtraces(0);
+                gc_state = jl_gc_safe_enter(ptls);
+
+                // we printed task backtraces
+                tasks_showed = 1;
+            }
+        }
+    }
+    else {
+        // got a heartbeat
+        n_hbs_recvd++;
+        // if we'd printed task backtraces, check for reset
+        if (tasks_showed && n_hbs_recvd >= reset_tasks_after_n) {
+            tasks_showed = 0;
+            jl_safe_printf("==== heartbeats recovered (lost for %ds) ====\n",
+                           n_hbs_missed * heartbeat_interval_s);
+        }
+        n_hbs_missed = 0;
+    }
+
+    return gc_state;
+}
+
+// heartbeat thread function
+void jl_heartbeat_threadfun(void *arg)
+{
+    int s = 59, ns = 1e9 - 1, rs;
+    uint64_t t0, tchb;
+
+    // We need a TLS because backtraces are accumulated into ptls->bt_size
+    // and ptls->bt_data, so we need to call jl_adopt_thread().
+    jl_adopt_thread();
+    (void)jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    heartbeat_tid = ptls->tid;
+
+    // Don't hold up GC, this thread doesn't participate.
+    uint8_t gc_state = jl_gc_safe_enter(ptls);
+
+    for (;;) {
+        if (!heartbeat_enabled) {
+            // post the off semaphore to indicate we're ready to enable
+            uv_sem_post(&heartbeat_off_sem);
+
+            // sleep the thread here; this semaphore is posted in
+            // jl_heartbeat_enable() or jl_heartbeat_resume()
+            uv_sem_wait(&heartbeat_on_sem);
+
+            // Set the sleep duration.
+            s = heartbeat_interval_s - 1;
+            ns = 1e9 - 1;
+            continue;
+        }
+
+        // heartbeat is enabled; sleep, waiting for the desired interval
+        sleep_for(s, ns);
+
+        // if heartbeats were turned off/paused while we were sleeping, reset
+        if (!heartbeat_enabled) {
+            continue;
+        }
+
+        // check if any heartbeats have happened, report as appropriate
+        t0 = jl_hrtime();
+        gc_state = check_heartbeats(gc_state);
+        tchb = jl_hrtime() - t0;
+
+        // adjust the next sleep duration based on how long the heartbeat
+        // check took, but if it took too long then use the normal duration
+        rs = 1;
+        while (tchb > 1e9) {
+            rs++;
+            tchb -= 1e9;
+        }
+        if (rs < heartbeat_interval_s) {
+            s = heartbeat_interval_s - rs;
+        }
+        ns = 1e9 - tchb;
+    }
+}
+
+#else // !JL_HEARTBEAT_THREAD
+
+void jl_init_heartbeat(void)
+{
+}
+
+int jl_inside_heartbeat_thread(void)
+{
+    return 0;
+}
+
+JL_DLLEXPORT int jl_heartbeat_enable(int heartbeat_s, int show_tasks_after_n,
+                                     int reset_after_n)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_heartbeat_pause(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_heartbeat_resume(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT void jl_heartbeat(void)
+{
+}
+
+#endif // JL_HEARTBEAT_THREAD
+
 #ifdef __cplusplus
 }
 #endif

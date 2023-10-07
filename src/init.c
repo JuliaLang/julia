@@ -553,6 +553,8 @@ extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
 extern jl_mutex_t profile_show_peek_cond_lock;
 
+extern void jl_init_heartbeat(void);
+
 static void restore_fp_env(void)
 {
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
@@ -611,6 +613,11 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
+
+    if (jl_base_module != NULL) {
+        // requires code in Base
+        jl_init_heartbeat();
+    }
 
     jl_gc_enable(1);
 
