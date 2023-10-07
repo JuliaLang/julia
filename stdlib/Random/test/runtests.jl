@@ -718,13 +718,13 @@ end
 
     for seed=seeds
         Random.seed!(seed)
-        @test Random.GLOBAL_SEED === seed
+        @test Random.get_tls_seed() == default_rng()
     end
 
     for ii = 1:8
         iseven(ii) ? Random.seed!(nothing) : Random.seed!()
-        push!(seeds, Random.GLOBAL_SEED)
-        @test Random.GLOBAL_SEED isa UInt128 # could change, but must not be nothing
+        push!(seeds, copy(Random.get_tls_seed()))
+        @test Random.get_tls_seed() isa Xoshiro # could change, but must not be nothing
     end
     @test allunique(seeds)
 end
