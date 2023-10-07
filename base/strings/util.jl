@@ -1102,3 +1102,38 @@ function Base.rest(s::AbstractString, st...)
     end
     return String(take!(io))
 end
+
+"""
+    StringPairs{T}(x::AbstractString)
+
+This internal type is an iterator over (key => value) pairs of strings.
+"""
+struct StringPairs{T <: AbstractString}
+    x::T
+end
+
+StringPairs(x) = StringPairs{typeof(x)}(x)
+IteratorSize(::Type{StringPairs{T}}) where T = IteratorSize(T)
+length(x::StringPairs) = length(x.x)
+pairs(x::AbstractString) = StringPairs(x)
+
+# Generic fallback
+function iterate(x::StringPairs, i=firstindex(x.x))
+    i > ncodeunits(x.x) && return nothing
+    (i => x.x[i], nextind(x.x, i))
+end
+
+# In this method, exploit that string iteration's state is the index
+function iterate(
+    x::StringPairs{<:Union{String, SubString{String}}},
+    state::Int=firstindex(x.x)
+)
+    (char, i) = @something iterate(x.x, state) return nothing
+    (state => char, i)
+end
+
+# At this moment, Reverse{<:AbstractString} is inefficient, so this simple
+# implementation is not easily optimised
+function iterate(x::Iterators.Reverse{<:StringPairs}, i=lastindex(x.itr.x))
+    i < firstindex(x.itr.x) ? nothing : (i => x.itr.x[i], prevind(x.itr.x, i))
+end
