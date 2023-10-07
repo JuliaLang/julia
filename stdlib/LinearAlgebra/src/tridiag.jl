@@ -103,10 +103,11 @@ julia> SymTridiagonal(B)
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
+    checksquare(A)
     du = diag(A, 1)
     d  = diag(A)
     dl = diag(A, -1)
-    if all((x, y) -> x == transpose(y), du, dl) && all(issymmetric, d)
+    if all(((x, y),) -> x == transpose(y), zip(du, dl)) && all(issymmetric, d)
         SymTridiagonal(d, du)
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
