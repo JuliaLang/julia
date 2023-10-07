@@ -20,7 +20,7 @@ pushd $STDLIB
 echo "Filtering repo"
 git filter-repo --subdirectory-filter stdlib/$STDLIB --path LICENSE.md \
 	--message-callback 'return re.sub(b"(\W)(#\d+)", lambda m: m.group(1) + b"JuliaLang/julia" + m.group(2), message)'
-	
+
 
 echo "Deleting branches"
 git branch -l | grep -v release- | grep -v master | xargs git branch -v -D
