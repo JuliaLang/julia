@@ -1581,6 +1581,16 @@ void jl_dump_native_impl(void *native_code,
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
 
+        // This should really be in jl_create_native, but we haven't
+        // yet set the target triple binary format correctly at that
+        // point. This should be resolved when we start JITting for
+        // COFF when we switch over to JITLink.
+        for (auto &GA : dataM.aliases()) {
+            // Global aliases are only used for ccallable things, so we should
+            // mark them as dllexport
+            addComdat(&GA, TheTriple);
+        }
+
         // Wipe the global initializers, we'll reset them at load time
         for (auto gv : data->jl_sysimg_gvars) {
             cast<GlobalVariable>(gv)->setInitializer(Constant::getNullValue(gv->getValueType()));
