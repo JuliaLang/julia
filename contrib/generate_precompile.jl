@@ -4,7 +4,7 @@
 @eval Module() begin
 
 if Threads.maxthreadid() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
+    @warn "Running this file with multiple Julia threads may lead to a build error" Base.Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"

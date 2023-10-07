@@ -138,6 +138,9 @@
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+// heartbeats
+#define JL_HEARTBEAT_THREAD
+
 // partr -- parallel tasks runtime options ------------------------------------
 
 // multiq
