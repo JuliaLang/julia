@@ -116,8 +116,7 @@ end
 
 Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
-Bidiagonal{T}(A::Bidiagonal) where {T} =
-    Bidiagonal{T}(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
+Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
 bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
 function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
