@@ -285,7 +285,8 @@ end
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., cftypes...]
+    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Pair{Int8, UInt32},
+             Base.BitInteger_types..., cftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
 
@@ -365,7 +366,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
-            (T <: Tuple) && continue
+            (T <: Tuple || T <: Pair) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
@@ -1179,4 +1180,17 @@ end
     hash32 = Random.hash_seed(seed32)
     @test Random.hash_seed(map(UInt64, seed32)) == hash32
     @test hash32 ∉ keys(vseeds)
+end
+
+@testset "rand(::Type{<:Pair})" begin
+    @test rand(Pair{Int, Int}) isa Pair{Int, Int}
+    @test rand(Pair{Int, Float64}) isa Pair{Int, Float64}
+    @test rand(Pair{Int, Float64}, 3) isa Array{Pair{Int, Float64}}
+
+    # test that making an array out of a sampler works
+    # (i.e. that gentype(sp) is correct)
+    sp = Random.Sampler(AbstractRNG, Pair{Bool, Char})
+    xs = rand(sp, 3)
+    @test xs isa Vector{Pair{Bool, Char}}
+    @test length(xs) == 3
 end
