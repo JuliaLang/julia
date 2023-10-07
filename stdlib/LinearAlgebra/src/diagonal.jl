@@ -10,7 +10,7 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-# Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
+Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
@@ -107,9 +107,9 @@ function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
 end
 
-# Diagonal(D::Diagonal) = copy(D)
-# Diagonal{T}(D::Diagonal{T}) where {T} = copy(D)
-# Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(AbstractVector{T}(D.diag))
+Diagonal(D::Diagonal) = copy(D)
+Diagonal{T}(D::Diagonal{T}) where {T} = copy(D)
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(AbstractVector{T}(D.diag))
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
