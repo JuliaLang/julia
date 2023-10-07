@@ -709,7 +709,7 @@ struct RegexMatchIterator{S <: AbstractString}
     RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
         new{String}(regex, String(string), ovr)
     RegexMatchIterator(regex::Regex, string::TaggedString, ovr::Bool=false) =
-        new{TaggedString{String}}(regex, TaggedString(String(string.string), string.properties), ovr)
+        new{TaggedString{String}}(regex, TaggedString(String(string.string), string.annotations), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{<:RegexMatchIterator}) = RegexMatch

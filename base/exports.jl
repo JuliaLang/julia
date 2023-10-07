@@ -1094,9 +1094,9 @@ public
     UUID,
 
 # Tagged strings
-    textproperties,
-    textproperty!,
     taggedstring,
+    annotate!,
+    annotations,
 
 # Semaphores
     Semaphore,

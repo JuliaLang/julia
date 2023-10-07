@@ -12,9 +12,9 @@
     @test "a" * str == Base.TaggedString("asome string")
     @test str * "a" == Base.TaggedString("some stringa")
     @test str * str == Base.TaggedString("some stringsome string")
-    Base.textproperty!(str, 1:4, :thing, 0x01)
-    Base.textproperty!(str, 5:11, :other, 0x02)
-    Base.textproperty!(str, 1:11, :all, 0x03)
+    Base.annotate!(str, 1:4, :thing => 0x01)
+    Base.annotate!(str, 5:11, :other => 0x02)
+    Base.annotate!(str, 1:11, :all => 0x03)
     @test str[3:4] == SubString(str, 3, 4)
     @test Base.TaggedString(str[3:4]) ==
         Base.TaggedString("me", [(1:2, :thing => 0x01), (1:2, :all => 0x03)])

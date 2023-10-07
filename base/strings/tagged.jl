@@ -3,63 +3,85 @@
 """
     TaggedString{S <: AbstractString} <: AbstractString
 
-A string with annotated regions (often styling information).
+A string with metadata, in the form of annotated regions.
 
-More specifically, this is a thin wrapper around any other [`AbstractString`](@ref),
-allows arbitary tagged values to be attached to regions of the wrapped string.
+More specifically, this is a simple wrapper around any other
+[`AbstractString`](@ref) that allows for regions of the wrapped string to be
+annotated with tagged values.
 
-Each tag takes the form of a `Pair{Symbol, <:Any}`, the first value being the
-tag name, and the second the value. A single region can be annotated with the
-same tag multiple times.
+```text
+                        C
+                    ┌───┸─────────┐
+  "this is an example tagged string"
+  └──┰────────┼─────┘      │
+     A        └───┰────────┘
+                  B
+```
 
-See also [`TaggedChar`](@ref), [`taggedstring`](@ref), [`textproperties`](@ref), and
-[`textproperty!`](@ref).
+The above diagram represents a `TaggedString` where three ranges have been
+annotated (labeled `A`, `B`, and `C`). Each annotation must take the form of a
+`Pair{Symbol, <:Any}`, where a `Symbol` "tag" is used to label `Any` "value".
+
+Tags do not need to be unique, the same region can be annotated with the same
+tag multiple times.
+
+See also [`TaggedChar`](@ref), [`taggedstring`](@ref), [`annotations`](@ref), and
+[`annotate!`](@ref).
 
 !!! warning
     While the constructors are part of the Base public API, the fields
     of `TaggedString` are not. This is to allow for potential future
     changes in the implementation of this type. Instead use the
-    [`textproperties`](@ref), and [`textproperty!`](@ref) getter/setter
+    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
     functions.
 
 # Constructors
 
 ```julia
 TaggedString(s::S<:AbstractString) -> TaggedString{S}
-TaggedString(s::S<:AbstractString, properties::Vector{Tuple{UnitRange{Int}, Pair{Symbol, <:Any}}})
+TaggedString(s::S<:AbstractString, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, <:Any}}})
 ```
 
 A TaggedString can also be created with [`taggedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any tags present in the arguments.
+
+# Example
+
+```julia-repl
+julia> TaggedString("this is an example tagged string",
+                    [(1:18, :A => 1), (12:25, :B => 2), (18:32, :C => 3)])
+"this is an example tagged string"
+```
 """
 struct TaggedString{S <: AbstractString} <: AbstractString
     string::S
-    properties::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
+    annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
 end
 
 """
     TaggedChar{S <: AbstractChar} <: AbstractChar
 
-A Char annotated with tags.
+A Char annotated with tagged values.
 
-More specifically, this is a thin wrapper around any other [`AbstractChar`](@ref),
-which adds arbitrary tags to the wrapped character.
+More specifically, this is a simple wrapper around any other
+[`AbstractChar`](@ref), which holds a list of arbitrary tagged values
+(`Pair{Symbol, <:Any}`) with the wrapped character.
 
-See also: [`TaggedString`](@ref), [`taggedstring`](@ref), `textproperties`, and
-`textproperty!`.
+See also: [`TaggedString`](@ref), [`taggedstring`](@ref), `annotations`,
+and `annotate!`.
 
 !!! warning
     While the constructors are part of the Base public API, the fields
     of `TaggedChar` are not. This it to allow for potential future
     changes in the implementation of this type. Instead use the
-    [`textproperties`](@ref), and [`textproperty!`](@ref) getter/setter
+    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
     functions.
 
 # Constructors
 
 ```julia
 TaggedChar(s::S) -> TaggedChar{S}
-TaggedChar(s::S, properties::Vector{Pair{Symbol, <:Any}})
+TaggedChar(s::S, annotations::Vector{Pair{Symbol, <:Any}})
 ```
 
 # Examples
@@ -71,26 +93,26 @@ julia> TaggedChar('j', :tag => 1)
 """
 struct TaggedChar{C <: AbstractChar} <: AbstractChar
     char::C
-    properties::Vector{Pair{Symbol, Any}}
+    annotations::Vector{Pair{Symbol, Any}}
 end
 
 ## Constructors ##
 
 # When called with overly-specialised arguments
 
-TaggedString(s::AbstractString, props::Vector{<:Tuple{UnitRange{Int}, <:Pair{Symbol, <:Any}}}) =
-    TaggedString(s, Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}(props))
+TaggedString(s::AbstractString, annots::Vector{<:Tuple{UnitRange{Int}, <:Pair{Symbol, <:Any}}}) =
+    TaggedString(s, Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}(annots))
 
-TaggedChar(c::AbstractChar, props::Vector{<:Pair{Symbol, <:Any}}) =
-    TaggedChar(c, Vector{Pair{Symbol, Any}}(props))
+TaggedChar(c::AbstractChar, annots::Vector{<:Pair{Symbol, <:Any}}) =
+    TaggedChar(c, Vector{Pair{Symbol, Any}}(annots))
 
 # Constructors to avoid recursive wrapping
 
-TaggedString(s::TaggedString, props::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}) =
-    TaggedString(s.string, vcat(s.properties, props))
+TaggedString(s::TaggedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}) =
+    TaggedString(s.string, vcat(s.annotations, annots))
 
-TaggedChar(c::TaggedChar, props::Vector{Pair{Symbol, Any}}) =
-    TaggedChar(c.char, vcat(s.properties, props))
+TaggedChar(c::TaggedChar, annots::Vector{Pair{Symbol, Any}}) =
+    TaggedChar(c.char, vcat(s.annotations, annots))
 
 String(s::TaggedString{String}) = s.string # To avoid pointless overhead
 
@@ -131,7 +153,7 @@ lastindex(s::TaggedString) = lastindex(s.string)
 function getindex(s::TaggedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        TaggedChar(s.string[i], textproperties(s, i))
+        TaggedChar(s.string[i], annotations(s, i))
     else
         string_index_err(s, i)
     end
@@ -149,10 +171,10 @@ cmp(a::AbstractString, b::TaggedString) = cmp(a, b.string)
 cmp(a::TaggedString, b::TaggedString) = cmp(a.string, b.string)
 
 ==(a::TaggedString, b::TaggedString) =
-    a.string == b.string && a.properties == b.properties
+    a.string == b.string && a.annotations == b.annotations
 
-==(a::TaggedString, b::AbstractString) = isempty(a.properties) && a.string == b
-==(a::AbstractString, b::TaggedString) = isempty(b.properties) && a == b.string
+==(a::TaggedString, b::AbstractString) = isempty(a.annotations) && a.string == b
+==(a::AbstractString, b::TaggedString) = isempty(b.annotations) && a == b.string
 
 """
     taggedstring(values...)
@@ -160,7 +182,7 @@ cmp(a::TaggedString, b::TaggedString) = cmp(a.string, b.string)
 Create a `TaggedString` from any number of `values` using their
 [`print`](@ref)ed representation.
 
-This acts like [`string`](@ref), but takes care to preserve any properties
+This acts like [`string`](@ref), but takes care to preserve any annotations
 present (in the form of [`TaggedString`](@ref) or [`TaggedChar`](@ref) values).
 
 See also [`TaggedString`](@ref) and [`TaggedChar`](@ref).
@@ -179,26 +201,26 @@ function taggedstring(xs...)
     isempty(xs) && return TaggedString("")
     size = mapreduce(_str_sizehint, +, xs)
     s = IOContext(IOBuffer(sizehint=size), :color => true)
-    properties = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
+    annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     for x in xs
         if x isa TaggedString
-            for (region, prop) in x.properties
-                push!(properties, (s.io.size .+ (region), prop))
+            for (region, annot) in x.annotations
+                push!(annotations, (s.io.size .+ (region), annot))
             end
             print(s, x.string)
         elseif x isa SubString{<:TaggedString}
-            for (region, prop) in x.string.properties
+            for (region, annot) in x.string.annotations
                 start, stop = first(region), last(region)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
                     rstart = s.io.size + max(0, start - x.offset) + 1
                     rstop = s.io.size + min(stop, x.offset + x.ncodeunits) - x.offset
-                    push!(properties, (rstart:rstop, prop))
+                    push!(annotations, (rstart:rstop, annot))
                 end
             end
             print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
         elseif x isa TaggedChar
-            for prop in x.properties
-                push!(properties, (1+s.io.size:1+s.io.size, prop))
+            for annot in x.annotations
+                push!(annotations, (1+s.io.size:1+s.io.size, annot))
             end
             print(s, x.char)
         else
@@ -206,12 +228,12 @@ function taggedstring(xs...)
         end
     end
     str = String(resize!(s.io.data, s.io.size))
-    TaggedString(str, properties)
+    TaggedString(str, annotations)
 end
 
 taggedstring(s::TaggedString) = s
 taggedstring(c::TaggedChar) =
-    TaggedString(string(c.char), [(1:ncodeunits(c), c.properties)])
+    TaggedString(string(c.char), [(1:ncodeunits(c), annot) for annot in c.annotations])
 
 TaggedString(s::SubString{<:TaggedString}) = taggedstring(s)
 
@@ -223,17 +245,17 @@ Merge contiguous identical tags in `str`.
 function taggedstring_optimize!(s::TaggedString)
     last_seen = Dict{Pair{Symbol, Any}, Int}()
     i = 1
-    while i <= length(s.properties)
-        region, keyval = s.properties[i]
+    while i <= length(s.annotations)
+        region, keyval = s.annotations[i]
         prev = get(last_seen, keyval, 0)
         if prev > 0
-            lregion, _ = s.properties[prev]
+            lregion, _ = s.annotations[prev]
             if last(lregion) + 1 == first(region)
-                s.properties[prev] =
-                    setindex(s.properties[prev],
+                s.annotations[prev] =
+                    setindex(s.annotations[prev],
                              first(lregion):last(region),
                              1)
-                deleteat!(s.properties, i)
+                deleteat!(s.annotations, i)
             else
                 delete!(last_seen, keyval)
             end
@@ -249,22 +271,22 @@ function repeat(str::TaggedString, r::Integer)
     r == 0 && return one(TaggedString)
     r == 1 && return str
     untagged = repeat(str.string, r)
-    properties = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
+    annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     len = ncodeunits(str)
     fullregion = firstindex(str):lastindex(str)
-    for (region, prop) in str.properties
+    for (region, annot) in str.annotations
         if region == fullregion
-            push!(properties, (firstindex(untagged):lastindex(untagged), prop))
+            push!(annotations, (firstindex(untagged):lastindex(untagged), annot))
         end
     end
     for offset in 0:len:(r-1)*len
-        for (region, prop) in str.properties
+        for (region, annot) in str.annotations
             if region != fullregion
-                push!(properties, (region .+ offset, prop))
+                push!(annotations, (region .+ offset, annot))
             end
         end
     end
-    TaggedString(untagged, properties) |> taggedstring_optimize!
+    TaggedString(untagged, annotations) |> taggedstring_optimize!
 end
 
 repeat(str::SubString{<:TaggedString}, r::Integer) =
@@ -273,7 +295,7 @@ repeat(str::SubString{<:TaggedString}, r::Integer) =
 function repeat(c::TaggedChar, r::Integer)
     str = repeat(c.char, r)
     fullregion = firstindex(str):lastindex(str)
-    TaggedString(str, [(fullregion, prop) for prop in c.properties])
+    TaggedString(str, [(fullregion, annot) for annot in c.annotations])
 end
 
 function reverse(s::TaggedString)
@@ -281,8 +303,8 @@ function reverse(s::TaggedString)
     TaggedString(reverse(s.string),
                  [(UnitRange(1 + lastind - last(region),
                              1 + lastind - first(region)),
-                   prop)
-                  for (region, prop) in s.properties])
+                   annot)
+                  for (region, annot) in s.annotations])
 end
 
 # TODO optimise?
@@ -293,62 +315,74 @@ reverse(s::SubString{<:TaggedString}) = reverse(TaggedString(s))
 ## End AbstractString interface ##
 
 """
-    textproperty!(str::TaggedString, [range::UnitRange{Int}], tag::Symbol, value)
-    textproperty!(str::SubString{TaggedString}, [range::UnitRange{Int}], tag::Symbol, value)
+    annotate!(str::TaggedString, [range::UnitRange{Int}], tag::Symbol => value)
+    annotate!(str::SubString{TaggedString}, [range::UnitRange{Int}], tag::Symbol => value)
 
-Add `tag` with `value` in `str`, over `range` if specified or the whole
-string otherwise.
+Annotate a `range` of `str` (or the entire string) with a tagged value (`tag` =>
+`value`). To remove existing `tag` annotations, use a value of `nothing`.
 """
-function textproperty!(s::TaggedString, range::UnitRange{Int}, tag::Symbol, val)
-    indices = searchsorted(s.properties, (range,), by=first)
-    tagindex = filter(i -> first(s.properties[i][2]) === tag, indices)
-    if length(tagindex) == 1
-        if val === nothing
-            deleteat!(s.properties, first(tagindex))
-        else
-            s.properties[first(tagindex)] = (range, Pair{Symbol, Any}(tag, val))
+function annotate!(s::TaggedString, range::UnitRange{Int}, @nospecialize(tagval::Pair{Symbol, <:Any}))
+    tag, val = tagval
+    indices = searchsorted(s.annotations, (range,), by=first)
+    if val === nothing
+        tagindex = filter(i -> first(s.annotations[i][2]) === tag, indices)
+        for index in Iterators.reverse(tagindex)
+            deleteat!(s.annotations, index)
         end
     else
-        splice!(s.properties, indices, [(range, Pair{Symbol, Any}(tag, val))])
+        splice!(s.annotations, indices, [(range, Pair{Symbol, Any}(tag, val))])
     end
     s
 end
 
-textproperty!(ss::TaggedString, tag::Symbol, value) =
-    textproperty!(ss, firstindex(ss):lastindex(ss), tag, value)
+annotate!(ss::TaggedString, @nospecialize(tagval::Pair{Symbol, <:Any})) =
+    annotate!(ss, firstindex(ss):lastindex(ss), tagval)
 
-textproperty!(s::SubString{<:TaggedString}, range::UnitRange{Int}, tag::Symbol, value) =
-    (textproperty!(s.string, s.offset .+ (range), tag, value); s)
+annotate!(s::SubString{<:TaggedString}, range::UnitRange{Int}, @nospecialize(tagval::Pair{Symbol, <:Any})) =
+    (annotate!(s.string, s.offset .+ (range), tagval); s)
 
-textproperty!(s::SubString{<:TaggedString}, tag::Symbol, value) =
-    (textproperty!(s.string, s.offset .+ (1:s.ncodeunits), tag, value); s)
+annotate!(s::SubString{<:TaggedString}, @nospecialize(tagval::Pair{Symbol, <:Any})) =
+    (annotate!(s.string, s.offset .+ (1:s.ncodeunits), tagval); s)
 
 """
-    textproperties(s::TaggedString, i::Integer)
-    textproperties(s::SubString{TaggedString}, i::Integer)
+    annotate!(char::TaggedChar, tag::Symbol => value)
 
-Get the text properties that apply to `s` at index `i`.
+Annotate `char` with the pair `tag => value`.
 """
-function textproperties(s::TaggedString, i::Integer)
+annotate!(c::TaggedChar, @nospecialize(tagval::Pair{Symbol, <:Any})) =
+    (push!(c.annotations, tagval); c)
+
+"""
+    annotations(str::TaggedString, [position::Union{Integer, UnitRange}])
+    annotations(str::SubString{TaggedString}, [position::Union{Integer, UnitRange}])
+
+Get all annotations that apply to `str`. Should `position` be provided, only
+annotations that overlap with `position` will be returned.
+
+See also: `annotate!`.
+"""
+annotations(s::TaggedString) = s.annotations
+
+annotations(s::SubString{<:TaggedString}) =
+    annotations(s, s.offset+1:s.offset+s.ncodeunits)
+
+function annotations(s::TaggedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    props = filter(tag -> !isempty(intersect(i:i, first(tag))),
-                   s.properties)
-    last.(props)
+    annots = filter(tag -> !isempty(intersect(pos, first(tag))),
+                    s.annotations)
+    last.(annots)
 end
 
-textproperties(s::SubString{<:TaggedString}, i::Integer) =
-    textproperties(s.string, s.offset + i)
+annotations(s::TaggedString, pos::Integer) = annotations(s, pos:pos)
+
+annotations(s::SubString{<:TaggedString}, pos::Integer) =
+    annotations(s.string, s.offset + pos)
+annotations(s::SubString{<:TaggedString}, pos::UnitRange{<:Integer}) =
+    annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    textproperties(c::TaggedChar)
+    annotations(chr::TaggedChar)
 
-Get the properties that apply to `c`.
+Get all annotations of `chr`.
 """
-textproperties(c::TaggedChar) = c.properties
-
-"""
-    textproperty!(char::TaggedChar, tag::Symbol, value)
-
- Add a `tag` with `value` to `char`.
-"""
-textproperty!(c::TaggedString, tag::Symbol, value)
+annotations(c::TaggedChar) = c.annotations

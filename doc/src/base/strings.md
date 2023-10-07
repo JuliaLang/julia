@@ -20,8 +20,8 @@ Base.@lazy_str
 Base.TaggedString
 Base.TaggedChar
 Base.taggedstring
-Base.textproperties
-Base.textproperty!
+Base.annotations
+Base.annotate!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
