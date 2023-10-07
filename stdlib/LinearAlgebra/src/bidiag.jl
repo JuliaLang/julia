@@ -114,9 +114,10 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
 end
 
 
-Bidiagonal(A::Bidiagonal) = copy(A)
-Bidiagonal{T}(A::Bidiagonal{T}) where {T} = copy(A)
-Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(AbstractVector{T}(A.dv), AbstractVector{T}(A.ev), A.uplo)
+Bidiagonal(A::Bidiagonal) = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal) where {T} =
+    Bidiagonal{T}(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 
 bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
 function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
@@ -229,6 +230,7 @@ promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A)
+AbstractMatrix{T}(A::Bidiagonal{T}) where {T} = copy(A)
 
 convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 

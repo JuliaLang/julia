@@ -114,15 +114,16 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = copy(S)
+SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
 SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
     SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
-SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = copy(S)
+SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(AbstractVector{T}(S.dv), AbstractVector{T}(S.ev))
-SymTridiagonal(S::SymTridiagonal) = copy(S)
+    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+SymTridiagonal(S::SymTridiagonal) = S
 
 AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+AbstractMatrix{T}(S::SymTridiagonal{T}) where {T} = copy(S)
 
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
@@ -539,8 +540,8 @@ julia> Tridiagonal(A)
 """
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 
-Tridiagonal(A::Tridiagonal) = copy(A)
-Tridiagonal{T}(A::Tridiagonal{T}) where {T} = copy(A)
+Tridiagonal(A::Tridiagonal) = A
+Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
     dl, d, du = map(x -> convert(AbstractVector{T}, x), (A.dl, A.d, A.du))
     if isdefined(A, :du2)
@@ -549,7 +550,7 @@ function Tridiagonal{T}(A::Tridiagonal) where {T}
         Tridiagonal{T}(dl, d, du)
     end
 end
-Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = copy(A)
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
 function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
     dl, d, du = map(x -> convert(V, x), (A.dl, A.d, A.du))
     if isdefined(A, :du2)
@@ -773,6 +774,7 @@ end
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+AbstractMatrix{T}(M::Tridiagonal{T}) where {T} = copy(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
     if issymmetric(M)

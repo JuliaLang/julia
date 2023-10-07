@@ -50,7 +50,7 @@ struct UpperHessenberg{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     end
 end
 UpperHessenberg(H::UpperHessenberg) = H
-UpperHessenberg{T}(A::AbstractMatrix) where {T} = UpperHessenberg(AbstractMatrix{T}(A))
+UpperHessenberg{T}(A::AbstractMatrix) where {T} = UpperHessenberg(convert(AbstractMatrix{T}, A))
 UpperHessenberg{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
 UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
@@ -62,7 +62,8 @@ parent(H::UpperHessenberg) = H.data
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
-AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(convert(AbstractMatrix{T}, H.data))
+AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
