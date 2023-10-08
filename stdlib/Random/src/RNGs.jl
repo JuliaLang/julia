@@ -387,23 +387,28 @@ const GLOBAL_RNG = default_rng()
 # the following feature of `@testset`:
 # > Before the execution of the body of a `@testset`, there is an implicit
 # > call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
-# But the global RNG is now TaskLocalRNG() and doesn't store its seed; in order to not break `@testset`, we now
-# store the seed used in a call like `seed!(seed)` *without* an explicit RNG in `GLOBAL_SEED`; the wording of the
-# feature above was sufficiently unprecise (e.g. what exactly is the "global RNG"?) that this solution seems fine
-GLOBAL_SEED = 0
-# only the Test module is allowed to use this function!
-set_global_seed!(seed) = global GLOBAL_SEED = seed
+# But the global RNG is now `TaskLocalRNG()` and doesn't store its seed; in order to not break `@testset`,
+# in a call like `seed!(seed)` *without* an explicit RNG, we now store the state of `TaskLocalRNG()` in
+# `task_local_storage()`
 
-# seed the "global" RNG
+# GLOBAL_SEED is used as a fall-back when no tls seed is found
+# only `Random.__init__` is allowed to set it
+const GLOBAL_SEED = Xoshiro(0, 0, 0, 0, 0)
+
+get_tls_seed() = get!(() -> copy(GLOBAL_SEED), task_local_storage(),
+                      :__RANDOM_GLOBAL_RNG_SEED_uBlmfA8ZS__)::Xoshiro
+
+# seed the default RNG
 function seed!(seed=nothing)
-    # the seed is not left as `nothing`, as storing `nothing` as the global seed wouldn't lead to reproducible streams
-    seed = @something seed rand(RandomDevice(), UInt128)
-    set_global_seed!(seed)
     seed!(default_rng(), seed)
+    copy!(get_tls_seed(), default_rng())
+    default_rng()
 end
 
 function __init__()
-    seed!()
+    # do not call no-arg `seed!()` to not update `task_local_storage()` unnecessarily at startup
+    seed!(default_rng())
+    copy!(GLOBAL_SEED, TaskLocalRNG())
     ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
