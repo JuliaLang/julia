@@ -35,7 +35,8 @@ function delete_stubs(mod)
         if obj isa Function
             ms = Base.methods(obj, mod)
             for m in ms
-                Base.delete_method(m)
+                ccall(:jl_push_newly_deleted, Cvoid, (Any,), m)
+                ccall(:jl_method_table_disable_incremental, Cvoid, (Any, Any), Base.get_methodtable(m), m)
             end
         end
     end

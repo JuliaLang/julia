@@ -3,6 +3,7 @@
 # Tracking of newly-inferred CodeInstances during precompilation
 const track_newly_inferred = RefValue{Bool}(false)
 const newly_inferred = CodeInstance[]
+const newly_deleted = Method[]
 
 # build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
