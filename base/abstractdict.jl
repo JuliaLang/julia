@@ -218,7 +218,8 @@ Dict{Int64, Int64} with 3 entries:
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
         if haslength(d) && haslength(other)
-            sizehint!(d, length(d) + length(other); shrink = false)
+            # TODO - do not shrink
+            sizehint!(d, length(d) + length(other))
         end
         for (k,v) in other
             d[k] = v
