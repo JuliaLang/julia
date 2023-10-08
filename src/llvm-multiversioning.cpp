@@ -50,7 +50,7 @@ extern Optional<bool> always_have_fma(Function&, const Triple &TT);
 
 namespace {
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
 
 // Treat identical mapping as missing and return `def` in that case.
 // We mainly need this to identify cloned function using value map after LLVM cloning
@@ -126,12 +126,14 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
             }
 
             for (size_t i = 0; i < I.getNumOperands(); i++) {
-                if(I.getOperand(i)->getType()->isHalfTy()){
+                if(I.getOperand(i)->getType()->isHalfTy()) {
                     flag |= JL_TARGET_CLONE_FLOAT16;
                 }
-                // Check for BFloat16 when they are added to julia can be done here
+                if(I.getOperand(i)->getType()->isBFloatTy()) {
+                    flag |= JL_TARGET_CLONE_BFLOAT16;
+                }
             }
-            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
+            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
             if (has_veccall && (flag & veccall_flags) == veccall_flags) {
                 return flag;
             }

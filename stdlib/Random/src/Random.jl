@@ -330,8 +330,11 @@ Pick a random element or array of random elements from the set of values specifi
 
   + a user-defined type and set of values; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
 
-  + `S` can also be a tuple type of known size and where each parameter of `S` is itself a sampleable type; return a value of type `S`.
-    Note that tuple types such as `Tuple{Vararg{T}}` (unknown size) and `Tuple{1:2}` (parameterized with a value) are not supported.
+  + a tuple type of known size and where each parameter of `S` is itself a sampleable type; return a value of type `S`.
+    Note that tuple types such as `Tuple{Vararg{T}}` (unknown size) and `Tuple{1:2}` (parameterized with a value) are not supported
+
+  + a `Pair` type, e.g. `Pair{X, Y}` such that `rand` is defined for `X` and `Y`,
+    in which case random pairs are produced.
 
 
 `S` defaults to [`Float64`](@ref).

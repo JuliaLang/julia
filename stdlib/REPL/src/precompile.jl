@@ -176,9 +176,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
-                delete!(statements, statement)
                 continue
             end
+            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)

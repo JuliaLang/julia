@@ -497,7 +497,6 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
-#if JULIA_FLOAT16_ABI == 1
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -514,7 +513,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     auto val = builder.CreateCall(target, CallArgs);
     builder.CreateRet(val);
 }
-#endif
+
 void multiversioning_preannotate(Module &M);
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
@@ -1065,6 +1064,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 #else
             emitFloat16Wrappers(M, false);
 #endif
+
+            injectCRTAlias(M, "__truncsfbf2", "julia__truncsfbf2",
+                    FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncsdbf2", "julia__truncdfbf2",
+                    FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
         }
         timers.optimize.stopTimer();
     }
@@ -1580,6 +1584,16 @@ void jl_dump_native_impl(void *native_code,
         auto &Context = dataM.getContext();
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
+
+        // This should really be in jl_create_native, but we haven't
+        // yet set the target triple binary format correctly at that
+        // point. This should be resolved when we start JITting for
+        // COFF when we switch over to JITLink.
+        for (auto &GA : dataM.aliases()) {
+            // Global aliases are only used for ccallable things, so we should
+            // mark them as dllexport
+            addComdat(&GA, TheTriple);
+        }
 
         // Wipe the global initializers, we'll reset them at load time
         for (auto gv : data->jl_sysimg_gvars) {

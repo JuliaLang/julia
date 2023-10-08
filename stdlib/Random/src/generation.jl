@@ -175,12 +175,29 @@ function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:Ab
 end
 
 function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
-    SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+    if N > 0
+        SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+    else
+        SamplerTag{Tuple{}}(())
+    end
 end
 
 function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
     ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
 end
+
+### random pairs
+
+function Sampler(::Type{RNG}, ::Type{Pair{A, B}}, n::Repetition) where {RNG<:AbstractRNG, A, B}
+    sp1 = Sampler(RNG, A, n)
+    sp2 = A === B ? sp1 : Sampler(RNG, B, n)
+    SamplerTag{Ref{Pair{A,B}}}(sp1 => sp2) # Ref so that the gentype is Pair{A, B}
+                                           # in SamplerTag's constructor
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{<:Ref{<:Pair}}) =
+    rand(rng, sp.data.first) => rand(rng, sp.data.second)
+
 
 ## Generate random integer within a range
 
