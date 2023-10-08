@@ -414,8 +414,33 @@ julia> for i = 1:3
 3
 ```
 
-Here the `1:3` is a range object, representing the sequence of numbers 1, 2, 3. The `for`
-loop iterates through these values, assigning each one in turn to the variable `i`. One rather
+Here the `1:3` is a [`range`](@ref) object, representing the sequence of numbers 1, 2, 3. The `for`
+loop iterates through these values, assigning each one in turn to the variable `i`.
+In general, the `for` construct can loop over any "iterable" object (or "container"), from a  range like `1:3` or `1:3:13` (a [`StepRange`](@ref) indicating every 3rd integer 1, 4, 7, …, 13) to more generic containers like arrays, including [iterators defined by user code](@ref man-interface-iteration)
+or external packages. For containers other than ranges, the alternative
+(but fully equivalent) keyword `in` or `∈` is typically used instead of `=`, since it makes
+the code read more clearly:
+
+```jldoctest
+julia> for i in [1,4,0]
+           println(i)
+       end
+1
+4
+0
+
+julia> for s ∈ ["foo","bar","baz"]
+           println(s)
+       end
+foo
+bar
+baz
+```
+
+Various types of iterable containers will be introduced and discussed in later sections of the
+manual (see, e.g., [Multi-dimensional Arrays](@ref man-multi-dim-arrays)).
+
+One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
 during which the variable is visible. A `for` loop always introduces a new iteration variable in
 its body, regardless of whether a variable of the same name exists in the enclosing scope.
@@ -454,29 +479,6 @@ Use `for outer` to modify the latter behavior and reuse an existing local variab
 
 See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
 Julia.
-
-In general, the `for` loop construct can iterate over any container. In these cases, the alternative
-(but fully equivalent) keyword `in` or `∈` is typically used instead of `=`, since it makes
-the code read more clearly:
-
-```jldoctest
-julia> for i in [1,4,0]
-           println(i)
-       end
-1
-4
-0
-
-julia> for s ∈ ["foo","bar","baz"]
-           println(s)
-       end
-foo
-bar
-baz
-```
-
-Various types of iterable containers will be introduced and discussed in later sections of the
-manual (see, e.g., [Multi-dimensional Arrays](@ref man-multi-dim-arrays)).
 
 It is sometimes convenient to terminate the repetition of a `while` before the test condition
 is falsified or stop iterating in a `for` loop before the end of the iterable object is reached.
