@@ -101,7 +101,7 @@ more efficient implementation.
 See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
 
 # Examples
-```jldoctest; filter = r"^  \\[1234]$"
+```jldoctest; filter = r"^  [1234]\$"
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
 false
 
@@ -120,7 +120,7 @@ Set{Any} with 4 elements:
 ```
 """
 function in!(x, s::AbstractSet)
-    x ∈ s ? true : (push!(s, x); s)
+    x ∈ s ? true : (push!(s, x); false)
 end
 
 function in!(x, s::Set)
