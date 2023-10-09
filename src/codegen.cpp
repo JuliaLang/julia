@@ -6474,7 +6474,7 @@ static Function* gen_cfun_wrapper(
 
         // TODO: Can use use emit_call_specfun_other here?
         SmallVector<Value*> args;
-        Value *result;
+        Value *result = nullptr;
         if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
             // fuse the two sret together, or emit an alloca to hold it
             if (sig.sret && jlfunc_sret) {
