@@ -332,6 +332,7 @@ function hash_seed(str::AbstractString)
         SHA.update!(ctx, (pad % UInt8,))
     end
     SHA.update!(ctx, (0x05,))
+    SHA.digest!(ctx)
 end
 
 
