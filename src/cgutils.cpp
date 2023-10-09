@@ -215,7 +215,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debu
     }
     else if (jl_is_structtype(jt) && !jl_is_layout_opaque(jdt->layout)) {
         size_t ntypes = jl_datatype_nfields(jdt);
-        std::vector<llvm::Metadata*> Elements(ntypes);
+        SmallVector<llvm::Metadata*> Elements(ntypes);
         for (unsigned i = 0; i < ntypes; i++) {
             jl_value_t *el = jl_field_type_concrete(jdt, i);
             DIType *di;
@@ -278,7 +278,7 @@ void jl_debugcache_t::initialize(Module *m) {
                                                 __alignof__(jl_value_t*) * 8);
 
     SmallVector<llvm::Metadata *, 1> Elts;
-    std::vector<Metadata*> diargs(0);
+    SmallVector<Metadata*> diargs(0);
     Elts.push_back(jl_pvalue_dillvmt);
     dbuilder.replaceArrays(jl_value_dillvmt,
     dbuilder.getOrCreateArray(Elts));
@@ -722,7 +722,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
         if (struct_decl)
             return struct_decl;
-        std::vector<Type*> latypes(0);
+        SmallVector<Type*> latypes(0);
         bool isarray = true;
         bool isvector = true;
         jl_value_t *jlasttype = NULL;
@@ -821,7 +821,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
     //  // pick an Integer type size such that alignment will be correct
     //  // and always end with an Int8 (selector byte)
     //  lty = ArrayType::get(IntegerType::get(lty->getContext(), 8 * al), fsz / al);
-    //  std::vector<Type*> Elements(2);
+    //  SmallVector<Type*> Elements(2);
     //  Elements[0] = lty;
     //  Elements[1] = getInt8Ty(ctxt);
     //  unsigned remainder = fsz % al;
@@ -1793,7 +1793,7 @@ static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
 static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
 
-std::vector<unsigned> first_ptr(Type *T)
+SmallVector<unsigned> first_ptr(Type *T)
 {
     if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
         if (!isa<StructType>(T)) {
@@ -1811,7 +1811,7 @@ std::vector<unsigned> first_ptr(Type *T)
         unsigned i = 0;
         for (Type *ElTy : T->subtypes()) {
             if (isa<PointerType>(ElTy) && ElTy->getPointerAddressSpace() == AddressSpace::Tracked) {
-                return std::vector<unsigned>{i};
+                return SmallVector<unsigned>{i};
             }
             auto path = first_ptr(ElTy);
             if (!path.empty()) {

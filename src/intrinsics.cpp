@@ -229,7 +229,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     }
 
     size_t nf = jl_datatype_nfields(bt);
-    std::vector<Constant*> fields(0);
+    SmallVector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
         jl_value_t *ft = jl_field_type(bt, i);
