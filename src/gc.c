@@ -683,25 +683,19 @@ static int64_t last_gc_total_bytes = 0;
 #ifdef _P64
 typedef uint64_t memsize_t;
 static const size_t default_collect_interval = 5600 * 1024 * sizeof(void*);
+static const size_t max_collect_interval = 1250000000UL;
 static size_t total_mem;
 // We expose this to the user/ci as jl_gc_set_max_memory
 static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
 typedef uint32_t memsize_t;
 static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
+static const size_t max_collect_interval = 500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
 #define MAX32HEAP 1536 * 1024 * 1024
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
-#endif
-// heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
-#ifdef MEMBALANCER
-static uint64_t old_pause_time = 0;
-static uint64_t old_mut_time = 0;
-static uint64_t old_heap_size = 0;
-static uint64_t old_alloc_diff = 0;
-static uint64_t old_freed_diff = 0;
 #endif
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
@@ -3244,9 +3238,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t gc_start_time = jl_hrtime();
     uint64_t mutator_time = gc_start_time - gc_end_time;
-#ifdef MEMBALANCER
-    uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
-#endif
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
@@ -3338,11 +3329,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.mark_time = mark_time;
     gc_num.total_mark_time += mark_time;
     gc_settime_postmark_end();
+    int64_t actual_allocd = gc_num.allocd;
     // marking is over
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);
 
+    int64_t live_sz_ub = live_bytes + actual_allocd;
+    int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
+    int64_t estimate_freed = live_sz_ub - live_sz_est;
 
     gc_verify(ptls);
     gc_stats_all_pool();
@@ -3353,21 +3348,49 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
-    int remset_nptr = 0;
-    int sweep_full = next_sweep_full;
-    int recollect = 0;
-    assert(gc_n_threads);
-    for (int i = 0; i < gc_n_threads; i++) {
+     int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
+     int nptr = 0;
+     assert(gc_n_threads);
+     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL)
-            remset_nptr += ptls2->heap.remset_nptr;
+            nptr += ptls2->heap.remset_nptr;
     }
-    (void)remset_nptr; //Use this information for something?
 
+    // many pointers in the intergen frontier => "quick" mark is not quick
+    int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
+    int sweep_full = 0;
+    int recollect = 0;
+
+    // update heuristics only if this GC was automatically triggered
+     if (collection == JL_GC_AUTO) {
+        if (large_frontier) {
+            sweep_full = 1;
+            gc_num.interval = last_long_collect_interval;
+        }
+        if (not_freed_enough || large_frontier) {
+            gc_num.interval = gc_num.interval * 2;
+        }
+
+        size_t maxmem = 0;
+#ifdef _P64
+        // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
+        maxmem = total_mem / (gc_n_threads - jl_n_gcthreads) / 2;
+#endif
+        if (maxmem < max_collect_interval)
+            maxmem = max_collect_interval;
+        if (gc_num.interval > maxmem) {
+            sweep_full = 1;
+            gc_num.interval = maxmem;
+        }
+    }
 
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
+    if (live_bytes > max_total_memory) {
+        sweep_full = 1;
+    }
     if (gc_sweep_always_full) {
         sweep_full = 1;
     }
@@ -3380,6 +3403,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
+        last_long_collect_interval = gc_num.interval;
     }
     scanned_bytes = 0;
     pool_live_bytes = 0;
@@ -3424,49 +3448,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
 
-#ifdef MEMBALANCER
-    if (collection == JL_GC_AUTO) {
-        double min_interval = default_collect_interval;
-        uint64_t alloc_diff = before_free_heap_size - old_heap_size;
-        uint64_t freed_diff = before_free_heap_size - heap_size;
-        double alloc_smooth_factor = 0.95;
-        double collect_smooth_factor = 0.5;
-        double tuning_factor = 0.03;
-        double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
-        double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
-        double gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
-        old_alloc_diff = alloc_diff;
-        old_mut_time = mutator_time;
-        old_freed_diff = freed_diff;
-        old_pause_time = pause;// TODO: Update these values dynamically instead of just during the GC
-        if (gc_time > alloc_time * 95 && !(thrash_counter < 4))
-            thrash_counter += 1;
-        else if (thrash_counter > 0)
-            thrash_counter -= 1;
-        if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
-            double alloc_rate = alloc_mem/alloc_time;
-            double gc_rate = gc_mem/gc_time;
-            target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
-        }
-    }
-    if (thrashing == 0 && thrash_counter >= 3)
-        thrashing = 1;
-    else if (thrashing == 1 && thrash_counter <= 2)
-        thrashing = 0; // maybe we should report this to the user or error out?
-
-    int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
-    if (target_allocs == 0.0 || thrashing || bad_result || /*Always do the default to avoid issues with the algorithm*/ 1) // If we are thrashing go back to default
-        target_allocs =  2*sqrt((double)heap_size/min_interval);
-    target_allocs = target_allocs * min_interval;
-#else
     if ((pause > (mutator_time * 95)) && !(thrash_counter < 4))
         thrash_counter += 1;
     else if (thrash_counter > 0)
         thrash_counter -= 1;
 
     target_allocs = alpha * heap_size;
-#endif
     jl_update_heap_size(target_allocs + heap_size);
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
@@ -3511,6 +3498,38 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
     if (max_memory > gc_num.max_memory) {
         gc_num.max_memory = max_memory;
+    }
+    gc_num.allocd = 0;
+    live_bytes += -gc_num.freed + gc_num.allocd;
+     if (collection == JL_GC_AUTO) {
+        //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
+        if (!not_freed_enough || large_frontier) {
+            int64_t tot = 2 * (live_bytes + gc_num.allocd) / 3;
+            if (gc_num.interval > tot) {
+                gc_num.interval = tot;
+                last_long_collect_interval = tot;
+            }
+        }
+        // If the current interval is larger than half the live data decrease the interval
+        else {
+            int64_t half = (live_bytes / 2);
+            if (gc_num.interval > half)
+                gc_num.interval = half;
+        }
+        // But never go below default
+        if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
+    }
+
+    if (gc_num.interval + live_bytes > max_total_memory) {
+        if (live_bytes < max_total_memory) {
+            gc_num.interval = max_total_memory - live_bytes;
+            last_long_collect_interval = max_total_memory - live_bytes;
+        }
+        else {
+            // We can't stay under our goal so let's go back to
+            // the minimum interval and hope things get better
+            gc_num.interval = default_collect_interval;
+        }
     }
     gc_final_pause_end(gc_start_time, gc_end_time);
     gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
