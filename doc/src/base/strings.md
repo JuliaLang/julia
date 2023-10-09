@@ -53,6 +53,7 @@ Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(::IO, s::AbstractString, ::Pair...)
 Base.eachsplit
+Base.eachrsplit
 Base.split
 Base.rsplit
 Base.strip

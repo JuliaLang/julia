@@ -593,6 +593,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,

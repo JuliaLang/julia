@@ -41,6 +41,7 @@ New library functions
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
 
 New library features
 --------------------
