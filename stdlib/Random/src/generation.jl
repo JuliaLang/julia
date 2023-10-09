@@ -171,18 +171,19 @@ end
 
 function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
     tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
-    SamplerTag{T}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+    SamplerTag{Ref{T}}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+    # Ref so that the gentype is `T` in SamplerTag's constructor
 end
 
 function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
     if N > 0
-        SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+        SamplerTag{Ref{Tuple{Vararg{T, N}}}}((Sampler(RNG, T, n),))
     else
-        SamplerTag{Tuple{}}(())
+        SamplerTag{Ref{Tuple{}}}(())
     end
 end
 
-function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
+function rand(rng::AbstractRNG, sp::SamplerTag{Ref{T}}) where T<:Tuple
     ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
 end
 
