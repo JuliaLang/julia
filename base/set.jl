@@ -102,7 +102,7 @@ See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
 
 !!! compat "Julia 1.11"
     This function requires at least 1.11.
-    
+
 # Examples
 ```jldoctest; filter = r"^  [1234]\$"
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
