@@ -74,14 +74,14 @@ struct Node {
     // whether the from_node is attached or dettached from the main application state
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
     int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
-    SmallVector<Edge> edges;
+    SmallVector<Edge, 0> edges;
 
     ~Node() JL_NOTSAFEPOINT = default;
 };
 
 struct StringTable {
     StringMap<size_t> map;
-    SmallVector<StringRef> strings;
+    SmallVector<StringRef, 0> strings;
 
     size_t find_or_create_string_id(StringRef key) JL_NOTSAFEPOINT {
         auto val = map.insert(make_pair(key, map.size()));
@@ -107,7 +107,7 @@ struct StringTable {
 };
 
 struct HeapSnapshot {
-    SmallVector<Node> nodes;
+    SmallVector<Node, 0> nodes;
     // edges are stored on each from_node
 
     StringTable names;
@@ -167,7 +167,7 @@ void _add_internal_root(HeapSnapshot *snapshot)
         0, // size
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-        SmallVector<Edge>() // outgoing edges
+        SmallVector<Edge, 0>() // outgoing edges
     };
     snapshot->nodes.push_back(internal_root);
 }
@@ -255,7 +255,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         sizeof(void*) + self_size, // size_t self_size;
         0,             // size_t trace_node_id (unused)
         0,             // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-        SmallVector<Edge>() // outgoing edges
+        SmallVector<Edge, 0>() // outgoing edges
     });
 
     if (ios_need_close)
@@ -278,7 +278,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
         bytes,         // size_t self_size;
         0,             // size_t trace_node_id (unused)
         0,             // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-        SmallVector<Edge>() // outgoing edges
+        SmallVector<Edge, 0>() // outgoing edges
     });
 
     return val.first->second;
@@ -345,7 +345,7 @@ size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEP
         1, // size
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-        SmallVector<Edge>() // outgoing edges
+        SmallVector<Edge, 0>() // outgoing edges
     });
 
     return val.first->second;

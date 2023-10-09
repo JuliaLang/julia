@@ -42,7 +42,7 @@ using namespace llvm;
 struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrspacesVisitor> {
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
-    SmallVector<Instruction *> ToDelete;
+    SmallVector<Instruction *, 0> ToDelete;
     SmallVector<std::pair<Instruction *, Instruction *>> ToInsert;
 
 public:
@@ -56,7 +56,7 @@ public:
     void visitMemTransferInst(MemTransferInst &MTI);
 
 private:
-    void PoisonValues(SmallVector<Value *> &Worklist);
+    void PoisonValues(SmallVector<Value *, 0> &Worklist);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -67,7 +67,7 @@ static bool isSpecialAS(unsigned AS) {
     return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
 }
 
-void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVector<Value *> &Worklist) {
+void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVector<Value *, 0> &Worklist) {
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();
@@ -82,7 +82,7 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVector<Value *> &Worklis
 
 Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
-    SmallVector<Value *> Worklist;
+    SmallVector<Value *, 0> Worklist;
     std::set<Value *> LocalVisited;
     unsigned allocaAddressSpace = M->getDataLayout().getAllocaAddrSpace();
     Worklist.push_back(V);
@@ -156,7 +156,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     }
 
     // Go through and insert lifted versions of all instructions on the list.
-    SmallVector<Value *> ToRevisit;
+    SmallVector<Value *, 0> ToRevisit;
     for (Value *V : Stack) {
         if (LiftingMap.count(V))
             continue;

@@ -117,7 +117,7 @@ using namespace llvm;
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {
     // internal state:
-    SmallVector<DILineInfo> context;
+    SmallVector<DILineInfo, 0> context;
     uint32_t inline_depth = 0;
     // configuration options:
     const char* LineStart = "; ";
@@ -147,7 +147,7 @@ public:
     }
 
     void emit_finish(raw_ostream &Out) JL_NOTSAFEPOINT;
-    void emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo> &DI) JL_NOTSAFEPOINT;
+    void emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo, 0> &DI) JL_NOTSAFEPOINT;
 
     struct repeat {
         size_t times;
@@ -169,7 +169,7 @@ public:
 
     void emit_lineinfo(raw_ostream &Out, DILineInfo &DI) JL_NOTSAFEPOINT
     {
-        SmallVector<DILineInfo> DIvec(1);
+        SmallVector<DILineInfo, 0> DIvec(1);
         DIvec[0] = DI;
         emit_lineinfo(Out, DIvec);
     }
@@ -177,7 +177,7 @@ public:
     void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI) JL_NOTSAFEPOINT
     {
         uint32_t nframes = DI.getNumberOfFrames();
-        SmallVector<DILineInfo> DIvec(nframes);
+        SmallVector<DILineInfo, 0> DIvec(nframes);
         for (uint32_t i = 0; i < DI.getNumberOfFrames(); i++) {
             DIvec[i] = DI.getFrame(i);
         }
@@ -207,7 +207,7 @@ void DILineInfoPrinter::emit_finish(raw_ostream &Out)
     this->inline_depth = 0;
 }
 
-void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo> &DI)
+void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo, 0> &DI)
 {
     if (verbosity == output_none)
         return;
@@ -375,7 +375,7 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
             FuncLoc = SP->second;
     }
     if (FuncLoc) {
-        SmallVector<DILineInfo> DIvec(1);
+        SmallVector<DILineInfo, 0> DIvec(1);
         DILineInfo &DI = DIvec.back();
         DI.FunctionName = FuncLoc->getName().str();
         DI.FileName = FuncLoc->getFilename().str();
@@ -402,7 +402,7 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
 {
     if (NewInstrLoc && NewInstrLoc != InstrLoc) {
         InstrLoc = NewInstrLoc;
-        SmallVector<DILineInfo> DIvec;
+        SmallVector<DILineInfo, 0> DIvec;
         do {
             DIvec.emplace_back();
             DILineInfo &DI = DIvec.back();
