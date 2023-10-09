@@ -2246,9 +2246,41 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
+"""
+    check_src_module_wrap(srcpath::String)
+
+Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
+"""
+function check_src_module_wrap(pkg::PkgId, srcpath::String)
+    module_rgx = r"^\s*(?:@\w*\s*)*(?:bare)?module\s"
+    load_rgx = r"\b(?:using|import)\s"
+    load_seen = false
+    inside_comment = false
+    for s in eachline(srcpath)
+        if contains(s, "\"\"\"")
+            # ignore module docstrings
+            inside_comment = !inside_comment
+        end
+        inside_comment && continue
+        if startswith(s, module_rgx)
+            if load_seen
+                throw(ErrorException("Package $pkg source file $srcpath has a using/import before a module declaration."))
+            end
+            return true
+        end
+        if startswith(s, load_rgx)
+            load_seen = true
+        end
+    end
+    throw(ErrorException("Package $pkg source file $srcpath does not contain a module declaration."))
+end
+
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+
+    check_src_module_wrap(pkg, input)
+
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
