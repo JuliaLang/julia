@@ -42,7 +42,6 @@ function chklapackerror(ret::BlasInt, f...)
 end
 
 chklapackerror_positive(ret, f...) = throw(LAPACKException(ret))
-chklapackerror_positive(ret, ::typeof(trtrs!)) = chknonsingular(ret)
 
 function chknonsingular(ret::BlasInt)
     if ret > 0
@@ -3577,6 +3576,7 @@ for (trtri, trtrs, elty) in
         end
     end
 end
+chklapackerror_positive(ret, ::typeof(trtrs!)) = chknonsingular(ret)
 
 """
     trtri!(uplo, diag, A)
