@@ -297,6 +297,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
                    randset                          => Int,
                    GenericSet(randset)              => Int,
                    randdict                         => Pair{Int,Int},
+                   keys(randdict)                   => Int,
+                   values(randdict)                 => Int,
                    GenericDict(randdict)            => Pair{Int,Int},
                    1:100                            => Int,
                    rand(Int, 100)                   => Int,
