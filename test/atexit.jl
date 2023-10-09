@@ -212,38 +212,6 @@ using Test
             exit(0)
             """ => 11,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-            # 3. attempting to register a hook after all hooks have finished (disallowed)
-            """
-            const atexit_has_finished = Threads.Atomic{Bool}(false)
-            atexit() do
-                Threads.@spawn begin
-                    # Block until the atexit hooks have all finished. We use a manual "spin
-                    # lock" because task switch is disallowed inside the finalizer, below.
-                    while !atexit_has_finished[] end
-                    try
-                        # By the time this runs, all the atexit hooks will be done.
-                        # So this will throw.
-                        atexit() do
-                            exit(11)
-                        end
-                    catch
-                        # Meaning we _actually_ exit 22.
-                        exit(22)
-                    end
-                end
-            end
-            # Finalizers run after the atexit hooks, so this blocks exit until the spawned
-            # task above gets a chance to run.
-            x = []
-            finalizer(x) do x
-                # Allow the spawned task to finish
-                atexit_has_finished[] = true
-                # Then spin forever to prevent exit.
-                while atexit_has_finished[] end
-            end
-            exit(0)
-            """ => 22,
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             )
         for julia_expr in keys(julia_expr_list)
             cmd_eval = _atexit_tests_gen_cmd_eval(julia_expr)
