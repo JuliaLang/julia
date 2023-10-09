@@ -145,7 +145,8 @@ GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 }
 
 
-static void emit_offset_table(Module &mod, const SmallVector<GlobalValue*, 0> &vars, StringRef name, Type *T_psize)
+static void emit_offset_table(Module &mod, ArrayRef<GlobalValue*> vars,
+                              StringRef name, Type *T_psize)
 {
     // Emit a global variable with all the variable addresses.
     // The cloning pass will convert them into offsets.

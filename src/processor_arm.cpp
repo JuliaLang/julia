@@ -1195,7 +1195,7 @@ static bool check_cpu_arch_ver(uint32_t cpu, arm_arch arch)
     return true;
 }
 
-static void shrink_big_little(llvm::SmallVector<std::pair<uint32_t,CPUID>, 0> &list,
+static void shrink_big_little(llvm::SmallVectorImpl<std::pair<uint32_t,CPUID>> &list,
                               const CPU *cpus, uint32_t ncpu)
 {
     auto find = [&] (uint32_t name) {

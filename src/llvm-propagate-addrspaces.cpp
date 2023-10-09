@@ -56,7 +56,7 @@ public:
     void visitMemTransferInst(MemTransferInst &MTI);
 
 private:
-    void PoisonValues(SmallVector<Value *, 0> &Worklist);
+    void PoisonValues(SmallVectorImpl<Value *> &Worklist);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -67,7 +67,7 @@ static bool isSpecialAS(unsigned AS) {
     return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
 }
 
-void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVector<Value *, 0> &Worklist) {
+void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVectorImpl<Value *> &Worklist) {
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();

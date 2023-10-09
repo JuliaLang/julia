@@ -879,7 +879,8 @@ static Constant *get_ptrdiff32(Type *T_size, Constant *ptr, Constant *base)
 }
 
 template<typename T>
-static Constant *emit_offset_table(Module &M, Type *T_size, const SmallVector<T*, 0> &vars, StringRef name, StringRef suffix)
+static Constant *emit_offset_table(Module &M, Type *T_size, const SmallVectorImpl<T*> &vars,
+                                   StringRef name, StringRef suffix)
 {
     auto T_int32 = Type::getInt32Ty(M.getContext());
     uint32_t nvars = vars.size();

@@ -322,7 +322,8 @@ public:
 private:
     CallInst *pgcstack;
 
-    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const SmallVector<int, 0> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
+    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
+                      SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses);
     void NoteUse(State &S, BBState &BBS, Value *V) {
         NoteUse(S, BBS, V, BBS.UpExposedUses);
@@ -346,14 +347,14 @@ private:
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
     SmallVector<int, 0> ColorRoots(const State &S);
-    void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const SmallVector<int, 0> &Colors, Value *GCFrame, Instruction *InsertBefore);
-    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const SmallVector<int, 0> &Colors, Value *GCFrame);
-    void PlaceRootsAndUpdateCalls(SmallVector<int, 0> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
+    void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
+    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame);
+    void PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
-    void RefineLiveSet(LargeSparseBitVector &LS, State &S, const SmallVector<int, 0> &CalleeRoots);
+    void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
 };
@@ -414,7 +415,7 @@ unsigned getCompositeNumElements(Type *T) {
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
-void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>> &Numberings) {
+void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>, 0> &Numberings) {
     if (isa<PointerType>(T)) {
         if (isSpecialPtr(T))
             Numberings.push_back(Idxs);
@@ -432,7 +433,7 @@ void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<Sma
 
 SmallVector<SmallVector<unsigned, 0>> TrackCompositeType(Type *T) {
     SmallVector<unsigned, 0> Idxs;
-    SmallVector<SmallVector<unsigned, 0>> Numberings;
+    SmallVector<SmallVector<unsigned, 0>, 0> Numberings;
     TrackCompositeType(T, Idxs, Numberings);
     return Numberings;
 }
@@ -1008,7 +1009,7 @@ static bool HasBitSet(const BitVector &BV, unsigned Bit) {
     return Bit < BV.size() && BV[Bit];
 }
 
-static void NoteDef(State &S, BBState &BBS, int Num, const SmallVector<int, 0> &SafepointsSoFar) {
+static void NoteDef(State &S, BBState &BBS, int Num, const ArrayRef<int> &SafepointsSoFar) {
     assert(Num >= 0);
     MaybeResize(BBS, Num);
     assert(!BBS.Defs.test(Num) && "SSA Violation or misnumbering?");
@@ -1022,7 +1023,9 @@ static void NoteDef(State &S, BBState &BBS, int Num, const SmallVector<int, 0> &
     }
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const SmallVector<int, 0> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr) {
+void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def,
+                                    const ArrayRef<int> &SafepointsSoFar,
+                                    SmallVector<int, 1> &&RefinedPtr) {
     Type *RT = Def->getType();
     if (isa<PointerType>(RT)) {
         if (!isSpecialPtr(RT))
@@ -1043,7 +1046,7 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const Sm
     }
 }
 
-static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVector<int, 0> CalleeRoots) {
+static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<int> &CalleeRoots) {
     int Number = ++S.MaxSafepointNumber;
     S.SafepointNumbering[CI] = Number;
     S.ReverseSafepointNumbering.push_back(CI);
@@ -1632,7 +1635,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     CalleeRoots.push_back(Num);
                 }
-                int SafepointNumber = NoteSafepoint(S, BBS, CI, std::move(CalleeRoots));
+                int SafepointNumber = NoteSafepoint(S, BBS, CI, CalleeRoots);
                 BBS.HasSafepoint = true;
                 BBS.TopmostSafepoint = SafepointNumber;
                 BBS.Safepoints.push_back(SafepointNumber);
@@ -1987,7 +1990,7 @@ static bool IsIndirectlyRooted(const State &S, LargeSparseBitVector &Visited, La
     return rooted;
 }
 
-void LateLowerGCFrame::RefineLiveSet(LargeSparseBitVector &LS, State &S, const SmallVector<int, 0> &CalleeRoots)
+void LateLowerGCFrame::RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots)
 {
     // It is possible that a value is not directly rooted by the refinements in the live set, but rather
     // indirectly by following the edges of the refinement graph to all the values that root it.
@@ -2089,8 +2092,8 @@ struct PEOIterator {
     };
     SmallVector<Element, 0> Elements;
     SmallVector<SmallVector<int, 0>> Levels;
-    const SmallVector<LargeSparseBitVector, 0> &Neighbors;
-    PEOIterator(const SmallVector<LargeSparseBitVector, 0> &Neighbors) : Neighbors(Neighbors) {
+    const ArrayRef<LargeSparseBitVector> &Neighbors;
+    PEOIterator(const ArrayRef<LargeSparseBitVector> &Neighbors) : Neighbors(Neighbors) {
         // Initialize State
         SmallVector<int, 0> FirstLevel;
         for (unsigned i = 0; i < Neighbors.size(); ++i) {
@@ -2139,7 +2142,7 @@ struct PEOIterator {
     }
 };
 
-JL_USED_FUNC static void dumpColorAssignments(const State &S, SmallVector<int, 0> &Colors)
+JL_USED_FUNC static void dumpColorAssignments(const State &S, const ArrayRef<int> &Colors)
 {
     for (unsigned i = 0; i < Colors.size(); ++i) {
         if (Colors[i] == -1)
@@ -2594,7 +2597,7 @@ static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, Stat
 }
 
 void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot,
-                                         const SmallVector<int, 0> &Colors, Value *GCFrame,
+                                         ArrayRef<int> Colors, Value *GCFrame,
                                          Instruction *InsertBefore) {
     // Get the slot address.
     auto slotAddress = CallInst::Create(
@@ -2615,7 +2618,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
-                                          const SmallVector<int, 0> &Colors, Value *GCFrame)
+                                          ArrayRef<int> Colors, Value *GCFrame)
 {
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
@@ -2639,7 +2642,8 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
     }
 }
 
-void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVector<int, 0> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
+void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S,
+                                                std::map<Value *, std::pair<int, int>>) {
     auto F = S.F;
     auto T_int32 = Type::getInt32Ty(F->getContext());
     int MaxColor = -1;

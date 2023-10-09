@@ -147,7 +147,7 @@ public:
     }
 
     void emit_finish(raw_ostream &Out) JL_NOTSAFEPOINT;
-    void emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo, 0> &DI) JL_NOTSAFEPOINT;
+    void emit_lineinfo(raw_ostream &Out, SmallVectorImpl<DILineInfo> &DI) JL_NOTSAFEPOINT;
 
     struct repeat {
         size_t times;
@@ -207,7 +207,7 @@ void DILineInfoPrinter::emit_finish(raw_ostream &Out)
     this->inline_depth = 0;
 }
 
-void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVector<DILineInfo, 0> &DI)
+void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVectorImpl<DILineInfo> &DI)
 {
     if (verbosity == output_none)
         return;

@@ -4,6 +4,7 @@
 
 #include "llvm-version.h"
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
@@ -256,7 +257,7 @@ static inline void mask_features(const FeatureList<n> masks, uint32_t *features)
 }
 
 // Turn feature list to a string the LLVM accept
-static inline std::string join_feature_strs(const llvm::SmallVector<std::string, 0> &strs)
+static inline std::string join_feature_strs(const llvm::ArrayRef<std::string> &strs)
 {
     size_t nstr = strs.size();
     if (!nstr)
@@ -276,7 +277,7 @@ static inline void append_ext_features(std::string &features, const std::string 
     features.append(ext_features);
 }
 
-static inline void append_ext_features(llvm::SmallVector<std::string, 0> &features,
+static inline void append_ext_features(llvm::SmallVectorImpl<std::string> &features,
                                        const std::string &ext_features)
 {
     if (ext_features.empty())
