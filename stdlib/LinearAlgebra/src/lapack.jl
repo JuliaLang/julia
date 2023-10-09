@@ -31,18 +31,18 @@ function chkargsok(ret::BlasInt)
 end
 
 "Handle all nonzero info codes"
-function chklapackerror(ret::BlasInt, f = nothing)
+function chklapackerror(ret::BlasInt, f...)
     if ret == 0
         return
     elseif ret < 0
         throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
     else # ret > 0
-        chklapackerror_positive(ret, f)
+        chklapackerror_positive(ret, f...)
     end
 end
 
-chklapackerror_positive(ret, ::Nothing) = throw(LAPACKException(ret))
-chklapackerror_positive(ret, ::Val{:trtrs!}) = chknonsingular(ret)
+chklapackerror_positive(ret, f...) = throw(LAPACKException(ret))
+chklapackerror_positive(ret, ::typeof(trtrs!)) = chknonsingular(ret)
 
 function chknonsingular(ret::BlasInt)
     if ret > 0
@@ -3572,7 +3572,7 @@ for (trtri, trtrs, elty) in
                   uplo, trans, diag, n, size(B,2), A, max(1,stride(A,2)),
                   B, max(1,stride(B,2)), info,
                   1, 1, 1)
-            chklapackerror(info[], Val(:trtrs!))
+            chklapackerror(info[], trtrs!)
             B
         end
     end
