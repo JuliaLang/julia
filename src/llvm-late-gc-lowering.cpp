@@ -431,7 +431,7 @@ void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<Sma
     }
 }
 
-SmallVector<SmallVector<unsigned, 0>> TrackCompositeType(Type *T) {
+SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
     SmallVector<unsigned, 0> Idxs;
     SmallVector<SmallVector<unsigned, 0>, 0> Numberings;
     TrackCompositeType(T, Idxs, Numberings);
