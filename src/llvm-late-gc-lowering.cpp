@@ -2092,8 +2092,8 @@ struct PEOIterator {
     };
     SmallVector<Element, 0> Elements;
     SmallVector<SmallVector<int, 0>> Levels;
-    const ArrayRef<LargeSparseBitVector> &Neighbors;
-    PEOIterator(const ArrayRef<LargeSparseBitVector> &Neighbors) : Neighbors(Neighbors) {
+    const SmallVector<LargeSparseBitVector, 0> &Neighbors;
+    PEOIterator(const SmallVector<LargeSparseBitVector, 0> &Neighbors) : Neighbors(Neighbors) {
         // Initialize State
         SmallVector<int, 0> FirstLevel;
         for (unsigned i = 0; i < Neighbors.size(); ++i) {
