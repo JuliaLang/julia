@@ -212,6 +212,18 @@ function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
 end
 
 function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
-    f! = inplace_adj_or_trans(src)
-    f!(dest, parent(src))
+    isempty(src) && return dest
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
+    idf, isf = first(destinds), first(srcinds)
+    Δi = idf - isf
+    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
+        throw(BoundsError(dest, srcinds))
+    if axes(dest) == axes(src)
+        f! = inplace_adj_or_trans(src)
+        f!(dest, parent(src))
+    else
+        invoke(Base.copyto_unaliased!, Tuple{IndexStyle, AbstractArray, IndexStyle, AbstractArray},
+            deststyle, dest, srcstyle, src)
+    end
+    return dest
 end
