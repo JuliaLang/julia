@@ -2255,13 +2255,13 @@ function check_src_module_wrap(pkg::PkgId, srcpath::String)
     module_rgx = r"^\s*(?:@\w*\s*)*(?:bare)?module\s"
     load_rgx = r"\b(?:using|import)\s"
     load_seen = false
-    inside_comment = false
+    inside_string = false
     for s in eachline(srcpath)
-        if contains(s, "\"\"\"")
+        if count("\"\"\"", s) == 1
             # ignore module docstrings
-            inside_comment = !inside_comment
+            inside_string = !inside_string
         end
-        inside_comment && continue
+        inside_string && continue
         if startswith(s, module_rgx)
             if load_seen
                 throw(ErrorException("Package $pkg source file $srcpath has a using/import before a module declaration."))
