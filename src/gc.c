@@ -3695,7 +3695,9 @@ void jl_gc_init(void)
 #ifdef _P64
     total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
+    int constrained = constrained_mem != 0 ? 1 : 0;
+    constrained_mem = MIN(total_mem, constrained_mem);
+    if (constrained)
         jl_gc_set_max_memory(constrained_mem - 250*1024*1024); // LLVM + other libraries need some amount of memory
 #endif
     if (jl_options.heap_size_hint)
