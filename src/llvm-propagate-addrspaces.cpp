@@ -43,7 +43,7 @@ struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrsp
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
     SmallVector<Instruction *, 0> ToDelete;
-    SmallVector<std::pair<Instruction *, Instruction *>> ToInsert;
+    SmallVector<std::pair<Instruction *, Instruction *>, 0> ToInsert;
 
 public:
     Value *LiftPointer(Module *M, Value *V, Instruction *InsertPt=nullptr);

@@ -307,7 +307,7 @@ struct State {
     SmallVector<AllocaInst *, 0> Allocas;
     DenseMap<AllocaInst *, unsigned> ArrayAllocas;
     DenseMap<AllocaInst *, AllocaInst *> ShadowAllocas;
-    SmallVector<std::pair<StoreInst *, unsigned>> TrackedStores;
+    SmallVector<std::pair<StoreInst *, unsigned>, 0> TrackedStores;
     State(Function &F) : F(&F), DT(nullptr), MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
 };
 

@@ -1230,7 +1230,7 @@ static void construct_vars(Module &M, Partition &partition) {
         fvars.push_back(fvar.second);
         fvar_idxs.push_back(fvar.first);
     }
-    SmallVector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
+    SmallVector<std::pair<uint32_t, GlobalValue *>, 0> gvar_pairs;
     gvar_pairs.reserve(partition.gvars.size());
     for (auto &gvar : partition.gvars) {
         auto GV = M.getNamedGlobal(gvar.first());

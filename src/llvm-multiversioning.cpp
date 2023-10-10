@@ -392,7 +392,7 @@ private:
     std::map<const Function*,uint32_t> func_ids{};
     SmallVector<Function*, 0> orig_funcs{};
     // GV addresses and their corresponding function id (i.e. 0-based index in `fvars`)
-    SmallVector<std::pair<Constant*,uint32_t>> gv_relocs{};
+    SmallVector<std::pair<Constant*,uint32_t>, 0> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
     std::map<Function *, GlobalVariable*> extern_relocs;

@@ -395,11 +395,9 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
 // 1. CPU ID is less stable (they are not bound to hardware/OS API)
 // 2. We need to support CPU names that are not recognized by us and therefore doesn't have an ID
 // 3. CPU name is trivial to parse
-static inline llvm::SmallVector<uint8_t, 0> serialize_target_data(llvm::StringRef name,
-                                                         uint32_t nfeature,
-                                                         const uint32_t *features_en,
-                                                         const uint32_t *features_dis,
-                                                         llvm::StringRef ext_features)
+static inline llvm::SmallVector<uint8_t, 0>
+serialize_target_data(llvm::StringRef name, uint32_t nfeature, const uint32_t *features_en,
+                      const uint32_t *features_dis, llvm::StringRef ext_features)
 {
     llvm::SmallVector<uint8_t, 0> res;
     auto add_data = [&] (const void *data, size_t sz) {
@@ -422,10 +420,9 @@ static inline llvm::SmallVector<uint8_t, 0> serialize_target_data(llvm::StringRe
 }
 
 template<size_t n>
-static inline llvm::SmallVector<uint8_t, 0> serialize_target_data(llvm::StringRef name,
-                                                         const FeatureList<n> &features_en,
-                                                         const FeatureList<n> &features_dis,
-                                                         llvm::StringRef ext_features)
+static inline llvm::SmallVector<uint8_t, 0>
+serialize_target_data(llvm::StringRef name, const FeatureList<n> &features_en,
+                      const FeatureList<n> &features_dis, llvm::StringRef ext_features)
 {
     return serialize_target_data(name, n, &features_en[0], &features_dis[0], ext_features);
 }
@@ -655,7 +652,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     llvm::SmallVector<const char *, 0> fvars(pointers->header->nfvars);
     llvm::SmallVector<const char *, 0> gvars(pointers->header->ngvars);
 
-    llvm::SmallVector<std::pair<uint32_t, const char *>> clones;
+    llvm::SmallVector<std::pair<uint32_t, const char *>, 0> clones;
 
     for (unsigned i = 0; i < pointers->header->nshards; i++) {
         auto shard = pointers->shards[i];
