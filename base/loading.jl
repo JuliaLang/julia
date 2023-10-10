@@ -1660,9 +1660,9 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(mod::Module, _path::AbstractString)
+function _include_dependency(mod::Module, _path::AbstractString; track_content=true)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -1671,9 +1671,15 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-            fsize = filesize(path)
-            hash = isfile(path) ? open(_crc32c, path, "r") : UInt32(0)
-            push!(_require_dependencies, (mod, path, fsize, hash))
+            if track_content
+                @assert isfile(path) "can only hash files"
+                # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
+                push!(_require_dependencies,
+                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
+            else
+                push!(_require_dependencies,
+                      (mod, path, UInt64(0), UInt32(0), mtime(path)))
+            end
         end
     end
     return path, prev
@@ -1684,13 +1690,13 @@ end
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if the file's size changes.
+to be recompiled if the modification time of `path` changes.
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency(Main, path)
+    _include_dependency(Main, path, track_content=false)
     return nothing
 end
 
@@ -1790,7 +1796,7 @@ function __require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0)))
+            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
         end
         return _require_prelocked(uuidkey, env)
     finally
@@ -2588,6 +2594,7 @@ mutable struct CacheHeaderIncludes
     filename::String
     const fsize::UInt64
     const hash::UInt32
+    const mtime::Float64
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
@@ -2649,6 +2656,8 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         totbytes -= 8
         hash = read(f, UInt32)
         totbytes -= 4
+        mtime = read(f, Float64)
+        totbytes -= 8
         n1 = read(f, Int32)
         totbytes -= 4
         # map ids to keys
@@ -2669,7 +2678,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
         else
-            push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, mtime, modpath))
         end
     end
     prefs = String[]
@@ -3236,13 +3245,13 @@ end
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
         # or neither
-        skip_hashcheck = false
+        skip_check = false
         for (req_key, req_build_id) in _concrete_dependencies
             build_id = get(modules, req_key, UInt64(0))
             if build_id !== UInt64(0)
                 build_id |= UInt128(checksum) << 64
                 if build_id === req_build_id
-                    skip_hashcheck = true
+                    skip_check = true
                     break
                 end
                 @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
@@ -3251,7 +3260,7 @@ end
         end
 
         # now check if this file's content hash has changed relative to its source files
-        if !skip_hashcheck
+        if !skip_check
             if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                 @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                 return true # cache file was compiled from a different path
@@ -3265,7 +3274,7 @@ end
                 end
             end
             for chi in includes
-                f, fsize_req, hash_req = chi.filename, chi.fsize, chi.hash
+                f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
@@ -3274,16 +3283,30 @@ end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
                     return true
                 end
-                fsize = filesize(f)
-                @debug (f,fsize)
-                if fsize != fsize_req
-                    @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
-                    return true
-                end
-                hash = open(_crc32c, f, "r")
-                if hash != hash_req
-                    @debug "Rejecting stale cache file $cachefile because file size of $f has changed (hash $hash, before $hash_req)"
-                    return true
+                if ftime_req >= 0.0
+                    # this is an include_dependency for which we only recorded the mtime
+                    ftime = mtime(f)
+                    is_stale = ( ftime != ftime_req ) &&
+                               ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                               ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
+                               ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
+                               ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
+                               !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+                    if is_stale
+                        @debug "Rejecting stale cache file $cachefile because mtime of include_dependency $f has changed (mtime $ftime, before $ftime_req)"
+                        return true
+                    end
+                else
+                    fsize = filesize(f)
+                    if fsize != fsize_req
+                        @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
+                        return true
+                    end
+                    hash = open(_crc32c, f, "r")
+                    if hash != hash_req
+                        @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
+                        return true
+                    end
                 end
             end
         end

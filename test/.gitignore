@@ -3,4 +3,4 @@
 /ccalltest.s
 /libccalltest.*
 /relocatedepot
-/RelocationTestPkg/src/foo.txt
+/RelocationTestPkg2/src/foo.txt

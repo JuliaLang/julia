@@ -2691,7 +2691,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_uint8(f, jl_cache_flags());
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
-    // Determine unique (module, abspath, fsize, hash) dependencies for the files defining modules in the worklist
+    // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
     // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header
     // (abspath will be converted to a relocateable @depot path before writing, cf. Base.replace_depot_path).
     // Also write Preferences.
