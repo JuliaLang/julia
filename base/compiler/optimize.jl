@@ -309,7 +309,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
-            if f === Intrinsics.cglobal
+            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -1031,11 +1031,36 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)
             iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-            if !isassigned(T_IFUNC_COST, iidx)
-                # unknown/unhandled intrinsic
-                return params.inline_nonleaf_penalty
+            if isassigned(T_IFUNC, iidx)
+                minarg, maxarg, = T_IFUNC[iidx]
+                nargs = length(ex.args)
+                if minarg + 1 <= nargs <= maxarg + 1
+                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # and are likely to combine with the operations around them,
+                    # so reduce their cost by half.
+                    cost = T_IFUNC_COST[iidx]
+                    if cost == 0 || nargs < 3 ||
+                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                        return cost
+                    end
+                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
+                    nconst = Int(aty2 isa Const)
+                    for i = 3:nargs
+                        aty = widenconditional(argextype(ex.args[i], src, sptypes))
+                        if widenconst(aty) != widenconst(aty2)
+                            nconst = 0
+                            break
+                        end
+                        nconst += aty isa Const
+                    end
+                    if nconst + 2 >= nargs
+                        cost = (cost - 1) ÷ 2
+                    end
+                    return cost
+                end
             end
-            return T_IFUNC_COST[iidx]
+            # unknown/unhandled intrinsic
+            return params.inline_nonleaf_penalty
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1046,9 +1071,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
+            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === Core.arrayset && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 8 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end

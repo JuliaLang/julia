@@ -1067,7 +1067,9 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main
 
 # TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
 eval(Expr(:public,

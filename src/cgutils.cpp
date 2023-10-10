@@ -411,7 +411,13 @@ static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), addr->smalltag << 4);
             Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jl_small_typeof_var), tag);
-            return ConstantExpr::getBitCast(smallp, ctx.types().T_ppjlvalue);
+            auto ty = ctx.types().T_ppjlvalue;
+            if (ty->getPointerAddressSpace() == smallp->getType()->getPointerAddressSpace())
+                return ConstantExpr::getBitCast(smallp, ty);
+            else {
+                Constant *newsmallp = ConstantExpr::getAddrSpaceCast(smallp, ty);
+                return ConstantExpr::getBitCast(newsmallp, ty);
+            }
         }
         // DataTypes are prefixed with a +
         return julia_pgv(ctx, "+", addr->name->name, addr->name->module, p);
@@ -659,6 +665,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
         return getFloatTy(ctxt);
     if (bt == (jl_value_t*)jl_float64_type)
         return getDoubleTy(ctxt);
+    if (bt == (jl_value_t*)jl_bfloat16_type)
+        return getBFloatTy(ctxt);
     if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;

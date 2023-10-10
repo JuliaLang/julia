@@ -961,6 +961,13 @@ static void ensure_jit_target(bool imaging)
                 break;
             }
         }
+        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
+        for (auto fe: clone_bf16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
+                break;
+            }
+        }
     }
 }
 

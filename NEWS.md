@@ -21,6 +21,13 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
+(see the docstring for futher details). When opted-in, and julia is invoked to run a script or expression
+(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+This is intended to unify script and compilation workflows, where code loading may happen
+in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
+
 Multi-threading changes
 -----------------------
 
@@ -29,6 +36,10 @@ Build system changes
 
 New library functions
 ---------------------
+
+* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 
 New library features
@@ -39,8 +50,6 @@ New library features
 Standard library changes
 ------------------------
 
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
-
 #### Package Manager
 
 #### LinearAlgebra
@@ -50,6 +59,10 @@ Standard library changes
 #### Profile
 
 #### Random
+* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+
+* `rand` now supports sampling over `Pair` types ([#28705]).
 
 #### REPL
 
@@ -70,6 +83,8 @@ Standard library changes
 * Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
