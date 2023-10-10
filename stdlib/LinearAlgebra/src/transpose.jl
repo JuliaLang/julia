@@ -210,3 +210,8 @@ function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
     C = similar(A, T, size(A))
     transpose!(C, parent(A))
 end
+
+function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
+    f! = inplace_adj_or_trans(src)
+    f!(dest, parent(src))
+end
