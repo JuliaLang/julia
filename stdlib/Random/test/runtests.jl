@@ -343,7 +343,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         end
     end
     for (C, T) in collections
-        for cc = (C, Sampler(realrng, C, Val(1)), Sampler(realrng, C, Val(1)))
+        for cc = (C, Sampler(realrng, C, Val(1)), Sampler(realrng, C, Val(Inf)))
             a0  = rand(rng..., cc)                                               ::T
             a1  = rand(rng..., cc, 5)                                            ::Vector{T}
             a2  = rand(rng..., cc, 2, 3)                                         ::Array{T, 2}
