@@ -132,7 +132,7 @@ static int jl_add_to_ee(
         orc::ThreadSafeModule &M,
         const StringMap<orc::ThreadSafeModule*> &NewExports,
         DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        std::vector<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT;
+        SmallVectorImpl<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT;
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
 static uint64_t getAddressForFunction(StringRef fname) JL_NOTSAFEPOINT;
 
@@ -270,7 +270,7 @@ static jl_callptr_t _jl_compile_codeinst(
             }
         }
         DenseMap<orc::ThreadSafeModule*, int> Queued;
-        std::vector<orc::ThreadSafeModule*> Stack;
+        SmallVector<orc::ThreadSafeModule*, 0> Stack;
         for (auto &def : params.compiled_functions) {
             // Add the results to the execution engine now
             orc::ThreadSafeModule &M = std::get<0>(def.second);
@@ -796,7 +796,7 @@ class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
     // Resources from distinct MaterializationResponsibilitys can get merged
     // after emission, so we can have multiple debug objects per resource key.
-    std::map<ResourceKey, std::vector<std::unique_ptr<JITObjectInfo>>> RegisteredObjs;
+    std::map<ResourceKey, SmallVector<std::unique_ptr<JITObjectInfo>, 0>> RegisteredObjs;
 
 public:
     void notifyMaterializing(MaterializationResponsibility &MR, jitlink::LinkGraph &G,
@@ -1216,8 +1216,8 @@ namespace {
     struct PMCreator {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
-        std::vector<std::function<void()>> &printers;
-        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+        SmallVector<std::function<void()>, 0> &printers;
+        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers) JL_NOTSAFEPOINT
             : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
@@ -1232,7 +1232,7 @@ namespace {
 
     template<size_t N>
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT {
+        OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers) JL_NOTSAFEPOINT {
             for (size_t i = 0; i < N; i++) {
                 PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers));
             }
@@ -1535,7 +1535,7 @@ struct JuliaOJIT::DLSymOptimizer {
 
         for (auto &F : M) {
             for (auto &BB : F) {
-                SmallVector<Instruction *> to_delete;
+                SmallVector<Instruction *, 0> to_delete;
                 for (auto &I : make_early_inc_range(BB)) {
                     auto CI = dyn_cast<CallInst>(&I);
                     if (!CI)
@@ -1599,7 +1599,7 @@ struct JuliaOJIT::DLSymOptimizer {
 
     std::mutex symbols_mutex;
     StringMap<std::pair<void *, StringMap<void *>>> user_symbols;
-    SmallVector<std::pair<void *, StringMap<void *>>> runtime_symbols;
+    SmallVector<std::pair<void *, StringMap<void *>>, 0> runtime_symbols;
     bool named;
 };
 
@@ -2182,7 +2182,7 @@ static int jl_add_to_ee(
         orc::ThreadSafeModule &M,
         const StringMap<orc::ThreadSafeModule*> &NewExports,
         DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        std::vector<orc::ThreadSafeModule*> &Stack)
+        SmallVectorImpl<orc::ThreadSafeModule*> &Stack)
 {
     // First check if the TSM is empty (already compiled)
     if (!M)
@@ -2198,7 +2198,7 @@ static int jl_add_to_ee(
     // Finally work out the SCC
     int depth = Stack.size();
     int MergeUp = depth;
-    std::vector<orc::ThreadSafeModule*> Children;
+    SmallVector<orc::ThreadSafeModule*, 0> Children;
     M.withModuleDo([&](Module &m) JL_NOTSAFEPOINT {
         for (auto &F : m.global_objects()) {
             if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {

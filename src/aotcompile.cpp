@@ -85,11 +85,11 @@ static void addComdat(GlobalValue *G, Triple &T)
 
 typedef struct {
     orc::ThreadSafeModule M;
-    std::vector<GlobalValue*> jl_sysimg_fvars;
-    std::vector<GlobalValue*> jl_sysimg_gvars;
+    SmallVector<GlobalValue*, 0> jl_sysimg_fvars;
+    SmallVector<GlobalValue*, 0> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
-    std::vector<void*> jl_value_to_llvm;
-    std::vector<jl_code_instance_t*> jl_external_to_llvm;
+    SmallVector<void*, 0> jl_value_to_llvm;
+    SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -145,12 +145,13 @@ GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 }
 
 
-static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars, StringRef name, Type *T_psize)
+static void emit_offset_table(Module &mod, ArrayRef<GlobalValue*> vars,
+                              StringRef name, Type *T_psize)
 {
     // Emit a global variable with all the variable addresses.
     // The cloning pass will convert them into offsets.
     size_t nvars = vars.size();
-    std::vector<Constant*> addrs(nvars);
+    SmallVector<Constant*, 0> addrs(nvars);
     for (size_t i = 0; i < nvars; i++) {
         Constant *var = vars[i];
         addrs[i] = ConstantExpr::getBitCast(var, T_psize);
@@ -354,7 +355,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
-    std::vector<std::string> gvars(params.global_targets.size());
+    SmallVector<std::string, 0> gvars(params.global_targets.size());
     data->jl_value_to_llvm.resize(params.global_targets.size());
     StringSet<> gvars_names;
     DenseSet<GlobalValue *> gvars_set;
@@ -705,8 +706,8 @@ static bool canPartition(const GlobalValue &G) {
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
 #ifndef JL_NDEBUG
-    SmallVector<uint32_t> fvars(fvars_size);
-    SmallVector<uint32_t> gvars(gvars_size);
+    SmallVector<uint32_t, 0> fvars(fvars_size);
+    SmallVector<uint32_t, 0> gvars(gvars_size);
     StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
@@ -794,7 +795,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             unsigned size;
             size_t weight;
         };
-        std::vector<Node> nodes;
+        SmallVector<Node, 0> nodes;
         DenseMap<GlobalValue *, unsigned> node_map;
         unsigned merged;
 
@@ -865,12 +866,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     auto pcomp = [](const Partition *p1, const Partition *p2) {
         return p1->weight > p2->weight;
     };
-    std::priority_queue<Partition *, std::vector<Partition *>, decltype(pcomp)> pq(pcomp);
+    std::priority_queue<Partition *, SmallVector<Partition *, 0>, decltype(pcomp)> pq(pcomp);
     for (unsigned i = 0; i < threads; ++i) {
         pq.push(&partitions[i]);
     }
 
-    std::vector<unsigned> idxs(partitioner.nodes.size());
+    SmallVector<unsigned, 0> idxs(partitioner.nodes.size());
     std::iota(idxs.begin(), idxs.end(), 0);
     std::sort(idxs.begin(), idxs.end(), [&](unsigned a, unsigned b) {
         //because roots have more weight than their children,
@@ -1212,7 +1213,7 @@ static void materializePreserved(Module &M, Partition &partition) {
 
 // Reconstruct jl_fvars, jl_gvars, jl_fvars_idxs, and jl_gvars_idxs from the partition
 static void construct_vars(Module &M, Partition &partition) {
-    std::vector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
+    SmallVector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
     fvar_pairs.reserve(partition.fvars.size());
     for (auto &fvar : partition.fvars) {
         auto F = M.getFunction(fvar.first());
@@ -1220,8 +1221,8 @@ static void construct_vars(Module &M, Partition &partition) {
         assert(!F->isDeclaration());
         fvar_pairs.push_back({ fvar.second, F });
     }
-    std::vector<GlobalValue *> fvars;
-    std::vector<uint32_t> fvar_idxs;
+    SmallVector<GlobalValue *, 0> fvars;
+    SmallVector<uint32_t, 0> fvar_idxs;
     fvars.reserve(fvar_pairs.size());
     fvar_idxs.reserve(fvar_pairs.size());
     std::sort(fvar_pairs.begin(), fvar_pairs.end());
@@ -1229,7 +1230,7 @@ static void construct_vars(Module &M, Partition &partition) {
         fvars.push_back(fvar.second);
         fvar_idxs.push_back(fvar.first);
     }
-    std::vector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
+    SmallVector<std::pair<uint32_t, GlobalValue *>, 0> gvar_pairs;
     gvar_pairs.reserve(partition.gvars.size());
     for (auto &gvar : partition.gvars) {
         auto GV = M.getNamedGlobal(gvar.first());
@@ -1237,8 +1238,8 @@ static void construct_vars(Module &M, Partition &partition) {
         assert(!GV->isDeclaration());
         gvar_pairs.push_back({ gvar.second, GV });
     }
-    std::vector<GlobalValue *> gvars;
-    std::vector<uint32_t> gvar_idxs;
+    SmallVector<GlobalValue *, 0> gvars;
+    SmallVector<uint32_t, 0> gvar_idxs;
     gvars.reserve(gvar_pairs.size());
     gvar_idxs.reserve(gvar_pairs.size());
     std::sort(gvar_pairs.begin(), gvar_pairs.end());
@@ -1630,7 +1631,7 @@ void jl_dump_native_impl(void *native_code,
             ngvars = data->jl_sysimg_gvars.size();
             emit_offset_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
             emit_offset_table(dataM, data->jl_sysimg_fvars, "jl_fvars", T_psize);
-            std::vector<uint32_t> idxs;
+            SmallVector<uint32_t, 0> idxs;
             idxs.resize(data->jl_sysimg_gvars.size());
             std::iota(idxs.begin(), idxs.end(), 0);
             auto gidxs = ConstantDataArray::get(Context, idxs);
@@ -1712,7 +1713,7 @@ void jl_dump_native_impl(void *native_code,
         if (imaging_mode) {
             auto specs = jl_get_llvm_clone_targets();
             const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-            std::vector<uint8_t> data;
+            SmallVector<uint8_t, 0> data;
             auto push_i32 = [&] (uint32_t v) {
                 uint8_t buff[4];
                 memcpy(buff, &v, 4);
@@ -1766,7 +1767,7 @@ void jl_dump_native_impl(void *native_code,
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
         if (fname) {\
-            std::vector<NewArchiveMember> archive; \
+            SmallVector<NewArchiveMember, 0> archive; \
             SmallVector<std::string, 16> filenames; \
             SmallVector<StringRef, 16> buffers; \
             for (size_t i = 0; i < threads; i++) { \
