@@ -234,6 +234,31 @@ end
     @test collect(eachrsplit("  a  b  c  d"; limit=3)) == ["d", "c", "  a  b "]
 end
 
+@testset "split to tuple" begin
+    # Cases where all elements are split, so they behave equivalently
+    @test split("a b c", Val(3)) == split("a b c", Val(3)) == ("a", "b", "c")
+    @test split("a b c d", Val(4)) == rsplit("a b c d", Val(4)) == ("a", "b", "c", "d")
+    @test split("a.:.b", ".:.", Val(2)) == rsplit("a.:.b", ".:.", Val(2)) == ("a", "b")
+    @test split(" a b  c", Val(5); keepempty = true) ==
+          split(" a b  c", Val(5); keepempty = true) ==
+          ("", "a", "b", "", "c")
+    @test split("", isascii, Val(1)) == rsplit("", isascii, Val(1)) == ("",)
+
+    # Cases where not all elements are split
+    @test  split("abc1def12", isnumeric, Val(3)) == ("abc", "def", "2")
+    @test rsplit("abc1def12", isnumeric, Val(3)) == ("abc1def", "", "")
+    @test  split("ab  cde  fg", Val(4); keepempty=true) == ("ab", "", "cde", " fg")
+    @test rsplit("ab  cde  fg", Val(4); keepempty=true) == ("ab ", "cde", "", "fg")
+
+
+    # Too few elements for the tuple
+    @test_throws ArgumentError split("a b", Val(3))
+    @test_throws ArgumentError rsplit("a b", Val(3))
+    @test_throws ArgumentError rsplit("a.:.b.:.c.:.d", ".:.", Val(5))
+    @test_throws ArgumentError split("", "abce", Val(2))
+    @test_throws ArgumentError split("a..b..c", '.', Val(6))
+end
+
 @testset "replace" begin
     @test replace("\u2202", '*' => '\0') == "\u2202"
 
