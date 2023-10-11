@@ -119,7 +119,8 @@ SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
     SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
 AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
@@ -543,18 +544,18 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x -> convert(AbstractVector{T}, x), (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x)::AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2))
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
     else
         Tridiagonal{T}(dl, d, du)
     end
 end
 Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
 function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    dl, d, du = map(x -> convert(V, x), (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(V, x)::V, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2))
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2)::V)
     else
         Tridiagonal{T,V}(dl, d, du)
     end
