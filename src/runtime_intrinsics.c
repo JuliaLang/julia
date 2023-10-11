@@ -210,6 +210,33 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
     return float_to_half(temp);
 }
 
+// x86-specific helpers for emulating the (B)Float16 ABI
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+#include <xmmintrin.h>
+__m128 return_in_xmm(uint16_t val) {
+    __m128 xmm_result;
+    uint32_t extended_val = val;
+    asm (
+        "pxor %%xmm0, %%xmm0\n\t"
+        "pinsrw $0, %1, %%xmm0\n\t"
+        "movaps %%xmm0, %0"
+        : "=x"(xmm_result)
+        : "r"(extended_val)
+        : "xmm0"
+    );
+    return xmm_result;
+}
+uint16_t take_from_xmm(__m128 xmm_val) {
+    uint32_t result;
+    asm (
+        "pextrw $0, %1, %0"
+        : "=r"(result)
+        : "x"(xmm_val)
+    );
+    return (uint16_t) result;
+}
+#endif
+
 // float16 conversion API
 
 // for use in APInt (without the ABI shenanigans from below)
@@ -241,10 +268,32 @@ JL_DLLEXPORT _Float16 julia__truncdfhf2(double param)
     return *(_Float16*)&res;
 }
 
+#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+
+// on older compilers, we need to do something platform-specific to ensure we're using
+// the appropriate ABI. in the case of X86, use __m128 to return in XMM registers.
+
+JL_DLLEXPORT float julia__gnu_h2f_ieee(__m128 param)
+{
+    uint16_t param16 = take_from_xmm(param);
+    return half_to_float(param16);
+}
+
+JL_DLLEXPORT __m128 julia__gnu_f2h_ieee(float param)
+{
+    uint16_t res = float_to_half(param);
+    return return_in_xmm(res);
+}
+
+JL_DLLEXPORT __m128 julia__truncdfhf2(double param)
+{
+    uint16_t res = double_to_half(param);
+    return return_in_xmm(res);
+}
+
 #else
 
-// on older compilers, we abuse `float` to ensure Float16 values are passed using the
-// floating-point ABI (e.g., in XMM registers on X86).
+// on other platforms, we use the floating-point ABI and pray it's compatible
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(float param)
 {
@@ -269,7 +318,8 @@ JL_DLLEXPORT float julia__truncdfhf2(double param)
 
 #endif
 
-// bfloat16 conversion routines
+
+// bfloat16 conversion helpers
 
 static inline uint16_t float_to_bfloat(float param) JL_NOTSAFEPOINT
 {
@@ -319,10 +369,26 @@ JL_DLLEXPORT __bf16 julia__truncdfbf2(double param) JL_NOTSAFEPOINT
     return *(__bf16*)&res;
 }
 
+#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+
+// on older compilers, we need to do something platform-specific to ensure we're using
+// the appropriate ABI. in the case of X86, use __m128 to return in XMM registers.
+
+JL_DLLEXPORT __m128 julia__truncsfbf2(float param) JL_NOTSAFEPOINT
+{
+    uint16_t res = float_to_bfloat(param);
+    return return_in_xmm(res);
+}
+
+JL_DLLEXPORT __m128 julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+{
+    uint16_t res = double_to_bfloat(param);
+    return return_in_xmm(res);
+}
+
 #else
 
-// on older compilers, we abuse `float` to ensure Float16 values are passed using the
-// floating-point ABI (e.g., in XMM registers on X86).
+// on other platforms, we use the floating-point ABI and pray it's compatible
 
 JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
 {
