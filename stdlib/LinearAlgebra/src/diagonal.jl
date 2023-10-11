@@ -780,8 +780,7 @@ function eigvecs(D::Diagonal{T}) where T<:AbstractMatrix
     ncols_diag = [ size(x, 2) for x in D.diag ]
     nrows = size(D, 1)
     vecs = Matrix{Vector{eltype(matT)}}(undef, nrows, sum(ncols_diag))
-    for ij in eachindex(D)
-        i,j = Tuple(ij)
+    for j in axes(D, 2), i in axes(D, 1)
         jj = sum(view(ncols_diag,1:j-1))
         if i == j
             for k in 1:ncols_diag[j]

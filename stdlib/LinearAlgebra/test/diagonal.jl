@@ -775,7 +775,7 @@ end
               [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]]  [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]] ]
     @test eigD.values == evals
     @test eigD.vectors == evecs
-    @test D * eigD.vectors == transpose(eigD.values) .* eigD.vectors
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 
     I3 = Matrix(I, 3,3)
     D = Diagonal([[0.0 -1.0; 1.0 0.0], 2.0*I3])
@@ -785,7 +785,7 @@ end
               [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
     @test eigD.values == evals
     @test eigD.vectors == evecs
-    @test D * eigD.vectors == transpose(eigD.values) .* eigD.vectors
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 end
 
 @testset "linear solve for block diagonal matrices" begin
