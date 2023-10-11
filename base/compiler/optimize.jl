@@ -1101,7 +1101,13 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head === :invoke_modify
+    elseif head === :foreigncall
+        foreigncall = ex.args[1]
+        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+            return 1
+        end
+        return 20
+    elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
