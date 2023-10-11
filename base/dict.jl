@@ -224,14 +224,16 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz) where T
+function _sizehint!(d::Dict{T}, newsz; shrink = true) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
     newsz = _tablesz(cld(3 * newsz, 2))
-    return newsz == oldsz ? d : rehash!(d, newsz)
+    return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
 end
+
+sizehint!(d::Dict{T}, newsz) where T = _sizehint!(d, newsz)
 
 """
     empty!(collection) -> collection
@@ -771,7 +773,7 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
-    haslength(d2) && sizehint!(d1, length(d1) + length(d2))
+    haslength(d2) && _sizehint!(d1, length(d1) + length(d2), shrink = false)
     for (k, v) in d2
         i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
