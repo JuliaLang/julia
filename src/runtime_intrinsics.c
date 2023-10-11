@@ -183,6 +183,33 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     return h;
 }
 
+static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
+{
+    float temp = (float)param;
+    uint32_t tempi;
+    memcpy(&tempi, &temp, sizeof(temp));
+
+    // if Float16(res) is subnormal
+    if ((tempi&0x7fffffffu) < 0x38800000u) {
+        // shift so that the mantissa lines up where it would for normal Float16
+        uint32_t shift = 113u-((tempi & 0x7f800000u)>>23u);
+        if (shift<23u) {
+            tempi |= 0x00800000; // set implicit bit
+            tempi >>= shift;
+        }
+    }
+
+    // if we are halfway between 2 Float16 values
+    if ((tempi & 0x1fffu) == 0x1000u) {
+        memcpy(&tempi, &temp, sizeof(temp));
+        // adjust the value by 1 ULP in the direction that will make Float16(temp) give the right answer
+        tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
+        memcpy(&temp, &tempi, sizeof(temp));
+    }
+
+    return float_to_half(temp);
+}
+
 // float16 conversion API
 
 // for use in APInt (without the ABI shenanigans from below)
@@ -213,29 +240,7 @@ JL_DLLEXPORT float julia__gnu_f2h_ieee(float param)
 
 JL_DLLEXPORT float julia__truncdfhf2(double param)
 {
-    float temp = (float)param;
-    uint32_t tempi;
-    memcpy(&tempi, &temp, sizeof(temp));
-
-    // if Float16(res) is subnormal
-    if ((tempi&0x7fffffffu) < 0x38800000u) {
-        // shift so that the mantissa lines up where it would for normal Float16
-        uint32_t shift = 113u-((tempi & 0x7f800000u)>>23u);
-        if (shift<23u) {
-            tempi |= 0x00800000; // set implicit bit
-            tempi >>= shift;
-        }
-    }
-
-    // if we are halfway between 2 Float16 values
-    if ((tempi & 0x1fffu) == 0x1000u) {
-        memcpy(&tempi, &temp, sizeof(temp));
-        // adjust the value by 1 ULP in the direction that will make Float16(temp) give the right answer
-        tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
-        memcpy(&temp, &tempi, sizeof(temp));
-    }
-
-    uint16_t res16 = float_to_half(temp);
+    uint16_t res16 = double_to_half(param);
     uint32_t res32 = (uint32_t)res16;
     return *(float*)&res32;
 }
