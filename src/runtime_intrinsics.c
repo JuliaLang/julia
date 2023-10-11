@@ -5,8 +5,6 @@
 //
 // this file assumes a little-endian processor, although that isn't too hard to fix
 // it also assumes two's complement negative numbers, which might be a bit harder to fix
-//
-// TODO: add half-float support
 
 #include "APInt-C.h"
 #include "julia.h"
@@ -14,7 +12,7 @@
 
 const unsigned int host_char_bit = 8;
 
-// float16 intrinsics
+// float16 conversion helpers
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -185,94 +183,109 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     return h;
 }
 
-JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
-{
+// float16 conversion API
+
+// for use in APInt (without the ABI shenanigans from below)
+uint16_t julia_float_to_half(float param) {
+    return float_to_half(param);
+}
+float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 
-JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
+// x86 ABI requires float16 to be passed in XMM registers, but that is only supported by
+// very recent compilers. to work around this, we pass float16 parameters as float, which is
+// also passed in XMM registers.
+
+JL_DLLEXPORT float julia__gnu_h2f_ieee(float param)
 {
-    return float_to_half(param);
+    uint32_t param32 = *(uint32_t*)&param;
+    uint16_t param16 = (uint16_t)param32;
+    return half_to_float(param16);
 }
 
-JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
+JL_DLLEXPORT float julia__gnu_f2h_ieee(float param)
 {
-    float res = (float)param;
-    uint32_t resi;
-    memcpy(&resi, &res, sizeof(res));
-    if ((resi&0x7fffffffu) < 0x38800000u){ // if Float16(res) is subnormal
+    uint16_t res16 = float_to_half(param);
+    uint32_t res32 = (uint32_t)res16;
+    return *(float*)&res32;
+}
+
+JL_DLLEXPORT float julia__truncdfhf2(double param)
+{
+    float temp = (float)param;
+    uint32_t tempi;
+    memcpy(&tempi, &temp, sizeof(temp));
+
+    // if Float16(res) is subnormal
+    if ((tempi&0x7fffffffu) < 0x38800000u) {
         // shift so that the mantissa lines up where it would for normal Float16
-        uint32_t shift = 113u-((resi & 0x7f800000u)>>23u);
+        uint32_t shift = 113u-((tempi & 0x7f800000u)>>23u);
         if (shift<23u) {
-            resi |= 0x00800000; // set implicit bit
-            resi >>= shift;
+            tempi |= 0x00800000; // set implicit bit
+            tempi >>= shift;
         }
     }
-    if ((resi & 0x1fffu) == 0x1000u) { // if we are halfway between 2 Float16 values
-        memcpy(&resi, &res, sizeof(res));
-        // adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
-        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
-        memcpy(&res, &resi, sizeof(res));
+
+    // if we are halfway between 2 Float16 values
+    if ((tempi & 0x1fffu) == 0x1000u) {
+        memcpy(&tempi, &temp, sizeof(temp));
+        // adjust the value by 1 ULP in the direction that will make Float16(temp) give the right answer
+        tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
+        memcpy(&temp, &tempi, sizeof(temp));
     }
-    return float_to_half(res);
+
+    uint16_t res16 = float_to_half(temp);
+    uint32_t res32 = (uint32_t)res16;
+    return *(float*)&res32;
 }
+
+// bfloat16 conversion routines
+
+static inline uint16_t float_to_bfloat(float param) JL_NOTSAFEPOINT
+{
+    if (isnan(param))
+        return 0x7fc0;
+
+    uint32_t bits = *((uint32_t*) &param);
+
+    // round to nearest even
+    bits += 0x7fff + ((bits >> 16) & 1);
+    return (uint16_t)(bits >> 16);
+}
+
+// bfloat16 conversion API
+
+// see note above; bfloat16 also needs to be passed in XMM registers on x86
+// NOTE: once we require GCC 13, use the __bf16 type
 
 JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
 {
-    uint16_t result;
-
-    if (isnan(param))
-        result = 0x7fc0;
-    else {
-        uint32_t bits = *((uint32_t*) &param);
-
-        // round to nearest even
-        bits += 0x7fff + ((bits >> 16) & 1);
-        result = (uint16_t)(bits >> 16);
-    }
-
-    // on x86, bfloat16 needs to be returned in XMM. only GCC 13 provides the necessary ABI
-    // support in the form of the __bf16 type; older versions only provide __bfloat16 which
-    // is simply a typedef for short (i16). so use float, which is passed in XMM too.
-    uint32_t result_32bit = (uint32_t)result;
-    return *(float*)&result_32bit;
+    uint16_t res16 = float_to_bfloat(param);
+    uint32_t res32 = (uint32_t)res16;
+    return *(float*)&res32;
 }
 
 JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
 {
-    float res = (float)param;
-    uint32_t resi;
-    memcpy(&resi, &res, sizeof(res));
+    float temp = (float)param;
+    uint32_t tempi;
+    memcpy(&tempi, &temp, sizeof(temp));
 
     // bfloat16 uses the same exponent as float32, so we don't need special handling
     // for subnormals when truncating float64 to bfloat16.
 
-    if ((resi & 0x1ffu) == 0x100u) { // if we are halfway between 2 bfloat16 values
-        // adjust the value by 1 ULP in the direction that will make bfloat16(res) give the right answer
-        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
-        memcpy(&res, &resi, sizeof(res));
+    // if we are halfway between 2 bfloat16 values
+    if ((tempi & 0x1ffu) == 0x100u) {
+        // adjust the value by 1 ULP in the direction that will make bfloat16(temp) give the right answer
+        tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
+        memcpy(&temp, &tempi, sizeof(temp));
     }
-    return julia__truncsfbf2(res);
-}
 
-//JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) { return (double)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) { return (int32_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) { return (int64_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint32_t julia__fixunshfsi(uint16_t n) { return (uint32_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint64_t julia__fixunshfdi(uint16_t n) { return (uint64_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint16_t julia__floatsihf(int32_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatdihf(int64_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) { return julia__gnu_f2h_ieee((float)n); }
-//HANDLE_LIBCALL(F16, F128, __extendhftf2)
-//HANDLE_LIBCALL(F16, F80, __extendhfxf2)
-//HANDLE_LIBCALL(F80, F16, __truncxfhf2)
-//HANDLE_LIBCALL(F128, F16, __trunctfhf2)
-//HANDLE_LIBCALL(PPCF128, F16, __trunctfhf2)
-//HANDLE_LIBCALL(F16, I128, __fixhfti)
-//HANDLE_LIBCALL(F16, I128, __fixunshfti)
-//HANDLE_LIBCALL(I128, F16, __floattihf)
-//HANDLE_LIBCALL(I128, F16, __floatuntihf)
+    uint16_t res16 = float_to_bfloat(temp);
+    uint32_t res32 = (uint32_t)res16;
+    return *(float*)&res32;
+}
 
 
 // run time version of bitcast intrinsic
@@ -643,11 +656,11 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     uint16_t a = *(uint16_t*)pa; \
-    float A = julia__gnu_h2f_ieee(a); \
+    float A = half_to_float(a); \
     if (osize == 16) { \
         float R; \
         OP(&R, A); \
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+        *(uint16_t*)pr = float_to_half(R); \
     } else { \
         OP((uint16_t*)pr, A); \
     } \
@@ -671,11 +684,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
+    float A = half_to_float(a); \
+    float B = half_to_float(b); \
     runtime_nbits = 16; \
     float R = OP(A, B); \
-    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = float_to_half(R); \
 }
 
 // float or integer inputs, bool output
@@ -696,8 +709,8 @@ static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEP
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
+    float A = half_to_float(a); \
+    float B = half_to_float(b); \
     runtime_nbits = 16; \
     return OP(A, B); \
 }
@@ -737,12 +750,12 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
     uint16_t c = *(uint16_t*)pc; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
-    float C = julia__gnu_h2f_ieee(c); \
+    float A = half_to_float(a); \
+    float B = half_to_float(b); \
+    float C = half_to_float(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = float_to_half(R); \
 }
 
 
@@ -1412,7 +1425,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
         else if (osize == 16) \
-            *(uint16_t*)pr = julia__gnu_f2h_ieee(a); \
+            *(uint16_t*)pr = float_to_half(a); \
         else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
