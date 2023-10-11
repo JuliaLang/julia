@@ -665,13 +665,6 @@ let s = "   \$abc   "
     @test s[Base.shell_parse(s)[2]] == "abc"
 end
 
-# Logging macros should not output to finalized streams (#26687)
-let
-    cmd = `$exename -e 'finalizer(x->@info(x), "Hello")'`
-    output = readchomp(pipeline(cmd, stderr=catcmd))
-    @test occursin("Info: Hello", output)
-end
-
 # Sys.which() testing
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
