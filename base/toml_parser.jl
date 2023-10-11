@@ -611,7 +611,7 @@ function _parse_key(l::Parser)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
-            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+            if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
