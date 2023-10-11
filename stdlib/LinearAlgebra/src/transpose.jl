@@ -216,8 +216,7 @@ function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, src
         f! = inplace_adj_or_trans(src)
         f!(dest, parent(src))
     else
-        invoke(Base.copyto_unaliased!, Tuple{IndexStyle, AbstractArray, IndexStyle, AbstractArray},
-            deststyle, dest, srcstyle, src)
+        @invoke Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     end
     return dest
 end
