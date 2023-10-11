@@ -30,17 +30,17 @@ static uint64_t poolmem_bytes_allocated = 0;
 static uint64_t poolmem_blocks_allocated_total = 0;
 
 
-JL_DLLEXPORT uint64_t jl_poolmem_blocks_allocated_total()
+JL_DLLEXPORT uint64_t jl_poolmem_blocks_allocated_total(void)
 {
     return poolmem_blocks_allocated_total;
 }
 
-JL_DLLEXPORT uint64_t jl_poolmem_bytes_allocated()
+JL_DLLEXPORT uint64_t jl_poolmem_bytes_allocated(void)
 {
     return poolmem_bytes_allocated;
 }
 
-JL_DLLEXPORT uint64_t jl_current_pg_count()
+JL_DLLEXPORT uint64_t jl_current_pg_count(void)
 {
     return (uint64_t)jl_atomic_load(&current_pg_count);
 }
