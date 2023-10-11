@@ -59,11 +59,18 @@ end
     @test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
 end
 
-@testset "Infinite CartesianIndices" begin
+@testset "Infinite axes" begin
     r = OneToInf()
-    C = CartesianIndices(size(r))
-    ax = to_indices(r, (C,))[1]
-    @test ax === r
+    @testset "CartesianIndices" begin
+        C = CartesianIndices(size(r))
+        ax = to_indices(r, (C,))[1]
+        @test ax === r
+    end
+    @testset "LinearIndices" begin
+        L = LinearIndices(size(r))
+        ax = to_indices(r, (L,))[1]
+        @test ax === L
+    end
 end
 
 @testset "vector indices" begin

@@ -96,11 +96,11 @@ Each statement gets analyzed for its total cost in a function called
 as follows:
 ```jldoctest; filter=r"tuple.jl:\d+"
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
-map(f, t::Tuple{Any}) @ Base tuple.jl:291
+map(f, t::Tuple{Any}) @ Base tuple.jl:281
   0 1 ─ %1  = $(Expr(:boundscheck, true))::Bool
   0 │   %2  = Base.getfield(_3, 1, %1)::Int64
   1 │   %3  = Base.sitofp(Float64, %2)::Float64
-  2 │   %4  = Base.lt_float(%3, 0.0)::Bool
+  0 │   %4  = Base.lt_float(%3, 0.0)::Bool
   0 └──       goto #3 if not %4
   0 2 ─       invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %3::Float64)::Union{}
   0 └──       unreachable

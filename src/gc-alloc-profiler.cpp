@@ -5,11 +5,12 @@
 #include "julia_internal.h"
 #include "gc.h"
 
+#include "llvm/ADT/SmallVector.h"
+
 #include <string>
-#include <vector>
 
 using std::string;
-using std::vector;
+using llvm::SmallVector;
 
 struct jl_raw_backtrace_t {
     jl_bt_element_t *data;
@@ -27,17 +28,17 @@ struct jl_raw_alloc_t {
 // == These structs define the global singleton profile buffer that will be used by
 // callbacks to store profile results. ==
 struct jl_per_thread_alloc_profile_t {
-    vector<jl_raw_alloc_t> allocs;
+    SmallVector<jl_raw_alloc_t, 0> allocs;
 };
 
 struct jl_alloc_profile_t {
     double sample_rate;
 
-    vector<jl_per_thread_alloc_profile_t> per_thread_profiles;
+    SmallVector<jl_per_thread_alloc_profile_t, 0> per_thread_profiles;
 };
 
 struct jl_combined_results {
-    vector<jl_raw_alloc_t> combined_allocs;
+    SmallVector<jl_raw_alloc_t, 0> combined_allocs;
 };
 
 // == Global variables manipulated by callbacks ==

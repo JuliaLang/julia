@@ -4,7 +4,7 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro(seed::Integer)
+    Xoshiro(seed::Union{Integer, AbstractString})
     Xoshiro()
 
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and

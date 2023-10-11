@@ -622,7 +622,11 @@ precompile_test_harness(false) do dir
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
     for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
-        write(FooBar3_file, code)
+        write(FooBar3_file, """
+        module FooBar3
+        $code
+        end
+        """)
         @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
                 Base.require(Main, :FooBar3)
             catch exc
