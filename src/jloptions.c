@@ -214,7 +214,7 @@ static const char opts_hidden[]  =
     " --trace-compile={stderr,name}\n"
     "                          Print precompile statements for methods compiled during execution or save to a path\n"
     " --trace-compile-locations\n"
-    "                          Show source locations of callers triggering precompile statements\n"
+    "                          Show source locations of callers triggering compilation\n"
     " --image-codegen          Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*} Copy the data section of package images into memory\n"
 ;
