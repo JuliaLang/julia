@@ -224,6 +224,30 @@ float julia_half_to_float(uint16_t param) {
 // very recent compilers. to work around this, we pass float16 parameters as float, which is
 // also passed in XMM registers.
 
+// Starting with GCC 12 and Clang 15, we have the _Float16 type which does the right thing
+#if (defined(__GNUC__) && (__GNUC__ > 12 || (__GNUC__ == 12 && __GNUC_MINOR__ >= 0))) || \
+    (defined(__clang__) && (__clang_major__ > 15 || (__clang_major__ == 15 && __clang_minor__ >= 0)))
+
+JL_DLLEXPORT float julia__gnu_h2f_ieee(_Float16 param)
+{
+    uint16_t param16 = *(uint16_t*)&param;
+    return half_to_float(param16);
+}
+
+JL_DLLEXPORT _Float16 julia__gnu_f2h_ieee(float param)
+{
+    uint16_t res = float_to_half(param);
+    return *(_Float16*)&res;
+}
+
+JL_DLLEXPORT _Float16 julia__truncdfhf2(double param)
+{
+    uint16_t res = double_to_half(param);
+    return *(_Float16*)&res;
+}
+
+#else
+
 JL_DLLEXPORT float julia__gnu_h2f_ieee(float param)
 {
     uint32_t param32 = *(uint32_t*)&param;
@@ -244,6 +268,8 @@ JL_DLLEXPORT float julia__truncdfhf2(double param)
     uint32_t res32 = (uint32_t)res16;
     return *(float*)&res32;
 }
+
+#endif
 
 // bfloat16 conversion routines
 
