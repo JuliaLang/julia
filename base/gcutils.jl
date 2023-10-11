@@ -56,6 +56,10 @@ Using the `@async` macro (to defer context switching to outside of the finalizer
 Note that there is no guaranteed world age for the execution of `f`. It may be
 called in the world age in which the finalizer was registered or any later world age.
 
+!!! compat "Julia 1.11"
+    As of Julia 1.11, finalizers are not run on exit. Thus it is not guaranteed that a
+    finalizer will be called.
+
 # Examples
 ```julia
 finalizer(my_mutable_struct) do x
