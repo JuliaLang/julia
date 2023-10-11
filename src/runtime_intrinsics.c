@@ -220,13 +220,8 @@ float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 
-// x86 ABI requires float16 to be passed in XMM registers, but that is only supported by
-// very recent compilers. to work around this, we pass float16 parameters as float, which is
-// also passed in XMM registers.
-
-// Starting with GCC 12 and Clang 15, we have the _Float16 type which does the right thing
-#if (defined(__GNUC__) && (__GNUC__ > 12 || (__GNUC__ == 12 && __GNUC_MINOR__ >= 0))) || \
-    (defined(__clang__) && (__clang_major__ > 15 || (__clang_major__ == 15 && __clang_minor__ >= 0)))
+// starting with GCC 12 and Clang 15, we have the _Float16 type which does the right thing
+#if (defined(__GNUC__) && __GNUC__ > 11) || (defined(__clang__) && __clang_major__ > 14)
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(_Float16 param)
 {
@@ -247,6 +242,9 @@ JL_DLLEXPORT _Float16 julia__truncdfhf2(double param)
 }
 
 #else
+
+// on older compilers, we abuse `float` to ensure Float16 values are passed using the
+// floating-point ABI (e.g., in XMM registers on X86).
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(float param)
 {
@@ -285,19 +283,7 @@ static inline uint16_t float_to_bfloat(float param) JL_NOTSAFEPOINT
     return (uint16_t)(bits >> 16);
 }
 
-// bfloat16 conversion API
-
-// see note above; bfloat16 also needs to be passed in XMM registers on x86
-// NOTE: once we require GCC 13, use the __bf16 type
-
-JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
-{
-    uint16_t res16 = float_to_bfloat(param);
-    uint32_t res32 = (uint32_t)res16;
-    return *(float*)&res32;
-}
-
-JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
 {
     float temp = (float)param;
     uint32_t tempi;
@@ -313,10 +299,46 @@ JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
         memcpy(&temp, &tempi, sizeof(temp));
     }
 
-    uint16_t res16 = float_to_bfloat(temp);
+    return float_to_bfloat(temp);
+}
+
+// bfloat16 conversion API
+
+// starting with GCC 13 and Clang 17, we have the __bf16 type which does the right thing
+#if (defined(__GNUC__) && __GNUC__ > 12) || (defined(__clang__) && __clang_major__ > 16)
+
+JL_DLLEXPORT __bf16 julia__truncsfbf2(float param) JL_NOTSAFEPOINT
+{
+    uint16_t res = float_to_bfloat(param);
+    return *(__bf16*)&res;
+}
+
+JL_DLLEXPORT __bf16 julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+{
+    uint16_t res = double_to_bfloat(param);
+    return *(__bf16*)&res;
+}
+
+#else
+
+// on older compilers, we abuse `float` to ensure Float16 values are passed using the
+// floating-point ABI (e.g., in XMM registers on X86).
+
+JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
+{
+    uint16_t res16 = float_to_bfloat(param);
     uint32_t res32 = (uint32_t)res16;
     return *(float*)&res32;
 }
+
+JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+{
+    uint16_t res16 = double_to_bfloat(param);
+    uint32_t res32 = (uint32_t)res16;
+    return *(float*)&res32;
+}
+
+#endif
 
 
 // run time version of bitcast intrinsic
