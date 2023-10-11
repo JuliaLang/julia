@@ -956,9 +956,5 @@ DLLEXPORT int threadcall_args(int a, int b) {
     return a + b;
 }
 
-DLLEXPORT void c_exit_finalizer(void* v) {
-    printf("c_exit_finalizer: %d, %u", *(int*)v, (unsigned)((uintptr_t)v & (uintptr_t)1));
-}
-
 // global variable for cglobal testing
 DLLEXPORT const int global_var = 1;
