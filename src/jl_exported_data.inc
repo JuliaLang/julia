@@ -42,6 +42,7 @@
     XX(jl_float16_type) \
     XX(jl_float32_type) \
     XX(jl_float64_type) \
+    XX(jl_bfloat16_type) \
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \

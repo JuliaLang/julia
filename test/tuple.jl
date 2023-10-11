@@ -763,6 +763,12 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
 
+# issue #50562
+f50562(r) = in(:i_backward, r[])
+r50562 = Ref((:b_back, :foofakgka, :i_backw))
+f50562(r50562)
+@test @allocated(f50562(r50562)) == 0
+
 # issue #47326
 function fun1_47326(args...)
     head..., tail = args

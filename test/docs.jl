@@ -1517,3 +1517,11 @@ struct S41727
 end
 @test S41727(1) isa S41727
 @test string(@repl S41727.x) == "x is 4\n"
+
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_short()::Int = 2
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_long()::Int = 3
+
+@test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
+@test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
