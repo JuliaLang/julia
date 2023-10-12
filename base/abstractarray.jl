@@ -1258,7 +1258,7 @@ Return a subset of array `A` as selected by the indices `inds`.
 
 Each index may be any [supported index type](@ref man-supported-index-types), such
 as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](ref `range`), or [array](@ref man-multi-dim-arrays) of supported indices.
-A `:` can be used to select all elements in some dimension, and a [`BitArray`](@ref) can be used to select all `true` elements.
+A [:](ref `Colon`) can be used to select all elements in some dimension, and a [`BitArray`](@ref) can be used to select all `true` elements.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
