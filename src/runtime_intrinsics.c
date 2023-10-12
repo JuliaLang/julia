@@ -268,10 +268,27 @@ JL_DLLEXPORT _Float16 julia__truncdfhf2(double param)
     return *(_Float16*)&res;
 }
 
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+// on older compilers, we need to do something platform-specific to ensure we're
+// using the appropriate ABI. on Win64 and PPC, that means treating as int16.
+#elif (defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)) || defined(_CPU_PPC64_) || defined(_CPU_PPC_)
 
-// on older compilers, we need to do something platform-specific to ensure we're using
-// the appropriate ABI. in the case of X86, use __m128 to return in XMM registers.
+JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
+{
+    return float_to_half(param);
+}
+
+JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
+{
+    return double_to_half(param);
+}
+
+// in the case of X86, use __m128 to return in XMM registers.
+#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(__m128 param)
 {
@@ -291,9 +308,8 @@ JL_DLLEXPORT __m128 julia__truncdfhf2(double param)
     return return_in_xmm(res);
 }
 
-#else
-
 // on other platforms, we use the floating-point ABI and pray it's compatible
+#else
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(float param)
 {
@@ -369,10 +385,22 @@ JL_DLLEXPORT __bf16 julia__truncdfbf2(double param) JL_NOTSAFEPOINT
     return *(__bf16*)&res;
 }
 
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+// on older compilers, we need to do something platform-specific to ensure we're
+// using the appropriate ABI. on Win64 and PPC, that means treating as int16.
+#elif (defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)) || defined(_CPU_PPC64_) || defined(_CPU_PPC_)
 
-// on older compilers, we need to do something platform-specific to ensure we're using
-// the appropriate ABI. in the case of X86, use __m128 to return in XMM registers.
+JL_DLLEXPORT uint16_t julia__truncsfbf2(float param) JL_NOTSAFEPOINT
+{
+    return float_to_bfloat(param);
+}
+
+JL_DLLEXPORT uint16_t julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+{
+    return double_to_bfloat(param);
+}
+
+// in the case of X86, use __m128 to return in XMM registers.
+#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 JL_DLLEXPORT __m128 julia__truncsfbf2(float param) JL_NOTSAFEPOINT
 {
