@@ -25,6 +25,7 @@ let ex = quote
         (::Test_y)() = "", ""
         unicode_αβγ = Test_y(1)
 
+        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
         module CompletionFoo2
 
         end
@@ -1888,4 +1889,18 @@ let s = "Issue49892(fal"
     for n in ("false", "falses")
         @test n in c
     end
+end
+
+# issue #51194
+for (s, compl) in (("2*CompletionFoo.nam", "named"),
+                   (":a isa CompletionFoo.test!1", "test!12"),
+                   ("-CompletionFoo.Test_y(3).", "yy"),
+                   ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
+                   ("foo'CompletionFoo.test!1", "test!12"))
+    c, r = test_complete(s)
+    @test only(c) == compl
 end
