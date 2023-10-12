@@ -2008,7 +2008,7 @@ function _require(pkg::PkgId, env=nothing)
                     if !isassigned(PKG_PRECOMPILE_HOOK)
                         # Note: Prevent load-time Pkg.precompile via `Base.PKG_PRECOMPILE_HOOK[]=Returns(nothing)`
                         pkgid = PkgId(UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                        if locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                        if pkg != pkgid && locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
                             require(pkgid)
                         end
                     end
