@@ -2003,7 +2003,7 @@ function _require(pkg::PkgId, env=nothing)
         end
 
         if JLOptions().use_compiled_modules == 1
-            if !generating_output(#=incremental=#false)
+            if !generating_output()
                 if !pkg_precompile_attempted && isinteractive()
                     if !isassigned(PKG_PRECOMPILE_HOOK)
                         # Note: Prevent load-time Pkg.precompile via `Base.PKG_PRECOMPILE_HOOK[]=Returns(nothing)`
