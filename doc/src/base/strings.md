@@ -56,6 +56,8 @@ Base.eachsplit
 Base.eachrsplit
 Base.split
 Base.rsplit
+Base.split!
+Base.rsplit!
 Base.strip
 Base.lstrip
 Base.rstrip

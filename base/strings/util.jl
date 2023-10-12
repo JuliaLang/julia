@@ -727,6 +727,39 @@ split(str::AbstractString;
     split(str, isspace; limit, keepempty)
 
 """
+    split!(v::AbstractVector, str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true) -> v
+
+Similar to [`split`](@ref), stores the substrings in `v`. `v` is resized to the number of substrings.
+
+See also: [`split`](@ref), [`eachsplit`](@ref)
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> v = []; split!(v, "alpha-beta-gamma", '-'; limit=2)
+2-element Vector{Any}:
+ "alpha"
+ "beta-gamma"
+```
+"""
+function split!(v::AbstractVector, str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    require_one_based_indexing(v) # needed to support resize!
+    i = 0
+    for s in eachsplit(str, dlm; limit, keepempty)
+        i += 1
+        i > length(v) && resize!(v, i)
+        @inbounds v[i] = s
+    end
+    length(v) > i && resize!(v, i)
+    v
+end
+
+split!(v::AbstractVector, str::AbstractString; limit::Integer=0, keepempty::Bool=false) =
+    split!(v, str, isspace; limit, keepempty)
+
+"""
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
     rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
@@ -764,6 +797,40 @@ end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
     rsplit(str, isspace; limit, keepempty)
+
+"""
+    rsplit!(v::AbstractVector, str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true) -> v
+
+Similar to [`rsplit`](@ref), stores the substrings in `v`. `v` is resized to the number of substrings.
+
+See also: [`rsplit`](@ref), [`eachrsplit`](@ref)
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> v = []; rsplit!(v, "alpha-beta-gamma", '-'; limit=2)
+2-element Vector{Any}:
+ "alpha-beta"
+ "gamma"
+```
+"""
+function rsplit!(v::AbstractVector, str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    require_one_based_indexing(v) # needed to support resize!
+    i = 0
+    for s in eachrsplit(str, dlm; limit, keepempty)
+        i += 1
+        i > length(v) && resize!(v, i)
+        @inbounds v[i] = s
+    end
+    length(v) > i && resize!(v, i)
+    reverse!(v)
+end
+
+rsplit!(v::AbstractVector, str::AbstractString; limit::Integer=0, keepempty::Bool=false) =
+    rsplit!(v, str, isspace; limit, keepempty)
+
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
