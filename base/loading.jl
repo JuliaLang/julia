@@ -2004,14 +2004,7 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules == 1
             if !generating_output(#=incremental=#false)
-                if !pkg_precompile_attempted && isinteractive()
-                    if !isassigned(PKG_PRECOMPILE_HOOK)
-                        # Note: Prevent load-time Pkg.precompile via `Base.PKG_PRECOMPILE_HOOK[]=Returns(nothing)`
-                        pkgid = PkgId(UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                        if locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                            require(pkgid)
-                        end
-                    end
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
