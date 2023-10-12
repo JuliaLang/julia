@@ -60,10 +60,11 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
         return handle;
 #endif
 
-    char path[2*JL_PATH_MAX + 1] = {0};
-    strncat(path, src_dir, sizeof(path) - 1);
-    strncat(path, PATHSEPSTRING, sizeof(path) - 1);
-    strncat(path, rel_path, sizeof(path) - 1);
+    char path[2*JL_PATH_MAX + 1];
+    path[0] = '\0';
+    strlcat(path, src_dir, sizeof(path));
+    strlcat(path, PATHSEPSTRING, sizeof(path));
+    strlcat(path, rel_path, sizeof(path));
 
 #if defined(_OS_WINDOWS_)
 #define PATH_EXISTS() win_file_exists(wpath)

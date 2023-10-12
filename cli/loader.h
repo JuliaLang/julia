@@ -14,7 +14,7 @@
 #define exit loader_exit
 #define strlen loader_strlen
 #define wcslen loader_wcslen
-#define strncat loader_strncat
+#define strlcat loader_strncat
 #define memcpy loader_memcpy
 #define dirname loader_dirname
 #define strchr loader_strchr
