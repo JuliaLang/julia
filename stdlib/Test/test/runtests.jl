@@ -1032,6 +1032,7 @@ end
     # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
+    seeded_state = copy(Random.default_rng())
     a = rand()
     @testset begin
         # global RNG must re-seeded at the beginning of @testset
@@ -1043,30 +1044,81 @@ end
     # the @testset's above must have no consequence for rand() below
     b = rand()
     Random.seed!(seed)
+    @test Random.default_rng() == seeded_state
     @test a == rand()
     @test b == rand()
 
     # Even when seed!() is called within a testset A, subsequent testsets
     # should start with the same "global RNG state" as what A started with,
     # such that the test `refvalue == rand(Int)` below succeeds.
-    # Currently, this means that Random.GLOBAL_SEED has to be restored,
+    # Currently, this means that `Random.get_tls_seed()` has to be restored,
     # in addition to the state of Random.default_rng().
-    GLOBAL_SEED_orig = Random.GLOBAL_SEED
+    tls_seed_orig = copy(Random.get_tls_seed())
     local refvalue
-    @testset "GLOBAL_SEED is also preserved (setup)" begin
-        @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "TLS seed is also preserved (setup)" begin
+        @test tls_seed_orig == Random.get_tls_seed()
         refvalue = rand(Int)
         Random.seed!()
-        @test GLOBAL_SEED_orig != Random.GLOBAL_SEED
+        @test tls_seed_orig != Random.get_tls_seed()
     end
-    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
-    @testset "GLOBAL_SEED is also preserved (forloop)" for _=1:3
+    @test tls_seed_orig == Random.get_tls_seed()
+    @testset "TLS seed is also preserved (forloop)" for _=1:3
         @test refvalue == rand(Int)
         Random.seed!()
     end
-    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
-    @testset "GLOBAL_SEED is also preserved (beginend)" begin
+    @test tls_seed_orig == Random.get_tls_seed()
+    @testset "TLS seed is also preserved (beginend)" begin
         @test refvalue == rand(Int)
+    end
+
+    # @testset below is not compatible with e.g. v1.9, but it still fails there (at "main task")
+    # when deleting lines using get_tls_seed() or GLOBAL_SEED
+    @testset "TLS seed and concurrency" begin
+        # Even with multi-tasking, the TLS seed must stay consistent: the default_rng() state
+        # is reset to the "global seed" at the beginning, and the "global seed" is reset to what
+        # it was at the end of the testset; make sure that distinct tasks don't see the mutation
+        # of this "global seed" (iow, it's task-local)
+        seed = rand(UInt128)
+        Random.seed!(seed)
+        seeded_state = copy(Random.default_rng())
+        a = rand()
+
+        ch = Channel{Nothing}()
+        @sync begin
+            @async begin
+                @testset "task 1" begin
+                    # tick 1
+                    # this task didn't call seed! explicitly (yet), so its TaskLocalRNG() should have been
+                    # reset to `Random.GLOBAL_SEED` at the beginning of `@testset`
+                    @test Random.GLOBAL_SEED == Random.default_rng()
+                    Random.seed!()
+                    put!(ch, nothing) # tick 1 -> tick 2
+                    take!(ch) # tick 3
+                end
+                put!(ch, nothing) # tick 3 -> tick 4
+            end
+            @async begin
+                take!(ch) # tick 2
+                # @testset below will record the current TLS "seed" and reset default_rng() to
+                # this value;
+                # it must not be affected by the fact that "task 1" called `seed!()` first
+                @test Random.get_tls_seed() == Random.GLOBAL_SEED
+
+                @testset "task 2" begin
+                    @test Random.GLOBAL_SEED == Random.default_rng()
+                    Random.seed!()
+                    put!(ch, nothing) # tick 2 -> tick 3
+                    take!(ch) # tick 4
+                end
+                # when `@testset` of task 2 finishes, which is after `@testset` from task 1,
+                # it resets `get_tls_seed()` to what it was before starting:
+                @test Random.get_tls_seed() == Random.GLOBAL_SEED
+            end
+        end
+        @testset "main task" begin
+            @test Random.default_rng() == seeded_state
+            @test a == rand()
+        end
     end
 end
 

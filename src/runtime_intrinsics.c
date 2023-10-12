@@ -217,6 +217,44 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
     return float_to_half(res);
 }
 
+JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT
+{
+    uint16_t result;
+
+    if (isnan(param))
+        result = 0x7fc0;
+    else {
+        uint32_t bits = *((uint32_t*) &param);
+
+        // round to nearest even
+        bits += 0x7fff + ((bits >> 16) & 1);
+        result = (uint16_t)(bits >> 16);
+    }
+
+    // on x86, bfloat16 needs to be returned in XMM. only GCC 13 provides the necessary ABI
+    // support in the form of the __bf16 type; older versions only provide __bfloat16 which
+    // is simply a typedef for short (i16). so use float, which is passed in XMM too.
+    uint32_t result_32bit = (uint32_t)result;
+    return *(float*)&result_32bit;
+}
+
+JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT
+{
+    float res = (float)param;
+    uint32_t resi;
+    memcpy(&resi, &res, sizeof(res));
+
+    // bfloat16 uses the same exponent as float32, so we don't need special handling
+    // for subnormals when truncating float64 to bfloat16.
+
+    if ((resi & 0x1ffu) == 0x100u) { // if we are halfway between 2 bfloat16 values
+        // adjust the value by 1 ULP in the direction that will make bfloat16(res) give the right answer
+        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
+        memcpy(&res, &resi, sizeof(res));
+    }
+    return julia__truncsfbf2(res);
+}
+
 //JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) { return (double)julia__gnu_h2f_ieee(n); }
 //JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) { return (int32_t)julia__gnu_h2f_ieee(n); }
 //JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) { return (int64_t)julia__gnu_h2f_ieee(n); }

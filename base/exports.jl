@@ -593,6 +593,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -1067,7 +1068,9 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main
 
 # TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
 eval(Expr(:public,

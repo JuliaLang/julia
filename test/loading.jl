@@ -1184,3 +1184,83 @@ end
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
 end
+
+@testset "checking srcpath modules" begin
+    p = Base.PkgId("Dummy")
+    fpath, _ = mktemp()
+    @testset "valid" begin
+        write(fpath, """
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        baremodule Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        using Foo
+        \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\" Foo \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        # using foo
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        # using foo
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+    end
+    @testset "invalid" begin
+        write(fpath, """
+        # module Foo
+        using Bar
+        # end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        module Foo
+        end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        x = 1
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
+end

@@ -21,6 +21,10 @@
 /SparseArrays
 /SHA-*
 /SHA
+/LazyArtifacts-*
+/LazyArtifacts
+/Distributed-*
+/Distributed
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
 /*.image

@@ -441,7 +441,6 @@ const native_rounding_modes = (
         setprecision(BigFloat, pr) do
             exp = 500
             bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 40040 random values
-            @show length(bf_samples)
             for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
                       native_rounding_modes...),
                 bf ∈ bf_samples,

@@ -118,7 +118,7 @@ module InternalWarningsTests
     @testset "internal warnings" begin
         header = "!!! warning\n    The following bindings may be internal; they may change or be removed in future versions:\n\n"
         prefix(warnings) = header * join("      * `$(@__MODULE__).$w`\n" for w in warnings) * "\n\n"
-        docstring(input) = string(eval(REPL.helpmode(input, @__MODULE__)))
+        docstring(input) = string(eval(REPL.helpmode(IOBuffer(), input, @__MODULE__)))
 
         @test docstring("A") == "No docstring or readme file found for internal module `$(@__MODULE__).A`.\n\n# Public names\n\n`B`, `B3`\n"
         @test docstring("A.B") == "No docstring or readme file found for public module `$(@__MODULE__).A.B`.\n\n# Public names\n\n`e`\n"

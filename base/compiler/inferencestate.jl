@@ -336,7 +336,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
-    # 3: (leave 1) # == 1
+    # 3: (leave %1) # == 1
     # 4: (expr)    # == 0
     # then we can find all trys by walking backwards from :enter statements,
     # and all catches by looking at the statement after the :enter
@@ -386,7 +386,20 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 if head === :enter
                     cur_hand = pc
                 elseif head === :leave
-                    l = stmt.args[1]::Int
+                    l = 0
+                    for j = 1:length(stmt.args)
+                        arg = stmt.args[j]
+                        if arg === nothing
+                            continue
+                        else
+                            enter_stmt = code[(arg::SSAValue).id]
+                            if enter_stmt === nothing
+                                continue
+                            end
+                            @assert isexpr(enter_stmt, :enter) "malformed :leave"
+                        end
+                        l += 1
+                    end
                     for i = 1:l
                         cur_hand = handler_at[cur_hand]
                     end
@@ -396,7 +409,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             if handler_at[pc´] != cur_hand
-                @assert handler_at[pc´] == 0 "unbalanced try/catch"
+                if handler_at[pc´] != 0
+                    @assert false "unbalanced try/catch"
+                end
                 handler_at[pc´] = cur_hand
             elseif !in(pc´, ip)
                 break  # already visited
@@ -539,6 +554,13 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
                     ty = fieldtype(linfo.specTypes, j)
                     @goto ty_computed
+                elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                    # then `vᵢ` is known to be `Int`
+                    if isdefined(va, :N) && va.N === vᵢ
+                        ty = Int
+                        @goto ty_computed
+                    end
                 end
             end
             ub = unwraptv_ub(v)
@@ -568,6 +590,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 constrains_param(v, sig, #=covariant=#true)
             end)
         elseif isvarargtype(v)
+            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # so the type is known to be `Int`
             ty = Int
             undef = false
         else
@@ -577,6 +601,21 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         sptypes[i] = VarState(ty, undef)
     end
     return sptypes
+end
+
+function va_from_vatuple(@nospecialize(t))
+    @_foldable_meta
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        if n > 0
+            va = t.parameters[n]
+            if isvarargtype(va)
+               return va
+            end
+        end
+    end
+    return nothing
 end
 
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
@@ -874,8 +913,14 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
     return true
 end
 function should_infer_for_effects(sv::InferenceState)
+    def = sv.linfo.def
+    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
     effects = sv.ipo_effects
-    return is_terminates(effects) && is_effect_free(effects)
+    override = decode_effects_override(def.purity)
+    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
+    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
+    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
+    return true
 end
 should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 

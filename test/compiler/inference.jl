@@ -60,7 +60,8 @@ end
 # issue #42835
 @test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1) # maybe should be fixed?
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.limit_type_size(Type{Int}, Any, Union{}, 0, 0) == Type{Int}
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
@@ -80,15 +81,16 @@ end
 @test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 
 # n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
-@test  Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
 
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Type{Union{Float32,Float64}}, Core.svec(Type{Union{Float32,Float64}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
@@ -97,8 +99,8 @@ end
 @test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
-    t = Type{Type{Int}}
-    c = Type{Int}
+    t = Type{Type{Type{Int}}}
+    c = Type{Type{Int}}
     r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
     @test t !== r && t <: r
 end
@@ -120,6 +122,11 @@ end
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
 
+
+@test Core.Compiler.limit_type_size(Type{Any}, Union{}, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Any, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
+      Type{Any}
 
 # issue #43296 #43296
 struct C43296{t,I} end
@@ -3290,7 +3297,10 @@ end
 call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
 @test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
 @test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
-@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+let (src, rt) = only(code_typed(my_ntuple, Tuple{Any, Val}))
+    @test src isa CodeInfo
+    @test rt == Tuple
+end
 
 @generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
 @test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
@@ -4361,18 +4371,18 @@ let x = Tuple{Int,Any}[
         #= 4=# (2, Expr(:enter, 12))
         #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
         #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
-        #= 7=# (4, Expr(:leave, 2))
+        #= 7=# (4, Expr(:leave, Core.SSAValue(4), Core.SSAValue(2)))
         #= 8=# (0, Core.ReturnNode(1))
         #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
-        #=10=# (4, Expr(:leave, 1))
+        #=10=# (4, Expr(:leave, Core.SSAValue(4)))
         #=11=# (2, Core.GotoNode(16))
-        #=12=# (4, Expr(:leave, 1))
+        #=12=# (4, Expr(:leave, Core.SSAValue(4)))
         #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
         #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
         #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
-        #=16=# (2, Expr(:leave, 1))
+        #=16=# (2, Expr(:leave, Core.SSAValue(2)))
         #=17=# (0, Core.GotoNode(22))
-        #=18=# (2, Expr(:leave, 1))
+        #=18=# (2, Expr(:leave, Core.SSAValue(2)))
         #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
         #=20=# (0, nothing)
         #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
@@ -5243,3 +5253,34 @@ let TV = TypeVar(:T)
     some = Some{Any}((TV, t))
     @test abstract_call_unionall_vararg(some) isa UnionAll
 end
+
+# use `Vararg` type constraints
+use_vararg_constrant1(args::Vararg{T,N}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant1, Tuple{Int,Int})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant2(args::Vararg{T,N}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant2, Tuple{Vararg{Int}})) == Tuple{Val{Int},Int}
+use_vararg_constrant3(args::NTuple{N,T}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constrant3, Tuple{Tuple{Int,Int}})) == Tuple{Val{Int},Val{2}}
+use_vararg_constrant4(args::NTuple{N,T}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constrant4, Tuple{NTuple{N,Int}} where N)) == Tuple{Val{Int},Int}
+
+# issue 51228
+global whatever_unknown_value51228
+f51228() = f51228(whatever_unknown_value51228)
+f51228(x) = 1
+f51228(::Vararg{T,T}) where {T} = "2"
+@test only(Base.return_types(f51228, ())) == Int
+
+struct A51317
+    b::Tuple{1}
+    A1() = new()
+end
+struct An51317
+    a::Int
+    b::Tuple{1}
+    An51317() = new()
+end
+@test only(Base.return_types((x,f) -> getfield(x, f), (A51317, Symbol))) === Union{}
+@test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
+@test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
+@test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}

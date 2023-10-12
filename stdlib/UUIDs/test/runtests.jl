@@ -56,10 +56,10 @@ for (init_uuid, next_uuid) in standard_namespace_uuids
 end
 
 # Issue 35860
-Random.seed!(Random.GLOBAL_RNG, 10)
+Random.seed!(Random.default_rng(), 10)
 u1 = uuid1()
 u4 = uuid4()
-Random.seed!(Random.GLOBAL_RNG, 10)
+Random.seed!(Random.default_rng(), 10)
 @test u1 != uuid1()
 @test u4 != uuid4()
 
