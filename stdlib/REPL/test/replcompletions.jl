@@ -2071,6 +2071,7 @@ end
     @test !Base.isexported(Base, :ispublic)
 end
 
+<<<<<<< HEAD
 # issue #51194
 for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    (":a isa CompletionFoo.test!1", "test!12"),
@@ -2085,7 +2086,7 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
     @test only(c) == compl
 end
 
-let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__)
+let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
     @test t isa Core.Const
     @test t.val == `a b`
 end
