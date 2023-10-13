@@ -1223,6 +1223,24 @@ end
         @test Base.check_src_module_wrap(p, fpath)
 
         write(fpath, """
+        \"\"\"
+        Foo
+        \"\"\" module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        @doc let x = 1
+            x
+        end module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
         # using foo
         module Foo
         using Bar
