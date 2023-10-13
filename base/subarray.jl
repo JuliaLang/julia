@@ -495,9 +495,9 @@ end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
-function Base.replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
-    Base.replace_in_print_matrix(S.parent, reindex(S.indices, (i,j))..., s)
+function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, reindex(S.indices, (i,j))..., s)
 end
-function Base.replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
-    Base.replace_in_print_matrix(S.parent, reindex(S.indices, (i,))..., j, s)
+function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, reindex(S.indices, (i,))..., j, s)
 end
