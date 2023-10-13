@@ -1263,7 +1263,7 @@ function shell_completions(string, pos, mod)
     last_arg = ex.args[end]
     if isexpr(last_arg, :incomplete) || isexpr(last_arg, :error)
         partial = scs[last_parse]
-        ret, range = completions(partial, lastindex(partial))
+        ret, range = completions(partial, lastindex(partial), mod)
         range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
@@ -1282,7 +1282,7 @@ function shell_completions(string, pos, mod)
     if !ignore_last_word
         for arg in ex.args
             if mod !== nothing
-                t = repl_eval_ex(arg, mod)
+                t = repl_eval_ex(arg, mod; limit_aggressive_inference=true)
                 t isa Const || @goto ret
                 (; val) = t
                 # For the first arg non-default Cmd flags are allowed
@@ -1304,23 +1304,25 @@ function shell_completions(string, pos, mod)
         end
     end
 
-    ret, _, _ = complete_path(evaled_args, pos; use_envpath=is_first_arg, shell_escape=true)
+    ret, range, should_complete = complete_path(evaled_args, pos; use_envpath=is_first_arg, shell_escape=true)
 
     # Only replace literal user input - not interpolations - with the available completion
-    should_complete = false
-    if ignore_last_word
-        should_complete = true
-    else
-        head, tail = splitdir(common_tail(scs, evaled_args))
-        if !isempty(head)
-            last_parse = nextind(string, last(last_parse))-ncodeunits(tail):last(last_parse)
-            should_complete = true
-        elseif length(ex.args) == 1
-            should_complete = true
+    if !ignore_last_word
+        # only replace literal text in cmd literals through completions, don't delete interpolated expressions via <tab>
+        potentially_replaceable = common_tail(scs, evaled_args)
+        if potentially_replaceable !== SubString(scs, last_parse)
+            # last cmd arg is not just literal text
+            filename = basename(evaled_args)
+            if endswith(potentially_replaceable, filename)
+                range = nextind(string, last(last_parse))-ncodeunits(filename):last(last_parse)
+            else
+                range = last_parse
+                should_complete = false
+            end
         end
     end
 
-    return ret, last_parse, should_complete
+    return ret, range, should_complete
 
     @label ret
     return Completion[], 0:-1, false
