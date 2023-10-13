@@ -2071,7 +2071,6 @@ end
     @test !Base.isexported(Base, :ispublic)
 end
 
-<<<<<<< HEAD
 # issue #51194
 for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    (":a isa CompletionFoo.test!1", "test!12"),
