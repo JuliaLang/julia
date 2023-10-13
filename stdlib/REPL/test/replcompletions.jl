@@ -2089,3 +2089,32 @@ let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inf
     @test t isa Core.Const
     @test t.val == `a b`
 end
+
+mktempdir() do tmp
+    mod = Module()
+    mod.tmp = tmp
+
+    touch(joinpath(tmp, "foo"))
+
+    @testset "shell completions with interpolation" begin
+        c, r, replace = test_scomplete(raw"echo $(", mod)
+        @test "tmp" in c
+        @test isempty(r)
+        @test replace
+
+        c, r, replace = test_scomplete(raw"echo $(tm", mod)
+        @test c == Any["tmp"]
+        @test r === 8:9
+        @test replace
+
+        c, r, replace = test_scomplete(raw"echo $(tmp)", mod)
+        @test c == Any[joinpath(splitpath(tmp)[end], "")]
+        @test r === 6:11
+        @test !replace
+
+        c, r, replace = test_scomplete(raw"echo $(tmp)/", mod)
+        @test c == Any["foo"]
+        @test r === 13:12
+        @test replace
+    end
+end
