@@ -2090,6 +2090,8 @@ let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inf
     @test t.val == `a b`
 end
 
+using Base.Filesystem: path_separator
+
 mktempdir() do tmp
     mod = Module()
     mod.tmp = tmp
@@ -2108,13 +2110,20 @@ mktempdir() do tmp
         @test replace
 
         c, r, replace = test_scomplete(raw"echo $(tmp)", mod)
-        @test c == Any[joinpath(splitpath(tmp)[end], "")]
+        @test c == Any[splitpath(tmp)[end] * Base.escape_raw_string(path_separator)]
         @test r === 6:11
         @test !replace
 
-        c, r, replace = test_scomplete(raw"echo $(tmp)/", mod)
+        s = raw"echo $(tmp)" * path_separator
+        c, r, replace = test_scomplete(s, mod)
         @test c == Any["foo"]
-        @test r === 13:12
+        @test r === lastindex(s) .+ (1:0)
+        @test replace
+
+        s = raw"echo $(tmp)" * path_separator * "fo"
+        c, r, replace = test_scomplete(s, mod)
+        @test c == Any["foo"]
+        @test r === lastindex(s) .+ (-1:0)
         @test replace
     end
 end
