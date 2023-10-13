@@ -248,19 +248,22 @@ float julia_half_to_float(uint16_t param) {
 }
 
 // starting with GCC 12 and Clang 15, we have _Float16 which does the right thing
-#if (defined(__GNUC__) && __GNUC__ > 11) || (defined(__clang__) && __clang_major__ > 14)
+// (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
+#if ((defined(__GNUC__) && __GNUC__ > 11) || \
+     (defined(__clang__) && __clang_major__ > 14)) && \
+    !defined(_OS_WINDOWS_)
     #define FLOAT16_TYPE _Float16
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define FLOAT16_FROM_UINT16(x) (*(_Float16*)&(x))
 // on older compilers, we need to emulate the platform-specific ABI
-#elif (defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)) || defined(_CPU_PPC64_) || defined(_CPU_PPC_)
-    #define FLOAT16_TYPE uint16_t
-    #define FLOAT16_TO_UINT16(x) (x)
-    #define FLOAT16_FROM_UINT16(x) (x)
 #elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
     #define FLOAT16_TYPE __m128
     #define FLOAT16_TO_UINT16(x) take_from_xmm(x)
     #define FLOAT16_FROM_UINT16(x) return_in_xmm(x)
+#elif defined(_CPU_PPC64_) || defined(_CPU_PPC_)
+    #define FLOAT16_TYPE uint16_t
+    #define FLOAT16_TO_UINT16(x) (x)
+    #define FLOAT16_FROM_UINT16(x) (x)
 #else
     #define FLOAT16_TYPE float
     #define FLOAT16_TO_UINT16(x) ((uint16_t)*(uint32_t*)&(x))
@@ -322,19 +325,22 @@ static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
 // bfloat16 conversion API
 
 // starting with GCC 13 and Clang 17, we have __bf16 which does the right thing
-#if (defined(__GNUC__) && __GNUC__ > 12) || (defined(__clang__) && __clang_major__ > 16)
+// (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
+#if ((defined(__GNUC__) && __GNUC__ > 12) || \
+     (defined(__clang__) && __clang_major__ > 16)) && \
+    !defined(_OS_WINDOWS_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define BFLOAT16_FROM_UINT16(x) (*(__bf16*)&(x))
 // on older compilers, we need to emulate the platform-specific ABI
-#elif (defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)) || defined(_CPU_PPC64_) || defined(_CPU_PPC_)
-    #define BFLOAT16_TYPE uint16_t
-    #define BFLOAT16_TO_UINT16(x) (x)
-    #define BFLOAT16_FROM_UINT16(x) (x)
 #elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
     #define BFLOAT16_TYPE __m128
     #define BFLOAT16_TO_UINT16(x) take_from_xmm(x)
     #define BFLOAT16_FROM_UINT16(x) return_in_xmm(x)
+#elif defined(_CPU_PPC64_) || defined(_CPU_PPC_)
+    #define BFLOAT16_TYPE uint16_t
+    #define BFLOAT16_TO_UINT16(x) (x)
+    #define BFLOAT16_FROM_UINT16(x) (x)
 #else
     #define BFLOAT16_TYPE float
     #define BFLOAT16_TO_UINT16(x) ((uint16_t)*(uint32_t*)&(x))
