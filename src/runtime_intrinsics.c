@@ -213,27 +213,27 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
 // x86-specific helpers for emulating the (B)Float16 ABI
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #include <xmmintrin.h>
-static inline __m128 return_in_xmm(uint16_t val) JL_NOTSAFEPOINT {
-    __m128 xmm_result;
-    uint32_t extended_val = val;
+static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
+    __m128 xmm_output;
     asm (
-        "pxor %%xmm0, %%xmm0\n\t"
-        "pinsrw $0, %1, %%xmm0\n\t"
-        "movaps %%xmm0, %0"
-        : "=x"(xmm_result)
-        : "r"(extended_val)
+        "movd %[input], %%xmm0\n\t"
+        "movss %%xmm0, %[xmm_output]\n\t"
+        : [xmm_output] "=x" (xmm_output)
+        : [input] "r" ((uint32_t)input)
         : "xmm0"
     );
-    return xmm_result;
+    return xmm_output;
 }
-static inline uint16_t take_from_xmm(__m128 xmm_val) JL_NOTSAFEPOINT {
-    uint32_t result;
+static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
+    uint32_t output;
     asm (
-        "pextrw $0, %1, %0"
-        : "=r"(result)
-        : "x"(xmm_val)
+        "movss %[xmm_input], %%xmm0\n\t"
+        "movd %%xmm0, %[output]\n\t"
+        : [output] "=r" (output)
+        : [xmm_input] "x" (xmm_input)
+        : "xmm0"
     );
-    return (uint16_t) result;
+    return (uint16_t)output;
 }
 #endif
 
