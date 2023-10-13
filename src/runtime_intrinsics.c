@@ -264,7 +264,7 @@ float julia_half_to_float(uint16_t param) {
 #else
     #define FLOAT16_TYPE float
     #define FLOAT16_TO_UINT16(x) ((uint16_t)*(uint32_t*)&(x))
-    #define FLOAT16_FROM_UINT16(x) (*(float*)&((uint32_t)(x)))
+    #define FLOAT16_FROM_UINT16(x) ({ uint32_t tmp = (uint32_t)(x); *(float*)&tmp; })
 #endif
 
 JL_DLLEXPORT float julia__gnu_h2f_ieee(FLOAT16_TYPE param)
@@ -338,7 +338,7 @@ static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
 #else
     #define BFLOAT16_TYPE float
     #define BFLOAT16_TO_UINT16(x) ((uint16_t)*(uint32_t*)&(x))
-    #define BFLOAT16_FROM_UINT16(x) (*(float*)&((uint32_t)(x)))
+    #define BFLOAT16_FROM_UINT16(x) ({ uint32_t tmp = (uint32_t)(x); *(float*)&tmp; })
 #endif
 
 JL_DLLEXPORT BFLOAT16_TYPE julia__truncsfbf2(float param) JL_NOTSAFEPOINT
