@@ -215,10 +215,16 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     size_t oldmaxsize = a->ref.mem->length;
     size_t reqmaxsize = oldoffset + newnrows;
     if (__unlikely(reqmaxsize > oldmaxsize)) {
-        // grow to max(3/2oldmaxsize, reqmaxsize)
-        size_t newmaxsize = oldmaxsize*3/2;
+        size_t newmaxsize;
+        if (oldmaxsize < 4) // typical sequence: 0, // 4, // 6, 9, 13, 19, 28, 42, // 50, 60, 72, ...
+            newmaxsize = 4;
+        else if (oldmaxsize < 48)
+            newmaxsize = oldmaxsize*3/2; // grow by 50%
+        else
+            newmaxsize = oldmaxsize*6/5; // grow by 20%
         if (newmaxsize < reqmaxsize)
             newmaxsize = reqmaxsize;
+        // TODO: round this up to newmaxsize < GC_MAX_SZCLASS ? jl_gc_sizeclasses[jl_gc_szclass(newmaxsize)] : LLT_ALIGN(newmaxsize, 4096), after accounting for the object header (24 bytes)
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, newmaxsize);
         char *newdata = (char*)newmem->ptr + oldoffset * elsz;
         memcpy(newdata, data, n * elsz);
