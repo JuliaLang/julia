@@ -213,7 +213,7 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
 // x86-specific helpers for emulating the (B)Float16 ABI
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #include <xmmintrin.h>
-static inline __m128 return_in_xmm(uint16_t val) {
+static inline __m128 return_in_xmm(uint16_t val) JL_NOTSAFEPOINT {
     __m128 xmm_result;
     uint32_t extended_val = val;
     asm (
@@ -226,7 +226,7 @@ static inline __m128 return_in_xmm(uint16_t val) {
     );
     return xmm_result;
 }
-static inline uint16_t take_from_xmm(__m128 xmm_val) {
+static inline uint16_t take_from_xmm(__m128 xmm_val) JL_NOTSAFEPOINT {
     uint32_t result;
     asm (
         "pextrw $0, %1, %0"
