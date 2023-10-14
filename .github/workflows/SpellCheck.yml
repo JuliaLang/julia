@@ -26,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install codespell
-      - run: codespell --skip='*.c,*.cpp,*.jl,*.md,*.scm,*.toml,*.S' --ignore-words=.codespell.ignore
+      - run: codespell --skip='*.c,*.cpp,*.jl,*.md,*.rtf,*.scm,*.toml,*.S' --ignore-words=.codespell.ignore
   codespell-file-extension:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -38,6 +38,7 @@ jobs:
           - 'cpp' # C++ files
           - 'jl' # Julia files
           - 'md' # Markdown files
+          - 'rtf' # RTF (Rich Text Format) files
           - 'scm' # Scheme (femtolisp) files
           - 'toml' # TOML files
           - 'S' # Assembly language files
