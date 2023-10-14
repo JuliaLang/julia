@@ -36,4 +36,4 @@ jobs:
           persist-credentials: false
       - run: pip install codespell
       # Only assembly files
-      - run: codespell --skip='*.c,*.cpp,*.jl,*.md,*.scm' --ignore-words=.codespell.asm.ignore
+      - run: codespell --skip='*.c,*.cpp,*.h,*.iss,*.jl,*.md,*.rtf,*.scm,*.toml' --ignore-words=.codespell.asm.ignore
