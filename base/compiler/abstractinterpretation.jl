@@ -1150,7 +1150,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
             if !(isa(rt, Type) && hasintersect(rt, Bool))
                 ir = irsv.ir
                 # TODO (#48913) enable double inlining pass when there are any calls
-                # that are newly resovled by irinterp
+                # that are newly resolved by irinterp
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
                 effects = result.effects
@@ -1219,7 +1219,7 @@ end
                             conditional_argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `conditional_argtypes`,
-as well as the other general extended lattice inforamtion.
+as well as the other general extended lattice information.
 """
 function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
                                  conditional_argtypes::ConditionalArgtypes)
@@ -2309,7 +2309,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::Infere
     si = StmtInfo(!call_result_unused(sv, sv.currpc))
     (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
     sv.stmt_info[sv.currpc] = info
-    # mark this call statement as DCE-elgible
+    # mark this call statement as DCE-eligible
     # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
     return RTEffects(rt, effects)
 end

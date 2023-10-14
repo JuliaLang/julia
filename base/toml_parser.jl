@@ -665,7 +665,7 @@ end
 #########
 
 function push!!(v::Vector, el)
-    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # Since these types are typically non-inferable, they are a big invalidation risk,
     # and since it's used by the package-loading infrastructure the cost of invalidation
     # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
     # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there

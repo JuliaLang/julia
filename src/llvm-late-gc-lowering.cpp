@@ -2395,7 +2395,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // Now, finally, set the tag. We do this in IR instead of in the C alloc
                 // function, to provide possible optimization opportunities. (I think? TBH
                 // the most recent editor of this code is not entirely clear on why we
-                // prefer to set the tag in the generated code. Providing optimziation
+                // prefer to set the tag in the generated code. Providing optimization
                 // opportunities is the most likely reason; the tradeoff is slightly
                 // larger code size and increased compilation time, compiling this
                 // instruction at every allocation site, rather than once in the C alloc

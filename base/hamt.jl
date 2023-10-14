@@ -29,11 +29,11 @@ export HAMT
 #
 # At each level we use a 32bit bitmap to store which elements are occupied.
 # Since our storage is "sparse" we need to map from index in [0,31] to
-# the actual storage index. We mask the bitmap wiht (1 << i) - 1 and count
+# the actual storage index. We mask the bitmap with (1 << i) - 1 and count
 # the ones in the result. The number of set ones (+1) gives us the index
 # into the storage array.
 #
-# HAMT can be both persitent and non-persistent.
+# HAMT can be both persistent and non-persistent.
 # The `path` function searches for a matching entries, and for persistency
 # optionally copies the path so that it can be safely mutated.
 

@@ -195,7 +195,7 @@ end
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 
-    # test keyword ags in composition
+    # test keyword args in composition
     function kwf(a;b,c); a + b + c; end
     @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
 

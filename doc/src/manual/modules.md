@@ -106,7 +106,7 @@ modules. We will see how to manage name clashes below.
 
 To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
 one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
-but does not have any namespace implications. The `public` keyword is only availiable in Julia 1.11
+but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
 and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
 [Compat](https://github.com/JuliaLang/Compat.jl) package.
 

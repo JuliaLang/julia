@@ -2846,7 +2846,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
         goto pop;
     }
     // Note that for the stealing heuristics, we try to
-    // steal chunks much more agressively than pointers,
+    // steal chunks much more aggressively than pointers,
     // since we know chunks will likely expand into a lot
     // of work for the mark loop
     steal : {

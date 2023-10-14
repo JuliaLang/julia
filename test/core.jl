@@ -8023,7 +8023,7 @@ for T in (Int, String, Symbol, Module)
 end
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
-# objectid for datatypes is inconsistant for types that have unbound type parameters.
+# objectid for datatypes is inconsistent for types that have unbound type parameters.
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
 

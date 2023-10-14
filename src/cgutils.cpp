@@ -3167,7 +3167,7 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (const auto *CC = dyn_cast<ConstantAggregate>(constant))
         nargs = CC->getNumOperands();
     else if (const auto *CAZ = dyn_cast<ConstantAggregateZero>(constant)) {
-        // SVE: Elsewhere we use `getMinKownValue`
+        // SVE: Elsewhere we use `getMinKnownValue`
         nargs = CAZ->getElementCount().getFixedValue();
     }
     else if (const auto *CDS = dyn_cast<ConstantDataSequential>(constant))
