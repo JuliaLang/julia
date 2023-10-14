@@ -1324,6 +1324,7 @@ namespace {
                         }
                     }
                 }
+                ++ModulesOptimized;
                 switch (PoolIdx) {
                     case 0:
                         ++OptO0;
