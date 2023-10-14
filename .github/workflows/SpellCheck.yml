@@ -9,6 +9,7 @@ jobs:
   typos-check:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout the JuliaLang/julia repository
         uses: actions/checkout@v4
