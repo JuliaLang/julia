@@ -1,7 +1,6 @@
 name: Spell Check
 
-permissions:
-  contents: read
+permissions: {}
 
 on: [pull_request]
 
