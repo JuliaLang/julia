@@ -80,7 +80,7 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Get's populated with the Dates stdlib if it exists
+    # Gets populated with the Dates stdlib if it exists
     Dates::Union{Module, Nothing}
 end
 
@@ -367,7 +367,7 @@ end
 @inline peek(l::Parser) = l.current_char
 
 # Return true if the character was accepted. When a character
-# is accepted it get's eaten and we move to the next character
+# is accepted it gets eaten and we move to the next character
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false

@@ -2812,7 +2812,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     //   1) record if btemp->lb/ub has indirect innervars.
     //   2) substitute `vb->var` with `varval`/`varval`
     //   note: We only store the innervar in the outmost `varbinding`,
-    //       thus we must check all inner env to ensure the recording/subtitution
+    //       thus we must check all inner env to ensure the recording/substitution
     //       is complete
     int len = current_env_length(e);
     int8_t *blinding_has_innerdep = (int8_t *)alloca(len);

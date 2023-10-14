@@ -71,7 +71,7 @@ struct Node {
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
-    // whether the from_node is attached or dettached from the main application state
+    // whether the from_node is attached or detached from the main application state
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
     int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
     SmallVector<Edge, 0> edges;

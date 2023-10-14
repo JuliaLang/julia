@@ -140,7 +140,7 @@ using namespace llvm;
       not sunk into the gc frame. Nevertheless performing such sinking can still
       be profitable. Since all arguments to a jlcall are guaranteed to be live
       at that call in some gc slot, we can attempt to rearrange the slots within
-      the gc-frame, or re-use slots not assigned at that particular location
+      the gc-frame, or reuse slots not assigned at that particular location
       for the gcframe. However, even without this optimization, stack frames
       are at most two times larger than optimal (because regular stack coloring
       can merge the jlcall allocas).
@@ -2117,7 +2117,7 @@ struct PEOIterator {
         }
         if (NextElement == -1)
             return NextElement;
-        // Make sure not to try to re-use this later.
+        // Make sure not to try to reuse this later.
         Elements[NextElement].weight = (unsigned)-1;
         // Raise neighbors
         for (int Neighbor : Neighbors[NextElement]) {
