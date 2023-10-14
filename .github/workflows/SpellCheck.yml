@@ -6,7 +6,7 @@ on: [pull_request]
 
 jobs:
   typos-check:
-    name: Spell Check with Typos
+    name: add false positives to typos.toml
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -14,8 +14,5 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check spelling
+      - name: Check spelling wit typos
         uses: crate-ci/typos@master
-      - name: False positive hint
-        if: failure()
-        run: echo "If this is not a typo, add it to the [default.extend-identifiers] section of typos.toml"
