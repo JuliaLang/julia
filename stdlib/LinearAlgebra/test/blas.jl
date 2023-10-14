@@ -447,6 +447,38 @@ Random.seed!(100)
             end
         end
     end
+    @testset "gemmt" begin
+        for uplo in ('L', 'U')
+            @test all(BLAS.gemmt(uplo, 'N', 'N', I4, I4) .== I4)
+            @test all(BLAS.gemmt(uplo, 'N', 'T', I4, I4) .== I4)
+            @test all(BLAS.gemmt(uplo, 'T', 'N', I4, I4) .== I4)
+            @test all(BLAS.gemmt(uplo, 'T', 'T', I4, I4) .== I4)
+            @test all(BLAS.gemmt(uplo, 'N', 'N', el2, I4, I4) .== el2 * I4)
+            @test all(BLAS.gemmt(uplo, 'N', 'T', el2, I4, I4) .== el2 * I4)
+            @test all(BLAS.gemmt(uplo, 'T', 'N', el2, I4, I4) .== el2 * I4)
+            @test all(LinearAlgebra.BLAS.gemmt(uplo, 'T', 'T', el2, I4, I4) .== el2 * I4)
+            I4cp = copy(I4)
+            @test all(BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemmt!(uplo, 'N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemmt!(uplo, 'T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            @test all(BLAS.gemmt(uplo, 'N', 'N', I4, U4) .== U4)
+            @test all(BLAS.gemmt(uplo, 'N', 'T', I4, U4) .== L4)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I4)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I43, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'T', one(elty), I43, I43, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'T', 'T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
+        end
+    end
     @testset "gemm" begin
         @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
         @test all(BLAS.gemm('N', 'T', I4, I4) .== I4)
