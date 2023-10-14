@@ -10,7 +10,7 @@ jobs:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Actions Repository
+      - name: Checkout the JuliaLang/julia repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
