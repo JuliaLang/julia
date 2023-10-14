@@ -14,5 +14,5 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check spelling wit typos
+      - name: Check spelling with typos
         uses: crate-ci/typos@master
