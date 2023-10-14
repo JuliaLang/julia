@@ -16,3 +16,6 @@ jobs:
           persist-credentials: false
       - name: Check spelling
         uses: crate-ci/typos@master
+      - name: False positive hint
+        if: failure()
+        run: echo "If this is not a typo, add it to the [default.extend-identifiers] section of typos.toml"
