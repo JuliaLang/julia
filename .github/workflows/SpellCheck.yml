@@ -25,4 +25,4 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install codespell
-      - run: codespell
+      - run: codespell --ignore-words=.codespell.ignore
