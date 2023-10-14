@@ -4195,11 +4195,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv  = similar(A, BlasInt, n)
             if n == 0
                 return A, ipiv, zero(BlasInt)
             end
@@ -4218,6 +4217,12 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 end
             end
             return A, ipiv, info[]
+        end
+
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            sytrf!(uplo, A, ipiv)
         end
 
         #       SUBROUTINE DSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -4538,11 +4543,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
@@ -4558,6 +4562,12 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 end
             end
             A, ipiv, info[]
+        end
+
+        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            hetrf!(uplo, A, ipiv)
         end
 
 #       SUBROUTINE ZHETRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -4806,11 +4816,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv = similar(A, BlasInt, n)
             if n == 0
                 return A, ipiv, zero(BlasInt)
             end
@@ -4829,6 +4838,12 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 end
             end
             A, ipiv, info[]
+        end
+
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            sytrf!(uplo, A, ipiv)
         end
 
 #       SUBROUTINE ZSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -5117,6 +5132,20 @@ zero at position `info`.
 sytrf!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
+    sytrf!(uplo, A, ipiv) -> (A, ipiv, info)
+
+Computes the Bunch-Kaufman factorization of a symmetric matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, the pivot vector `ipiv`, and
+the error code `info` which is a non-negative integer. If `info` is positive
+the matrix is singular and the diagonal part of the factorization is exactly
+zero at position `info`.
+"""
+sytrf!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+
+"""
     sytri!(uplo, A, ipiv)
 
 Computes the inverse of a symmetric matrix `A` using the results of
@@ -5160,6 +5189,20 @@ the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
 hetrf!(uplo::AbstractChar, A::AbstractMatrix)
+
+"""
+    hetrf!(uplo, A, ipiv) -> (A, ipiv, info)
+
+Computes the Bunch-Kaufman factorization of a Hermitian matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, the pivot vector `ipiv`, and
+the error code `info` which is a non-negative integer. If `info` is positive
+the matrix is singular and the diagonal part of the factorization is exactly
+zero at position `info`.
+"""
+hetrf!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
 
 """
     hetri!(uplo, A, ipiv)
