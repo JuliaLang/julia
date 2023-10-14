@@ -26,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install codespell
-      - run: codespell --skip='*.c,*.jl,*.md,*.scm,*.S' --ignore-words=.codespell.ignore
+      - run: codespell --skip='*.c,*.cpp,*.jl,*.md,*.scm,*.S' --ignore-words=.codespell.ignore
   codespell-file-extension:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -35,6 +35,7 @@ jobs:
       matrix:
         file-extension:
           - 'c' # C files
+          - 'cpp' # C++ files
           - 'jl' # Julia files
           - 'md' # Markdown files
           - 'scm' # Scheme (femtolisp) files
