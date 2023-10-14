@@ -448,29 +448,31 @@ Random.seed!(100)
         end
     end
     @testset "gemmt" begin
-        for uplo in ('L', 'U')
-            @test all(BLAS.gemmt(uplo, 'N', 'N', I4, I4) .== I4)
-            @test all(BLAS.gemmt(uplo, 'N', 'T', I4, I4) .== I4)
-            @test all(BLAS.gemmt(uplo, 'T', 'N', I4, I4) .== I4)
-            @test all(BLAS.gemmt(uplo, 'T', 'T', I4, I4) .== I4)
-            @test all(BLAS.gemmt(uplo, 'N', 'N', el2, I4, I4) .== el2 * I4)
-            @test all(BLAS.gemmt(uplo, 'N', 'T', el2, I4, I4) .== el2 * I4)
-            @test all(BLAS.gemmt(uplo, 'T', 'N', el2, I4, I4) .== el2 * I4)
-            @test all(LinearAlgebra.BLAS.gemmt(uplo, 'T', 'T', el2, I4, I4) .== el2 * I4)
+        for (wrapper, uplo) in ((LowerTriangular, 'L'), (UpperTriangular, 'U'))
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'N', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'T', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'N', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'T', el2, I4, I4)) ≈ wrapper(el2 * I4)
             I4cp = copy(I4)
-            @test all(BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
-            @test all(I4cp .== Z4)
+            @test wrapper(BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
             I4cp[:] = I4
-            @test all(BLAS.gemmt!(uplo, 'N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
-            @test all(I4cp .== Z4)
+            @test wrapper(BLAS.gemmt!(uplo, 'N', 'T', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
             I4cp[:] = I4
-            @test all(BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
-            @test all(I4cp .== Z4)
+            @test wrapper(BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
             I4cp[:] = I4
-            @test all(BLAS.gemmt!(uplo, 'T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
-            @test all(I4cp .== Z4)
-            @test all(BLAS.gemmt(uplo, 'N', 'N', I4, U4) .== U4)
-            @test all(BLAS.gemmt(uplo, 'N', 'T', I4, U4) .== L4)
+            @test wrapper(BLAS.gemmt!(uplo, 'T', 'T', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
+            M1 = uplo == 'U' ? U4 : I4
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', I4, U4)) ≈ wrapper(M1)
+            M2 = uplo == 'U' ? I4 : U4'
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', I4, U4)) ≈ wrapper(M2)
             @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I43)
             @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
             @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I4)
@@ -487,7 +489,7 @@ Random.seed!(100)
         @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)
         @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)
         @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)
-        @test all(LinearAlgebra.BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
+        @test all(BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
         I4cp = copy(I4)
         @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
