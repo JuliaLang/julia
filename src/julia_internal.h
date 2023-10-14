@@ -217,7 +217,7 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 #define NOP5_OVERRIDE_NOP ".byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n\t"
     uint64_t low, high;
     // This instruction sequence is promised by rr to be patchable. rr can usually
-    // also patch `rdtsc` in regular code, but without the proceeding nop, there could
+    // also patch `rdtsc` in regular code, but without the preceding nop, there could
     // be an interfering branch into the middle of rr's patch region. Using this
     // sequence prevents a massive rr-induced slowdown if the compiler happens to emit
     // an unlucky pattern. See https://github.com/rr-debugger/rr/pull/3580.
