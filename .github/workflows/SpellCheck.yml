@@ -27,33 +27,19 @@ jobs:
           persist-credentials: false
       - run: pip install codespell
       - run: codespell --skip='*.jl,*.md,*.S' --ignore-words=.codespell.ignore
-  codespell-jl:
+  codespell-file-extension:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        file-extension:
+          - 'jl'
+          - 'md'
+          - 'S'
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - run: pip install codespell
-      # Only Julia files (*.jl)
-      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.jl.ignore {} \;
-  codespell-md:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - run: pip install codespell
-      # Only Markdown files (*.md)
-      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.md.ignore {} \;
-  codespell-asm:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - run: pip install codespell
-      # Only assembly files (*.S)
-      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.asm.ignore {} \;
+      - run: find . -type f -name '*.${{ matrix.file-extension }}' -exec codespell --ignore-words=.codespell.jl.ignore {} \;
