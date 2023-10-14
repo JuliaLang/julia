@@ -16,3 +16,12 @@ jobs:
           persist-credentials: false
       - name: Check spelling
         uses: crate-ci/typos@master
+  codespell:
+    https://github.com/codespell-project/codespell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: pip install codespell
+      - run: codespell
