@@ -18,6 +18,7 @@ jobs:
         uses: crate-ci/typos@master
   codespell:
     # https://github.com/codespell-project/codespell
+    # This is a catch-all job to cover file extensions that aren't in another job
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -25,8 +26,27 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install codespell
-      # All files except assembly files (*.S)
-      - run: codespell --skip='*.S' --ignore-words=.codespell.ignore
+      - run: codespell --skip='*.jl,*.md,*.S' --ignore-words=.codespell.ignore
+  codespell-jl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: pip install codespell
+      # Only Julia files (*.jl)
+      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.jl.ignore {} \;
+  codespell-md:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: pip install codespell
+      # Only Markdown files (*.md)
+      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.md.ignore {} \;
   codespell-asm:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -35,5 +55,5 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install codespell
-      # Only assembly files
-      - run: codespell --skip='*.c,*.cpp,*.h,*.iss,*.jl,*.md,*.rtf,*.scm,*.toml' --ignore-words=.codespell.asm.ignore
+      # Only assembly files (*.S)
+      - run: find . -type f -name '*.S' -exec codespell --ignore-words=.codespell.asm.ignore {} \;
