@@ -6,7 +6,7 @@ on: [pull_request]
 
 jobs:
   typos-check:
-    name: add false positives to typos.toml
+    name: (add false positives to typos.toml)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
