@@ -6,8 +6,10 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 
 using Random, Core.IR
 using InteractiveUtils
+const CC = Core.Compiler
 
 include("irutils.jl")
+include("newinterp.jl")
 
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
@@ -2226,7 +2228,6 @@ import Core.Compiler:
     InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
     BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
-include("newinterp.jl")
 @newinterp MustAliasInterpreter
 let CC = Core.Compiler
     CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
@@ -5270,6 +5271,29 @@ f51228() = f51228(whatever_unknown_value51228)
 f51228(x) = 1
 f51228(::Vararg{T,T}) where {T} = "2"
 @test only(Base.return_types(f51228, ())) == Int
+
+# check we don't perform essentially duplicated constant-propagation for `Type{Base.RefValue}(::Int)`
+@newinterp ConstPropChecker
+function CC.InferenceState(result::CC.InferenceResult, src::Core.CodeInfo, cache::Symbol,
+                           interp::ConstPropChecker)
+    ret = @invoke CC.InferenceState(result::CC.InferenceResult, src::Core.CodeInfo, cache::Symbol,
+                                    interp::CC.AbstractInterpreter)
+    if ret !== nothing
+        push!(interp.meta, ret => result.overridden_by_const)
+    end
+    return ret
+end
+let meta = Base.IdSet()
+    interp = ConstPropChecker(meta)
+    code_typed((Int,); interp) do x
+        Ref(x)
+    end
+    @test !isempty(meta)
+    # assert that there are no const-propagated frames
+    for (sv, overridden_by_const) in meta
+        @test !CC.any(overridden_by_const)
+    end
+end
 
 struct A51317
     b::Tuple{1}
