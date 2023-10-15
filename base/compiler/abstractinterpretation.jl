@@ -2981,6 +2981,20 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     end
 end
 
+function propagate_to_error_handler!(frame::InferenceState, currpc::Int, W::BitSet, 𝕃ᵢ::AbstractLattice, currstate::VarTable)
+    # If this statement potentially threw, propagate the currstate to the
+    # exception handler, BEFORE applying any state changes.
+    cur_hand = frame.handler_at[currpc]
+    if cur_hand != 0
+        enter = frame.src.code[cur_hand]::Expr
+        l = enter.args[1]::Int
+        exceptbb = block_for_inst(frame.cfg, l)
+        if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate)
+            push!(W, exceptbb)
+        end
+    end
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
@@ -3037,6 +3051,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if nothrow
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
+                        propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
 
@@ -3107,12 +3122,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     ssavaluetypes[frame.currpc] = Any
                     @goto find_next_bb
                 elseif isexpr(stmt, :enter)
-                    # Propagate entry info to exception handler
-                    l = stmt.args[1]::Int
-                    catchbb = block_for_inst(frame.cfg, l)
-                    if update_bbstate!(𝕃ᵢ, frame, catchbb, currstate)
-                        push!(W, catchbb)
-                    end
+                    ssavaluetypes[currpc] = Any
+                    @goto fallthrough
+                elseif isexpr(stmt, :leave)
                     ssavaluetypes[currpc] = Any
                     @goto fallthrough
                 end
@@ -3121,26 +3133,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             # Process non control-flow statements
             (; changes, type) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
+            if (get_curr_ssaflag(frame) & IR_FLAG_NOTHROW) != IR_FLAG_NOTHROW
+                propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
+            end
             if type === Bottom
                 ssavaluetypes[currpc] = Bottom
                 @goto find_next_bb
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
-                let cur_hand = frame.handler_at[currpc], l, enter
-                    while cur_hand != 0
-                        enter = frame.src.code[cur_hand]::Expr
-                        l = enter.args[1]::Int
-                        exceptbb = block_for_inst(frame.cfg, l)
-                        # propagate new type info to exception handler
-                        # the handling for Expr(:enter) propagates all changes from before the try/catch
-                        # so this only needs to propagate any changes
-                        if stupdate1!(𝕃ᵢ, states[exceptbb]::VarTable, changes)
-                            push!(W, exceptbb)
-                        end
-                        cur_hand = frame.handler_at[cur_hand]
-                    end
-                end
             end
             if type === nothing
                 ssavaluetypes[currpc] = Any

@@ -5180,14 +5180,19 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
     ctx.ssavalue_assigned[ssaidx_0based] = true;
 }
 
-static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL)
+static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL, bool allow_mismatch=false)
 {
     if (!vi.used || vi.value.typ == jl_bottom_type)
         return;
 
     // convert rval-type to lval-type
     jl_value_t *slot_type = vi.value.typ;
-    rval_info = convert_julia_type(ctx, rval_info, slot_type);
+    // If allow_mismatch is set, type mismatches will not result in traps.
+    // This is used for upsilon nodes, where the destination can have a narrower
+    // type than the store, if inference determines that the store is never read.
+    Value *dummy = NULL;
+    Value **skip = allow_mismatch ? &dummy : NULL;
+    rval_info = convert_julia_type(ctx, rval_info, slot_type, skip);
     if (rval_info.typ == jl_bottom_type)
         return;
 
@@ -5284,7 +5289,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
             // was unreachable and dead
             val = NULL;
         else
-            emit_varinfo_assign(ctx, vi, rval_info);
+            emit_varinfo_assign(ctx, vi, rval_info, NULL, true);
     }
     if (!val) {
         if (vi.boxroot) {

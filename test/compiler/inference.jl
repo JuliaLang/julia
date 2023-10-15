@@ -5284,3 +5284,72 @@ end
 @test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
 @test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
 @test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}
+
+# Don't visit the catch block for empty try/catch
+function completely_dead_try_catch()
+    try
+    catch
+        return 2.0
+    end
+    return 1
+end
+@test Base.return_types(completely_dead_try_catch) |> only === Int
+@test fully_eliminated(completely_dead_try_catch)
+
+function nothrow_try_catch()
+    try
+        1+1
+    catch
+        return 2.0
+    end
+    return 1
+end
+@test Base.return_types(nothrow_try_catch) |> only === Int
+@test fully_eliminated(nothrow_try_catch)
+
+may_error(b) = Base.inferencebarrier(b) && error()
+function phic_type1()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type1) |> only === Int
+@test phic_type1() === 2
+
+function phic_type2()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+        may_error(false)
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type2) |> only === Union{Int, Float64}
+@test phic_type2() === 2
+
+function phic_type3()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+        may_error(false)
+        if Base.inferencebarrier(false)
+            a = Ref(1)
+        elseif Base.inferencebarrier(false)
+            a = nothing
+        end
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type3) |> only === Union{Int, Float64}
+@test phic_type3() === 2
