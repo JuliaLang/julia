@@ -1089,12 +1089,12 @@ public
     Generator,
     ImmutableDict,
     OneTo,
-    TaggedString,
-    TaggedChar,
+    AnnotatedString,
+    AnnotatedChar,
     UUID,
 
-# Tagged strings
-    taggedstring,
+# Annotated strings
+    annotatedstring,
     annotate!,
     annotations,
 

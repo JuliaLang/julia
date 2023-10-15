@@ -353,31 +353,31 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-# TODO: If/when we have `TaggedIO`, we can revisit this and
+# TODO: If/when we have `AnnotatedIO`, we can revisit this and
 # implement it more nicely.
-function join_tagged(iterator, delim="", last=delim)
+function join_annotated(iterator, delim="", last=delim)
     xs = zip(iterator, Iterators.repeated(delim)) |> Iterators.flatten |> collect
     xs = xs[1:end-1]
     if length(xs) > 1
         xs[end-1] = last
     end
-    taggedstring(xs...)::TaggedString{String}
+    annotatedstring(xs...)::AnnotatedString{String}
 end
 
-function _join_maybe_tagged(args...)
+function _join_maybe_annotated(args...)
     if any(function (arg)
                t = eltype(arg)
-               !(t == Union{}) && (t <: TaggedString || t <: TaggedChar)
+               !(t == Union{}) && (t <: AnnotatedString || t <: AnnotatedChar)
            end, args)
-        join_tagged(args...)
+        join_annotated(args...)
     else
         sprint(join, args...)
     end
 end
 
-join(iterator) = _join_maybe_tagged(iterator)
-join(iterator, delim) = _join_maybe_tagged(iterator, delim)
-join(iterator, delim, last) = _join_maybe_tagged(iterator, delim, last)
+join(iterator) = _join_maybe_annotated(iterator)
+join(iterator, delim) = _join_maybe_annotated(iterator, delim)
+join(iterator, delim, last) = _join_maybe_annotated(iterator, delim, last)
 
 ## string escaping & unescaping ##
 
@@ -787,8 +787,8 @@ function String(chars::AbstractVector{<:AbstractChar})
     end
 end
 
-function TaggedString(chars::AbstractVector{C}) where {C<:AbstractChar}
-    str = if C <: TaggedChar
+function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
+    str = if C <: AnnotatedChar
         String(getfield.(chars, :char))
     else
         sprint(sizehint=length(chars)) do io
@@ -800,12 +800,12 @@ function TaggedString(chars::AbstractVector{C}) where {C<:AbstractChar}
     props = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
     point = 1
     for c in chars
-        if c isa TaggedChar
+        if c isa AnnotatedChar
             for prop in c.properties
                 push!(props, (point:point, prop))
             end
         end
         point += ncodeunits(c)
     end
-    TaggedString(str, props)
+    AnnotatedString(str, props)
 end

@@ -1205,28 +1205,28 @@ However, the next backslash character escapes the backslash that follows it, and
 last backslash escapes a quote, since these backslashes appear before a quote.
 
 
-## [Tagged Strings](@id man-tagged-strings)
+## [Annotated Strings](@id man-annotated-strings)
 
 It is sometimes useful to be able to hold metadata relating to regions of a
-string. A [`TaggedString`](@ref Base.TaggedString) wraps another string and
-allows for regions of it to be annotated with tagged values (`:tag => value`).
+string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
+allows for regions of it to be annotated with labelled values (`:label => value`).
 All generic string operations are applied to the underlying string. However,
 when possible, styling information is preserved. This means you can manipulate a
-[`TaggedString`](@ref Base.TaggedString) —taking substrings, padding them,
+[`AnnotatedString`](@ref Base.AnnotatedString) —taking substrings, padding them,
 concatenating them with other strings— and the metadata annotations will "come
 along for the ride".
 
 This string type is fundamental to the [StyledStrings stdlib](@ref
-stdlib-styledstrings), which uses `:face`-tagged annotations to hold styling
+stdlib-styledstrings), which uses `:face`-labelled annotations to hold styling
 information.
 
-When concatenating a [`TaggedString`](@ref Base.TaggedString), take care to use
-[`taggedstring`](@ref Base.taggedstring) instead of [`string`](@ref) if you want
-to keep the tagged string annotations.
+When concatenating a [`AnnotatedString`](@ref Base.AnnotatedString), take care to use
+[`annotatedstring`](@ref Base.annotatedstring) instead of [`string`](@ref) if you want
+to keep the string annotations.
 
 ```jldoctest
-julia> str = Base.TaggedString("hello there",
-               [(1:5, :word => :greeting), (7:11, :tag => 1)])
+julia> str = Base.AnnotatedString("hello there",
+               [(1:5, :word => :greeting), (7:11, :label => 1)])
 "hello there"
 
 julia> length(str)
@@ -1236,18 +1236,18 @@ julia> lpad(str, 14)
 "   hello there"
 
 julia> typeof(lpad(str, 7))
-Base.TaggedString{String}
+Base.AnnotatedString{String}
 
-julia> str2 = Base.TaggedString(" julia", [(2:6, :face => :magenta)])
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face => :magenta)])
 " julia"
 
-julia> Base.taggedstring(str, str2)
+julia> Base.annotatedstring(str, str2)
 "hello there julia"
 
-julia> str * str2 == Base.taggedstring(str, str2) # *-concatination still works
+julia> str * str2 == Base.annotatedstring(str, str2) # *-concatenation still works
 true
 ```
 
-The annotations of a [`TaggedString`](@ref Base.TaggedString) can be accessed
+The annotations of a [`AnnotatedString`](@ref Base.AnnotatedString) can be accessed
 and modified via the [`annotations`](@ref Base.annotations) and
 [`annotate!`](@ref Base.annotate!) functions.

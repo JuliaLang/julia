@@ -459,8 +459,8 @@ function lpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 )
-    stringfn = if any(isa.((s, p), Union{TaggedString, TaggedChar, SubString{<:TaggedString}}))
-        taggedstring else string end
+    stringfn = if any(isa.((s, p), Union{AnnotatedString, AnnotatedChar, SubString{<:AnnotatedString}}))
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
@@ -491,8 +491,8 @@ function rpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 )
-    stringfn = if any(isa.((s, p), Union{TaggedString, TaggedChar, SubString{<:TaggedString}}))
-        taggedstring else string end
+    stringfn = if any(isa.((s, p), Union{AnnotatedString, AnnotatedChar, SubString{<:AnnotatedString}}))
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)

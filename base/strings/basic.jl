@@ -242,8 +242,8 @@ end
     *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
 
 Concatenate strings and/or characters, producing a [`String`](@ref) or
-[`TaggedString`](@ref) (as appropriate). This is equivalent to calling the
-[`string`](@ref) or [`taggedstring`](@ref) function on the arguments. Concatenation of built-in string
+[`AnnotatedString`](@ref) (as appropriate). This is equivalent to calling the
+[`string`](@ref) or [`annotatedstring`](@ref) function on the arguments. Concatenation of built-in string
 types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
 
@@ -257,10 +257,10 @@ julia> 'j' * "ulia"
 ```
 """
 function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
-    istagged = s1 isa TaggedString || s1 isa TaggedChar ||
-        any(s -> s isa TaggedString || s isa TaggedChar, ss)
-    if istagged
-        taggedstring(s1, ss...)
+    isannotated = s1 isa AnnotatedString || s1 isa AnnotatedChar ||
+        any(s -> s isa AnnotatedString || s isa AnnotatedChar, ss)
+    if isannotated
+        annotatedstring(s1, ss...)
     else
         string(s1, ss...)
     end
@@ -318,7 +318,7 @@ end
     ==(a::AbstractString, b::AbstractString) -> Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point). Should either string be a [`TaggedString`](@ref) the
+code point by code point). Should either string be a [`AnnotatedString`](@ref) the
 string properties must match too.
 
 # Examples

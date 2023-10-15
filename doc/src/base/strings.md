@@ -17,9 +17,9 @@ Core.String(::AbstractString)
 Base.SubString
 Base.LazyString
 Base.@lazy_str
-Base.TaggedString
-Base.TaggedChar
-Base.taggedstring
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
 Base.annotations
 Base.annotate!
 Base.transcode
