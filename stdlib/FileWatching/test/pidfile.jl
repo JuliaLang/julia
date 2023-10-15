@@ -211,7 +211,7 @@ end
         close(f)
     end
     @test t < 2
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1)::File
+    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=5)::File
     close(f)
     @test 20 < t < 50
     rm("pidfile")
