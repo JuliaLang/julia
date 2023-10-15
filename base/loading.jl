@@ -3053,6 +3053,8 @@ global parse_pidfile_hook
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
+const compilecache_pidlock_stale_age = 10
+
 # Allows processes to wait if another process is precompiling a given source already.
 # The lock file mtime will be updated when held every `stale_age/2` seconds.
 # After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
@@ -3060,8 +3062,7 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); projec
 # seconds if the process does still exist.
 # If the lock is held by another host, it will conservatively wait `stale_age * 5`
 # seconds since processes cannot be checked remotely
-# NOTE: keep stale_age in-step with parallel precompile lock
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
