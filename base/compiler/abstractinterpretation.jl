@@ -2981,7 +2981,7 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     end
 end
 
-function propagate_to_error_handler!(frame::InferenceState, currpc::Int, W, 𝕃ᵢ, currstate)
+function propagate_to_error_handler!(frame::InferenceState, currpc::Int, W::BitSet, 𝕃ᵢ::AbstractLattice, currstate::VarTable)
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
     cur_hand = frame.handler_at[currpc]
