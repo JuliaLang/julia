@@ -3060,6 +3060,7 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); projec
 # seconds if the process does still exist.
 # If the lock is held by another host, it will conservatively wait `stale_age * 5`
 # seconds since processes cannot be checked remotely
+# NOTE: keep stale_age in-step with parallel precompile lock
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
