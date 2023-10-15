@@ -440,7 +440,6 @@ operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 # mode predicate methods for file names
 
 for f in Symbol[
-    :ispath,
     :isfifo,
     :ischardev,
     :isdir,
@@ -460,6 +459,8 @@ for f in Symbol[
 ]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
+
+ispath(path::AbstractString) = ispath(stat(path))
 
 islink(path...) = islink(lstat(path...))
 

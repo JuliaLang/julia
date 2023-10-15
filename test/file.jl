@@ -648,6 +648,9 @@ let path = tempname()
     @test !ispath(path)
 end
 
+# Issue #51710
+@test_throws MethodError ispath(1)
+
 (p, f) = mktemp()
 print(f, "Here is some text")
 close(f)
