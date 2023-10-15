@@ -296,9 +296,9 @@ endif
 	# The rest are libraries from mingw32 needed to link pkgimages, as an example memcpy is exported by msvcrt.
 	# These files must be outside of the search path of the compiler used to build julia itself,
 	# but should be picked up by the pkgimages linker.
-	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(private_libdir)/
-	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(private_libdir)/
-	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(private_libdir)/
+	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(DESTDIR)$(private_libdir)/
+	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(DESTDIR)$(private_libdir)/
+	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(DESTDIR)$(private_libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
