@@ -349,10 +349,8 @@ end
 # Parser
 #
 # The definitions and top-level comments here were copied to match the
-# structure of Julia's official flisp-based parser.
-#
-# This is to make both codebases mutually understandable and make porting
-# changes simple.
+# structure of Julia's previous flisp-based parser to make both codebases
+# mutually understandable and make porting changes simple.
 #
 # The `parse_*` functions are listed here roughly in order of increasing
 # precedence (lowest to highest binding power). A few helper functions are

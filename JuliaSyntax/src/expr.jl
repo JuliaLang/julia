@@ -138,10 +138,9 @@ function _string_to_Expr(k, args)
         # If there's a single string remaining after joining, we unwrap
         # to give a string literal.
         #   """\n  a\n  b""" ==>  "a\nb"
-        # k == K"cmdstring" follows this branch
         return only(args2)
     else
-        @check k == K"string"
+        # This only happens when k == K"string" or when an error has occurred. 
         return Expr(:string, args2...)
     end
 end

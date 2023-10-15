@@ -286,6 +286,13 @@
                  "a\nb")
         @test parsestmt("\"\"\"\n  a\n  \$x\n  b\n  c\"\"\"") ==
             Expr(:string, "a\n", :x, "\nb\nc")
+        # Incomplete cases
+        @test parsestmt("`x", ignore_errors=true) ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(1),
+                 Expr(:string, "x", Expr(:error)))
+        @test parsestmt("`", ignore_errors=true) ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(1),
+                 Expr(:string, Expr(:error)))
     end
 
     @testset "Char conversions" begin
