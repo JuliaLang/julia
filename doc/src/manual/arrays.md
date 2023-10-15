@@ -479,8 +479,8 @@ If all the indices are scalars, then the result `X` is a single element from the
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
 indices.
 
-When some or all `I_k` are ranges or array of integers ("slicing"), the returned array would be a new copy of
-the selected elements, instead of sharing memory with the original array `A`, to slice an array
+When some or all `I_k` are ranges or array of integers ("slicing"), the returned array would be a new array with
+copies of selected elements instead of sharing underlying memory with the original array `A`; to slice an array
 without making a copy, see [array views](@lib-arrays-view).
 
 If all indices `I_k` are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
