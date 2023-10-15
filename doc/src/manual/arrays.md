@@ -481,7 +481,7 @@ indices.
 
 When some or all `I_k` are ranges or array of integers ("slicing"), the returned array would be a new array with
 copies of selected elements instead of sharing underlying memory with the original array `A`; to slice an array
-without making a copy, see [array views](@lib-arrays-view).
+without making a copy, see [array views](@lib-arrays-views).
 
 If all indices `I_k` are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
 with location `i_1, i_2, ..., i_n` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
