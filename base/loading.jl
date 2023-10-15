@@ -3056,7 +3056,8 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); projec
 const compilecache_pidlock_stale_age = 10
 
 # Allows processes to wait if another process is precompiling a given source already.
-# The lock file mtime will be updated when held every `stale_age/2` seconds.
+# The lock file mtime will be updated when held at most every `stale_age/2` seconds, with expected
+# variance of 10 seconds or more being infrequent but not unusual.
 # After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
 # precompilation will proceed if the locking process no longer exists or after `stale_age * 5`
 # seconds if the process does still exist.
