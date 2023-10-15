@@ -33,7 +33,7 @@ Optional keyword arguments:
  - `mode`: file access mode (modified by the process umask). Defaults to world-readable.
  - `poll_interval`: Specify the maximum time to between attempts (if `watch_file` doesn't work)
  - `stale_age`: Delete an existing pidfile (ignoring the lock) if it is older than this many seconds, based on its mtime.
-     The file won't be deleted until 25x longer than this if the pid in the file appears that it may be valid.
+     The file won't be deleted until 5x longer than this if the pid in the file appears that it may be valid.
      By default this is disabled (`stale_age` = 0), but a typical recommended value would be about 3-5x an
      estimated normal completion time.
  - `refresh`: Keeps a lock from becoming stale by updating the mtime every interval of time that passes.
@@ -193,7 +193,7 @@ function stale_pidfile(path::String, stale_age::Real)
     pid, hostname, age = parse_pidfile(path)
     age < -stale_age && @warn "filesystem time skew detected" path=path
     if age > stale_age
-        if (age > stale_age * 25) || !isvalidpid(hostname, pid)
+        if (age > stale_age * 5) || !isvalidpid(hostname, pid)
             return true
         end
     end

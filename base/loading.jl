@@ -3056,10 +3056,10 @@ compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); projec
 # Allows processes to wait if another process is precompiling a given source already.
 # The lock file mtime will be updated when held every `stale_age/2` seconds.
 # After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
-# precompilation will proceed if
-#  - the locking process no longer exists
-#  - the lock is held by another host, since processes cannot be checked remotely
-# or after `stale_age * 25` seconds if the process does still exist.
+# precompilation will proceed if the locking process no longer exists or after `stale_age * 5`
+# seconds if the process does still exist.
+# If the lock is held by another host, it will conservatively wait `stale_age * 5`
+# seconds since processes cannot be checked remotely
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
