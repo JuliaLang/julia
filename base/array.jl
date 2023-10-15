@@ -2026,6 +2026,7 @@ function hcat(V::Vector{T}...) where T
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
+hcat(::Vector{Union{}}, slurp...) = Matrix{Union{}}(undef, 0, 1)
 
 function vcat(arrays::Vector{T}...) where T
     n = 0
@@ -2043,6 +2044,7 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+vcat(::Vector{Union{}}, slurp...) = Union{}[]
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
