@@ -39,6 +39,8 @@ const IR_FLAG_REFINED     = UInt32(1) << 7
 # This is :noub == ALWAYS_TRUE
 const IR_FLAG_NOUB        = UInt32(1) << 8
 
+const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 # This corresponds to the type of `CodeInfo`'s `inlining_cost` field
@@ -181,7 +183,17 @@ function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
     return OptimizationState(linfo, src, interp)
 end
 
-include("compiler/ssair/driver.jl")
+function argextype end # imported by EscapeAnalysis
+function try_compute_field end # imported by EscapeAnalysis
+
+include("compiler/ssair/heap.jl")
+include("compiler/ssair/slot2ssa.jl")
+include("compiler/ssair/inlining.jl")
+include("compiler/ssair/verify.jl")
+include("compiler/ssair/legacy.jl")
+include("compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("compiler/ssair/passes.jl")
+include("compiler/ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
@@ -231,7 +243,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-    typ, isexact = instanceof_tfunc(atyp)
+    typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
         if isType(atyp) && isTypeDataType(atyp.parameters[1])
@@ -297,7 +309,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
-            if f === Intrinsics.cglobal
+            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -323,7 +335,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
-            typ, isexact = instanceof_tfunc(typ)
+            typ, isexact = instanceof_tfunc(typ, true)
             isexact || return (false, false, false)
             ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
@@ -333,9 +345,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 return (false, false, false)
             end
             return (false, true, true)
-        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds
+        elseif head === :inbounds
             return (true, true, true)
-        elseif head === :boundscheck
+        elseif head === :boundscheck || head === :isdefined || head === :the_exception || head === :copyast
             return (false, true, true)
         else
             # e.g. :loopinfo
@@ -460,7 +472,7 @@ end
 function visit_bb_phis!(callback, ir::IRCode, bb::Int)
     stmts = ir.cfg.blocks[bb].stmts
     for idx in stmts
-        stmt = ir[SSAValue(idx)][:inst]
+        stmt = ir[SSAValue(idx)][:stmt]
         if !isa(stmt, PhiNode)
             if !is_valid_phiblock_stmt(stmt)
                 return
@@ -483,13 +495,12 @@ end
 function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
-    postdomtree = get!(lazypostdomtree)
     while !isempty(worklist)
         thisbb = pop!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(postdomtree, succ, thisbb) && continue
+            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
             any_stmt_may_throw(ir, succ) && return true
             push!(worklist, succ)
         end
@@ -502,215 +513,272 @@ struct AugmentedDomtree
     domtree::DomTree
 end
 
-function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
-    inconsistent = BitSet()
-    inconsistent_bbs = BitSet()
-    tpdum = TwoPhaseDefUseMap(length(ir.stmts))
-    lazypostdomtree = LazyPostDomtree(ir)
+mutable struct LazyAugmentedDomtree
+    const ir::IRCode
+    agdomtree::AugmentedDomtree
+    LazyAugmentedDomtree(ir::IRCode) = new(ir)
+end
 
-    all_effect_free = true # TODO refine using EscapeAnalysis
-    all_nothrow = true
-    all_retpaths_consistent = true
-    all_noub = true
-    any_conditional_ub = false
-    had_trycatch = false
-
-    scanner = BBScanner(ir)
-
-    effects = result.ipo_effects
-
-    agdomtree = nothing
-    function get_augmented_domtree()
-        if agdomtree !== nothing
-            return agdomtree
+function get!(lazyagdomtree::LazyAugmentedDomtree)
+    isdefined(lazyagdomtree, :agdomtree) && return lazyagdomtree.agdomtree
+    ir = lazyagdomtree.ir
+    cfg = copy(ir.cfg)
+    # Add a virtual basic block to represent the exit
+    push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
+    for bb = 1:(length(cfg.blocks)-1)
+        terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:stmt]
+        if isa(terminator, ReturnNode) && isdefined(terminator, :val)
+            cfg_insert_edge!(cfg, bb, length(cfg.blocks))
         end
-        cfg = copy(ir.cfg)
-        # Add a virtual basic block to represent the exit
-        push!(cfg.blocks, BasicBlock(StmtRange(0:-1)))
+    end
+    domtree = construct_domtree(cfg.blocks)
+    return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
+end
 
-        for bb = 1:(length(cfg.blocks)-1)
-            terminator = ir[SSAValue(last(cfg.blocks[bb].stmts))][:inst]
-            if isa(terminator, ReturnNode) && isdefined(terminator, :val)
-                cfg_insert_edge!(cfg, bb, length(cfg.blocks))
+# TODO refine `:effect_free` using EscapeAnalysis
+mutable struct PostOptAnalysisState
+    const result::InferenceResult
+    const ir::IRCode
+    const inconsistent::BitSetBoundedMinPrioritySet
+    const tpdum::TwoPhaseDefUseMap
+    const lazypostdomtree::LazyPostDomtree
+    const lazyagdomtree::LazyAugmentedDomtree
+    all_retpaths_consistent::Bool
+    all_effect_free::Bool
+    all_nothrow::Bool
+    all_noub::Bool
+    any_conditional_ub::Bool
+    function PostOptAnalysisState(result::InferenceResult, ir::IRCode)
+        inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
+        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+        lazypostdomtree = LazyPostDomtree(ir)
+        lazyagdomtree = LazyAugmentedDomtree(ir)
+        return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, true, true, true, true, false)
+    end
+end
+
+give_up_refinements!(sv::PostOptAnalysisState) =
+    sv.all_retpaths_consistent = sv.all_effect_free = sv.all_nothrow = sv.all_noub = false
+
+function any_refinable(sv::PostOptAnalysisState)
+    effects = sv.result.ipo_effects
+    return ((!is_consistent(effects) & sv.all_retpaths_consistent) |
+            (!is_effect_free(effects) & sv.all_effect_free) |
+            (!is_nothrow(effects) & sv.all_nothrow) |
+            (!is_noub(effects) & sv.all_noub))
+end
+
+function refine_effects!(sv::PostOptAnalysisState)
+    any_refinable(sv) || return false
+    effects = sv.result.ipo_effects
+    sv.result.ipo_effects = Effects(effects;
+        consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = sv.all_nothrow ? true : effects.nothrow,
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+    return true
+end
+
+function is_ipo_dataflow_analysis_profitable(effects::Effects)
+    return !(is_consistent(effects) && is_effect_free(effects) &&
+             is_nothrow(effects) && is_noub(effects))
+end
+
+function is_getfield_with_boundscheck_arg(@nospecialize(stmt), sv::PostOptAnalysisState)
+    is_known_call(stmt, getfield, sv.ir) || return false
+    length(stmt.args) < 4 && return false
+    boundscheck = stmt.args[end]
+    argextype(boundscheck, sv.ir) === Bool || return false
+    isa(boundscheck, SSAValue) || return false
+    return true
+end
+
+function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
+    # Special case: `:boundscheck` into `getfield`
+    stmt = inst[:stmt]
+    is_getfield_with_boundscheck_arg(stmt, sv) || return false
+    barg = stmt.args[end]
+    bstmt = sv.ir[barg][:stmt]
+    isexpr(bstmt, :boundscheck) || return false
+    # If IR_FLAG_INBOUNDS is already set, no more conditional ub
+    (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
+    sv.any_conditional_ub = true
+    return true
+end
+
+function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
+    flag = inst[:flag]
+    stmt = inst[:stmt]
+    if !isterminator(stmt) && stmt !== nothing
+        # ignore control flow node – they are not removable on their own and thus not
+        # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
+        # the whole method invocation
+        sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+    end
+    sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
+    if iszero(flag & IR_FLAG_NOUB)
+        if !is_conditional_noub(inst, sv)
+            sv.all_noub = false
+        end
+    end
+end
+
+function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisState)
+    flag = inst[:flag]
+    stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
+    stmt = inst[:stmt]
+    # Special case: For getfield, we allow inconsistency of the :boundscheck argument
+    (; inconsistent, tpdum) = sv
+    if is_getfield_with_boundscheck_arg(stmt, sv)
+        for i = 1:(length(stmt.args)-1)
+            val = stmt.args[i]
+            if isa(val, SSAValue)
+                stmt_inconsistent |= val.id in inconsistent
+                count!(tpdum, val)
             end
         end
+    else
+        for ur in userefs(stmt)
+            val = ur[]
+            if isa(val, SSAValue)
+                stmt_inconsistent |= val.id in inconsistent
+                count!(tpdum, val)
+            end
+        end
+    end
+    stmt_inconsistent && push!(inconsistent, idx)
+    return stmt_inconsistent
+end
 
-        domtree = construct_domtree(cfg.blocks)
-        agdomtree = AugmentedDomtree(cfg, domtree)
-        return agdomtree
+struct ScanStmt
+    sv::PostOptAnalysisState
+end
+
+function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
+    stmt = inst[:stmt]
+    flag = inst[:flag]
+
+    if isexpr(stmt, :enter)
+        # try/catch not yet modeled
+        give_up_refinements!(sv)
+        return nothing
     end
 
-    function is_getfield_with_boundscheck_arg(inst::Instruction)
-        stmt = inst[:stmt]
-        is_known_call(stmt, getfield, ir) || return false
-        length(stmt.args) < 4 && return false
-        boundscheck = stmt.args[end]
-        argextype(boundscheck, ir) === Bool || return false
-        isa(boundscheck, SSAValue) || return false
-        return true
-    end
+    scan_non_dataflow_flags!(inst, sv)
 
-    function is_conditional_noub(inst::Instruction)
-        # Special case: `:boundscheck` into `getfield`
-        is_getfield_with_boundscheck_arg(inst) || return false
-        barg = inst[:stmt].args[end]
-        bstmt = ir[barg][:stmt]
-        isexpr(bstmt, :boundscheck) || return false
-        # If IR_FLAG_INBOUNDS is already set, no more conditional ub
-        (length(bstmt.args) != 0 && bstmt.args[1] === false) && return false
-        any_conditional_ub = true
-        return true
-    end
+    stmt_inconsistent = scan_inconsistency!(inst, idx, sv)
 
-    function scan_non_dataflow_flags!(inst::Instruction)
-        flag = inst[:flag]
-        all_effect_free &= (flag & IR_FLAG_EFFECT_FREE) != 0
-        all_nothrow &= (flag & IR_FLAG_NOTHROW) != 0
-        if (flag & IR_FLAG_NOUB) == 0
-            if !is_conditional_noub(inst)
-                all_noub = false
+    if stmt_inconsistent && idx == lstmt
+        if isa(stmt, ReturnNode) && isdefined(stmt, :val)
+            sv.all_retpaths_consistent = false
+        elseif isa(stmt, GotoIfNot)
+            # Conditional Branch with inconsistent condition.
+            # If we do not know this function terminates, taint consistency, now,
+            # :consistent requires consistent termination. TODO: Just look at the
+            # inconsistent region.
+            if !sv.result.ipo_effects.terminates
+                sv.all_retpaths_consistent = false
+            elseif conditional_successors_may_throw(sv.lazypostdomtree, sv.ir, bb)
+                # Check if there are potential throws that require
+                sv.all_retpaths_consistent = false
+            else
+                (; cfg, domtree) = get!(sv.lazyagdomtree)
+                for succ in iterated_dominance_frontier(cfg, BlockLiveness(sv.ir.cfg.blocks[bb].succs, nothing), domtree)
+                    if succ == length(cfg.blocks)
+                        # Phi node in the virtual exit -> We have a conditional
+                        # return. TODO: Check if all the retvals are egal.
+                        sv.all_retpaths_consistent = false
+                    else
+                        visit_bb_phis!(sv.ir, succ) do phiidx::Int
+                            push!(sv.inconsistent, phiidx)
+                        end
+                    end
+                end
             end
         end
     end
 
-    function scan_inconsistency!(inst::Instruction, idx::Int)
-        flag = inst[:flag]
-        stmt_inconsistent = (flag & IR_FLAG_CONSISTENT) == 0
+    # bail out early if there are no possibilities to refine the effects
+    if !any_refinable(sv)
+        return nothing
+    end
+
+    return true
+end
+
+function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
+    scan!(ScanStmt(sv), scanner, true)
+    complete!(sv.tpdum); push!(scanner.bb_ip, 1)
+    populate_def_use_map!(sv.tpdum, scanner)
+    (; ir, inconsistent, tpdum) = sv
+    stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
+    for def in sv.inconsistent
+        for use in tpdum[def]
+            if !(use in inconsistent)
+                push!(inconsistent, use)
+                append!(stmt_ip, tpdum[use])
+            end
+        end
+    end
+    while !isempty(stmt_ip)
+        idx = popfirst!(stmt_ip)
+        inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        # Special case: For getfield, we allow inconsistency of the :boundscheck argument
-        if is_getfield_with_boundscheck_arg(inst)
+        if is_getfield_with_boundscheck_arg(stmt, sv)
+            any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
                 if isa(val, SSAValue)
-                    stmt_inconsistent |= val.id in inconsistent
-                    count!(tpdum, val)
+                    any_non_boundscheck_inconsistent |= val.id in inconsistent
+                    any_non_boundscheck_inconsistent && break
                 end
             end
+            any_non_boundscheck_inconsistent || continue
+        elseif isa(stmt, ReturnNode)
+            sv.all_retpaths_consistent = false
+        else isa(stmt, GotoIfNot)
+            bb = block_for_inst(ir, idx)
+            cfg = ir.cfg
+            blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
+            domtree = construct_domtree(cfg.blocks)
+            for succ in iterated_dominance_frontier(cfg, blockliveness, domtree)
+                visit_bb_phis!(ir, succ) do phiidx::Int
+                    push!(inconsistent, phiidx)
+                    push!(stmt_ip, phiidx)
+                end
+            end
+        end
+        sv.all_retpaths_consistent || break
+        append!(inconsistent, tpdum[idx])
+        append!(stmt_ip, tpdum[idx])
+    end
+end
+
+function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
+    is_ipo_dataflow_analysis_profitable(result.ipo_effects) || return false
+
+    sv = PostOptAnalysisState(result, ir)
+    scanner = BBScanner(ir)
+
+    completed_scan = scan!(ScanStmt(sv), scanner, true)
+
+    if !completed_scan
+        if sv.all_retpaths_consistent
+            check_inconsistentcy!(sv, scanner)
         else
-            for ur in userefs(stmt)
-                val = ur[]
-                if isa(val, SSAValue)
-                    stmt_inconsistent |= val.id in inconsistent
-                    count!(tpdum, val)
-                end
-            end
-        end
-        stmt_inconsistent && push!(inconsistent, idx)
-        return stmt_inconsistent
-    end
-
-    function scan_stmt!(inst, idx, lstmt, bb)
-        stmt = inst[:inst]
-        flag = inst[:flag]
-
-        if isexpr(stmt, :enter)
-            # try/catch not yet modeled
-            had_trycatch = true
-            return false
-        end
-
-        scan_non_dataflow_flags!(inst)
-        stmt_inconsistent = scan_inconsistency!(inst, idx)
-
-        if idx == lstmt
-            if isa(stmt, ReturnNode) && isdefined(stmt, :val) && stmt_inconsistent
-                all_retpaths_consistent = false
-            elseif isa(stmt, GotoIfNot) && stmt_inconsistent
-                # Conditional Branch with inconsistent condition.
-                # If we do not know this function terminates, taint consistency, now,
-                # :consistent requires consistent termination. TODO: Just look at the
-                # inconsistent region.
-                if !effects.terminates
-                    all_retpaths_consistent = false
-                    # Check if there are potential throws that require
-                elseif conditional_successors_may_throw(lazypostdomtree, ir, bb)
-                    all_retpaths_consistent = false
-                else
-                    (; cfg, domtree) = get_augmented_domtree()
-                    for succ in iterated_dominance_frontier(cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), domtree)
-                        if succ == length(cfg.blocks)
-                            # Phi node in the virtual exit -> We have a conditional
-                            # return. TODO: Check if all the retvals are egal.
-                            all_retpaths_consistent = false
-                        else
-                            visit_bb_phis!(ir, succ) do phiidx::Int
-                                push!(inconsistent, phiidx)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        return true
-    end
-    if !scan!(scan_stmt!, scanner, true)
-        if !all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
-                scan_non_dataflow_flags!(inst)
+                scan_non_dataflow_flags!(inst, sv)
+                # bail out early if there are no possibilities to refine the effects
+                if !any_refinable(sv)
+                    return nothing
+                end
                 return true
-            end
-        else
-            scan!(scan_stmt!, scanner, true)
-            complete!(tpdum); push!(scanner.bb_ip, 1)
-            populate_def_use_map!(tpdum, scanner)
-            for def in inconsistent
-                for use in tpdum[def]
-                    if !(use in inconsistent)
-                        push!(inconsistent, use)
-                        append!(stmt_ip, tpdum[use])
-                    end
-                end
-            end
-
-            stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-            while !isempty(stmt_ip)
-                idx = popfirst!(stmt_ip)
-                inst = ir[SSAValue(idx)]
-                stmt = inst[:inst]
-                if is_getfield_with_boundscheck_arg(inst)
-                    any_non_boundscheck_inconsistent = false
-                    for i = 1:(length(stmt.args)-1)
-                        val = stmt.args[i]
-                        if isa(val, SSAValue)
-                            any_non_boundscheck_inconsistent |= val.id in inconsistent
-                            any_non_boundscheck_inconsistent && break
-                        end
-                    end
-                    any_non_boundscheck_inconsistent || continue
-                elseif isa(stmt, ReturnNode)
-                    all_retpaths_consistent = false
-                else isa(stmt, GotoIfNot)
-                    bb = block_for_inst(ir, idx)
-                    for succ in iterated_dominance_frontier(ir.cfg, BlockLiveness(ir.cfg.blocks[bb].succs, nothing), get!(lazydomtree))
-                        visit_bb_phis!(ir, succ) do phiidx
-                            push!(inconsistent, phiidx)
-                            push!(stmt_ip, phiidx)
-                        end
-                    end
-                end
-                all_retpaths_consistent || break
-                append!(inconsistent, tpdum[idx])
-                append!(stmt_ip, tpdum[idx])
             end
         end
     end
 
-    had_trycatch && return
-    if all_effect_free
-        effects = Effects(effects; effect_free = true)
-    end
-    if all_nothrow
-        effects = Effects(effects; nothrow = true)
-    end
-    if all_retpaths_consistent
-        effects = Effects(effects; consistent = ALWAYS_TRUE)
-    end
-    if all_noub
-        effects = Effects(effects; noub = any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE)
-    end
-    result.ipo_effects = effects
+    return refine_effects!(sv)
 end
 
 # run the optimization work
@@ -719,32 +787,6 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::I
     ipo_dataflow_analysis!(interp, ir, caller)
     return finish(interp, opt, ir, caller)
 end
-
-using .EscapeAnalysis
-import .EscapeAnalysis: EscapeState, ArgEscapeCache, is_ipo_profitable
-
-"""
-    cache_escapes!(caller::InferenceResult, estate::EscapeState)
-
-Transforms escape information of call arguments of `caller`,
-and then caches it into a global cache for later interprocedural propagation.
-"""
-cache_escapes!(caller::InferenceResult, estate::EscapeState) =
-    caller.argescapes = ArgEscapeCache(estate)
-
-function ipo_escape_cache(mi_cache::MICache) where MICache
-    return function (linfo::Union{InferenceResult,MethodInstance})
-        if isa(linfo, InferenceResult)
-            argescapes = linfo.argescapes
-        else
-            codeinst = get(mi_cache, linfo, nothing)
-            isa(codeinst, CodeInstance) || return nothing
-            argescapes = codeinst.argescapes
-        end
-        return argescapes !== nothing ? argescapes::ArgEscapeCache : nothing
-    end
-end
-null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
 macro pass(name, expr)
     optimize_until = esc(:optimize_until)
@@ -797,27 +839,35 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         expr = code[i]
-        if !(i in sv.unreachable) && isa(expr, GotoIfNot)
-            # Replace this live GotoIfNot with:
-            # - no-op if :nothrow and the branch target is unreachable
-            # - cond if :nothrow and both targets are unreachable
-            # - typeassert if must-throw
-            block = block_for_inst(sv.cfg, i)
-            if ssavaluetypes[i] === Bottom
-                destblock = block_for_inst(sv.cfg, expr.dest)
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
-                expr = Expr(:call, Core.typeassert, expr.cond, Bool)
-            elseif i + 1 in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                expr = GotoNode(expr.dest)
-            elseif expr.dest in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                expr = nothing
+        if !(i in sv.unreachable)
+            if isa(expr, GotoIfNot)
+                # Replace this live GotoIfNot with:
+                # - no-op if :nothrow and the branch target is unreachable
+                # - cond if :nothrow and both targets are unreachable
+                # - typeassert if must-throw
+                block = block_for_inst(sv.cfg, i)
+                if ssavaluetypes[i] === Bottom
+                    destblock = block_for_inst(sv.cfg, expr.dest)
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
+                    expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+                elseif i + 1 in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    expr = GotoNode(expr.dest)
+                elseif expr.dest in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = nothing
+                end
+                code[i] = expr
+            elseif isexpr(expr, :enter)
+                catchdest = expr.args[1]::Int
+                if catchdest in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
+                    code[i] = nothing
+                end
             end
-            code[i] = expr
         end
     end
 
@@ -964,7 +1014,7 @@ end
 
 ## Computing the cost of a function body
 
-# saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
+# saturating sum (inputs are non-negative), prevents overflow with typemax(Int) below
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
@@ -989,11 +1039,36 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)
             iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-            if !isassigned(T_IFUNC_COST, iidx)
-                # unknown/unhandled intrinsic
-                return params.inline_nonleaf_penalty
+            if isassigned(T_IFUNC, iidx)
+                minarg, maxarg, = T_IFUNC[iidx]
+                nargs = length(ex.args)
+                if minarg + 1 <= nargs <= maxarg + 1
+                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # and are likely to combine with the operations around them,
+                    # so reduce their cost by half.
+                    cost = T_IFUNC_COST[iidx]
+                    if cost == 0 || nargs < 3 ||
+                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                        return cost
+                    end
+                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
+                    nconst = Int(aty2 isa Const)
+                    for i = 3:nargs
+                        aty = widenconditional(argextype(ex.args[i], src, sptypes))
+                        if widenconst(aty) != widenconst(aty2)
+                            nconst = 0
+                            break
+                        end
+                        nconst += aty isa Const
+                    end
+                    if nconst + 2 >= nargs
+                        cost = (cost - 1) ÷ 2
+                    end
+                    return cost
+                end
             end
-            return T_IFUNC_COST[iidx]
+            # unknown/unhandled intrinsic
+            return params.inline_nonleaf_penalty
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1004,9 +1079,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
+            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === Core.arrayset && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 8 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
@@ -1169,7 +1247,12 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             if el.head === :enter
                 tgt = el.args[1]::Int
-                el.args[1] = tgt + labelchangemap[tgt]
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    body[i] = nothing
+                else
+                    el.args[1] = tgt + labelchangemap[tgt]
+                end
             elseif !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)

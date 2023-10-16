@@ -620,7 +620,8 @@ static const char *absformat(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{   // this function resolves the paths in jl_options to absolute file locations as needed
+{
+    // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
     // it may fail, print an error, and exit(1) if any of these paths are longer than JL_PATH_MAX
     //
@@ -841,7 +842,9 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    if (jl_options.image_file)
+    if (rel == JL_IMAGE_IN_MEMORY)
+        jl_set_sysimg_so(jl_exe_handle);
+    else if (jl_options.image_file)
         jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";

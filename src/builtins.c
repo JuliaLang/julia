@@ -1939,7 +1939,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_const(inm, sym, i);
-    jl_module_export(inm, sym);
+    jl_module_public(inm, sym, 1);
 }
 
 void jl_init_intrinsic_properties(void) JL_GC_DISABLED

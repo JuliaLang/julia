@@ -595,11 +595,12 @@ typedef struct _jl_binding_t {
     _Atomic(struct _jl_binding_t*) owner;  // for individual imported bindings (NULL until 'resolved')
     _Atomic(jl_value_t*) ty;  // binding type
     uint8_t constp:1;
-    uint8_t exportp:1;
+    uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
+    uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t imported:1;
     uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:2;
+    uint8_t padding:1;
 } jl_binding_t;
 
 typedef struct {
@@ -847,6 +848,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_float16_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_float32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_float64_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_bfloat16_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_floatingpoint_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_number_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_void_type JL_GLOBALLY_ROOTED;  // deprecated
@@ -1052,6 +1054,13 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
 JL_DLLEXPORT void jl_gc_safepoint(void);
+JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
+JL_DLLEXPORT int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT;
+
+void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;
+size_t mtarraylist_length(small_arraylist_t *_a) JL_NOTSAFEPOINT;
+void mtarraylist_add(small_arraylist_t *_a, void *elt, size_t idx) JL_NOTSAFEPOINT;
+void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
 
 // object accessors -----------------------------------------------------------
 
@@ -1563,7 +1572,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1);
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2);
 JL_DLLEXPORT jl_datatype_t *jl_apply_modify_type(jl_value_t *dt);
 JL_DLLEXPORT jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt);
-JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params);
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params, int check); // if uncertain, set check=1
 JL_DLLEXPORT jl_value_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
                                             jl_module_t *module,
@@ -1763,7 +1772,7 @@ JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
@@ -1863,7 +1872,7 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 typedef enum {
     JL_IMAGE_CWD = 0,
     JL_IMAGE_JULIA_HOME = 1,
-    //JL_IMAGE_LIBJULIA = 2,
+    JL_IMAGE_IN_MEMORY = 2
 } JL_IMAGE_SEARCH;
 
 JL_DLLIMPORT const char *jl_get_libdir(void);
@@ -2036,7 +2045,7 @@ typedef struct _jl_task_t {
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
-    jl_value_t *logstate;
+    jl_value_t *scope;
     jl_function_t *start;
     // 4 byte padding on 32-bit systems
     // uint32_t padding0;
@@ -2051,9 +2060,6 @@ typedef struct _jl_task_t {
 
 // hidden state:
 
-#ifdef USE_TRACY
-    const char *name;
-#endif
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id
@@ -2071,6 +2077,9 @@ typedef struct _jl_task_t {
     size_t world_age;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
+#ifdef USE_TRACY
+    const char *name;
+#endif
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler
@@ -2373,18 +2382,13 @@ typedef struct {
     int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
     int debug_info_kind;    // Enum for line-table-only, line-directives-only,
                             // limited, standalone
-
+    int debug_info_level;   // equivalent to the -g level from the cli
     int safepoint_on_entry; // Emit a safepoint on entry to each function
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
-
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
-
-    // If not `nothing`, rewrite all generic calls to call
-    // generic_context(f, args...) instead of f(args...).
-    jl_value_t *generic_context;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 

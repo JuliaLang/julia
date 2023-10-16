@@ -163,7 +163,7 @@
 #    result::Any
 #    exception::Any
 #    backtrace::Any
-#    logstate::Any
+#    scope::Any
 #    code::Any
 #end
 
@@ -216,6 +216,8 @@ abstract type Unsigned <: Integer end
 primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
+
+primitive type BFloat16 <: AbstractFloat 16 end
 
 #primitive type Bool <: Integer 8 end
 abstract type AbstractChar end
@@ -527,7 +529,7 @@ export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional

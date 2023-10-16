@@ -314,6 +314,8 @@ static uv_mutex_t tls_lock; // controls write-access to these variables:
 _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED;
 int jl_all_tls_states_size;
 static uv_cond_t cond;
+// concurrent reads are permitted, using the same pattern as mtsmall_arraylist
+// it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -347,7 +349,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, (void*)ptls);
 #endif
-    ptls->system_id = (jl_thread_t)(uintptr_t)uv_thread_self();
+    ptls->system_id = uv_thread_self();
     ptls->rngseed = jl_rand();
     if (tid == 0)
         ptls->disable_gc = 1;
@@ -365,11 +367,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
-        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size);
+        jl_atomic_store_relaxed(&ptls->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size));
     }
     else {
-        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
-                                    sizeof(size_t));
+        jl_atomic_store_relaxed(&ptls->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
+                                sizeof(size_t)));
     }
     jl_bt_element_t *bt_data = (jl_bt_element_t*)
         malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
@@ -382,10 +384,10 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     uv_cond_init(&ptls->wake_signal);
 
     uv_mutex_lock(&tls_lock);
-    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     if (tid == -1)
         tid = jl_atomic_load_relaxed(&jl_n_threads);
     ptls->tid = tid;
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     if (jl_all_tls_states_size <= tid) {
         int i, newsize = jl_all_tls_states_size + tid + 2;
         jl_ptls_t *newpptls = (jl_ptls_t*)calloc(newsize, sizeof(jl_ptls_t));
@@ -752,10 +754,10 @@ void jl_start_threads(void)
             }
         }
         else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_gc_sweep_threadfun, t);
+            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
         }
         else {
-            uv_thread_create(&uvtid, jl_gc_mark_threadfun, t);
+            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
         }
         uv_thread_detach(&uvtid);
     }

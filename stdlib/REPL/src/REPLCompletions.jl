@@ -19,6 +19,10 @@ struct KeywordCompletion <: Completion
     keyword::String
 end
 
+struct KeyvalCompletion <: Completion
+    keyval::String
+end
+
 struct PathCompletion <: Completion
     path::String
 end
@@ -99,6 +103,7 @@ end
 
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::KeyvalCompletion) = c.keyval
 _completion_text(c::PathCompletion) = c.path
 _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
@@ -131,6 +136,7 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -190,7 +196,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
                 push!(suggestions, PropertyCompletion(val, property))
             end
         end
-    else
+    elseif field_completion_eligible(t)
         # Looking for a member of a type
         add_field_completions!(suggestions, name, t)
     end
@@ -201,43 +207,56 @@ function add_field_completions!(suggestions::Vector{Completion}, name::String, @
     if isa(t, Union)
         add_field_completions!(suggestions, name, t.a)
         add_field_completions!(suggestions, name, t.b)
-    elseif t isa DataType && t != Any
-        # Check for cases like Type{typeof(+)}
-        if Base.isType(t)
-            t = typeof(t.parameters[1])
-        end
-        # Only look for fields if this is a concrete type
-        if isconcretetype(t)
-            fields = fieldnames(t)
-            for field in fields
-                isa(field, Symbol) || continue # Tuple type has ::Int field name
-                s = string(field)
-                if startswith(s, name)
-                    push!(suggestions, FieldCompletion(t, field))
-                end
+    else
+        @assert isconcretetype(t)
+        fields = fieldnames(t)
+        for field in fields
+            isa(field, Symbol) || continue # Tuple type has ::Int field name
+            s = string(field)
+            if startswith(s, name)
+                push!(suggestions, FieldCompletion(t, field))
             end
         end
     end
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export", "false",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "true", "try", "using", "while"]
+const GENERIC_PROPERTYNAMES_METHOD = which(propertynames, (Any,))
 
-function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
+function field_completion_eligible(@nospecialize t)
+    if isa(t, Union)
+        return field_completion_eligible(t.a) && field_completion_eligible(t.b)
+    end
+    isconcretetype(t) || return false
+    # field completion is correct only when `getproperty` fallbacks to `getfield`
+    match = Base._which(Tuple{typeof(propertynames),t}; raise=false)
+    match === nothing && return false
+    return match.method === GENERIC_PROPERTYNAMES_METHOD
+end
+
+function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+    r = searchsorted(list, s)
     i = first(r)
-    n = length(sorted_keywords)
-    while i <= n && startswith(sorted_keywords[i],s)
+    n = length(list)
+    while i <= n && startswith(list[i],s)
         r = first(r):i
         i += 1
     end
-    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
+    Completion[T(kw) for kw in list[r]]
 end
+
+const sorted_keywords = [
+    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "const", "continue", "do", "else", "elseif", "end", "export",
+    "finally", "for", "function", "global", "if", "import",
+    "let", "local", "macro", "module", "mutable struct",
+    "primitive type", "quote", "return", "struct",
+    "try", "using", "while"]
+
+complete_keyword(s::Union{String,SubString{String}}) = complete_from_list(KeywordCompletion, sorted_keywords, s)
+
+const sorted_keyvals = ["false", "true"]
+
+complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
 
 function complete_path(path::AbstractString, pos::Int;
                        use_envpath=false, shell_escape=false,
@@ -344,13 +363,10 @@ end
 # Returns a range that includes the method name in front of the first non
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
-    braces = 0
     r = reverse(s)
     i = firstindex(r)
-    in_single_quotes = false
-    in_double_quotes = false
-    in_back_ticks = false
-    in_comment = 0
+    braces = in_comment = 0
+    in_single_quotes = in_double_quotes = in_back_ticks = false
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -429,7 +445,7 @@ function get_code_cache()
     #     that those produced by `NativeInterpreter`, will leak into the native code cache,
     #     potentially causing runtime slowdown.
     #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if (@ccall jl_generating_output()::Cint) == 1
+    if Base.generating_output()
         return REPLInterpreterCache()
     else
         return REPL_INTERPRETER_CACHE
@@ -437,19 +453,21 @@ function get_code_cache()
 end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
-    repl_frame::CC.InferenceResult
+    limit_aggressive_inference::Bool
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
     code_cache::REPLInterpreterCache
-    function REPLInterpreter(repl_frame::CC.InferenceResult;
+    function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
-                             inf_params::CC.InferenceParams = CC.InferenceParams(),
+                             inf_params::CC.InferenceParams = CC.InferenceParams(;
+                                 aggressive_constant_propagation=true,
+                                 unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                              code_cache::REPLInterpreterCache = get_code_cache())
-        return new(repl_frame, world, inf_params, opt_params, inf_cache, code_cache)
+        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
@@ -473,25 +491,36 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # Aggressive binding resolution poses challenges for the inference cache validation
 # (until https://github.com/JuliaLang/julia/issues/40399 is implemented).
 # To avoid the cache validation issues, `REPLInterpreter` only allows aggressive binding
-# resolution for top-level frame representing REPL input code (`repl_frame`) and for child
-# `getproperty` frames that are constant propagated from the `repl_frame`. This works, since
-# a.) these frames are never cached, and
-# b.) their results are only observed by the non-cached `repl_frame`.
+# resolution for top-level frame representing REPL input code and for child uncached frames
+# that are constant propagated from the top-level frame ("repl-frame"s). This works, even if
+# those global bindings are not constant and may be mutated in the future, since:
+# a.) "repl-frame"s are never cached, and
+# b.) mutable values are never observed by any cached frames.
 #
 # `REPLInterpreter` also aggressively concrete evaluate `:inconsistent` calls within
-# `repl_frame` to provide reasonable completions for lines like `Ref(Some(42))[].|`.
+# "repl-frame" to provide reasonable completions for lines like `Ref(Some(42))[].|`.
 # Aggressive concrete evaluation allows us to get accurate type information about complex
 # expressions that otherwise can not be constant folded, in a safe way, i.e. it still
 # doesn't evaluate effectful expressions like `pop!(xs)`.
 # Similarly to the aggressive binding resolution, aggressive concrete evaluation doesn't
-# present any cache validation issues because `repl_frame` is never cached.
+# present any cache validation issues because "repl-frame" is never cached.
 
-is_repl_frame(interp::REPLInterpreter, sv::CC.InferenceState) = interp.repl_frame === sv.result
+# `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
+# `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
+# be employed, for instance, by `typeinf_ext_toplevel`.
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && !sv.cached
+
+function is_call_graph_uncached(sv::CC.InferenceState)
+    sv.cached && return false
+    parent = sv.parent
+    parent === nothing && return true
+    return is_call_graph_uncached(parent::CC.InferenceState)
+end
 
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if CC.isdefined_globalref(g)
             return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
         end
@@ -501,18 +530,18 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(interp::REPLInterpreter, sv::CC.InferenceState)
+function is_repl_frame_getproperty(sv::CC.InferenceState)
     def = sv.linfo.def
     def isa Method || return false
     def.name === :getproperty || return false
     sv.cached && return false
-    return is_repl_frame(interp, sv.parent)
+    return is_repl_frame(sv.parent)
 end
 
 # aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
 function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
                               argtypes::Vector{Any}, sv::CC.InferenceState)
-    if f === Core.getglobal && is_repl_frame_getproperty(interp, sv)
+    if f === Core.getglobal && (interp.limit_aggressive_inference ? is_repl_frame_getproperty(sv) : is_call_graph_uncached(sv))
         if length(argtypes) == 2
             a1, a2 = argtypes
             if isa(a1, Const) && isa(a2, Const)
@@ -535,28 +564,46 @@ end
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if is_repl_frame(interp, sv)
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
     end
-    return @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
-                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
-                                             sv::CC.InferenceState)
+    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
+                                            result::CC.MethodCallResult, arginfo::CC.ArgInfo,
+                                            sv::CC.InferenceState)
+    if ret === :semi_concrete_eval
+        # while the base eligibility check probably won't permit semi-concrete evaluation
+        # for `REPLInterpreter` (given it completely turns off optimization),
+        # this ensures we don't inadvertently enter irinterp
+        ret = :none
+    end
+    return ret
 end
 
-function resolve_toplevel_symbols!(mod::Module, src::Core.CodeInfo)
-    newsrc = copy(src)
+# allow constant propagation for mutable constants
+function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
+    if !interp.limit_aggressive_inference
+        any(@nospecialize(a)->isa(a, Const), arginfo.argtypes) && return true # even if mutable
+    end
+    return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
+end
+
+function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_globals_in_ir(
-        #=jl_array_t *stmts=# newsrc.code::Any,
+        #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
         #=int binding_effects=# 0::Int)::Cvoid
-    return newsrc
+    return src
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
-function repl_eval_ex(@nospecialize(ex), context_module::Module)
+function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressive_inference::Bool=false)
+    if (isexpr(ex, :toplevel) || isexpr(ex, :tuple)) && !isempty(ex.args)
+        # get the inference result for the last expression
+        ex = ex.args[end]
+    end
     lwr = try
         Meta.lower(context_module, ex)
     catch # macro expansion failed, etc.
@@ -574,12 +621,12 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     mi.specTypes = Tuple{}
 
     mi.def = context_module
-    src = resolve_toplevel_symbols!(context_module, src)
+    resolve_toplevel_symbols!(src, context_module)
     @atomic mi.uninferred = src
 
+    interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
-    interp = REPLInterpreter(result)
-    frame = CC.InferenceState(result, src, #=cache=#:no, interp)::CC.InferenceState
+    frame = CC.InferenceState(result, src, #=cache=#:no, interp)
 
     # NOTE Use the fixed world here to make `REPLInterpreter` robust against
     #      potential invalidations of `Core.Compiler` methods.
@@ -834,20 +881,18 @@ function dict_identifier_key(str::String, tag::Symbol, context_module::Module=Ma
     else
         str_close = str
     end
-
     frange, end_of_identifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    obj = context_module
-    for name in split(str[frange[1]:end_of_identifier], '.')
-        Base.isidentifier(name) || return (nothing, nothing, nothing)
-        sym = Symbol(name)
-        isdefined(obj, sym) || return (nothing, nothing, nothing)
-        obj = getfield(obj, sym)
-    end
-    (isa(obj, AbstractDict) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
+    objstr = str[1:end_of_identifier]
+    objex = Meta.parse(objstr, raise=false, depwarn=false)
+    objt = repl_eval_ex(objex, context_module)
+    isa(objt, Core.Const) || return (nothing, nothing, nothing)
+    obj = objt.val
+    isa(obj, AbstractDict) || return (nothing, nothing, nothing)
+    length(obj)::Int < 1_000_000 || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
-    return (obj::AbstractDict, str[begin_of_key:end], begin_of_key)
+    return (obj, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
@@ -926,6 +971,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
     append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+    append!(suggestions, complete_keyval(last_word))
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -948,9 +994,12 @@ end
 
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
     ex = nothing
-    comp_keywords && append!(suggestions, complete_keyword(name))
+    if comp_keywords
+        append!(suggestions, complete_keyword(name))
+        append!(suggestions, complete_keyval(name))
+    end
     if dotpos > 1 && string[dotpos] == '.'
-        s = string[1:dotpos-1]
+        s = string[1:prevind(string, dotpos)]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.
         ex = Meta.parse(s, raise=false, depwarn=false)
         if isexpr(ex, :incomplete)
@@ -989,6 +1038,17 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                 ex = Meta.parse(lookup_name, raise=false, depwarn=false)
             end
             isexpr(ex, :incomplete) && (ex = nothing)
+        elseif isexpr(ex, :call) && length(ex.args) > 1
+            isinfix = s[end] != ')'
+            # A complete call expression that does not finish with ')' is an infix call.
+            if !isinfix
+                # Handle infix call argument completion of the form bar + foo(qux).
+                frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
+                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == ex.args[end]
+            end
+            if isinfix
+                ex = ex.args[end]
+            end
         end
     end
     append!(suggestions, complete_symbol(ex, name, ffunc, context_module))

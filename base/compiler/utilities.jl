@@ -390,6 +390,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
+            isdefined(e, :val) || continue
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
@@ -500,7 +501,7 @@ is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
-    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
         m = moduleroot(m)

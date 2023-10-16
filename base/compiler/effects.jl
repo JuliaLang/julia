@@ -131,7 +131,14 @@ const CONSISTENT_IF_NOTRETURNED         = 0x01 << 1
 const CONSISTENT_IF_INACCESSIBLEMEMONLY = 0x01 << 2
 
 # :effect_free-ness bits
-const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
+const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x02
+
+"""
+`EFFECT_FREE_GLOBALLY` means that the statement is `:effect-free` and does not have a
+caller-visible effect, but may not be removed from the function itself. This may e.g.
+be used for effects that last only for the scope of the current function.
+"""
+const EFFECT_FREE_GLOBALLY = 0x03
 
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
@@ -190,18 +197,20 @@ is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
-is_noub(effects::Effects, noinbounds::Bool=true) = effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
 is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
 
+is_noub(effects::Effects, noinbounds::Bool=true) =
+    effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
+
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
-is_foldable(effects::Effects, noinbounds::Bool=true) =
+is_foldable(effects::Effects) =
     is_consistent(effects) &&
-    is_noub(effects, noinbounds) &&
+    is_noub(effects) &&
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_foldable_nothrow(effects::Effects, noinbounds::Bool=true) =
-    is_foldable(effects, noinbounds) &&
+is_foldable_nothrow(effects::Effects) =
+    is_foldable(effects) &&
     is_nothrow(effects)
 
 # TODO add `is_noub` here?

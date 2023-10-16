@@ -2901,6 +2901,7 @@ end
     let float_types = Set()
         allsubtypes!(Base, AbstractFloat, float_types)
         allsubtypes!(Core, AbstractFloat, float_types)
+        filter!(!isequal(Core.BFloat16), float_types)   # defined externally
         @test !isempty(float_types)
 
         for T in float_types

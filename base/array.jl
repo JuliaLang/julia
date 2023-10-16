@@ -368,7 +368,7 @@ end
 
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be nonnegative.")
+    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
@@ -1349,6 +1349,9 @@ function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Cvoid, (Any, UInt), a, sz)
     a
 end
+
+# Fall-back implementation for non-shrinkable collections
+_sizehint!(a, sz; shrink) = sizehint!(a, sz)
 
 """
     pop!(collection) -> item

@@ -465,7 +465,7 @@ wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
 wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
-function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     if tA == 'N'
         return A
     elseif tA == 'T'
@@ -678,7 +678,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")

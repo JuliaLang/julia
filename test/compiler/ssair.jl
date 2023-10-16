@@ -424,7 +424,7 @@ let
         Expr(:enter, 11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
-        Expr(:leave, 1),
+        Expr(:leave, Core.SSAValue(1)),
         Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
         UpsilonNode(),
         UpsilonNode(SSAValue(2)),

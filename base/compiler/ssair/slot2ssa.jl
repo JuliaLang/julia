@@ -583,18 +583,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
     end
 
-    exc_handlers = IdDict{Int, TryCatchRegion}()
-    # Record the correct exception handler for all cricitcal sections
-    for catch_entry_block in catch_entry_blocks
-        (; enter_block, leave_block) = catch_entry_block
-        exc_handlers[enter_block+1] = catch_entry_block
-        # TODO: Cut off here if the terminator is a leave corresponding to this enter
-        for block in dominated(domtree, enter_block+1)
-            exc_handlers[block] = catch_entry_block
-        end
-    end
+    # Record the correct exception handler for all critical sections
+    handler_at = compute_trycatch(code, BitSet())
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
+    live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     new_phi_nodes = Vector{NewPhiNode2}[NewPhiNode2[] for _ = 1:length(cfg.blocks)]
     new_phic_nodes = IdDict{Int, Vector{NewPhiCNode2}}()
     for (; leave_block) in catch_entry_blocks
@@ -625,8 +618,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             end
             continue
         end
+
         @timeit "liveness" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
+            push!(live_slots[li], idx)
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
             if cidx !== nothing
                 # The slot is live-in into this block. We need to
@@ -743,7 +738,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
         # Record Pi nodes if necessary
         has_pinode = fill(false, length(sv.slottypes))
-        for slot in 1:length(sv.slottypes)
+        for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
             (ival === SSAValue(-1)) && continue
             (ival === SSAValue(-2)) && continue
@@ -814,9 +809,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         end
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
-                        enter_block = item
-                        while haskey(exc_handlers, enter_block)
-                            (; enter_block, leave_block) = exc_handlers[enter_block]
+                        enter_idx = idx
+                        while handler_at[enter_idx] != 0
+                            enter_idx = handler_at[enter_idx]
+                            leave_block = block_for_inst(cfg, code[enter_idx].args[1]::Int)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
@@ -879,7 +875,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
         elseif isexpr(stmt, :enter)
-            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+            except_bb = block_for_inst(cfg, stmt.args[1]::Int)
+            new_code[idx] = Expr(:enter, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)

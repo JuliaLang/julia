@@ -347,7 +347,7 @@ function steprange_last(start, step, stop)::typeof(stop)
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
             absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
 
-            # Compute remainder as a nonnegative number:
+            # Compute remainder as a non-negative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
                 # unlikely, but handle the signed overflow case with unsigned rem
                 overflow_case(absdiff, absstep) = (@noinline; convert(typeof(absdiff), unsigned(absdiff) % absstep))

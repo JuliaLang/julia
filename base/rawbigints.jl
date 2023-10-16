@@ -26,7 +26,7 @@ split_bit_index(x::RawBigInt, i::Int) = divrem(i, word_length(x), RoundToZero)
 the less significant words.
 """
 function get_elem(x::RawBigInt{T}, i::Int, ::Val{:words}, ::Val{:ascending}) where {T}
-    # `i` must be nonnegative and less than `x.word_count`
+    # `i` must be non-negative and less than `x.word_count`
     d = x.d
     (GC.@preserve d unsafe_load(Ptr{T}(pointer(d)), i + 1))::T
 end

@@ -49,7 +49,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     if (default_names) {
         jl_set_const(m, name, (jl_value_t*)m);
     }
-    jl_module_export(m, name);
+    jl_module_public(m, name, 1);
     JL_GC_POP();
     return m;
 }
@@ -180,6 +180,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
+    b->publicp = 0;
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
@@ -670,10 +671,11 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 }
 
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
-    b->exportp = 1;
+    b->publicp = 1;
+    b->exportp = exported;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -692,6 +694,12 @@ JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
     return b && b->exportp;
+}
+
+JL_DLLEXPORT int jl_module_public_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    return b && b->publicp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
@@ -945,7 +953,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
-        if ((b->exportp ||
+        if ((b->publicp ||
              (imported && b->imported) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
             (all || (!b->deprecated && !hidden))) {

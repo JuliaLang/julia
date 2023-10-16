@@ -892,7 +892,7 @@ end |> Core.Compiler.is_foldable
     getfield(w, s)
 end |> Core.Compiler.is_foldable
 
-# Flow-sensitive consistenct for _typevar
+# Flow-sensitive consistent for _typevar
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
 end |> Core.Compiler.is_foldable_nothrow
@@ -1001,6 +1001,27 @@ isassigned_effects(s) = isassigned(Ref(s))
     isassigned_effects(:foo)
 end
 
+# inference on throw block should be disabled only when the effects are already known to be
+# concrete-eval ineligible:
+function optimize_throw_block_for_effects(x)
+    a = [x]
+    if x < 0
+        throw(ArgumentError(lazy"negative number given: $x"))
+    end
+    return a
+end
+let effects = Base.infer_effects(optimize_throw_block_for_effects, (Int,))
+    @test Core.Compiler.is_consistent_if_notreturned(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+
+# :isdefined effects
+@test @eval Base.infer_effects() do
+    @isdefined($(gensym("some_undef_symbol")))
+end |> !Core.Compiler.is_consistent
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
@@ -1078,3 +1099,34 @@ GLOBAL_MUTABLE_SWITCH[] = true
 @test (Base.return_types(check_switch2) |> only) === Nothing
 
 @test !Core.Compiler.is_consistent(Base.infer_effects(check_switch, (Base.RefValue{Bool},)))
+
+# post-opt IPO analysis refinement of `:effect_free`-ness
+function post_opt_refine_effect_free(y, c=true)
+    x = Ref(c)
+    if x[]
+        return true
+    else
+        r = y[] isa Number
+        y[] = nothing
+    end
+    return r
+end
+@test Core.Compiler.is_effect_free(Base.infer_effects(post_opt_refine_effect_free, (Base.RefValue{Any},)))
+@test Base.infer_effects((Base.RefValue{Any},)) do y
+    post_opt_refine_effect_free(y, true)
+end |> Core.Compiler.is_effect_free
+
+# effects for Cmd construction
+for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_terminates(effects)
+    @test Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects(x -> `a $x`, (Any,))
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_terminates(effects)
+    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end

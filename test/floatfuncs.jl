@@ -139,9 +139,10 @@ end
 end
 
 @testset "literal pow matches runtime pow matches optimized pow" begin
-    two = 2
-    @test 1.0000000105367122^2 == 1.0000000105367122^two
-    @test 1.0041504f0^2 == 1.0041504f0^two
+    let two = 2
+        @test 1.0000000105367122^2 == 1.0000000105367122^two
+        @test 1.0041504f0^2 == 1.0041504f0^two
+    end
 
     function g2(start, two, N)
         x = start
@@ -192,11 +193,13 @@ end
     finv(x) = f(x, -1)
     f2(x) = f(x, 2)
     f3(x) = f(x, 3)
-    x = 1.0000000105367122
-    @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
-    @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
-    x = 1.000000007393669
-    @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    let x = 1.0000000105367122
+        @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
+        @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
+    end
+    let x = 1.000000007393669
+        @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    end
 end
 
 @testset "curried approximation" begin

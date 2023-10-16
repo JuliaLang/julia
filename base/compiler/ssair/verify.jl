@@ -20,6 +20,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
+is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
@@ -360,6 +361,20 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     if f isa GlobalRef && f.name === :cglobal
                         # TODO: these are not yet linearized
                         continue
+                    end
+                elseif stmt.head === :leave
+                    for i in 1:length(stmt.args)
+                        arg = stmt.args[i]
+                        if !isa(arg, Union{Nothing, SSAValue})
+                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                            error()
+                        elseif isa(arg, SSAValue)
+                            enter_stmt = ir[arg::SSAValue][:stmt]
+                            if !isa(enter_stmt, Nothing) && !isexpr(enter_stmt, :enter)
+                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                                error()
+                            end
+                        end
                     end
                 end
             end

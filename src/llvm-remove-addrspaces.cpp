@@ -7,7 +7,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/InstIterator.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -433,36 +432,6 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 }
 
 
-struct RemoveAddrspacesPassLegacy : public ModulePass {
-    static char ID;
-    AddrspaceRemapFunction ASRemapper;
-    RemoveAddrspacesPassLegacy(
-            AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
-        : ModulePass(ID), ASRemapper(ASRemapper){};
-
-public:
-    bool runOnModule(Module &M) override {
-        bool modified = removeAddrspaces(M, ASRemapper);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyLLVMIR(M));
-#endif
-        return modified;
-    }
-};
-
-char RemoveAddrspacesPassLegacy::ID = 0;
-static RegisterPass<RemoveAddrspacesPassLegacy>
-        X("RemoveAddrspaces",
-          "Remove IR address space information.",
-          false,
-          false);
-
-Pass *createRemoveAddrspacesPass(
-        AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
-{
-    return new RemoveAddrspacesPassLegacy(ASRemapper);
-}
-
 RemoveAddrspacesPass::RemoveAddrspacesPass() : RemoveAddrspacesPass(removeAllAddrspaces) {}
 
 PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -490,32 +459,7 @@ unsigned removeJuliaAddrspaces(unsigned AS)
         return AS;
 }
 
-struct RemoveJuliaAddrspacesPassLegacy : public ModulePass {
-    static char ID;
-    RemoveAddrspacesPassLegacy Pass;
-    RemoveJuliaAddrspacesPassLegacy() : ModulePass(ID), Pass(removeJuliaAddrspaces){};
-
-    bool runOnModule(Module &M) override { return Pass.runOnModule(M); }
-};
-
-char RemoveJuliaAddrspacesPassLegacy::ID = 0;
-static RegisterPass<RemoveJuliaAddrspacesPassLegacy>
-        Y("RemoveJuliaAddrspaces",
-          "Remove IR address space information.",
-          false,
-          false);
-
-Pass *createRemoveJuliaAddrspacesPass()
-{
-    return new RemoveJuliaAddrspacesPassLegacy();
-}
 
 PreservedAnalyses RemoveJuliaAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
     return RemoveAddrspacesPass(removeJuliaAddrspaces).run(M, AM);
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

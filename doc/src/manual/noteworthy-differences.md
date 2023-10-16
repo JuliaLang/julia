@@ -392,7 +392,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     paths to the `Base.LOAD_PATH` array.
     * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
       being loaded with `import` or `using`. They are simply available to the project.
-    * Directory-based package repositories are the **quickest solution** to developping local
+    * Directory-based package repositories are the **quickest solution** to developing local
       libraries of "software modules".
 
 ### Julia &hArr; C/C++: Assembling modules
@@ -413,15 +413,16 @@ For users coming to Julia from R, these are some noteworthy differences:
       file are `include`d only once (No `#ifdef` confusion).
 
 ### Julia &hArr; C/C++: Module interface
-  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s `export`
-    symbols that are intended for their users.
+  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
+    specific symbols that are intended for their users as `public`or `export`ed.
     * Often, Julia `module`s simply add functionality by generating new "methods" to existing
       functions (ex: `Base.push!`).
     * Developers of Julia packages therefore cannot rely on header files for interface
       documentation.
     * Interfaces for Julia packages are typically described using docstrings, README.md,
       static web pages, ...
-  * Some developers choose not to `export` all symbols required to use their package/module.
+  * Some developers choose not to `export` all symbols required to use their package/module,
+    but should still mark unexported user facing symbols as `public`.
     * Users might be expected to access these components by qualifying functions/structs/...
       with the package/module name (ex: `MyModule.run_this_task(...)`).
 

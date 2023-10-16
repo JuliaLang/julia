@@ -390,11 +390,12 @@ function block_for_inst(ir::IRCode, inst::Int)
     block_for_inst(ir.cfg, inst)
 end
 
-function getindex(x::IRCode, s::SSAValue)
-    if s.id <= length(x.stmts)
-        return x.stmts[s.id]
+function getindex(ir::IRCode, s::SSAValue)
+    nstmts = length(ir.stmts)
+    if s.id <= nstmts
+        return ir.stmts[s.id]
     else
-        return x.new_nodes.stmts[s.id - length(x.stmts)]
+        return ir.new_nodes.stmts[s.id - nstmts]
     end
 end
 
@@ -477,6 +478,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
+                      :leave,
                       :new_opaque_closure)
 end
 
@@ -1359,6 +1361,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if isa(cond, Bool) && cond === true
                 # cond was folded to true - this statement
                 # is dead.
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
                 ssa_rename[idx] = nothing
                 return result_idx
             end

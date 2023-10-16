@@ -19,20 +19,14 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
-        function $t(A::AbstractMatrix)
-            return $t{eltype(A), typeof(A)}(A)
-        end
-        function $t{T}(A::AbstractMatrix) where T
-            $t(convert(AbstractMatrix{T}, A))
-        end
+        $t(A::AbstractMatrix) = $t{eltype(A), typeof(A)}(A)
+        $t{T}(A::AbstractMatrix) where {T} = $t(convert(AbstractMatrix{T}, A))
+        $t{T}(A::$t) where {T} = $t(convert(AbstractMatrix{T}, A.data))
 
-        function $t{T}(A::$t) where T
-            Anew = convert(AbstractMatrix{T}, A.data)
-            $t(Anew)
-        end
         Matrix(A::$t{T}) where {T} = Matrix{T}(A)
 
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
+        AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
         size(A::$t) = size(A.data)
 

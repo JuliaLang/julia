@@ -285,8 +285,9 @@ end
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
-        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+@assume_effects :foldable function merge_fallback(a::NamedTuple, b::NamedTuple,
+                                                  an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
@@ -297,6 +298,10 @@ end
     end
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
+
+# This is `Experimental.@max_methods 4 function merge end`, which is not
+# defined at this point in bootstrap.
+typeof(function merge end).name.max_methods = UInt8(4)
 
 """
     merge(a::NamedTuple, bs::NamedTuple...)

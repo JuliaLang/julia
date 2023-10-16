@@ -17,7 +17,7 @@ end
 
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
-    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false)
+    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
     d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end
@@ -569,6 +569,7 @@ end
     function f1(cond)
         val = [1]
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f1, Tuple{Bool}, true, false, false))
 
@@ -576,6 +577,7 @@ end
     function f3(cond)
         val = ([1],)
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
 
@@ -583,12 +585,14 @@ end
     function f2(cond)
         val = cond ? 1 : 1f0
         GC.@preserve val begin end
+        return cond
     end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
     # make sure the fix for the above doesn't regress #34241
     function f4(cond)
         val = cond ? ([1],) : ([1f0],)
         GC.@preserve val begin end
+        return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
 end
@@ -859,3 +863,7 @@ end
 @noinline bar50964(x::DataType) = Base.inferencebarrier(2)
 foo50964(x) = bar50964(Base.inferencebarrier(Core.Const(x)))
 foo50964(1) # Shouldn't assert!
+
+# https://github.com/JuliaLang/julia/issues/51233
+obj51233 = (1,)
+@test_throws ErrorException obj51233.x

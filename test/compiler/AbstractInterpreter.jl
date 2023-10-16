@@ -441,7 +441,7 @@ function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
             if CC.any(inf_result.overridden_by_const)
-                return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.src, inf_result.valid_worlds)
+                return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.valid_worlds)
             elseif matched_mi === nothing
                 matched_mi = inf_result.linfo
             end
@@ -464,6 +464,7 @@ let # generate cache
     lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
     params = CodegenParams(;
         debug_info_kind=Cint(0),
+        debug_info_level=Cint(2),
         safepoint_on_entry=raw,
         gcstack_arg=raw,
         lookup)

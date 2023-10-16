@@ -42,9 +42,9 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Creates a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples
@@ -596,7 +596,7 @@ any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @noinline
     @_total_meta
     for y in itr
@@ -604,7 +604,7 @@ function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     end
     return false
 end
-in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
+in(x::Symbol, itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """

@@ -31,46 +31,19 @@ let
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
+        :FileWatching, # used by loading.jl -- implicit assumption that init runs
+        :Libdl, # Transitive through LinAlg
+        :Artifacts, # Transitive through LinAlg
+        :SHA, # transitive through Random
+        :Sockets, # used by stream.jl
+
+        # Transitive through LingAlg
+        # OpenBLAS_jll
+        # libblastrampoline_jll
 
         # 1-depth packages
-        :LinearAlgebra,
-        :Markdown,
-        :Printf,
-        :Random,
-        :Tar,
-
-        # 2-depth packages
-        :Dates,
-        :Future,
-        :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
-
-        # 3-depth packages
-        :REPL,
-        :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
-
-        # 6-depth packages
-        :Pkg,
+        :LinearAlgebra, # Commits type-piracy and GEMM
+        :Random, # Can't be removed due to rand being exported by Base
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)

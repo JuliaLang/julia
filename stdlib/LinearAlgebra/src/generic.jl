@@ -755,8 +755,8 @@ This is equivalent to [`norm`](@ref).
 @inline opnorm(x::Number, p::Real=2) = norm(x, p)
 
 """
-    opnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
-    opnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
+    opnorm(A::Adjoint{<:Any,<:AbstractVector}, q::Real=2)
+    opnorm(A::Transpose{<:Any,<:AbstractVector}, q::Real=2)
 
 For Adjoint/Transpose-wrapped vectors, return the operator ``q``-norm of `A`, which is
 equivalent to the `p`-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
@@ -1689,8 +1689,8 @@ logabsdet(a::Number) = log(abs(a)), sign(a)
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
-increased accuracy and/or speed.
+Logarithm of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and avoids overflow/underflow.
 
 # Examples
 ```jldoctest

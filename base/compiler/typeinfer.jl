@@ -282,19 +282,19 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
+function is_result_constabi_eligible(result::InferenceResult)
+    result_type = result.result
+    return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
+end
 function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
-                      @nospecialize(inferred_result), valid_worlds::WorldRange)
+                      valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type === nothing || result_type isa LimitedAccuracy)
-
-    if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
+    if is_result_constabi_eligible(result)
         # use constant calling convention
         rettype_const = result_type.val
         const_flags = 0x3
-        if may_discard_trees(interp)
-            inferred_result = nothing
-        end
     else
         if isa(result_type, Const)
             rettype_const = result_type.val
@@ -320,12 +320,18 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         end
     end
     relocatability = 0x0
-    if isa(inferred_result, String)
-        t = @_gc_preserve_begin inferred_result
-        relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
-        @_gc_preserve_end t
-    elseif inferred_result === nothing
+    if const_flags == 0x3 && may_discard_trees(interp)
+        inferred_result = nothing
         relocatability = 0x1
+    else
+        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result)
+        if isa(inferred_result, String)
+            t = @_gc_preserve_begin inferred_result
+            relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+            @_gc_preserve_end t
+        elseif inferred_result === nothing
+            relocatability = 0x1
+        end
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
@@ -338,10 +344,7 @@ end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
-    toplevel = !isa(def, Method)
-    if toplevel
-        return ci
-    end
+    isa(def, Method) || return ci # don't compress toplevel code
     if may_discard_trees(interp)
         cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
     else
@@ -397,8 +400,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
-        code_cache(interp)[linfo] = ci = CodeInstance(interp, result, inferred_result, valid_worlds)
+        code_cache(interp)[linfo] = ci = CodeInstance(interp, result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
@@ -458,7 +460,6 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     end
     return ipo_effects
 end
-
 
 function adjust_effects(sv::InferenceState)
     ipo_effects = sv.ipo_effects
@@ -545,6 +546,10 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
             end
         end
     end
+    me.result.valid_worlds = me.valid_worlds
+    me.result.result = bestguess
+    me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
+
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
@@ -562,15 +567,17 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # either because we are the outermost code, or we might use this later
         type_annotate!(interp, me)
         doopt = (me.cached || me.parent !== nothing)
+        # Disable the optimizer if we've already determined that there's nothing for
+        # it to do.
+        if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
+            doopt = false
+        end
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
     end
-    me.result.valid_worlds = me.valid_worlds
-    me.result.result = bestguess
-    me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -795,8 +802,6 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
     return false
 end
 
-generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 struct EdgeCallResult
@@ -830,7 +835,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     else
         cache = :global # cache edge targets by default
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
@@ -892,36 +897,69 @@ end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
+function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, @nospecialize(val))
+    method = mi.def::Method
+    tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    tree.code = Any[ ReturnNode(quoted(val)) ]
+    nargs = Int(method.nargs)
+    tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
+    tree.slotflags = fill(0x00, nargs)
+    tree.ssavaluetypes = 1
+    tree.codelocs = Int32[1]
+    tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+    tree.ssaflags = UInt32[0]
+    set_inlineable!(tree, true)
+    tree.parent = mi
+    tree.rettype = Core.Typeof(val)
+    tree.min_world = worlds.min_world
+    tree.max_world = worlds.max_world
+    tree.inferred = true
+    return tree
+end
+
+result_is_constabi(interp::AbstractInterpreter, run_optimizer::Bool, result::InferenceResult) =
+    run_optimizer && may_discard_trees(interp) && is_result_constabi_eligible(result)
+
 # compute an inferred AST and return type
-function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
-    frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
+typeinf_code(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(match), run_optimizer)
+typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+             run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
+function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
+    frame = typeinf_frame(interp, mi, run_optimizer)
     frame === nothing && return nothing, Any
     is_inferred(frame) || return nothing, Any
+    if result_is_constabi(interp, run_optimizer, frame.result)
+        rt = frame.result.result::Const
+        return codeinfo_for_const(interp, frame.linfo, frame.result.valid_worlds, rt.val), widenconst(rt)
+    end
     code = frame.src
     rt = widenconst(ignorelimited(frame.result.result))
     return code, rt
 end
 
 """
-    typeinf_ircode(
-        interp::AbstractInterpreter,
-        method::Method,
-        atype,
-        sparams::SimpleVector,
-        optimize_until::Union{Integer,AbstractString,Nothing},
-    ) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter,
+                   method::Method, atype, sparams::SimpleVector,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
 
 Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
-function typeinf_ircode(
-    interp::AbstractInterpreter,
-    method::Method,
-    @nospecialize(atype),
-    sparams::SimpleVector,
-    optimize_until::Union{Integer,AbstractString,Nothing},
-)
+typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(match), optimize_until)
+typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(method, atype, sparams), optimize_until)
+function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                        optimize_until::Union{Integer,AbstractString,Nothing})
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-    frame = typeinf_frame(interp, method, atype, sparams, false)
+    frame = typeinf_frame(interp, mi, false)
     if frame === nothing
         ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
         return nothing, Any
@@ -935,8 +973,12 @@ function typeinf_ircode(
 end
 
 # compute an inferred frame
-function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
-    mi = specialize_method(method, atype, sparams)::MethodInstance
+typeinf_frame(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(match), run_optimizer)
+typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+              run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(method, atype, sparams), run_optimizer)
+function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
@@ -956,23 +998,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         inf = @atomic :monotonic code.inferred
         if use_const_api(code)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-            rettype_const = code.rettype_const
-            tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
-            nargs = Int(method.nargs)
-            tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
-            tree.slotflags = fill(0x00, nargs)
-            tree.ssavaluetypes = 1
-            tree.codelocs = Int32[1]
-            tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
-            tree.ssaflags = UInt32[0]
-            set_inlineable!(tree, true)
-            tree.parent = mi
-            tree.rettype = Core.Typeof(rettype_const)
-            tree.min_world = code.min_world
-            tree.max_world = code.max_world
-            tree.inferred = true
-            return tree
+            return codeinfo_for_const(interp, mi, WorldRange(code.min_world, code.max_world), code.rettype_const)
         elseif isa(inf, CodeInfo)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
             if !(inf.min_world == code.min_world &&
@@ -990,7 +1016,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             return inf
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         return retrieve_code_info(mi, get_world_counter(interp))
     end
     lock_mi_inference(interp, mi)
@@ -999,6 +1025,9 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    if result_is_constabi(interp, true, frame.result)
+        return codeinfo_for_const(interp, frame.linfo, frame.result.valid_worlds, frame.result.result.val)
+    end
     frame.src.inferred || return nothing
     return frame.src
 end

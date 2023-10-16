@@ -45,50 +45,84 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
-extern uv_cond_t safepoint_cond;
+
+// see jl_safepoint_wait_thread_resume
+void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
+{
+    // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
+    for (size_t i = 0; i < suspended_threads.len; i++) {
+        uintptr_t item = (uintptr_t)suspended_threads.items[i];
+        int16_t tid = (int16_t)item;
+        int8_t gc_state = (int8_t)(item >> 8);
+        if (tid != tid2)
+            continue;
+        jl_atomic_store_release(&ptls2->gc_state, gc_state);
+        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        suspended_threads.items[i] = suspended_threads.items[--suspended_threads.len];
+        break;
+    }
+    // thread hadn't actually reached a jl_mach_gc_wait call where we suspended it
+}
+
 void jl_mach_gc_end(void)
 {
-    // Requires the safepoint lock to be held
+    // must be called with uv_mutex_lock(&safepoint_lock) held
+    size_t j = 0;
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        uv_mutex_lock(&ptls2->sleep_lock);
+        if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
+            jl_atomic_store_release(&ptls2->gc_state, gc_state);
+            thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        }
+        else {
+            // this is the check for jl_safepoint_wait_thread_resume
+            suspended_threads.items[j++] = (void*)item;
+        }
+        uv_mutex_unlock(&ptls2->sleep_lock);
     }
-    suspended_threads.len = 0;
+    suspended_threads.len = j;
 }
 
-// Suspend the thread and return `1` if the GC is running.
-// Otherwise return `0`
-static int jl_mach_gc_wait(jl_ptls_t ptls2,
-                           mach_port_t thread, int16_t tid)
+// implement jl_set_gc_and_wait from a different thread
+static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 {
+    // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
     uv_mutex_lock(&safepoint_lock);
-    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
-        // relaxed, since gets set to zero only while the safepoint_lock was held
-        // this means we can tell if GC is done before we got the message or
-        // the safepoint was enabled for SIGINT.
-        uv_mutex_unlock(&safepoint_lock);
-        return 0;
+    // Since this gets set to zero only while the safepoint_lock was held this
+    // means we can tell for sure if GC is done before we got the message or
+    // the safepoint was enabled for SIGINT instead.
+    int doing_gc = jl_atomic_load_relaxed(&jl_gc_running);
+    int do_suspend = doing_gc;
+    int relaxed_suspend_count = !doing_gc && jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+    if (relaxed_suspend_count) {
+        uv_mutex_lock(&ptls2->sleep_lock);
+        do_suspend = jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+        // only do_suspend while holding the sleep_lock, otherwise we might miss a resume
     }
-    // Otherwise, set the gc state of the thread, suspend and record it
-    // TODO: TSAN will complain that it never saw the faulting task do an
-    // atomic release (it was in the kernel). And our attempt here does
-    // nothing, since we are a different thread, and it is not transitive).
-    //
-    // This also means we are not making this thread available for GC work.
-    // Eventually, we should probably release this signal to the original
-    // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-    // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-    int8_t gc_state = ptls2->gc_state;
-    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-    arraylist_push(&suspended_threads, (void*)item);
-    thread_suspend(thread);
+    if (do_suspend) {
+        // Set the gc state of the thread, suspend and record it
+        //
+        // TODO: TSAN will complain that it never saw the faulting task do an
+        // atomic release (it was in the kernel). And our attempt here does
+        // nothing, since we are a different thread, and it is not transitive).
+        //
+        // This also means we are not making this thread available for GC work.
+        // Eventually, we should probably release this signal to the original
+        // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
+        // triggers a SIGSEGV and gets handled by the usual codepath for unix.
+        int8_t gc_state = ptls2->gc_state;
+        jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
+        uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+        arraylist_push(&suspended_threads, (void*)item);
+        thread_suspend(thread);
+    }
+    if (relaxed_suspend_count)
+        uv_mutex_unlock(&ptls2->sleep_lock);
     uv_mutex_unlock(&safepoint_lock);
-    return 1;
 }
 
 static mach_port_t segv_port = 0;
@@ -314,8 +348,7 @@ kern_return_t catch_mach_exception_raise(
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
-        if (jl_mach_gc_wait(ptls2, thread, tid))
-            return KERN_SUCCESS;
+        jl_mach_gc_wait(ptls2, thread, tid);
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
         if (ptls2->defer_signal) {
@@ -384,12 +417,12 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
+static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;
-    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL) // this thread is already dead
         return 0;
 
@@ -407,18 +440,18 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
     return 1;
 }
 
-static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t **ctx)
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
-    static host_thread_state_t state;
+    host_thread_state_t state;
     if (!jl_thread_suspend_and_get_state2(tid, &state)) {
-        *ctx = NULL;
-        return;
+        return 0;
     }
-    *ctx = (unw_context_t*)&state;
+    *ctx = *(unw_context_t*)&state;
+    return 1;
 }
 
-static void jl_thread_resume(int tid, int sig)
+void jl_thread_resume(int tid)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -593,8 +626,15 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     jl_unlock_profile();
 }
 
-#define jl_lock_profile()       int keymgr_locked = jl_lock_profile_mach(1)
-#define jl_unlock_profile()     jl_unlock_profile_mach(1, keymgr_locked)
+int jl_lock_stackwalk(void)
+{
+    return jl_lock_profile_mach(1);
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    jl_unlock_profile_mach(1, lockret);
+}
 
 void *mach_profile_listener(void *arg)
 {
@@ -691,7 +731,7 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
             // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
+            jl_thread_resume(i);
         }
         jl_unlock_profile_mach(0, keymgr_locked);
         if (running) {

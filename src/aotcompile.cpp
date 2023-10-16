@@ -85,11 +85,11 @@ static void addComdat(GlobalValue *G, Triple &T)
 
 typedef struct {
     orc::ThreadSafeModule M;
-    std::vector<GlobalValue*> jl_sysimg_fvars;
-    std::vector<GlobalValue*> jl_sysimg_gvars;
+    SmallVector<GlobalValue*, 0> jl_sysimg_fvars;
+    SmallVector<GlobalValue*, 0> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
-    std::vector<void*> jl_value_to_llvm;
-    std::vector<jl_code_instance_t*> jl_external_to_llvm;
+    SmallVector<void*, 0> jl_value_to_llvm;
+    SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -145,12 +145,13 @@ GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 }
 
 
-static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars, StringRef name, Type *T_psize)
+static void emit_offset_table(Module &mod, ArrayRef<GlobalValue*> vars,
+                              StringRef name, Type *T_psize)
 {
     // Emit a global variable with all the variable addresses.
     // The cloning pass will convert them into offsets.
     size_t nvars = vars.size();
-    std::vector<Constant*> addrs(nvars);
+    SmallVector<Constant*, 0> addrs(nvars);
     for (size_t i = 0; i < nvars; i++) {
         Constant *var = vars[i];
         addrs[i] = ConstantExpr::getBitCast(var, T_psize);
@@ -304,7 +305,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging_mode = imaging;
-    params.debug_level = jl_options.debug_level;
+    params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
@@ -354,7 +355,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
-    std::vector<std::string> gvars(params.global_targets.size());
+    SmallVector<std::string, 0> gvars(params.global_targets.size());
     data->jl_value_to_llvm.resize(params.global_targets.size());
     StringSet<> gvars_names;
     DenseSet<GlobalValue *> gvars_set;
@@ -497,7 +498,6 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
-#if JULIA_FLOAT16_ABI == 1
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -514,7 +514,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     auto val = builder.CreateCall(target, CallArgs);
     builder.CreateRet(val);
 }
-#endif
+
 void multiversioning_preannotate(Module &M);
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
@@ -706,8 +706,8 @@ static bool canPartition(const GlobalValue &G) {
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
 #ifndef JL_NDEBUG
-    SmallVector<uint32_t> fvars(fvars_size);
-    SmallVector<uint32_t> gvars(gvars_size);
+    SmallVector<uint32_t, 0> fvars(fvars_size);
+    SmallVector<uint32_t, 0> gvars(gvars_size);
     StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
@@ -795,7 +795,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             unsigned size;
             size_t weight;
         };
-        std::vector<Node> nodes;
+        SmallVector<Node, 0> nodes;
         DenseMap<GlobalValue *, unsigned> node_map;
         unsigned merged;
 
@@ -836,8 +836,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             continue;
         if (!canPartition(G))
             continue;
-        G.setLinkage(GlobalValue::ExternalLinkage);
-        G.setVisibility(GlobalValue::HiddenVisibility);
+        // Currently ccallable global aliases have extern linkage, we only want to make the
+        // internally linked functions/global variables extern+hidden
+        if (G.hasLocalLinkage()) {
+            G.setLinkage(GlobalValue::ExternalLinkage);
+            G.setVisibility(GlobalValue::HiddenVisibility);
+        }
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
@@ -862,12 +866,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     auto pcomp = [](const Partition *p1, const Partition *p2) {
         return p1->weight > p2->weight;
     };
-    std::priority_queue<Partition *, std::vector<Partition *>, decltype(pcomp)> pq(pcomp);
+    std::priority_queue<Partition *, SmallVector<Partition *, 0>, decltype(pcomp)> pq(pcomp);
     for (unsigned i = 0; i < threads; ++i) {
         pq.push(&partitions[i]);
     }
 
-    std::vector<unsigned> idxs(partitioner.nodes.size());
+    SmallVector<unsigned, 0> idxs(partitioner.nodes.size());
     std::iota(idxs.begin(), idxs.end(), 0);
     std::sort(idxs.begin(), idxs.end(), [&](unsigned a, unsigned b) {
         //because roots have more weight than their children,
@@ -1021,13 +1025,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     {
         timers.optimize.startTimer();
 
-#ifndef JL_USE_NEW_PM
-        legacy::PassManager optimizer;
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-#else
-
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
                 SourceTM.getTargetTriple().str(),
@@ -1038,7 +1035,6 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
-#endif
         optimizer.run(M);
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
@@ -1069,6 +1065,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 #else
             emitFloat16Wrappers(M, false);
 #endif
+
+            injectCRTAlias(M, "__truncsfbf2", "julia__truncsfbf2",
+                    FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncsdbf2", "julia__truncdfbf2",
+                    FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
         }
         timers.optimize.stopTimer();
     }
@@ -1123,7 +1124,7 @@ static auto serializeModule(const Module &M) {
 // Modules are deserialized lazily by LLVM, to avoid deserializing
 // unnecessary functions. We take advantage of this by serializing
 // the entire module once, then deleting the bodies of functions
-// that are not in this partition. Once unnecesary functions are
+// that are not in this partition. Once unnecessary functions are
 // deleted, we then materialize the entire module to make use-lists
 // consistent.
 static void materializePreserved(Module &M, Partition &partition) {
@@ -1212,7 +1213,7 @@ static void materializePreserved(Module &M, Partition &partition) {
 
 // Reconstruct jl_fvars, jl_gvars, jl_fvars_idxs, and jl_gvars_idxs from the partition
 static void construct_vars(Module &M, Partition &partition) {
-    std::vector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
+    SmallVector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
     fvar_pairs.reserve(partition.fvars.size());
     for (auto &fvar : partition.fvars) {
         auto F = M.getFunction(fvar.first());
@@ -1220,8 +1221,8 @@ static void construct_vars(Module &M, Partition &partition) {
         assert(!F->isDeclaration());
         fvar_pairs.push_back({ fvar.second, F });
     }
-    std::vector<GlobalValue *> fvars;
-    std::vector<uint32_t> fvar_idxs;
+    SmallVector<GlobalValue *, 0> fvars;
+    SmallVector<uint32_t, 0> fvar_idxs;
     fvars.reserve(fvar_pairs.size());
     fvar_idxs.reserve(fvar_pairs.size());
     std::sort(fvar_pairs.begin(), fvar_pairs.end());
@@ -1229,7 +1230,7 @@ static void construct_vars(Module &M, Partition &partition) {
         fvars.push_back(fvar.second);
         fvar_idxs.push_back(fvar.first);
     }
-    std::vector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
+    SmallVector<std::pair<uint32_t, GlobalValue *>, 0> gvar_pairs;
     gvar_pairs.reserve(partition.gvars.size());
     for (auto &gvar : partition.gvars) {
         auto GV = M.getNamedGlobal(gvar.first());
@@ -1237,8 +1238,8 @@ static void construct_vars(Module &M, Partition &partition) {
         assert(!GV->isDeclaration());
         gvar_pairs.push_back({ gvar.second, GV });
     }
-    std::vector<GlobalValue *> gvars;
-    std::vector<uint32_t> gvar_idxs;
+    SmallVector<GlobalValue *, 0> gvars;
+    SmallVector<uint32_t, 0> gvar_idxs;
     gvars.reserve(gvar_pairs.size());
     gvar_idxs.reserve(gvar_pairs.size());
     std::sort(gvar_pairs.begin(), gvar_pairs.end());
@@ -1585,6 +1586,16 @@ void jl_dump_native_impl(void *native_code,
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
 
+        // This should really be in jl_create_native, but we haven't
+        // yet set the target triple binary format correctly at that
+        // point. This should be resolved when we start JITting for
+        // COFF when we switch over to JITLink.
+        for (auto &GA : dataM.aliases()) {
+            // Global aliases are only used for ccallable things, so we should
+            // mark them as dllexport
+            addComdat(&GA, TheTriple);
+        }
+
         // Wipe the global initializers, we'll reset them at load time
         for (auto gv : data->jl_sysimg_gvars) {
             cast<GlobalVariable>(gv)->setInitializer(Constant::getNullValue(gv->getValueType()));
@@ -1620,7 +1631,7 @@ void jl_dump_native_impl(void *native_code,
             ngvars = data->jl_sysimg_gvars.size();
             emit_offset_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
             emit_offset_table(dataM, data->jl_sysimg_fvars, "jl_fvars", T_psize);
-            std::vector<uint32_t> idxs;
+            SmallVector<uint32_t, 0> idxs;
             idxs.resize(data->jl_sysimg_gvars.size());
             std::iota(idxs.begin(), idxs.end(), 0);
             auto gidxs = ConstantDataArray::get(Context, idxs);
@@ -1702,7 +1713,7 @@ void jl_dump_native_impl(void *native_code,
         if (imaging_mode) {
             auto specs = jl_get_llvm_clone_targets();
             const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-            std::vector<uint8_t> data;
+            SmallVector<uint8_t, 0> data;
             auto push_i32 = [&] (uint32_t v) {
                 uint8_t buff[4];
                 memcpy(buff, &v, 4);
@@ -1756,7 +1767,7 @@ void jl_dump_native_impl(void *native_code,
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
         if (fname) {\
-            std::vector<NewArchiveMember> archive; \
+            SmallVector<NewArchiveMember, 0> archive; \
             SmallVector<std::string, 16> filenames; \
             SmallVector<StringRef, 16> buffers; \
             for (size_t i = 0; i < threads; i++) { \
@@ -1787,308 +1798,6 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 {
     PM->add(new TargetLibraryInfoWrapperPass(triple));
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
-}
-
-
-void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
-{
-    // TODO: don't do this on CPUs that natively support Float16
-    PM->add(createDemoteFloat16Pass());
-    if (optlevel > 1)
-        PM->add(createGVNPass());
-}
-
-// this defines the set of optimization passes defined for Julia at various optimization levels.
-// it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native,
-                           bool external_use)
-{
-    // Note: LLVM 12 disabled the hoisting of common instruction
-    //       before loop vectorization (https://reviews.llvm.org/D84108).
-    //
-    // TODO: CommonInstruction hoisting/sinking enables AllocOpt
-    //       to merge allocations and sometimes eliminate them,
-    //       since AllocOpt does not handle PhiNodes.
-    //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
-        .convertSwitchRangeToICmp(true)
-        .convertSwitchToLookupTable(true)
-        .forwardSwitchCondToPhi(true);
-    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
-        .convertSwitchRangeToICmp(true)
-        .convertSwitchToLookupTable(true)
-        .forwardSwitchCondToPhi(true)
-        //These mess with loop rotation, so only do them after that
-        .hoistCommonInsts(true)
-        // Causes an SRET assertion error in late-gc-lowering
-        // .sinkCommonInsts(true)
-        ;
-#ifdef JL_DEBUG_BUILD
-    PM->add(createGCInvariantVerifierPass(true));
-    PM->add(createVerifierPass());
-#endif
-
-    PM->add(createConstantMergePass());
-    if (opt_level < 2) {
-        if (!dump_native) {
-            // we won't be multiversioning, so lower CPU feature checks early on
-            // so that we can avoid an additional CFG simplification pass at the end.
-            PM->add(createCPUFeaturesPass());
-            if (opt_level == 1)
-                PM->add(createInstSimplifyLegacyPass());
-        }
-        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-        if (opt_level == 1) {
-            PM->add(createSROAPass());
-            PM->add(createInstructionCombiningPass());
-            PM->add(createEarlyCSEPass());
-            // maybe add GVN?
-            // also try GVNHoist and GVNSink
-        }
-        PM->add(createMemCpyOptPass());
-        PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (lower_intrinsics) {
-            PM->add(createBarrierNoopPass());
-            PM->add(createLowerExcHandlersPass());
-            PM->add(createGCInvariantVerifierPass(false));
-            PM->add(createRemoveNIPass());
-            PM->add(createLateLowerGCFramePass());
-            PM->add(createFinalLowerGCPass());
-            PM->add(createLowerPTLSPass(dump_native));
-        }
-        else {
-            PM->add(createRemoveNIPass());
-        }
-        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native) {
-            PM->add(createMultiVersioningPass(external_use));
-            PM->add(createCPUFeaturesPass());
-            // minimal clean-up to get rid of CPU feature checks
-            if (opt_level == 1) {
-                PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-            }
-        }
-#if JL_LLVM_VERSION < 150000
-#if defined(_COMPILER_ASAN_ENABLED_)
-        PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-        PM->add(createThreadSanitizerLegacyPassPass());
-#endif
-#endif
-        return;
-    }
-    PM->add(createPropagateJuliaAddrspaces());
-    PM->add(createScopedNoAliasAAWrapperPass());
-    PM->add(createTypeBasedAAWrapperPass());
-    if (opt_level >= 3) {
-        PM->add(createBasicAAWrapperPass());
-    }
-
-    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createSROAPass());
-
-    //PM->add(createMemCpyOptPass());
-
-    PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-
-    // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
-    // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
-    // pass.
-    PM->add(createAllocOptPass());
-    // consider AggressiveInstCombinePass at optlevel > 2
-    PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    if (dump_native) {
-        PM->add(createStripDeadPrototypesPass());
-        PM->add(createMultiVersioningPass(external_use));
-    }
-    PM->add(createCPUFeaturesPass());
-    PM->add(createSROAPass());
-    PM->add(createInstSimplifyLegacyPass());
-    PM->add(createJumpThreadingPass());
-    PM->add(createCorrelatedValuePropagationPass());
-
-    PM->add(createReassociatePass());
-
-    PM->add(createEarlyCSEPass());
-
-    // Load forwarding above can expose allocations that aren't actually used
-    // remove those before optimizing loops.
-    PM->add(createAllocOptPass());
-    PM->add(createLoopRotatePass());
-    // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
-#ifdef USE_POLLY
-    // LCSSA (which has already run at this point due to the dependencies of the
-    // above passes) introduces redundant phis that hinder Polly. Therefore we
-    // run InstCombine here to remove them.
-    PM->add(createInstructionCombiningPass());
-    PM->add(polly::createCodePreparationPass());
-    polly::registerPollyPasses(*PM);
-    PM->add(polly::createCodegenCleanupPass());
-#endif
-    // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-    PM->add(createLICMPass());
-    PM->add(createJuliaLICMPass());
-#if JL_LLVM_VERSION >= 150000
-    PM->add(createSimpleLoopUnswitchLegacyPass());
-#else
-    PM->add(createLoopUnswitchPass());
-#endif
-    PM->add(createLICMPass());
-    PM->add(createJuliaLICMPass());
-    PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
-    // Subsequent passes not stripping metadata from terminator
-    PM->add(createInstSimplifyLegacyPass());
-    PM->add(createLoopIdiomPass());
-    PM->add(createIndVarSimplifyPass());
-    PM->add(createLoopDeletionPass());
-    PM->add(createSimpleLoopUnrollPass());
-
-    // Run our own SROA on heap objects before LLVM's
-    PM->add(createAllocOptPass());
-    // Re-run SROA after loop-unrolling (useful for small loops that operate,
-    // over the structure of an aggregate)
-    PM->add(createSROAPass());
-    // might not be necessary:
-    PM->add(createInstSimplifyLegacyPass());
-
-    PM->add(createGVNPass());
-    PM->add(createMemCpyOptPass());
-    PM->add(createSCCPPass());
-
-    //These next two passes must come before IRCE to eliminate the bounds check in #43308
-    PM->add(createCorrelatedValuePropagationPass());
-    PM->add(createDeadCodeEliminationPass());
-
-    PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
-
-    // Run instcombine after redundancy elimination to exploit opportunities
-    // opened up by them.
-    // This needs to be InstCombine instead of InstSimplify to allow
-    // loops over Union-typed arrays to vectorize.
-    PM->add(createInstructionCombiningPass());
-    PM->add(createJumpThreadingPass());
-    if (opt_level >= 3) {
-        PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
-    }
-    PM->add(createDeadStoreEliminationPass());
-    // see if all of the constant folding has exposed more loops
-    // to simplification and deletion
-    // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
-    PM->add(createAllocOptPass());
-    PM->add(createLoopDeletionPass());
-    PM->add(createInstructionCombiningPass());
-    PM->add(createLoopVectorizePass());
-    PM->add(createLoopLoadEliminationPass());
-    // Cleanup after LV pass
-    PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        aggressiveSimplifyCFGOptions
-    ));
-    PM->add(createSLPVectorizerPass());
-    // might need this after LLVM 11:
-    //PM->add(createVectorCombinePass());
-
-    PM->add(createAggressiveDCEPass());
-
-    if (lower_intrinsics) {
-        // LowerPTLS removes an indirect call. As a result, it is likely to trigger
-        // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-executed. Prevent this by inserting a barrier.
-        PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
-        PM->add(createGCInvariantVerifierPass(false));
-        // Needed **before** LateLowerGCFrame on LLVM < 12
-        // due to bug in `CreateAlignmentAssumption`.
-        PM->add(createRemoveNIPass());
-        PM->add(createLateLowerGCFramePass());
-        PM->add(createFinalLowerGCPass());
-        // We need these two passes and the instcombine below
-        // after GC lowering to let LLVM do some constant propagation on the tags.
-        // and remove some unnecessary write barrier checks.
-        PM->add(createGVNPass());
-        PM->add(createSCCPPass());
-        // Remove dead use of ptls
-        PM->add(createDeadCodeEliminationPass());
-        PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createInstructionCombiningPass());
-        // Clean up write barrier and ptls lowering
-        PM->add(createCFGSimplificationPass());
-    }
-    else {
-        PM->add(createRemoveNIPass());
-    }
-    PM->add(createCombineMulAddPass());
-    PM->add(createDivRemPairsPass());
-#if JL_LLVM_VERSION < 150000
-#if defined(_COMPILER_ASAN_ENABLED_)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-    PM->add(createThreadSanitizerLegacyPassPass());
-#endif
-#endif
-}
-
-// An LLVM module pass that just runs all julia passes in order. Useful for
-// debugging
-template <int OptLevel, bool dump_native>
-class JuliaPipeline : public Pass {
-public:
-    static char ID;
-    // A bit of a hack, but works
-    struct TPMAdapter : public PassManagerBase {
-        PMTopLevelManager *TPM;
-        TPMAdapter(PMTopLevelManager *TPM) : TPM(TPM) {}
-        void add(Pass *P) { TPM->schedulePass(P); }
-    };
-    void preparePassManager(PMStack &Stack) override {
-        (void)jl_init_llvm();
-        PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
-        TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-        addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
-        addMachinePasses(&Adapter, OptLevel);
-    }
-    JuliaPipeline() : Pass(PT_PassManager, ID) {}
-    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
-        return createPrintModulePass(O, Banner);
-    }
-};
-template<> char JuliaPipeline<0,false>::ID = 0;
-template<> char JuliaPipeline<2,false>::ID = 0;
-template<> char JuliaPipeline<3,false>::ID = 0;
-template<> char JuliaPipeline<0,true>::ID = 0;
-template<> char JuliaPipeline<2,true>::ID = 0;
-template<> char JuliaPipeline<3,true>::ID = 0;
-static RegisterPass<JuliaPipeline<0,false>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
-static RegisterPass<JuliaPipeline<2,false>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
-static RegisterPass<JuliaPipeline<3,false>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
-
-static RegisterPass<JuliaPipeline<0,true>> XS("juliaO0-sysimg", "Runs the entire julia pipeline (at -O0/sysimg mode)", false, false);
-static RegisterPass<JuliaPipeline<2,true>> YS("julia-sysimg", "Runs the entire julia pipeline (at -O2/sysimg mode)", false, false);
-static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire julia pipeline (at -O3/sysimg mode)", false, false);
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
-    addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -2161,10 +1870,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // // Force imaging mode for names of pointers
         // output.imaging = true;
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
-        // Force at least medium debug info for introspection
-        // No debug info = no variable names,
-        // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
-        output.debug_level = std::max(2, static_cast<int>(jl_options.debug_level));
+        // To get correct names in the IR this needs to be at least 2
+        output.debug_level = params.debug_info_level;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 
@@ -2198,14 +1905,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
-#ifndef JL_USE_NEW_PM
-                legacy::PassManager PM;
-                addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-                addOptimizationPasses(&PM, jl_options.opt_level);
-                addMachinePasses(&PM, jl_options.opt_level);
-#else
                 NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
-#endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));

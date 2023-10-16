@@ -774,6 +774,28 @@ end
     end
 end
 
+@testset "Eigensystem for block diagonal (issue #30681)" begin
+    I2 = Matrix(I, 2,2)
+    D = Diagonal([2.0*I2, 3.0*I2])
+    eigD = eigen(D)
+    evals = [ 2.0, 2.0, 3.0, 3.0 ]
+    evecs = [ [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]]  [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]];
+              [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]]  [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]] ]
+    @test eigD.values == evals
+    @test eigD.vectors == evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
+
+    I3 = Matrix(I, 3,3)
+    D = Diagonal([[0.0 -1.0; 1.0 0.0], 2.0*I3])
+    eigD = eigen(D)
+    evals = [ -1.0im, 1.0im, 2.0, 2.0, 2.0 ]
+    evecs = [ [[ 1/sqrt(2)+0im, 1/sqrt(2)*im ]]  [[ 1/sqrt(2)+0im, -1/sqrt(2)*im ]]  [[ 0.0, 0.0 ]]       [[ 0.0, 0.0 ]]      [[ 0.0, 0.0]];
+              [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
+    @test eigD.values == evals
+    @test eigD.vectors == evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
+end
+
 @testset "linear solve for block diagonal matrices" begin
     D = Diagonal([rand(2,2) for _ in 1:5])
     b = [rand(2,2) for _ in 1:5]

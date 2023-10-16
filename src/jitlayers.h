@@ -73,8 +73,6 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeCont
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false) JL_NOTSAFEPOINT;
-void addMachinePasses(legacy::PassManagerBase *PM, int optlevel) JL_NOTSAFEPOINT;
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
@@ -97,12 +95,6 @@ struct OptimizationOptions {
         return {lower_intrinsics, dump_native, external_use, llvm_only};
     }
 };
-
-// LLVM's new pass manager is scheduled to replace the legacy pass manager
-// for middle-end IR optimizations.
-#if JL_LLVM_VERSION >= 150000
-#define JL_USE_NEW_PM
-#endif
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
@@ -200,7 +192,7 @@ struct jl_codegen_call_target_t {
     bool specsig;
 };
 
-typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> jl_workqueue_t;
+typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 // TODO DenseMap?
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
 
@@ -340,7 +332,7 @@ public:
     <typename ResourceT, size_t max = 0,
         typename BackingT = std::stack<ResourceT,
             std::conditional_t<max == 0,
-                SmallVector<ResourceT>,
+                SmallVector<ResourceT, 0>,
                 SmallVector<ResourceT, max>
             >
         >
@@ -542,7 +534,7 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
-    std::vector<std::function<void()>> PrintLLVMTimers;
+    SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
@@ -576,22 +568,6 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
 }
 
 void optimizeDLSyms(Module &M);
-
-Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;
-Pass *createCombineMulAddPass() JL_NOTSAFEPOINT;
-Pass *createFinalLowerGCPass() JL_NOTSAFEPOINT;
-Pass *createLateLowerGCFramePass() JL_NOTSAFEPOINT;
-Pass *createLowerExcHandlersPass() JL_NOTSAFEPOINT;
-Pass *createGCInvariantVerifierPass(bool Strong) JL_NOTSAFEPOINT;
-Pass *createPropagateJuliaAddrspaces() JL_NOTSAFEPOINT;
-Pass *createRemoveJuliaAddrspacesPass() JL_NOTSAFEPOINT;
-Pass *createRemoveNIPass() JL_NOTSAFEPOINT;
-Pass *createJuliaLICMPass() JL_NOTSAFEPOINT;
-Pass *createMultiVersioningPass(bool external_use) JL_NOTSAFEPOINT;
-Pass *createAllocOptPass() JL_NOTSAFEPOINT;
-Pass *createDemoteFloat16Pass() JL_NOTSAFEPOINT;
-Pass *createCPUFeaturesPass() JL_NOTSAFEPOINT;
-Pass *createLowerSimdLoopPass() JL_NOTSAFEPOINT;
 
 // NewPM
 #include "passes.h"

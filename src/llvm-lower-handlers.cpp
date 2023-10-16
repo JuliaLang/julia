@@ -17,7 +17,6 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
@@ -61,7 +60,7 @@ using namespace llvm;
  *                 \                 /
  *              br i1 %cond, %left2, %right2
  *                 /                 \
- *           jl_pop_hander          ret
+ *           jl_pop_handler          ret
  *           ret
  *
  *    The frontend doesn't emit structures like this. However, the optimizer
@@ -89,13 +88,13 @@ static void ensure_enter_function(Module &M, const Triple &TT)
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
     if (!M.getNamedValue(XSTR(jl_enter_handler))) {
-        std::vector<Type*> ehargs(0);
+        SmallVector<Type*, 0> ehargs(0);
         ehargs.push_back(T_pint8);
         Function::Create(FunctionType::get(T_void, ehargs, false),
                          Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
-        std::vector<Type*> args2(0);
+        SmallVector<Type*, 0> args2(0);
         args2.push_back(T_pint8);
         if (!TT.isOSWindows()) {
             args2.push_back(T_int32);
@@ -174,7 +173,7 @@ static bool lowerExcHandlers(Function &F) {
     Value *handler_sz64 = ConstantInt::get(Type::getInt64Ty(F.getContext()),
                                            sizeof(jl_handler_t));
     Instruction *firstInst = &F.getEntryBlock().front();
-    std::vector<Instruction *> buffs;
+    SmallVector<Instruction *, 0> buffs;
     unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     for (int i = 0; i < MaxDepth; ++i) {
         auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
@@ -246,34 +245,4 @@ PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-
-struct LowerExcHandlersLegacy : public FunctionPass {
-    static char ID;
-    LowerExcHandlersLegacy() : FunctionPass(ID)
-    {}
-    bool runOnFunction(Function &F) {
-        bool modified = lowerExcHandlers(F);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyLLVMIR(F));
-#endif
-        return modified;
-    }
-};
-
-char LowerExcHandlersLegacy::ID = 0;
-static RegisterPass<LowerExcHandlersLegacy> X("LowerExcHandlers", "Lower Julia Exception Handlers",
-                                         false /* Only looks at CFG */,
-                                         false /* Analysis Pass */);
-
-Pass *createLowerExcHandlersPass()
-{
-    return new LowerExcHandlersLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLowerExcHandlersPass());
 }

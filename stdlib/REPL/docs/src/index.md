@@ -312,7 +312,7 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 ## Tab completion
 
-In both the Julian and help modes of the REPL, one can enter the first few characters of a function
+In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
@@ -333,6 +333,13 @@ If you hit tab again, then you get the list of things that might complete this:
 julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
+
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+
+!!! compat "Julia 1.11"
+    Tab-complete hinting was added in Julia 1.11
 
 Like other components of the REPL, the search is case-sensitive:
 

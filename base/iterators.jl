@@ -714,7 +714,7 @@ struct Take{I}
     xs::I
     n::Int
     function Take(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Take length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -773,7 +773,7 @@ struct Drop{I}
     xs::I
     n::Int
     function Drop(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Drop length must be non-negative"))
         return new{I}(xs, n)
     end
 end

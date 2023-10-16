@@ -17,7 +17,8 @@ using ..FileWatching: watch_file
 using Base.Sys: iswindows
 
 """
-    mkpidlock([f::Function], at::String, [pid::Cint, proc::Process]; kwopts...)
+    mkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
+    mkpidlock(at::String, proc::Process; kwopts...)
 
 Create a pidfile lock for the path "at" for the current process
 or the process identified by pid or proc. Can take a function to execute once locked,
@@ -42,13 +43,13 @@ Optional keyword arguments:
 function mkpidlock end
 
 """
-    trymkpidlock([f::Function], at::String, [pid::Cint, proc::Process]; kwopts...)
+    trymkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
+    trymkpidlock(at::String, proc::Process; kwopts...)
 
 Like `mkpidlock` except returns `false` instead of waiting if the file is already locked.
 
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
-
 """
 function trymkpidlock end
 

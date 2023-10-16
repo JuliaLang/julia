@@ -93,6 +93,10 @@ rethrown. It is the responsibility of the user to cancel any still-running opera
 during error handling.
 
 !!! Note
+    This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
+    potentially before all tasks have returned.
+
+!!! Note
     This interface is experimental and subject to change or removal without notice.
 """
 macro sync(block)

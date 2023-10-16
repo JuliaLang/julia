@@ -25,6 +25,7 @@ function runtests(name, path, isolate=true; seed=nothing)
             original_depot_path = copy(Base.DEPOT_PATH)
             original_load_path = copy(Base.LOAD_PATH)
             original_env = copy(ENV)
+            original_project = Base.active_project()
 
             Base.include(m, "$path.jl")
 
@@ -62,6 +63,17 @@ function runtests(name, path, isolate=true; seed=nothing)
                     )
                     error(msg)
                 end
+            end
+            if Base.active_project() != original_project
+                msg = "The `$(name)` test set changed the active project and did not restore the original value"
+                @error(
+                    msg,
+                    original_project,
+                    Base.active_project(),
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
             end
         end
         rss = Sys.maxrss()

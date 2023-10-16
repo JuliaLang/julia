@@ -11,7 +11,7 @@ const VInt = UInt32
 Version number type which follows the specifications of
 [semantic versioning (semver)](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations.
+alphanumeric annotations.
 
 `VersionNumber` objects can be compared with all of the standard comparison
 operators (`==`, `<`, `<=`, etc.), with the result following semver rules.

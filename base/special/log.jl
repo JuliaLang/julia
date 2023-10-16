@@ -260,14 +260,14 @@ end
     Float32(logb(Float32, base)*(u64 + q))
 end
 
-log2(x::Float32)  = _log(x, Val(2),  :log2)
-log(x::Float32)   = _log(x, Val(:ℯ), :log)
-log10(x::Float32) = _log(x, Val(10), :log10)
-log2(x::Float64)  = _log(x, Val(2),  :log2)
-log(x::Float64)   = _log(x, Val(:ℯ), :log)
-log10(x::Float64) = _log(x, Val(10), :log10)
+@noinline log2(x::Float32)  = _log(x, Val(2),  :log2)
+@noinline log(x::Float32)   = _log(x, Val(:ℯ), :log)
+@noinline log10(x::Float32) = _log(x, Val(10), :log10)
+@noinline log2(x::Float64)  = _log(x, Val(2),  :log2)
+@noinline log(x::Float64)   = _log(x, Val(:ℯ), :log)
+@noinline log10(x::Float64) = _log(x, Val(10), :log10)
 
-function _log(x::Float64, base, func)
+@inline function _log(x::Float64, base, func)
     if x > 0.0
         x == Inf && return x
 
@@ -302,7 +302,7 @@ function _log(x::Float64, base, func)
     end
 end
 
-function _log(x::Float32, base, func)
+@inline function _log(x::Float32, base, func)
     if x > 0f0
         x == Inf32 && return x
 

@@ -199,7 +199,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
     v = transcode(Cwchar_t, String(s))
-    !isempty(v) && v[end] == 0 || push!(v, 0)
+    push!(v, 0)
     return v
 end
 
@@ -211,7 +211,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
+function unsafe_convert(::Type{Cstring}, s::String)
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -540,7 +540,7 @@ function expand_ccallable(rt, def)
                 end
             end
             return quote
-                $(esc(def))
+                @__doc__ $(esc(def))
                 _ccallable($(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
             end
         end

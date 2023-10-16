@@ -3,6 +3,11 @@ Julia v1.11 Release Notes
 
 New language features
 ---------------------
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module. ([#50105])
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes
 ----------------
@@ -16,6 +21,13 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
+(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
+(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+This is intended to unify script and compilation workflows, where code loading may happen
+in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
+
 Multi-threading changes
 -----------------------
 
@@ -24,7 +36,12 @@ Build system changes
 
 New library functions
 ---------------------
+
+* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
 
 New library features
 --------------------
@@ -33,8 +50,6 @@ New library features
 
 Standard library changes
 ------------------------
-
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Package Manager
 
@@ -45,8 +60,16 @@ Standard library changes
 #### Profile
 
 #### Random
+* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
+* `rand` now supports sampling over `Pair` types ([#28705]).
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+* Seedable random number generators from `Random` can now be seeded by a string, e.g.
+  `seed!(rng, "a random seed")` ([#51527]).
 
 #### REPL
+
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
 
 #### SuiteSparse
 
@@ -57,8 +80,13 @@ Standard library changes
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library.([#46501])
 
 #### Distributed
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 

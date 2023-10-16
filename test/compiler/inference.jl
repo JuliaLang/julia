@@ -5,7 +5,7 @@ import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
-using InteractiveUtils: code_llvm
+using InteractiveUtils
 
 include("irutils.jl")
 
@@ -60,7 +60,8 @@ end
 # issue #42835
 @test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1) # maybe should be fixed?
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.limit_type_size(Type{Int}, Any, Union{}, 0, 0) == Type{Int}
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
@@ -80,15 +81,16 @@ end
 @test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
 
 # n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
-@test  Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
 
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
-@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Union{Float32,Float64}}}, Type{Union{Float32,Float64}}, Core.svec(Type{Union{Float32,Float64}}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
@@ -97,8 +99,8 @@ end
 @test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
-    t = Type{Type{Int}}
-    c = Type{Int}
+    t = Type{Type{Type{Int}}}
+    c = Type{Type{Int}}
     r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
     @test t !== r && t <: r
 end
@@ -120,6 +122,11 @@ end
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
 
+
+@test Core.Compiler.limit_type_size(Type{Any}, Union{}, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Any, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
+      Type{Any}
 
 # issue #43296 #43296
 struct C43296{t,I} end
@@ -156,15 +163,15 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 @test Core.Compiler.unioncomplexity(Tuple{Union{Int8, Int16, Int32, Int64}}) == 3
 @test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, T} where T) == 3
 @test Core.Compiler.unioncomplexity(Tuple{Val{T}, Union{Int8, Int16}, Int8} where T<:Union{Int8, Int16, Int32, Int64}) == 3
-@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 1
-@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 0
-@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 1
-@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
-@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 2
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 5
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 7
 
 
 # PR 22120
-function tmerge_test(a, b, r, commutative=true)
+function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
     if commutative
         @test r == Core.Compiler.tuplemerge(b, a)
@@ -172,32 +179,32 @@ function tmerge_test(a, b, r, commutative=true)
         @test_broken r == Core.Compiler.tuplemerge(b, a)
     end
 end
-tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
-tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
-tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
-tmerge_test(Tuple{Int}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tuplemerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tuplemerge_test(Tuple{Int}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Integer}, Tuple{Int, Int},
     Tuple{Vararg{Integer}})
-tmerge_test(Tuple{}, Tuple{Int, Int},
+tuplemerge_test(Tuple{}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{}, Tuple{Complex},
+tuplemerge_test(Tuple{}, Tuple{Complex},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+tuplemerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}}, false)
-tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
 @test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
@@ -214,12 +221,22 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 # test issue behind https://github.com/JuliaLang/julia/issues/50458
-@test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
-@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Base.BitInteger, Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Core.Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
-# Specificially test with base types of a trivial type, a simple union, a complicated union, and a tuple.
+# Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
 for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
     Ta, Tb = T, T
     for i in 1:10
@@ -2386,7 +2403,7 @@ isaint(a) = isa(a, Int)
     end
     return 0
 end |> only === Int
-# handle multiple call-site refinment targets
+# handle multiple call-site refinement targets
 isasome(_) = true
 isasome(::Nothing) = false
 @test_broken Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
@@ -2886,7 +2903,7 @@ end
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
-let expected = NTuple{2, Union{Nothing, NTuple{2, Union{Nothing, Tuple{Any, Any}}}}}
+let expected = NTuple{2, Union{Nothing, Tuple{Any, Any}}}
     @test Tuple{Nothing, Nothing} <: only(Base.return_types(f27316, Tuple{Int})) == expected # we may be able to improve this bound in the future
 end
 function g27316()
@@ -3280,7 +3297,10 @@ end
 call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
 @test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
 @test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
-@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+let (src, rt) = only(code_typed(my_ntuple, Tuple{Any, Val}))
+    @test src isa CodeInfo
+    @test rt == Tuple
+end
 
 @generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
 @test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
@@ -3501,8 +3521,20 @@ function pickvarnames(x::Vector{Any})
 end
 @test pickvarnames(:a) === :a
 @test pickvarnames(Any[:a, :b]) === (:a, :b)
-@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
-@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple}}}
+
+# make sure this converges in a reasonable amount of time
+function pickvarnames2(x::Vector{Any})
+    varnames = ()
+    for a in x
+        varnames = (varnames..., pickvarnames(a) )
+    end
+    return varnames
+end
+@test only(Base.return_types(pickvarnames2, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
+@test only(Base.code_typed(pickvarnames2, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple}}}
+
 
 @test map(>:, [Int], [Int]) == [true]
 
@@ -4339,18 +4371,18 @@ let x = Tuple{Int,Any}[
         #= 4=# (2, Expr(:enter, 12))
         #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
         #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
-        #= 7=# (4, Expr(:leave, 2))
+        #= 7=# (4, Expr(:leave, Core.SSAValue(4), Core.SSAValue(2)))
         #= 8=# (0, Core.ReturnNode(1))
         #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
-        #=10=# (4, Expr(:leave, 1))
+        #=10=# (4, Expr(:leave, Core.SSAValue(4)))
         #=11=# (2, Core.GotoNode(16))
-        #=12=# (4, Expr(:leave, 1))
+        #=12=# (4, Expr(:leave, Core.SSAValue(4)))
         #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
         #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
         #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
-        #=16=# (2, Expr(:leave, 1))
+        #=16=# (2, Expr(:leave, Core.SSAValue(2)))
         #=17=# (0, Core.GotoNode(22))
-        #=18=# (2, Expr(:leave, 1))
+        #=18=# (2, Expr(:leave, Core.SSAValue(2)))
         #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
         #=20=# (0, nothing)
         #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
@@ -4597,6 +4629,16 @@ end
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Val{<:a}, a)
     @test_broken a != Val{<:Val{Union{}}}
     @test_broken a == Val{<:Val} || a == Val
+
+    a = Tuple{Vararg{Tuple{}}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
+    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
+    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
+    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}}}
+    a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
+    @test a == Tuple
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -5087,7 +5129,7 @@ let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
     end isa Vector
 end
 
-# `getindex(::SimpleVector, ::Int)` shuold be concrete-evaluated
+# `getindex(::SimpleVector, ::Int)` should be concrete-evaluated
 @eval Base.return_types() do
     $(Core.svec(1,Int,nothing))[2]
 end |> only == Type{Int}
@@ -5185,3 +5227,129 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+# exploit throwness from concrete eval for intrinsics
+@test Base.return_types() do
+    Base.or_int(true, 1)
+end |> only === Union{}
+
+# [add|or]_int tfuncs
+@test Base.return_types((Bool,)) do b
+    Val(Core.Intrinsics.and_int(b, false))
+end |> only == Val{false}
+@test Base.return_types((Bool,)) do b
+    Val(Core.Intrinsics.or_int(true, b))
+end |> only == Val{true}
+
+# https://github.com/JuliaLang/julia/issues/51310
+@test code_typed() do
+    b{c} = d...
+end |> only |> first isa Core.CodeInfo
+
+abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)
+@test only(Base.return_types(abstract_call_unionall_vararg)) !== Union{}
+let TV = TypeVar(:T)
+    t = Vector{TV}
+    some = Some{Any}((TV, t))
+    @test abstract_call_unionall_vararg(some) isa UnionAll
+end
+
+# use `Vararg` type constraints
+use_vararg_constraint1(args::Vararg{T,N}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constraint1, Tuple{Int,Int})) == Tuple{Val{Int},Val{2}}
+use_vararg_constraint2(args::Vararg{T,N}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constraint2, Tuple{Vararg{Int}})) == Tuple{Val{Int},Int}
+use_vararg_constraint3(args::NTuple{N,T}) where {T,N} = Val(T), Val(N)
+@test only(Base.return_types(use_vararg_constraint3, Tuple{Tuple{Int,Int}})) == Tuple{Val{Int},Val{2}}
+use_vararg_constraint4(args::NTuple{N,T}) where {T,N} = Val(T), N
+@test only(Base.return_types(use_vararg_constraint4, Tuple{NTuple{N,Int}} where N)) == Tuple{Val{Int},Int}
+
+# issue 51228
+global whatever_unknown_value51228
+f51228() = f51228(whatever_unknown_value51228)
+f51228(x) = 1
+f51228(::Vararg{T,T}) where {T} = "2"
+@test only(Base.return_types(f51228, ())) == Int
+
+struct A51317
+    b::Tuple{1}
+    A1() = new()
+end
+struct An51317
+    a::Int
+    b::Tuple{1}
+    An51317() = new()
+end
+@test only(Base.return_types((x,f) -> getfield(x, f), (A51317, Symbol))) === Union{}
+@test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
+@test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
+@test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}
+
+# Don't visit the catch block for empty try/catch
+function completely_dead_try_catch()
+    try
+    catch
+        return 2.0
+    end
+    return 1
+end
+@test Base.return_types(completely_dead_try_catch) |> only === Int
+@test fully_eliminated(completely_dead_try_catch)
+
+function nothrow_try_catch()
+    try
+        1+1
+    catch
+        return 2.0
+    end
+    return 1
+end
+@test Base.return_types(nothrow_try_catch) |> only === Int
+@test fully_eliminated(nothrow_try_catch)
+
+may_error(b) = Base.inferencebarrier(b) && error()
+function phic_type1()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type1) |> only === Int
+@test phic_type1() === 2
+
+function phic_type2()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+        may_error(false)
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type2) |> only === Union{Int, Float64}
+@test phic_type2() === 2
+
+function phic_type3()
+    a = 1
+    try
+        may_error(false)
+        a = 1.0
+        may_error(false)
+        if Base.inferencebarrier(false)
+            a = Ref(1)
+        elseif Base.inferencebarrier(false)
+            a = nothing
+        end
+    catch
+        return a
+    end
+    return 2
+end
+@test Base.return_types(phic_type3) |> only === Union{Int, Float64}
+@test phic_type3() === 2

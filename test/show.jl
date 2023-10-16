@@ -326,7 +326,7 @@ end
             # line meta
             if d < 0
                 # line meta
-                error(\"dimension size must be nonnegative (got \$d)\")
+                error(\"dimension size must be non-negative (got \$d)\")
             end
             # line meta
             n *= d
@@ -522,6 +522,13 @@ end
 @test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
+# Test that public expressions are rendered nicely
+# though they are hard to create with quotes because public is not a context dependant keyword
+@test sprint(show, Expr(:public, Symbol("@foo"))) == ":(public @foo)"
+@test sprint(show, Expr(:public, :f,:o,:o)) == ":(public f, o, o)"
+s = sprint(show, :(module A; public x; end))
+@test match(r"^:\(module A\n  #= .* =#\n  #= .* =#\n  public x\n  end\)$", s) !== nothing
 
 # PR #38418
 module M1 var"#foo#"() = 2 end
@@ -1361,6 +1368,9 @@ test_repr("(:).a")
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 @test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
 @test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
+@test repr(NTuple) == "NTuple{N, T} where {N, T}"
+@test repr(Tuple{NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "NTuple{5, NTuple{N, T} where T} where N"
+@test repr(Tuple{Float64, NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "Tuple{Float64, Vararg{NTuple{N, T} where T, 5}} where N"
 
 # Test printing of NamedTuples using the macro syntax
 @test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"
@@ -1373,17 +1383,20 @@ test_repr("(:).a")
 @test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
-    @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
+    @test repr(NTuple{4, :A}) == "Tuple{:A, :A, :A, :A}"
     @test repr(NTuple{3, :A}) == "Tuple{:A, :A, :A}"
     @test repr(NTuple{2, :A}) == "Tuple{:A, :A}"
     @test repr(NTuple{1, :A}) == "Tuple{:A}"
     @test repr(NTuple{0, :A}) == "Tuple{}"
 
     @test repr(Tuple{:A, :A, :A, :B}) == "Tuple{:A, :A, :A, :B}"
-    @test repr(Tuple{:A, :A, :A, :A}) == "NTuple{4, :A}"
+    @test repr(Tuple{:A, :A, :A, :A}) == "Tuple{:A, :A, :A, :A}"
     @test repr(Tuple{:A, :A, :A}) == "Tuple{:A, :A, :A}"
     @test repr(Tuple{:A}) == "Tuple{:A}"
     @test repr(Tuple{}) == "Tuple{}"
+
+    @test repr(Tuple{Vararg{N, 10}} where N) == "NTuple{10, N} where N"
+    @test repr(Tuple{Vararg{10, N}} where N) == "Tuple{Vararg{10, N}} where N"
 end
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
