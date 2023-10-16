@@ -161,3 +161,7 @@ For users who prefer IDEs, we recommend using VS Code with the
 For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
 [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.
+
+This is a typo: futher, staticly
+
+Teh rest are quite simlpe.
