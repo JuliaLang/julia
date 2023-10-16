@@ -20,7 +20,6 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
         run: |
           git fetch --depth=1 origin ${{ github.base_ref }}
-          set -o pipefail
           mkdir -p "${{ runner.temp }}/typos"
           RELEASE_ASSET_URL="$(
             gh api /repos/crate-ci/typos/releases/latest \
@@ -35,11 +34,11 @@ jobs:
           echo a
           NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
           echo b
-          do -i {NEW_TYPOS=$(echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json)}
+          NEW_TYPOS=$(echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json) || true
           echo c
           git checkout FETCH_HEAD -- $OLD_FILES
           echo d
-          do -i {OLD_TYPOS=$(echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json)}
+          OLD_TYPOS=$(echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json) || true
           echo e
           python -c '
           import sys, json
