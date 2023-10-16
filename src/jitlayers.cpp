@@ -794,7 +794,7 @@ struct JITObjectInfo {
 class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
     std::mutex PluginMutex;
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
-    // Resources from distinct MaterializationResponsibilitys can get merged
+    // Resources from distinct `MaterializationResponsibility`s can get merged
     // after emission, so we can have multiple debug objects per resource key.
     std::map<ResourceKey, SmallVector<std::unique_ptr<JITObjectInfo>, 0>> RegisteredObjs;
 

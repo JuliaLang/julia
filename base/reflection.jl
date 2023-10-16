@@ -1354,7 +1354,7 @@ struct CodegenParams
     using the `swiftself` convention, which in the ordinary case means that the
     pointer is kept in a register and accesses are thus very fast. If this option
     is disabled, the task local state pointer must be loaded from thread local
-    stroage, which incurs a small amount of additional overhead. The option is enabled by
+    storage, which incurs a small amount of additional overhead. The option is enabled by
     default.
     """
     gcstack_arg::Cint

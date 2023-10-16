@@ -51,7 +51,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
-cd("complet_path\t\t$CTRL_C
+cd("complete_path\t\t$CTRL_C
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -148,7 +148,7 @@ generate_precompile_statements() = try
 
         open(precompile_file, "r") do io
             while true
-                # We need to allways call eof(io) for bytesavailable(io) to work
+                # We need to always call eof(io) for bytesavailable(io) to work
                 eof(io) && istaskdone(repl_inputter) && eof(io) && break
                 if bytesavailable(io) == 0
                     sleep(0.1)

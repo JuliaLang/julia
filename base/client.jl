@@ -613,7 +613,7 @@ In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be aut
 the completion of script execution.
 
 The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parenthese are required. In particular, the following are equivalent:
+case, parentheses are required. In particular, the following are equivalent:
 
 ```
 function (@main)(ARGS)

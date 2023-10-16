@@ -379,7 +379,7 @@ make_makeargs(args::Tuple) = _make_makeargs(args, 1)[1]
 end
 _make_makeargs(::Tuple{}, n::Int) = (), n
 
-# A help struct to store the flattened index staticly
+# A help struct to store the flattened index statically
 struct Pick{N} <: Function end
 (::Pick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
 

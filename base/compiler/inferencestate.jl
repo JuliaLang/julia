@@ -338,8 +338,8 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # 3: (expr)    # == 1
     # 3: (leave %1) # == 1
     # 4: (expr)    # == 0
-    # then we can find all trys by walking backwards from :enter statements,
-    # and all catches by looking at the statement after the :enter
+    # then we can find all `try`s by walking backwards from :enter statements,
+    # and all `catch`es by looking at the statement after the :enter
     n = length(code)
     empty!(ip)
     ip.offset = 0 # for _bits_findnext

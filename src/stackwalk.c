@@ -1022,7 +1022,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->__r14 = ((uint64_t*)mctx)[5];
         mc->__r15 = ((uint64_t*)mctx)[6];
         mc->__rip = ((uint64_t*)mctx)[7];
-        // added in libsystem_plaform 177.200.16 (macOS Mojave 10.14.3)
+        // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
         // prior to that _os_ptr_munge_token was (hopefully) typically 0,
         // so x ^ 0 == x and this is a no-op
         mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);

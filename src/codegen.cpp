@@ -6354,7 +6354,7 @@ static Function* gen_cfun_wrapper(
                 BasicBlock *unboxedBB = BasicBlock::Create(ctx.builder.getContext(), "maybe-unboxed", cw);
                 BasicBlock *isanyBB = BasicBlock::Create(ctx.builder.getContext(), "any", cw);
                 BasicBlock *afterBB = BasicBlock::Create(ctx.builder.getContext(), "after", cw);
-                Value *isrtboxed = ctx.builder.CreateIsNull(val); // XXX: this is the wrong condition and should be inspecting runtime_dt intead
+                Value *isrtboxed = ctx.builder.CreateIsNull(val); // XXX: this is the wrong condition and should be inspecting runtime_dt instead
                 ctx.builder.CreateCondBr(isrtboxed, boxedBB, loadBB);
                 ctx.builder.SetInsertPoint(boxedBB);
                 Value *p1 = ctx.builder.CreateBitCast(val, ctx.types().T_pjlvalue);

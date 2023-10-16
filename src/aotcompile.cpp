@@ -1124,7 +1124,7 @@ static auto serializeModule(const Module &M) {
 // Modules are deserialized lazily by LLVM, to avoid deserializing
 // unnecessary functions. We take advantage of this by serializing
 // the entire module once, then deleting the bodies of functions
-// that are not in this partition. Once unnecesary functions are
+// that are not in this partition. Once unnecessary functions are
 // deleted, we then materialize the entire module to make use-lists
 // consistent.
 static void materializePreserved(Module &M, Partition &partition) {
