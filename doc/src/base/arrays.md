@@ -109,7 +109,7 @@ Base.checkindex
 Base.elsize
 ```
 
-## Views (SubArrays and other view types)(@id lib-arrays-views)
+## [Views (SubArrays and other view types)](@id lib-arrays-views)
 
 A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually
 part of another array.
