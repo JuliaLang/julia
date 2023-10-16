@@ -163,3 +163,5 @@ For notebook users, [Jupyter](https://jupyter.org/) notebook support is availabl
 the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.
 
 teh
+
+compileable
