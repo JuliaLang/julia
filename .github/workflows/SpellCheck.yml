@@ -15,4 +15,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Check spelling with typos
-        uses: crate-ci/typos@master
+        #uses: crate-ci/typos@master
+        run: |
+          set -o pipefail
+          mkdir -p "${{ runner.temp }}/typos"
+          RELEASE_ASSET_URL="$(
+            gh api /repos/crate-ci/typos/releases/latest \
+            --jq '."assets"[] | select(."name" | test("^typos-.+-x86_64-unknown-linux-musl\\.tar\\.gz$")) | ."browser_download_url"'
+          )"
+          wget --secure-protocol=TLSv1_3 --max-redirect=1 --retry-on-host-error --retry-connrefused --tries=3 \
+            --quiet --output-document=- "${RELEASE_ASSET_URL}" \
+            | tar -xz -C "${{ runner.temp }}/typos" ./typos
+          "${{ runner.temp }}/typos/typos" --version
+          git diff-index --name-only --diff-filter=d -z ${{ github.base_ref }} \
+            | xargs -0"${{ runner.temp }}/typos/typos" --format json \
+            | jq --raw-output '"::warning file=\(.path),line=\(.line_num),col=\(.byte_offset)::perhaps \"\(.typo)\" should be \"" + (.corrections // [] | join("\" or \"") + "\".")'
