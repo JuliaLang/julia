@@ -8,7 +8,7 @@ Interfaces to LAPACK subroutines.
 using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
 using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
-    SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
+    SingularException, PosDefException, chkstride1, checksquare, triu, tril, dot
 
 using Base: iszero, require_one_based_indexing
 
@@ -554,13 +554,12 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function getrf!(A::AbstractMatrix{$elty}; check = true)
+        function getrf!(A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}; check::Bool=true)
             require_one_based_indexing(A)
             check && chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
-            ipiv = similar(A, BlasInt, min(m,n))
             info = Ref{BlasInt}()
             ccall((@blasfunc($getrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
@@ -681,15 +680,13 @@ Returns `A` and `tau` modified in-place.
 gerqf!(A::AbstractMatrix, tau::AbstractVector)
 
 """
-    getrf!(A) -> (A, ipiv, info)
+    getrf!(A, ipiv) -> (A, ipiv, info)
 
-Compute the pivoted `LU` factorization of `A`, `A = LU`.
-
-Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
-code which indicates success (`info = 0`), a singular value in `U`
-(`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
+Compute the pivoted `LU` factorization of `A`, `A = LU`. `ipiv` contains the pivoting
+information and `info` a code which indicates success (`info = 0`), a singular value
+in `U` (`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
 """
-getrf!(A::AbstractMatrix, tau::AbstractVector)
+getrf!(A::AbstractMatrix, ipiv::AbstractVector; check::Bool=true)
 
 """
     gelqf!(A) -> (A, tau)
@@ -752,6 +749,17 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 gerqf!(A::AbstractMatrix{<:BlasFloat}) = ((m,n) = size(A); gerqf!(A, similar(A, min(m, n))))
+
+"""
+    getrf!(A) -> (A, ipiv, info)
+
+Compute the pivoted `LU` factorization of `A`, `A = LU`.
+
+Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
+code which indicates success (`info = 0`), a singular value in `U`
+(`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
+"""
+getrf!(A::AbstractMatrix{T}; check::Bool=true) where {T <: BlasFloat} = ((m,n) = size(A); getrf!(A, similar(A, BlasInt, min(m, n)); check))
 
 ## Tools to compute and apply elementary reflectors
 for (larfg, elty) in
@@ -4189,11 +4197,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv  = similar(A, BlasInt, n)
             if n == 0
                 return A, ipiv, zero(BlasInt)
             end
@@ -4212,6 +4219,12 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 end
             end
             return A, ipiv, info[]
+        end
+
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            sytrf!(uplo, A, ipiv)
         end
 
         #       SUBROUTINE DSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -4532,11 +4545,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
@@ -4552,6 +4564,12 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 end
             end
             A, ipiv, info[]
+        end
+
+        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            hetrf!(uplo, A, ipiv)
         end
 
 #       SUBROUTINE ZHETRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -4800,11 +4818,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
-            ipiv = similar(A, BlasInt, n)
             if n == 0
                 return A, ipiv, zero(BlasInt)
             end
@@ -4823,6 +4840,12 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 end
             end
             A, ipiv, info[]
+        end
+
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            n = checksquare(A)
+            ipiv = similar(A, BlasInt, n)
+            sytrf!(uplo, A, ipiv)
         end
 
 #       SUBROUTINE ZSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -5111,6 +5134,20 @@ zero at position `info`.
 sytrf!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
+    sytrf!(uplo, A, ipiv) -> (A, ipiv, info)
+
+Computes the Bunch-Kaufman factorization of a symmetric matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, the pivot vector `ipiv`, and
+the error code `info` which is a non-negative integer. If `info` is positive
+the matrix is singular and the diagonal part of the factorization is exactly
+zero at position `info`.
+"""
+sytrf!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+
+"""
     sytri!(uplo, A, ipiv)
 
 Computes the inverse of a symmetric matrix `A` using the results of
@@ -5154,6 +5191,20 @@ the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
 hetrf!(uplo::AbstractChar, A::AbstractMatrix)
+
+"""
+    hetrf!(uplo, A, ipiv) -> (A, ipiv, info)
+
+Computes the Bunch-Kaufman factorization of a Hermitian matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, the pivot vector `ipiv`, and
+the error code `info` which is a non-negative integer. If `info` is positive
+the matrix is singular and the diagonal part of the factorization is exactly
+zero at position `info`.
+"""
+hetrf!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
 
 """
     hetri!(uplo, A, ipiv)

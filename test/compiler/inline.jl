@@ -1710,7 +1710,7 @@ let getfield_tfunc(@nospecialize xs...) =
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
-# TODO: Remove compute sparams for vararg_retrival
+# TODO: Remove compute sparams for vararg_retrieval
 fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN_inline(args...) = fvarargN_inline(args)
 let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))

@@ -215,7 +215,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debu
     }
     else if (jl_is_structtype(jt) && !jl_is_layout_opaque(jdt->layout)) {
         size_t ntypes = jl_datatype_nfields(jdt);
-        std::vector<llvm::Metadata*> Elements(ntypes);
+        SmallVector<llvm::Metadata*, 0> Elements(ntypes);
         for (unsigned i = 0; i < ntypes; i++) {
             jl_value_t *el = jl_field_type_concrete(jdt, i);
             DIType *di;
@@ -278,7 +278,7 @@ void jl_debugcache_t::initialize(Module *m) {
                                                 __alignof__(jl_value_t*) * 8);
 
     SmallVector<llvm::Metadata *, 1> Elts;
-    std::vector<Metadata*> diargs(0);
+    SmallVector<Metadata*, 0> diargs(0);
     Elts.push_back(jl_pvalue_dillvmt);
     dbuilder.replaceArrays(jl_value_dillvmt,
     dbuilder.getOrCreateArray(Elts));
@@ -665,6 +665,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
         return getFloatTy(ctxt);
     if (bt == (jl_value_t*)jl_float64_type)
         return getDoubleTy(ctxt);
+    if (bt == (jl_value_t*)jl_bfloat16_type)
+        return getBFloatTy(ctxt);
     if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
@@ -720,7 +722,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
         if (struct_decl)
             return struct_decl;
-        std::vector<Type*> latypes(0);
+        SmallVector<Type*, 0> latypes(0);
         bool isarray = true;
         bool isvector = true;
         jl_value_t *jlasttype = NULL;
@@ -819,7 +821,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
     //  // pick an Integer type size such that alignment will be correct
     //  // and always end with an Int8 (selector byte)
     //  lty = ArrayType::get(IntegerType::get(lty->getContext(), 8 * al), fsz / al);
-    //  std::vector<Type*> Elements(2);
+    //  SmallVector<Type*, 0> Elements(2);
     //  Elements[0] = lty;
     //  Elements[1] = getInt8Ty(ctxt);
     //  unsigned remainder = fsz % al;
@@ -1791,7 +1793,7 @@ static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
 static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
 
-std::vector<unsigned> first_ptr(Type *T)
+SmallVector<unsigned, 0> first_ptr(Type *T)
 {
     if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
         if (!isa<StructType>(T)) {
@@ -1809,7 +1811,7 @@ std::vector<unsigned> first_ptr(Type *T)
         unsigned i = 0;
         for (Type *ElTy : T->subtypes()) {
             if (isa<PointerType>(ElTy) && ElTy->getPointerAddressSpace() == AddressSpace::Tracked) {
-                return std::vector<unsigned>{i};
+                return SmallVector<unsigned, 0>{i};
             }
             auto path = first_ptr(ElTy);
             if (!path.empty()) {
@@ -3008,7 +3010,7 @@ static Value *emit_array_nd_index(
         endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
     }
 #endif
-    SmallVector<Value *> idxs(nidxs);
+    SmallVector<Value *, 0> idxs(nidxs);
     for (size_t k = 0; k < nidxs; k++) {
         idxs[k] = emit_unbox(ctx, ctx.types().T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
     }
@@ -3165,7 +3167,7 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (const auto *CC = dyn_cast<ConstantAggregate>(constant))
         nargs = CC->getNumOperands();
     else if (const auto *CAZ = dyn_cast<ConstantAggregateZero>(constant)) {
-        // SVE: Elsewhere we use `getMinKownValue`
+        // SVE: Elsewhere we use `getMinKnownValue`
         nargs = CAZ->getElementCount().getFixedValue();
     }
     else if (const auto *CDS = dyn_cast<ConstantDataSequential>(constant))
@@ -3731,7 +3733,7 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
 }
 
-static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)
+static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
 {
     // This is a inlined field at `offset`.
     if (!typ->layout || typ->layout->npointers == 0)

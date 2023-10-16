@@ -2810,9 +2810,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 
     // I. Handle indirect innervars (make them behave like direct innervars).
     //   1) record if btemp->lb/ub has indirect innervars.
-    //   2) subtitute `vb->var` with `varval`/`varval`
+    //   2) substitute `vb->var` with `varval`/`varval`
     //   note: We only store the innervar in the outmost `varbinding`,
-    //       thus we must check all inner env to ensure the recording/subtitution
+    //       thus we must check all inner env to ensure the recording/substitution
     //       is complete
     int len = current_env_length(e);
     int8_t *blinding_has_innerdep = (int8_t *)alloca(len);
@@ -2852,9 +2852,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     }
                 }
                 if (!has_innerdep) continue;
-                int need_subtitution = 0;
+                int need_substitution = 0;
                 if (ilb != ivar->lb || iub != ivar->ub) {
-                    need_subtitution = 1;
+                    need_substitution = 1;
                     nivar = (jl_value_t *)jl_new_typevar(ivar->name, ilb, iub);
                     jl_array_ptr_set(btemp->innervars, i, nivar);
                     if (jl_has_typevar(res, ivar))
@@ -2863,12 +2863,12 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 int envind = 0;
                 for (jl_varbinding_t *btemp2 = e->vars; btemp2 != btemp->prev; btemp2 = btemp2->prev) {
                     if (jl_has_typevar(btemp2->lb, ivar)) {
-                        if (need_subtitution)
+                        if (need_substitution)
                             btemp2->lb = jl_substitute_var(btemp2->lb, ivar, nivar);
                         blinding_has_innerdep[envind] |= 1;
                     }
                     if (jl_has_typevar(btemp2->ub, ivar)) {
-                        if (need_subtitution)
+                        if (need_substitution)
                             btemp2->ub = jl_substitute_var(btemp2->ub, ivar, nivar);
                         blinding_has_innerdep[envind] |= 2;
                     }
@@ -3637,7 +3637,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (xlb == xub && ylb == yub &&
                     jl_has_typevar(xlb, (jl_tvar_t *)y) &&
                     jl_has_typevar(ylb, (jl_tvar_t *)x)) {
-                    // specical case for e.g.
+                    // special case for e.g.
                     // 1) Val{Y}<:X<:Val{Y} && Val{X}<:Y<:Val{X}
                     // 2) Y<:X<:Y && Val{X}<:Y<:Val{X} => Val{Y}<:Y<:Val{Y}
                     ccheck = 0;

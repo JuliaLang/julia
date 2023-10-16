@@ -153,10 +153,10 @@ end
 @nospecs conversion_tfunc(𝕃::AbstractLattice, t, x) = conversion_tfunc(widenlattice(𝕃), t, x)
 @nospecs conversion_tfunc(::JLTypeLattice, t, x) = instanceof_tfunc(t, true)[1]
 
-add_tfunc(bitcast, 2, 2, bitcast_tfunc, 1)
-add_tfunc(sext_int, 2, 2, conversion_tfunc, 1)
-add_tfunc(zext_int, 2, 2, conversion_tfunc, 1)
-add_tfunc(trunc_int, 2, 2, conversion_tfunc, 1)
+add_tfunc(bitcast, 2, 2, bitcast_tfunc, 0)
+add_tfunc(sext_int, 2, 2, conversion_tfunc, 0)
+add_tfunc(zext_int, 2, 2, conversion_tfunc, 0)
+add_tfunc(trunc_int, 2, 2, conversion_tfunc, 0)
 add_tfunc(fptoui, 2, 2, conversion_tfunc, 1)
 add_tfunc(fptosi, 2, 2, conversion_tfunc, 1)
 add_tfunc(uitofp, 2, 2, conversion_tfunc, 1)
@@ -170,30 +170,30 @@ add_tfunc(fpext, 2, 2, conversion_tfunc, 1)
 @nospecs math_tfunc(𝕃::AbstractLattice, args...) = math_tfunc(widenlattice(𝕃), args...)
 @nospecs math_tfunc(::JLTypeLattice, x, xs...) = widenconst(x)
 
-add_tfunc(neg_int, 1, 1, math_tfunc, 1)
+add_tfunc(neg_int, 1, 1, math_tfunc, 0)
 add_tfunc(add_int, 2, 2, math_tfunc, 1)
 add_tfunc(sub_int, 2, 2, math_tfunc, 1)
-add_tfunc(mul_int, 2, 2, math_tfunc, 4)
-add_tfunc(sdiv_int, 2, 2, math_tfunc, 30)
-add_tfunc(udiv_int, 2, 2, math_tfunc, 30)
-add_tfunc(srem_int, 2, 2, math_tfunc, 30)
-add_tfunc(urem_int, 2, 2, math_tfunc, 30)
+add_tfunc(mul_int, 2, 2, math_tfunc, 3)
+add_tfunc(sdiv_int, 2, 2, math_tfunc, 20)
+add_tfunc(udiv_int, 2, 2, math_tfunc, 20)
+add_tfunc(srem_int, 2, 2, math_tfunc, 20)
+add_tfunc(urem_int, 2, 2, math_tfunc, 20)
 add_tfunc(add_ptr, 2, 2, math_tfunc, 1)
 add_tfunc(sub_ptr, 2, 2, math_tfunc, 1)
 add_tfunc(neg_float, 1, 1, math_tfunc, 1)
-add_tfunc(add_float, 2, 2, math_tfunc, 1)
-add_tfunc(sub_float, 2, 2, math_tfunc, 1)
-add_tfunc(mul_float, 2, 2, math_tfunc, 4)
-add_tfunc(div_float, 2, 2, math_tfunc, 4)
-add_tfunc(fma_float, 3, 3, math_tfunc, 5)
-add_tfunc(muladd_float, 3, 3, math_tfunc, 5)
+add_tfunc(add_float, 2, 2, math_tfunc, 2)
+add_tfunc(sub_float, 2, 2, math_tfunc, 2)
+add_tfunc(mul_float, 2, 2, math_tfunc, 8)
+add_tfunc(div_float, 2, 2, math_tfunc, 10)
+add_tfunc(fma_float, 3, 3, math_tfunc, 8)
+add_tfunc(muladd_float, 3, 3, math_tfunc, 8)
 
 # fast arithmetic
 add_tfunc(neg_float_fast, 1, 1, math_tfunc, 1)
-add_tfunc(add_float_fast, 2, 2, math_tfunc, 1)
-add_tfunc(sub_float_fast, 2, 2, math_tfunc, 1)
-add_tfunc(mul_float_fast, 2, 2, math_tfunc, 2)
-add_tfunc(div_float_fast, 2, 2, math_tfunc, 2)
+add_tfunc(add_float_fast, 2, 2, math_tfunc, 2)
+add_tfunc(sub_float_fast, 2, 2, math_tfunc, 2)
+add_tfunc(mul_float_fast, 2, 2, math_tfunc, 8)
+add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
 
 # bitwise operators
 # -----------------
@@ -280,12 +280,12 @@ add_tfunc(le_float_fast, 2, 2, cmp_tfunc, 1)
 @nospecs chk_tfunc(𝕃::AbstractLattice, x, y) = chk_tfunc(widenlattice(𝕃), x, y)
 @nospecs chk_tfunc(::JLTypeLattice, x, y) = Tuple{widenconst(x), Bool}
 
-add_tfunc(checked_sadd_int, 2, 2, chk_tfunc, 10)
-add_tfunc(checked_uadd_int, 2, 2, chk_tfunc, 10)
-add_tfunc(checked_ssub_int, 2, 2, chk_tfunc, 10)
-add_tfunc(checked_usub_int, 2, 2, chk_tfunc, 10)
-add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 10)
-add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
+add_tfunc(checked_sadd_int, 2, 2, chk_tfunc, 2)
+add_tfunc(checked_uadd_int, 2, 2, chk_tfunc, 2)
+add_tfunc(checked_ssub_int, 2, 2, chk_tfunc, 2)
+add_tfunc(checked_usub_int, 2, 2, chk_tfunc, 2)
+add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 5)
+add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 5)
 
 # other, misc
 # -----------
@@ -1655,7 +1655,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     (headtype === Union) && return true
     isa(rt, Const) && return true
     u = headtype
-    # TODO: implement optimization for isvarargtype(u) and istuple occurences (which are valid but are not UnionAll)
+    # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])

@@ -378,7 +378,7 @@ end
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
     sym = constprop_setting(setting)

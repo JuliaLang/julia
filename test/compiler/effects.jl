@@ -1115,3 +1115,18 @@ end
 @test Base.infer_effects((Base.RefValue{Any},)) do y
     post_opt_refine_effect_free(y, true)
 end |> Core.Compiler.is_effect_free
+
+# effects for Cmd construction
+for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_terminates(effects)
+    @test Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects(x -> `a $x`, (Any,))
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_terminates(effects)
+    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end

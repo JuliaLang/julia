@@ -165,7 +165,7 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
         return getInt32Ty(ctxt);
-    if (t == getHalfTy(ctxt))
+    if (t == getHalfTy(ctxt) || t == getBFloatTy(ctxt))
         return getInt16Ty(ctxt);
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != getVoidTy(ctxt) && nb > 0);
@@ -229,7 +229,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     }
 
     size_t nf = jl_datatype_nfields(bt);
-    std::vector<Constant*> fields(0);
+    SmallVector<Constant*, 0> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
         jl_value_t *ft = jl_field_type(bt, i);
@@ -487,7 +487,7 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
     Function *func = prepare_call(runtime_func()[f]);
-    SmallVector<Value *> argvalues(nargs);
+    SmallVector<Value *, 0> argvalues(nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
     }
@@ -1193,11 +1193,11 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     if (f == cglobal_auto || f == cglobal)
         return emit_cglobal(ctx, args, nargs);
 
-    SmallVector<jl_cgval_t> argv(nargs);
+    SmallVector<jl_cgval_t, 0> argv(nargs);
     for (size_t i = 0; i < nargs; ++i) {
         jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
         if (arg.typ == jl_bottom_type) {
-            // intrinsics generally don't handle buttom values, so bail out early
+            // intrinsics generally don't handle bottom values, so bail out early
             return jl_cgval_t();
         }
         argv[i] = arg;
@@ -1337,7 +1337,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         //if (xtyp == (jl_value_t*)jl_bool_type)
         //    r = getInt1Ty(ctx.builder.getContext());
 
-        SmallVector<Type *> argt(nargs);
+        SmallVector<Type *, 0> argt(nargs);
         argt[0] = xtyp;
 
         if (f == shl_int || f == lshr_int || f == ashr_int) {
@@ -1354,7 +1354,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
 
         // unbox the arguments
-        SmallVector<Value *> argvalues(nargs);
+        SmallVector<Value *, 0> argvalues(nargs);
         for (size_t i = 0; i < nargs; ++i) {
             argvalues[i] = emit_unbox(ctx, argt[i], argv[i], argv[i].typ);
         }

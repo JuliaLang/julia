@@ -25,6 +25,7 @@ const PARALLEL_PRECOMPILATION = true
 const debug_output = devnull # or stdout
 
 CTRL_C = '\x03'
+CTRL_D = '\x04'
 CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
@@ -50,7 +51,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
-cd("complet_path\t\t$CTRL_C
+cd("complete_path\t\t$CTRL_C
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -130,7 +131,7 @@ generate_precompile_statements() = try
                     sleep(0.1)
                 end
             end
-            write(ptm, "exit()\n")
+            write(ptm, "$CTRL_D")
             wait(tee)
             success(p) || Base.pipeline_error(p)
             close(ptm)
@@ -147,7 +148,7 @@ generate_precompile_statements() = try
 
         open(precompile_file, "r") do io
             while true
-                # We need to allways call eof(io) for bytesavailable(io) to work
+                # We need to always call eof(io) for bytesavailable(io) to work
                 eof(io) && istaskdone(repl_inputter) && eof(io) && break
                 if bytesavailable(io) == 0
                     sleep(0.1)
@@ -175,9 +176,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
-                delete!(statements, statement)
                 continue
             end
+            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)

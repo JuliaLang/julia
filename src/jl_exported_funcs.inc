@@ -363,6 +363,7 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
+    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -415,6 +416,8 @@
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
+    XX(jl_safepoint_suspend_thread) \
+    XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \

@@ -475,7 +475,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
     // within the BB.
     // If some successors are live and others are dead, it's the first instruction in
     // the successors that are dead.
-    std::vector<Instruction*> first_dead;
+    SmallVector<Instruction*, 0> first_dead;
     for (auto bb: bbs) {
         bool has_use = false;
         for (auto succ: successors(bb)) {
@@ -1164,7 +1164,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             for (auto &bundle: bundles) {
                 if (bundle.getTag() != "jl_roots")
                     continue;
-                std::vector<Value*> operands;
+                SmallVector<Value*, 0> operands;
                 for (auto op: bundle.inputs()) {
                     if (op == orig_i || isa<Constant>(op))
                         continue;

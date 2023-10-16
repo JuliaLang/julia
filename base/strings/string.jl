@@ -247,7 +247,7 @@ end
 
            Shifts | 0  4 10 14 18 24  8 20 12 26
 
-    The shifts that represent each state were derived using teh SMT solver Z3, to ensure when encoded into
+    The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
     Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by

@@ -379,7 +379,7 @@ make_makeargs(args::Tuple) = _make_makeargs(args, 1)[1]
 end
 _make_makeargs(::Tuple{}, n::Int) = (), n
 
-# A help struct to store the flattened index staticly
+# A help struct to store the flattened index statically
 struct Pick{N} <: Function end
 (::Pick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
 
@@ -419,6 +419,10 @@ function combine_styles end
 
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
+function combine_styles(bc::Broadcasted)
+    bc.style isa Union{Nothing,Unknown} || return bc.style
+    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
+end
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 

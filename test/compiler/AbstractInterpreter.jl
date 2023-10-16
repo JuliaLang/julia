@@ -464,6 +464,7 @@ let # generate cache
     lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
     params = CodegenParams(;
         debug_info_kind=Cint(0),
+        debug_info_level=Cint(2),
         safepoint_on_entry=raw,
         gcstack_arg=raw,
         lookup)

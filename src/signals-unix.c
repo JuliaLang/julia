@@ -364,6 +364,12 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;
+        // n.b. if the user might have seen that we were in a state where it
+        // was safe to run GC concurrently, we might briefly enter a state
+        // where our execution is not consistent with the gc_state of this
+        // thread. That will quickly be rectified when we rerun the faulting
+        // instruction and end up right back here, or we start to run the
+        // exception handler and immediately hit the safepoint there.
         if (ct->ptls->defer_signal) {
             jl_safepoint_defer_sigint();
         }

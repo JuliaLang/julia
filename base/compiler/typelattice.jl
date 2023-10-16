@@ -759,24 +759,6 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
     return changed
 end
 
-function stupdate1!(lattice::AbstractLattice, state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    oldtype = state[changeid]
-    if schanged(lattice, newtype, oldtype)
-        state[changeid] = smerge(lattice, oldtype, newtype)
-        return true
-    end
-    return false
-end
-
 function stoverwrite!(state::VarTable, newstate::VarTable)
     for i = 1:length(state)
         state[i] = newstate[i]

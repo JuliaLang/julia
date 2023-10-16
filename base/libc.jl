@@ -6,7 +6,7 @@ Interface to libc, the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
-# these need to be defined seperately for bootstrapping but belong to Libc
+# these need to be defined separately for bootstrapping but belong to Libc
 import Base: memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 

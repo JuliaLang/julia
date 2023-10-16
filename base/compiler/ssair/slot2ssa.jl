@@ -875,7 +875,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
         elseif isexpr(stmt, :enter)
-            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+            except_bb = block_for_inst(cfg, stmt.args[1]::Int)
+            new_code[idx] = Expr(:enter, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
