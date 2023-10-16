@@ -14,12 +14,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-        run: git fetch --depth=1 origin ${{ github.base_ref }}
       - name: Check spelling with typos
         #uses: crate-ci/typos@master
         env:
           GH_TOKEN: "${{ github.token }}"
         run: |
+          git fetch --depth=1 origin ${{ github.base_ref }}
           set -o pipefail
           mkdir -p "${{ runner.temp }}/typos"
           RELEASE_ASSET_URL="$(
