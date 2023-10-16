@@ -1299,7 +1299,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1367,7 +1367,7 @@ algorithms).
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
 resulting order is reversed if `rev=true` (this preserves forward stability:
-elements that compare equal are not reversed). The current implemention applies
+elements that compare equal are not reversed). The current implementation applies
 the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than

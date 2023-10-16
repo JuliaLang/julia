@@ -659,15 +659,15 @@ end
 @test tss.foo == 3
 
 # test @inferred
-uninferrable_function(i) = (1, "1")[i]
-uninferrable_small_union(i) = (1, nothing)[i]
-@test_throws ErrorException @inferred(uninferrable_function(1))
+uninferable_function(i) = (1, "1")[i]
+uninferable_small_union(i) = (1, nothing)[i]
+@test_throws ErrorException @inferred(uninferable_function(1))
 @test @inferred(identity(1)) == 1
-@test @inferred(Nothing, uninferrable_small_union(1)) === 1
-@test @inferred(Nothing, uninferrable_small_union(2)) === nothing
-@test_throws ErrorException @inferred(Missing, uninferrable_small_union(1))
-@test_throws ErrorException @inferred(Missing, uninferrable_small_union(2))
-@test_throws ArgumentError @inferred(nothing, uninferrable_small_union(1))
+@test @inferred(Nothing, uninferable_small_union(1)) === 1
+@test @inferred(Nothing, uninferable_small_union(2)) === nothing
+@test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
+@test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
+@test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -692,12 +692,12 @@ end
 
 # Issue #17105
 # @inferred with kwargs
-inferrable_kwtest(x; y=1) = 2x
-uninferrable_kwtest(x; y=1) = 2x+y
-@test (@inferred inferrable_kwtest(1)) == 2
-@test (@inferred inferrable_kwtest(1; y=1)) == 2
-@test (@inferred uninferrable_kwtest(1)) == 3
-@test (@inferred uninferrable_kwtest(1; y=2)) == 4
+inferable_kwtest(x; y=1) = 2x
+uninferable_kwtest(x; y=1) = 2x+y
+@test (@inferred inferable_kwtest(1)) == 2
+@test (@inferred inferable_kwtest(1; y=1)) == 2
+@test (@inferred uninferable_kwtest(1)) == 3
+@test (@inferred uninferable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
@@ -1193,7 +1193,7 @@ h25835(;x=1,y=1) = x isa Int ? x*y : (rand(Bool) ? 1.0 : 1)
     @test @inferred(f25835(x=nothing)) == ()
     @test @inferred(f25835(x=1)) == (1,)
 
-    # A global argument should make this uninferrable
+    # A global argument should make this uninferable
     global y25835 = 1
     @test f25835(x=y25835) == (1,)
     @test_throws ErrorException @inferred((()->f25835(x=y25835))()) == (1,)

@@ -211,13 +211,13 @@ void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
-    // This is nopl 0(%rax, %rax, 1), but assembler are incosistent about whether
+    // This is nopl 0(%rax, %rax, 1), but assembler are inconsistent about whether
     // they emit that as a 4 or 5 byte sequence and we need to be guaranteed to use
     // the 5 byte one.
 #define NOP5_OVERRIDE_NOP ".byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n\t"
     uint64_t low, high;
     // This instruction sequence is promised by rr to be patchable. rr can usually
-    // also patch `rdtsc` in regular code, but without the preceeding nop, there could
+    // also patch `rdtsc` in regular code, but without the preceding nop, there could
     // be an interfering branch into the middle of rr's patch region. Using this
     // sequence prevents a massive rr-induced slowdown if the compiler happens to emit
     // an unlucky pattern. See https://github.com/rr-debugger/rr/pull/3580.

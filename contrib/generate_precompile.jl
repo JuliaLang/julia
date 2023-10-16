@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Prevent this from putting anyting into the Main namespace
+# Prevent this from putting anything into the Main namespace
 @eval Module() begin
 
 if Threads.maxthreadid() != 1

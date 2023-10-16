@@ -182,7 +182,7 @@ end
 
 if Sys.ARCH == :aarch64 ||  Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
-    # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
+    # TODO: Should we have `Chalf == Int16` and `Cfloat16 == Float16`?
     extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
     gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
     truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, UInt16, (Float32,), x))

@@ -148,7 +148,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_LOAD_PATH" => ";;;:::",
                     "JULIA_DEPOT_PATH" => ";;;:::",
                     "HOME" => homedir()))
-        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
+        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
         @test v == ("REPL: 3\n", true)
     end
     @testset let v = readchomperrors(`$exename -i -e '

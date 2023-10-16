@@ -1144,7 +1144,7 @@ Version numbers can easily be expressed with non-standard string literals of the
 Version number literals create [`VersionNumber`](@ref) objects which follow the
 specifications of [semantic versioning](https://semver.org/),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
-build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
+build alphanumeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering
 a version literal, everything except the major version number is optional, therefore e.g.  `v"0.2"`
 is equivalent to `v"0.2.0"` (with empty pre-release/build annotations), `v"2"` is equivalent to
