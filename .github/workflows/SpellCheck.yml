@@ -30,6 +30,6 @@ jobs:
             --quiet --output-document=- "${RELEASE_ASSET_URL}" \
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
-          git diff-index --name-only --diff-filter=d -z ${{ github.base_ref }} \
-            | xargs -0"${{ runner.temp }}/typos/typos" --format json \
+          git diff-index --name-only --diff-filter=d -z FETCH_HEAD \
+            | xargs -0 "${{ runner.temp }}/typos/typos" --format json \
             | jq --raw-output '"::warning file=\(.path),line=\(.line_num),col=\(.byte_offset)::perhaps \"\(.typo)\" should be \"" + (.corrections // [] | join("\" or \"") + "\".")'
