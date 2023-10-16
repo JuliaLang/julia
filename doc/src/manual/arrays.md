@@ -477,12 +477,7 @@ subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all the indices are scalars, then the result `X` is a single element from the array `A`. Otherwise,
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
-indices.
-
-When some or all `I_k` are ranges or array of integers ("slicing"), the returned array would be a new array with
-copies of selected elements instead of sharing underlying memory with the original array `A`; to slice an array
-without making a copy, see [array views](@ref lib-arrays-views).
-
+indices. This returned array is a newly allocated container that contains the selected elements from the original array `A`.  As this uses separate storage, subsequent [indexed assignment](@ref man-indexed-assignment) into `X` does not change the elements of `A`.  To select a subset of an array without allocating new storage, see [array views](@ref lib-array-views).
 If all indices `I_k` are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
 with location `i_1, i_2, ..., i_n` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
 
