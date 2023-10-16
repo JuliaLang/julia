@@ -390,6 +390,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
+            isdefined(e, :val) || continue
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
