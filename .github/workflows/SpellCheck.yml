@@ -30,11 +30,17 @@ jobs:
             --quiet --output-document=- "${RELEASE_ASSET_URL}" \
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
+          echo z
           OLD_FILES=$(git diff-index --name-only --diff-filter=ad -z FETCH_HEAD)
-          NEW_FILES=$(git diff-index --name-only --diff-filter=d -d FETCH_HEAD)
+          echo a
+          NEW_FILES=$(git diff-index --name-only --diff-filter=d -z FETCH_HEAD)
+          echo b
           NEW_TYPOS=$(echo -n $NEW_FILES | xargs -0 "${{ runner.temp }}/typos/typos" --format json)
+          echo c
           git checkout FETCH_HEAD -- $OLD_FILES
+          echo d
           OLD_TYPOS=$(echo -n $OLD_FILES | xargs -0 "${{ runner.temp }}/typos/typos" --format json)
+          echo e
           python -c '
           import sys, json
           existing = set(typo["typo"] for typo in json.loads("["+sys.argv[1].replace("\n", ",")+"]"))
