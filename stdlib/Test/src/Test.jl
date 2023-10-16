@@ -1459,7 +1459,7 @@ parent test set (with the context object appended to any failing tests.)
     `@testset let` requires at least Julia 1.9.
 
 !!! compat "Julia 1.10"
-    Multiple `let` assignements are supported since Julia 1.10.
+    Multiple `let` assignments are supported since Julia 1.10.
 
 ## Examples
 ```jldoctest

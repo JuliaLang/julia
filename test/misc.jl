@@ -1058,7 +1058,7 @@ Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
         @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
+    # when argument's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
@@ -1353,7 +1353,7 @@ end
 end
 
 # Test that read fault on a prot-none region does not incorrectly give
-# ReadOnlyMemoryEror, but rather crashes the program
+# ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
 let script = :(
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},

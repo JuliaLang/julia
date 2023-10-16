@@ -1197,7 +1197,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     for (size_t i = 0; i < nargs; ++i) {
         jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
         if (arg.typ == jl_bottom_type) {
-            // intrinsics generally don't handle buttom values, so bail out early
+            // intrinsics generally don't handle bottom values, so bail out early
             return jl_cgval_t();
         }
         argv[i] = arg;

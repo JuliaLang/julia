@@ -292,7 +292,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             cred = explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            # invalidation fix from cred being non-inferrable
+            # invalidation fix from cred being non-inferable
             p.credential = Base.invokelatest(deepcopy, cred)
 
             if isa(cred, SSHCredential)
@@ -307,7 +307,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
             if haskey(cache, cred_id)
-                # invalidation fix from cache[cred_id] being non-inferrable
+                # invalidation fix from cache[cred_id] being non-inferable
                 p.credential = Base.invokelatest(deepcopy, cache[cred_id])
             end
         end

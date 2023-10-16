@@ -1980,7 +1980,7 @@ let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
 end
 
 # JuliaLang/julia/#51548
-# don't return wrong result due to mutable inconsistentcy
+# don't return wrong result due to mutable inconsistency
 function issue51548(T, a)
     # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
     # constant-fold `isempty(xs)::Const(true)` and return wrong result
