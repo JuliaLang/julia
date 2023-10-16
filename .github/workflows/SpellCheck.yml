@@ -36,10 +36,10 @@ jobs:
           git checkout FETCH_HEAD -- $OLD_FILES
           OLD_TYPOS=$(echo -n $OLD_FILES | xargs -0 "${{ runner.temp }}/typos/typos" --format json)
           python -c '
-import sys, json
-existing = set(typo["typo"] for typo in json.loads("["+sys.argv[1].replace("\n", ",")+"]"))
-for new in json.loads("["+sys.argv[2].replace("\n", ",")+"]"):
-  if new["typo"] not in existing:
-    print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
-      new["path"], new["line_num"], new["byte_offset"],
-      new["typo"], " or ".join(new["corrections"])))' "$OLD_TYPOS" "$NEW_TYPOS"
+          import sys, json
+          existing = set(typo["typo"] for typo in json.loads("["+sys.argv[1].replace("\n", ",")+"]"))
+          for new in json.loads("["+sys.argv[2].replace("\n", ",")+"]"):
+            if new["typo"] not in existing:
+              print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
+                new["path"], new["line_num"], new["byte_offset"],
+                new["typo"], " or ".join(new["corrections"])))' "$OLD_TYPOS" "$NEW_TYPOS"
