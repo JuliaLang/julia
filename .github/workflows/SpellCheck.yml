@@ -35,11 +35,11 @@ jobs:
           echo a
           NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
           echo b
-          NEW_TYPOS=$(echo -n $NEW_FILES | xargs -d '\n' "${{ runner.temp }}/typos/typos" --format json)
+          NEW_TYPOS=$(echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json)
           echo c
           git checkout FETCH_HEAD -- $OLD_FILES
           echo d
-          OLD_TYPOS=$(echo -n $OLD_FILES | xargs -d '\n' "${{ runner.temp }}/typos/typos" --format json)
+          OLD_TYPOS=$(echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json)
           echo e
           python -c '
           import sys, json
