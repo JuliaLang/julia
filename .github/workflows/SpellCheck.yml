@@ -16,6 +16,8 @@ jobs:
           persist-credentials: false
       - name: Check spelling with typos
         #uses: crate-ci/typos@master
+        env:
+         GH_TOKEN: "${{ github.token }}"
         run: |
           set -o pipefail
           mkdir -p "${{ runner.temp }}/typos"
