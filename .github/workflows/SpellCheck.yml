@@ -20,6 +20,9 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
         run: |
           git fetch --depth=1 origin ${{ github.base_ref }}
+          OLD_FILES=$(git diff-index --name-only --diff-filter=ad FETCH_HEAD)
+          NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
+
           mkdir -p "${{ runner.temp }}/typos"
           RELEASE_ASSET_URL="$(
             gh api /repos/crate-ci/typos/releases/latest \
@@ -29,17 +32,11 @@ jobs:
             --quiet --output-document=- "${RELEASE_ASSET_URL}" \
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
-          echo z
-          OLD_FILES=$(git diff-index --name-only --diff-filter=ad FETCH_HEAD)
-          echo a
-          NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
-          echo b
+
           NEW_TYPOS=$(echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json) || true
-          echo c
           git checkout FETCH_HEAD -- $OLD_FILES
-          echo d
           OLD_TYPOS=$(echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json) || true
-          echo e
+
           python -c '
           import sys, json
           existing = set(typo["typo"] for typo in json.loads("["+sys.argv[1].replace("\n", ",")+"]"))
