@@ -4,6 +4,8 @@
   jlapi.c
   miscellaneous functions for users of libjulia.so, to handle initialization
   and the style of use where julia is not in control most of the time.
+
+  This is not a typo.
 */
 #include "platform.h"
 
