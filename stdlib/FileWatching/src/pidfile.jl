@@ -235,7 +235,7 @@ function open_exclusive(path::String;
                         poll_interval::Real = 10 #= seconds =#,
                         wait::Bool = true #= return on failure if false =#,
                         stale_age::Real = 0 #= disabled =#,
-                        refresh::Real = 0 #= disabled =#)
+                        refresh::Real = stale_age/2)
     # fast-path: just try to open it
     file = tryopen_exclusive(path, mode)
     file === nothing || return file
