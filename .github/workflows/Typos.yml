@@ -39,17 +39,17 @@ jobs:
 
           python -c '
           import sys, json
-          existing = set()
-          with open(sys.argv[1]) as existing_file:
-            for line in existing_file:
-              existing.add(json.loads(line)["typo"])
+          old = set()
+          with open(sys.argv[1]) as old_file:
+            for line in old_file:
+              old.add(json.loads(line)["typo"])
           clean = True
           with open(sys.argv[2]) as new_file:
             for line in new_file:
               new = json.loads(line)
-              if new["typo"] not in existing:
+              if new["typo"] not in old:
                 clean = False
                 print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
                   new["path"], new["line_num"], new["byte_offset"],
                   new["typo"], " or ".join(new["corrections"])))
-          sys.exit(1 if not clean else 0)' "${{ runner.temp }}/new_typos.jsonl" "${{ runner.temp }}/new_typos.jsonl"
+          sys.exit(1 if not clean else 0)' "${{ runner.temp }}/old_typos.jsonl" "${{ runner.temp }}/new_typos.jsonl"
