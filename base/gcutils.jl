@@ -49,6 +49,14 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 `x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the function
 will throw.
 
+!!! warning
+
+    Julia may interrupt any other code when it calls a finalizer function so you must take special care to avoid concurrency bugs when writing your finalizers.
+    Even if you use no other concurrency features in your program, one finalizer call can interrupt another and cause a concurrency bug if they interact with the same global state.
+
+    If your finalizer interacts with global state (and it probably will), then you must use a synchronization strategy for that interaction that is safe even if your finalizer is interrupted by another finalizer.
+    Review the extended help for suggested strategies.
+
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
 Using the `@async` macro (to defer context switching to outside of the finalizer) or
 `ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
@@ -63,7 +71,7 @@ finalizer(my_mutable_struct) do x
 end
 
 finalizer(my_mutable_struct) do x
-    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+    @ccall jl_safe_printf("Finalizing %s."::Cstring, repr(x)::Cstring)::Cvoid
 end
 ```
 
@@ -81,6 +89,57 @@ mutable struct MyMutableStruct
     end
 end
 ```
+
+# Extended help
+
+You can protect access to a critical region in your finalizer with one of these techniques:
+
+ 1. The simplest strategy is to guard access to your critical region with a lock:
+
+    ```julia
+    function my_finalizer(x)
+        lock(my_lock)
+        try
+            # Your critical region here
+        finally
+            unlock(my_lock)
+        end
+    end
+
+    finalizer(my_finalizer, my_object)
+    ```
+
+    The locks in `Base` prevent multiple finalizers entering the critical region concurrently.
+    If you want to use a lock from another package then check its documentation.
+
+ 2. Another strategy is to use the finalizer only to schedule the work to be done at another time.
+    This means we don't have to care about finalizers interrupting each other because the actual work will be done in a non-finalizer context.
+
+    Do this by pushing the work into a concurrent queue such as `Base.IntrusiveLinkedListSynchronized{T}`
+    or by using `Threads.@spawn` to add a task to the Julia task scheduler's queue.
+
+    This can be a good strategy to use for code with event loops
+    and is employed by `Gtk.jl` to manage lifetime ref-counting.
+
+    If you use `Threads.@spawn` then you will not have control over with thread the spawned task will run on, so you will still need to acquire a lock in the task.
+    If you define your own queue then you can avoid this by only draining the queue from one thread at a time.
+
+    An example using `Threads.@spawn`:
+
+    ```
+    function my_finalizer(x)
+        Threads.@spawn begin
+            lock(my_lock)
+            try
+                # Your critical region here
+            finally
+                unlock(my_lock)
+            end
+        end
+    end
+
+    finalizer(my_finalizer, my_object)
+    ```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     _check_mutable(o)
