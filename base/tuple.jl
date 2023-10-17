@@ -432,7 +432,10 @@ function _totuple(::Type{NTuple{N, T}}, itr) where {N, T}
     end
 end
 
-_totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T, N} = _totuple_recursive(T, itr, s...)
+function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T, N}
+    @inline
+    _totuple_recursive(T, itr, s...)
+end
 
 function _totuple_recursive(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @inline
