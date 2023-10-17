@@ -11,6 +11,10 @@ using Dates
     @test Dates.CompoundPeriod(a - b) == Dates.Hour(12)
 end
 
+@testset "TimeType arithmetic" begin
+    @test_throws MethodError DateTime(2023, 5, 2) - Date(2023, 5, 1)
+end
+
 @testset "Wrapping arithmetic for Months" begin
     # This ends up being trickier than expected because
     # the user might do 2014-01-01 + Month(-14)
