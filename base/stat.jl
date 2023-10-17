@@ -439,16 +439,8 @@ operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 
 # mode predicate methods for file names
 
+# The documentation in these files refer to taking the same argument as `stat`...
 for f in Symbol[
-    :isfifo,
-    :ischardev,
-    :isdir,
-    :isblockdev,
-    :isfile,
-    :issocket,
-    :issetuid,
-    :issetgid,
-    :issticky,
     :uperm,
     :gperm,
     :operm,
@@ -460,7 +452,22 @@ for f in Symbol[
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
 
-ispath(path::AbstractString) = ispath(stat(path))
+# ...whereas these files should really only take paths (and not e.g. Ints)
+# See issue #51710
+for f in Symbol[
+    :isfifo,
+    :ischardev,
+    :isdir,
+    :isblockdev,
+    :ispath,
+    :isfile,
+    :issocket,
+    :issetuid,
+    :issetgid,
+    :issticky,
+]
+    @eval ($f)(path::AbstractString) = ($f)(stat(path))
+end
 
 islink(path...) = islink(lstat(path...))
 

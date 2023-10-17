@@ -649,7 +649,12 @@ let path = tempname()
 end
 
 # Issue #51710
-@test_throws MethodError ispath(1)
+for f in [
+    isfifo, ischardev, isdir, isblockdev, ispath, isfile, issocket,
+    issetuid, issetgid, issticky
+]
+    @test_throws MethodError f(1)
+end
 
 (p, f) = mktemp()
 print(f, "Here is some text")
