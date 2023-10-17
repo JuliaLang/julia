@@ -53,10 +53,18 @@ julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
 true
 ```
 """
-function setindex(x::Tuple, v, i::Integer)
+function setindex(x::T, v::V, i::Integer) where {T<:Tuple, V}
     @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
     @inline
-    _setindex(v, i, x...)
+    if @inbounds fieldtype(T, Int(i)) == V && isbitstype(V)
+        new_tuple = Ref(x)
+        t = @_gc_preserve_begin new_tuple
+        unsafe_store!(Ptr{V}(Base.pointer_from_objref(new_tuple)), v, i)
+        @_gc_preserve_end t
+        new_tuple[]
+    else
+        _setindex(v, i, x...)
+    end
 end
 
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
@@ -387,7 +395,44 @@ function _totuple_err(@nospecialize T)
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
+function _tontuple_isbits(::Type{NTuple{N, T}}, itr) where {N, T}
+    @inline
+    isbitstype(T) || throw(ArgumentError("tuple type $T is not isbits"))
+    tuple = Ref{NTuple{N, T}}()
+    tuple_ptr = Ptr{T}(Base.pointer_from_objref(tuple))
+
+    iterations = 0
+    for (i, v) in zip(1:N, itr)
+        t = @_gc_preserve_begin tuple
+        unsafe_store!(tuple_ptr, v, i)
+        @_gc_preserve_end t
+
+        iterations = i
+    end
+    iterations < N && Base._totuple_err(NTuple{N, T})
+
+    return tuple[]
+end
+
+function _totuple(::Type{NTuple{N, T}}, itr) where {N, T}
+    @inline
+    if isbitstype(T)
+        _tontuple_isbits(NTuple{N, T}, itr)
+    elseif N >= 32
+        # use iterative algorithm for long tuples
+        elts = collect(E, Iterators.take(itr,N))
+        if length(elts) != N
+            _totuple_err(T)
+        end
+        (elts...,)
+    else
+        _totuple_recursive(NTuple{N, T}, itr)
+    end
+end
+
+_totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T, N} = _totuple_recursive(T, itr, s...)
+
+function _totuple_recursive(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @inline
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
@@ -398,16 +443,6 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
     return (t1, ts...)::T
-end
-
-# use iterative algorithm for long tuples
-function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
-    len = N+32
-    elts = collect(E, Iterators.take(itr,len))
-    if length(elts) != len
-        _totuple_err(T)
-    end
-    (elts...,)
 end
 
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)

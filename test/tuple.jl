@@ -647,6 +647,11 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    x = (Ref(1), Ref(2))
+    y = Base.setindex(x, Ref(3), 1)
+    @test y[1][] === 3
+    @test y[2][] === 2
 end
 
 @testset "inferable range indexing with constant values" begin
