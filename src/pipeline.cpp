@@ -84,6 +84,7 @@
 #include "llvm/Transforms/Tapir/LoopStripMinePass.h"
 #include "llvm/Transforms/Tapir/SerializeSmallTasks.h"
 #include "llvm/Transforms/Tapir/TapirToTarget.h"
+#include "llvm/Transforms/Tapir/TapirTargetOptions.h"
 #endif
 
 #ifdef _COMPILER_GCC_
@@ -708,6 +709,48 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         return PIC;
     }
 
+#ifdef USE_TAPIR
+    using ValueSet = llvm::SetVector<llvm::Value *>;
+    void marshalInputsCallback(Function &F, const ValueSet &Inputs, ValueSet &Args,
+                           ValueToValueMapTy &InputMap,
+                           IRBuilder<> &StoreBuilder, IRBuilder<> &LoadBuilder,
+                           IRBuilder<> &StaticAllocaInserter) {
+        dbgs() << "marshalInputsCallback called!\n";
+
+        LLVMContext &Ctx = F.getContext();
+        // Get vectors of inputs and their types to define argument structure.                                                                                                                                                                                             
+        SmallVector<Value *, 8> StructInputs;
+        SmallVector<Type *, 8> StructIT;
+        for (Value *V : Inputs) {
+            StructInputs.push_back(V);
+            StructIT.push_back(V->getType());
+        }
+        // Derive type of argument structure.                                                                                                                                                                             
+        StructType *STy = StructType::get(Ctx, StructIT);
+        // Allocate the argument structure.                                                                                                                                                                                                                                
+        AllocaInst *Closure = StaticAllocaInserter.CreateAlloca(STy);
+        for (unsigned i = 0; i < StructInputs.size(); ++i) {
+            // Populate the argument structure.                                                                                                                                                                                                                              
+            StoreBuilder.CreateStore(
+                StructInputs[i], StoreBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
+            // Load argument from the argument structure.  Store the load into InputMap                                                                                                                                                                                      
+            // so that uses of the argument can be remapped to use the loaded value                                                                                                                                                                                          
+            // instead.                                                                                                                                                                                                                                                      
+            InputMap[StructInputs[i]] = LoadBuilder.CreateLoad(
+                StructIT[i], LoadBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
+        }
+
+        // Modify Args to contain just the argument structure.                                                                                                                                                                                                             
+        Args.clear();
+        Args.insert(Closure);
+    }
+
+    void loopLaunchCallback(CallBase &CB, SyncInst *SI) {
+        dbgs() << "loopLaunchCallback called!\n";
+        dbgs() << "Callbase" << CB;
+    }
+#endif
+
     // TODO: addTargetPasses for reflection and AOT
     auto createTLII(llvm::Triple TargetTriple) {
         TargetLibraryInfoImpl *TLII = new TargetLibraryInfoImpl(TargetTriple);
@@ -715,10 +758,16 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #ifdef USE_TAPIR
         // TapirTargetID::Lambda
         // TapirTargetID::Serial
-        TLII->setTapirTarget(TapirTargetID::Lambda);
+        // TLII->setTapirTarget(TapirTargetID::Serial);
+        // TLII->etTapirTarget(TapirTargetID::Lambda);
         // TLII->setTapirTargetOptions(
         //     std::make_unique<OpenCilkABIOptions>(CodeGenOpts.OpenCilkABIBitcodeFile));
         // TLII->addTapirTargetLibraryFunctions();
+        TLII->setTapirTarget(TapirTargetID::Chi);
+        std::string bcPathHost = "";
+        std::string bcPathDevice = "";
+        TLII->setTapirTargetOptions(
+            std::make_unique<llvm::ChiABIOptions>(bcPathHost, bcPathDevice, marshalInputsCallback, loopLaunchCallback));
 #endif
         return std::unique_ptr<TargetLibraryInfoImpl>(TLII);
     }

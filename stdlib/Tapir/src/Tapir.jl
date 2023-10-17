@@ -108,7 +108,7 @@ end
 # Parallel constructs
 ###
 
-loop_spawning_strategy() = (Symbol("tapir.loop.spawn.strategy"), 1)
+loop_spawning_strategy() = (Symbol("tapir.loop.spawn.strategy"), 2)
 loop_grainsize(n) = (Symbol("tapir.loop.grainsize"), convert(Int, n))
 simd() = Symbol("julia.simdloop")
 ivdep() = Symbol("julia.ivdep")
@@ -116,7 +116,7 @@ ivdep() = Symbol("julia.ivdep")
 @eval function foreach(f::F, iterator) where F
     @sync for I in iterator
         @spawn @inline f(I)
-        $(Expr(:loopinfo, simd(), ivdep(), loop_spawning_strategy()))
+        $(Expr(:loopinfo, simd(), ivdep(), loop_spawning_strategy(), loop_grainsize(1)))
     end
     return nothing
 end
