@@ -1080,13 +1080,22 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if srcstyle isa IndexLinear
             # Single-index implementation
             @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
+                if isassigned(src, i)
+                    dest[i + Δi] = src[i]
+                else
+                    _unsetindex!(dest, i + Δi)
+                end
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
+            @inbounds for a in eachindex(src)
+                i += 1
+                if isassigned(src, a)
+                    dest[i] = src[a]
+                else
+                    _unsetindex!(dest, i)
+                end
             end
         end
     else
@@ -1094,14 +1103,22 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
-                @inbounds dest[I] = src[I]
+                if isassigned(src, I)
+                    @inbounds dest[I] = src[I]
+                else
+                    _unsetindex!(dest, I)
+                end
             end
         else
             # Dual-iterator implementation
             ret = iterate(iterdest)
-            @inbounds for a in src
+            @inbounds for a in itersrc
                 idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
+                if isassigned(src, a)
+                    dest[idx] = src[a]
+                else
+                    _unsetindex!(dest, idx)
+                end
                 ret = iterate(iterdest, state)
             end
         end
@@ -1120,8 +1137,8 @@ function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstar
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
-               src::AbstractArray, sstart::Integer,
-               n::Integer)
+                 src::AbstractArray, sstart::Integer,
+                 n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
@@ -1130,7 +1147,11 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+        if isassigned(src′, sstart+i)
+            dest[dstart+i] = src′[sstart+i]
+        else
+            _unsetindex!(dest, dstart+i)
+        end
     end
     return dest
 end
@@ -1141,7 +1162,7 @@ function copy(a::AbstractArray)
 end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+                 A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
