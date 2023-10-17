@@ -583,7 +583,7 @@ end
 
     # PhiNode of unions of immutables (JuliaLang/julia#39501)
     function f2(cond)
-        val = cond ? 1 : 1f0
+        val = cond ? 1 : ""
         GC.@preserve val begin end
         return cond
     end
