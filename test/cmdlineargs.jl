@@ -996,4 +996,6 @@ end
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
 
 # test --bug-report=rr
-@test success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
+    @test success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
+end
