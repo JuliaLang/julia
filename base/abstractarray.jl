@@ -1445,6 +1445,8 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+
 """
     parent(A)
 

@@ -87,7 +87,7 @@ function unsafe_convert(::Type{Cstring}, s::String)
     return Cstring(p)
 end
 
-unsafe_convert(::Type{Cstring}, s::Union{Vector{UInt8},Vector{Int8}}) = Cstring(unsafe_convert(Ptr{Cvoid}, s))
+unsafe_convert(::Type{Cstring}, s::Union{Memory{UInt8},Memory{Int8}}) = Cstring(unsafe_convert(Ptr{Cvoid}, s))
 
 function cconvert(::Type{Cwstring}, v::Vector{Cwchar_t})
     for i = 1:length(v)-1

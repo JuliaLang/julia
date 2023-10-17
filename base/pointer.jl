@@ -62,13 +62,14 @@ unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8},
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
-unsafe_convert(::Type{Ptr{T}}, a::Array) where {T} = unsafe_convert(Ptr{T}, a.ref)
+cconvert(::Type{<:Ptr}, a::Array) where {T} = getfield(a, :ref)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 # TODO: add this deprecation to give a better error:
 # cconvert(::Type{<:Ptr}, a::AbstractArray) = error("conversion to pointer not defined for $(typeof(a))")
 # unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("missing call to cconvert for call to unsafe_convert for AbstractArray")
 
+cconvert(::Type{<:Ptr}, a::GenericMemory) = a
 unsafe_convert(::Type{Ptr{Cvoid}}, a::GenericMemory{T}) where {T} = getfield(a, :ptr)
 unsafe_convert(::Type{Ptr{T}}, a::GenericMemory) where {T} = convert(Ptr{T}, getfield(a, :ptr))
 

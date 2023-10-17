@@ -278,7 +278,7 @@ that N is inbounds on either array. Incorrect usage may corrupt or segfault your
 the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
-    n==0 && return dest
+    n == 0 && return dest
     unsafe_copyto!(GenericMemoryRef(dest.ref, doffs), GenericMemoryRef(src.ref, soffs), n)
     return dest
 end
@@ -405,8 +405,9 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    t = @_gc_preserve_begin a
-    p = unsafe_convert(Ptr{Cvoid}, a)
+    ref = a.ref
+    t = @_gc_preserve_begin ref
+    p = unsafe_convert(Ptr{Cvoid}, ref)
     memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
     @_gc_preserve_end t
     return a
@@ -1113,6 +1114,7 @@ end
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
     delta = Int(delta)
+    i = Int(i)
     i == 1 && return _growbeg!(a, delta)
     len = length(a)
     i == len + 1 && return _growend!(a, delta)
@@ -1985,10 +1987,12 @@ end
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
-    ta = @_gc_preserve_begin a
-    tb = @_gc_preserve_begin b
-    pa = unsafe_convert(Ptr{Cvoid}, a)
-    pb = unsafe_convert(Ptr{Cvoid}, b)
+    aref = a.ref
+    bref = b.ref
+    ta = @_gc_preserve_begin aref
+    tb = @_gc_preserve_begin bref
+    pa = unsafe_convert(Ptr{Cvoid}, aref)
+    pb = unsafe_convert(Ptr{Cvoid}, bref)
     c = memcmp(pa, pb, min(length(a),length(b)))
     @_gc_preserve_end ta
     @_gc_preserve_end tb
@@ -1999,10 +2003,12 @@ const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where 
 # use memcmp for == on bit integer types
 function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
     if size(a) == size(b)
-        ta = @_gc_preserve_begin a
-        tb = @_gc_preserve_begin b
-        pa = unsafe_convert(Ptr{Cvoid}, a)
-        pb = unsafe_convert(Ptr{Cvoid}, b)
+        aref = a.ref
+        bref = b.ref
+        ta = @_gc_preserve_begin aref
+        tb = @_gc_preserve_begin bref
+        pa = unsafe_convert(Ptr{Cvoid}, aref)
+        pb = unsafe_convert(Ptr{Cvoid}, bref)
         c = memcmp(pa, pb, sizeof(eltype(Arr)) * length(a))
         @_gc_preserve_end ta
         @_gc_preserve_end tb
@@ -2015,11 +2021,13 @@ end
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     if len == length(b)
-        ta = @_gc_preserve_begin a
-        tb = @_gc_preserve_begin b
+        aref = a.ref
+        bref = b.ref
+        ta = @_gc_preserve_begin aref
+        tb = @_gc_preserve_begin bref
         T = eltype(Arr)
-        pa = unsafe_convert(Ptr{T}, a)
-        pb = unsafe_convert(Ptr{T}, b)
+        pa = unsafe_convert(Ptr{T}, aref)
+        pb = unsafe_convert(Ptr{T}, bref)
         c = memcmp(pa, pb, sizeof(T) * len)
         @_gc_preserve_end ta
         @_gc_preserve_end tb
