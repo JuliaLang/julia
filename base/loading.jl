@@ -2312,10 +2312,18 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
-        exit(125) # we define status = 125 means PrecompileableError
+        exit(125) # we define status = 125 means PrecompilableError
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+
+    # restore the globals we set before running precompilation workload in case they were altered
+    append!(empty!(Base.DEPOT_PATH), depot_path)
+    append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
+    append!(empty!(Base.LOAD_PATH), load_path)
+    ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
+    set_active_project(nothing)
+
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
