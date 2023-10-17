@@ -48,7 +48,8 @@ jobs:
             for line in new_file:
               new = json.loads(line)
               if new["typo"] not in old:
-                clean = False
+                if len(new["typo"]) > 6: # Short typos might be false positives. Long are probably real.
+                  clean = False
                 print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
                   new["path"], new["line_num"], new["byte_offset"],
                   new["typo"], " or ".join(new["corrections"])))
