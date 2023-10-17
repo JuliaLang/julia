@@ -213,7 +213,7 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     LAPACK.lapmr!(A, B.p, true)
     ldiv!(M, A)
     rdiv!(A, M')
-    ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
+    ldiv!(Tridiagonal(dl, diag(LUD), du), A)
     vals, vecs = eigen!(A; sortby)
     # Compute generalized eigenvectors from 'vecs':
     #   vecs = P'*inv(M')*vecs
