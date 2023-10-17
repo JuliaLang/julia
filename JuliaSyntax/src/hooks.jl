@@ -255,7 +255,8 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                     #-#-#-
                     """)
         end
-        @error("JuliaSyntax parser failed — falling back to flisp!",
+        @error("""JuliaSyntax parser failed — falling back to flisp!
+                  This is not your fault. Please submit a bug report to https://github.com/JuliaLang/JuliaSyntax.jl/issues""",
                exception=(exc,catch_backtrace()),
                offset=offset,
                code=code)
