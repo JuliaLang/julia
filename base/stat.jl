@@ -469,7 +469,7 @@ for f in Symbol[
     @eval ($f)(path::AbstractString) = ($f)(stat(path))
 end
 
-islink(path...) = islink(lstat(path...))
+islink(path::AbstractString) = islink(lstat(path))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
 function samefile(a::StatStruct, b::StatStruct)
@@ -488,8 +488,8 @@ samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 Return `true` if `path` is a mount point, `false` otherwise.
 """
-function ismount(path...)
-    path = joinpath(path...)
+function ismount(path::AbstractString, paths::Vararg{AbstractString})
+    path = joinpath(path, paths...)
     isdir(path) || return false
     s1 = lstat(path)
     # Symbolic links cannot be mount points
