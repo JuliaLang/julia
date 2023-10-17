@@ -1234,7 +1234,21 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         name, pos, dotpos, startpos, comp_keywords)
 end
 
-function shell_completions(string, pos)
+function common_tail(s1, s2)
+    i = ncodeunits(s1) + 1
+    itr = Iterators.Stateful(Iterators.reverse(pairs(s1)))
+    for ((_i, c1), c2) in zip(itr, Iterators.reverse(s2))
+        if c1 == '\\'
+            isempty(itr) && break
+            _i, c1 = popfirst!(itr)
+        end
+        c1 == c2 || break
+        i = _i
+    end
+    return SubString(s1, i)
+end
+
+function shell_completions(string, pos, mod)
     # First parse everything up to the current position
     scs = string[1:pos]
     local args, last_parse
@@ -1246,27 +1260,71 @@ function shell_completions(string, pos)
     ex = args.args[end]::Expr
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 0:-1, false
-    arg = ex.args[end]
-    if all(s -> isa(s, AbstractString), ex.args)
-        arg = arg::AbstractString
-        # Treat this as a path
-
-        # As Base.shell_parse throws away trailing spaces (unless they are escaped),
-        # we need to special case here.
-        # If the last char was a space, but shell_parse ignored it search on "".
-        ignore_last_word = arg != " " && scs[end] == ' '
-        prefix = ignore_last_word ? "" : join(ex.args)
-
-        # Also try looking into the env path if the user wants to complete the first argument
-        use_envpath = !ignore_last_word && length(args.args) < 2
-
-        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
-    elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
+    last_arg = ex.args[end]
+    if isexpr(last_arg, :incomplete) || isexpr(last_arg, :error)
         partial = scs[last_parse]
-        ret, range = completions(partial, lastindex(partial))
+        ret, range = completions(partial, lastindex(partial), mod)
         range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
+
+    # Treat this as a path
+
+    # As Base.shell_parse throws away trailing spaces (unless they are escaped),
+    # we need to special case here.
+    # If the last char was a space, but shell_parse ignored it search on "".
+    ignore_last_word = isempty(last_parse)
+    # Also try looking into the env path if the user wants to complete the first argument
+    is_first_arg = !ignore_last_word && length(args.args) < 2
+
+    # Try to evaluate interpolation
+    evaled_args = ""
+    if !ignore_last_word
+        for arg in ex.args
+            if mod !== nothing
+                t = repl_eval_ex(arg, mod; limit_aggressive_inference=true)
+                t isa Const || @goto ret
+                (; val) = t
+                # For the first arg non-default Cmd flags are allowed
+                if is_first_arg && val isa Cmd
+                    val = val.exec
+                end
+                expanded = try
+                    Base.arg_gen(val)::Vector{String}
+                catch
+                    @goto ret
+                end
+                # Interpolation may return multiple args, always choose the last one
+                isempty(expanded) && @goto ret
+                evaled_args *= expanded[end]
+            else
+                arg isa AbstractString || @goto ret
+                evaled_args *= String(arg)::String
+            end
+        end
+    end
+
+    ret, range, should_complete = complete_path(evaled_args, pos; use_envpath=is_first_arg, shell_escape=true)
+
+    # Only replace literal user input - not interpolations - with the available completion
+    if !ignore_last_word
+        # only replace literal text in cmd literals through completions, don't delete interpolated expressions via <tab>
+        potentially_replaceable = common_tail(scs, evaled_args)
+        if potentially_replaceable !== SubString(scs, last_parse)
+            # last cmd arg is not just literal text
+            filename = basename(evaled_args)
+            if endswith(potentially_replaceable, filename)
+                range = nextind(string, last(last_parse))-ncodeunits(filename):last(last_parse)
+            else
+                range = last_parse
+                should_complete = false
+            end
+        end
+    end
+
+    return ret, range, should_complete
+
+    @label ret
     return Completion[], 0:-1, false
 end
 

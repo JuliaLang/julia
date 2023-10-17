@@ -155,7 +155,7 @@ function map_completion_text(completions)
 end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
-test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+test_scomplete(s, m=@__MODULE__) =  map_completion_text(@inferred(shell_completions(s, lastindex(s), m)))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
@@ -2088,4 +2088,42 @@ end
 let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
     @test t isa Core.Const
     @test t.val == `a b`
+end
+
+using Base.Filesystem: path_separator
+
+mktempdir() do tmp
+    mod = Module()
+    mod.tmp = tmp
+
+    touch(joinpath(tmp, "foo"))
+
+    @testset "shell completions with interpolation" begin
+        c, r, replace = test_scomplete(raw"echo $(", mod)
+        @test "tmp" in c
+        @test isempty(r)
+        @test replace
+
+        c, r, replace = test_scomplete(raw"echo $(tm", mod)
+        @test c == Any["tmp"]
+        @test r === 8:9
+        @test replace
+
+        c, r, replace = test_scomplete(raw"echo $(tmp)", mod)
+        @test c == Any[splitpath(tmp)[end] * Base.escape_raw_string(path_separator)]
+        @test r === 6:11
+        @test !replace
+
+        s = raw"echo $(tmp)" * path_separator
+        c, r, replace = test_scomplete(s, mod)
+        @test c == Any["foo"]
+        @test r === lastindex(s) .+ (1:0)
+        @test replace
+
+        s = raw"echo $(tmp)" * path_separator * "fo"
+        c, r, replace = test_scomplete(s, mod)
+        @test c == Any["foo"]
+        @test r === lastindex(s) .+ (-1:0)
+        @test replace
+    end
 end

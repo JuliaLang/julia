@@ -4,25 +4,13 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-# strips the end but respects the space when the string ends with "\\ "
-function rstrip_shell(s::AbstractString)
-    c_old = nothing
-    for (i, c) in Iterators.reverse(pairs(s))
-        i::Int; c::AbstractChar
-        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
-        isspace(c) || return SubString(s, 1, i)
-        c_old = c
-    end
-    SubString(s, 1, 0)
-end
-
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
     s = SubString(str, firstindex(str))
-    s = rstrip_shell(lstrip(s))
+    s = lstrip(s)
 
     # N.B.: This is used by REPLCompletions
-    last_parse = 0:-1
+    last_parse = 1:0
     isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
@@ -34,9 +22,16 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     st = Iterators.Stateful(pairs(s))
 
     function push_nonempty!(list, x)
-        if !isa(x,AbstractString) || !isempty(x)
-            push!(list, x)
+        if !isempty(list)
+            y = last(list)
+            if isa(y, AbstractString) && isempty(y)
+                list[end] = x
+                return nothing
+            elseif isa(x, AbstractString) && isempty(x)
+                return nothing
+            end
         end
+        push!(list, x)
         return nothing
     end
     function consume_upto!(list, s, i, j)
@@ -44,9 +39,10 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
     end
     function append_2to1!(list, innerlist)
-        if isempty(innerlist); push!(innerlist, ""); end
-        push!(list, copy(innerlist))
-        empty!(innerlist)
+        if !isempty(innerlist)
+            push!(list, copy(innerlist))
+            empty!(innerlist)
+        end
     end
 
     C = eltype(str)
@@ -57,12 +53,12 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
-                # We've made sure above that we don't end in whitespace,
-                # so updating `i` here is ok
                 (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
+                i += 1
             end
+            last_parse = (i:i-1) .+ s.offset
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
@@ -77,7 +73,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # use parseatom instead of parse to respect filename (#28188)
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            last_parse = (stpos:prevind(s, j)) .+ s.offset
+            if j > lastindex(s) && last(s) != ')'
+                last_parse = (stpos+(c=='('):lastindex(s)) .+ s.offset
+            end
             push_nonempty!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
@@ -121,8 +119,11 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    push_nonempty!(arg, s[i:end])
+    if i <= lastindex(s)
+        push_nonempty!(arg, s[i:end])
+    end
     append_2to1!(args, arg)
+    last_parse = first(last_parse):lastindex(parent(s))
 
     interpolate || return args, last_parse
 
