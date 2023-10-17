@@ -140,8 +140,7 @@ function write(io::IO, s::SecretBuffer)
     return nb
 end
 
-cconvert(::Type{Cstring}, s::SecretBuffer) = unsafe_convert(Cstring, s)
-function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
+function cconvert(::Type{Cstring}, s::SecretBuffer)
     # Ensure that no nuls appear in the valid region
     if any(==(0x00), s.data[i] for i in 1:s.size)
         throw(ArgumentError("`SecretBuffers` containing nul bytes cannot be converted to C strings"))
@@ -152,8 +151,10 @@ function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
     write(s, '\0')
     s.ptr = p
     s.size -= 1
-    return Cstring(unsafe_convert(Ptr{Cchar}, s.data))
+    return s.data
 end
+# optional shim for manual calls to unsafe_convert:
+#   unsafe_convert(::Type{Cstring}, s::SecretBuffer) = unsafe_convert(Cstring, cconvert(Cstring, s))
 
 seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)
 seekend(io::SecretBuffer) = seek(io, io.size+1)
