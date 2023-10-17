@@ -3696,12 +3696,13 @@ void jl_gc_init(void)
     total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory(); // This returns != 0 for not constrained
     int constrained = constrained_mem != 0 ? 1 : 0;         // But it can return -1 if there is a constraint but no value
+    constrained_mem = 3/4 * constrained_mem;                // We want to leave some memory for non GC things
     constrained_mem = (total_mem < constrained) ? total_mem : constrained_mem; // The constrained value can also be greater so take the min
     if (constrained)                                        // https://docs.libuv.org/en/v1.x/misc.html#c.uv_get_constrained_memory
-        jl_gc_set_max_memory(constrained_mem - 250*1024*1024); // LLVM + other libraries need some amount of memory
+        jl_gc_set_max_memory(constrained_mem); // LLVM + other libraries need some amount of memory
 #endif
     if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint - 250*1024*1024);
+        jl_gc_set_max_memory(jl_options.heap_size_hint * 3/4);
 
     t_start = jl_hrtime();
 }
