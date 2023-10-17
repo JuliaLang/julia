@@ -839,27 +839,35 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         expr = code[i]
-        if !(i in sv.unreachable) && isa(expr, GotoIfNot)
-            # Replace this live GotoIfNot with:
-            # - no-op if :nothrow and the branch target is unreachable
-            # - cond if :nothrow and both targets are unreachable
-            # - typeassert if must-throw
-            block = block_for_inst(sv.cfg, i)
-            if ssavaluetypes[i] === Bottom
-                destblock = block_for_inst(sv.cfg, expr.dest)
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
-                expr = Expr(:call, Core.typeassert, expr.cond, Bool)
-            elseif i + 1 in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                expr = GotoNode(expr.dest)
-            elseif expr.dest in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                expr = nothing
+        if !(i in sv.unreachable)
+            if isa(expr, GotoIfNot)
+                # Replace this live GotoIfNot with:
+                # - no-op if :nothrow and the branch target is unreachable
+                # - cond if :nothrow and both targets are unreachable
+                # - typeassert if must-throw
+                block = block_for_inst(sv.cfg, i)
+                if ssavaluetypes[i] === Bottom
+                    destblock = block_for_inst(sv.cfg, expr.dest)
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
+                    expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+                elseif i + 1 in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    expr = GotoNode(expr.dest)
+                elseif expr.dest in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = nothing
+                end
+                code[i] = expr
+            elseif isexpr(expr, :enter)
+                catchdest = expr.args[1]::Int
+                if catchdest in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
+                    code[i] = nothing
+                end
             end
-            code[i] = expr
         end
     end
 
@@ -1239,7 +1247,12 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             if el.head === :enter
                 tgt = el.args[1]::Int
-                el.args[1] = tgt + labelchangemap[tgt]
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    body[i] = nothing
+                else
+                    el.args[1] = tgt + labelchangemap[tgt]
+                end
             elseif !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)

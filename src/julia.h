@@ -2382,12 +2382,11 @@ typedef struct {
     int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
     int debug_info_kind;    // Enum for line-table-only, line-directives-only,
                             // limited, standalone
-
+    int debug_info_level;   // equivalent to the -g level from the cli
     int safepoint_on_entry; // Emit a safepoint on entry to each function
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
-
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
 } jl_cgparams_t;

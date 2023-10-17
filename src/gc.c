@@ -2811,7 +2811,7 @@ void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 }
 
 // Main mark loop. Stack (allocated on the heap) of `jl_value_t *`
-// is used to keep track of processed items. Maintaning this stack (instead of
+// is used to keep track of processed items. Maintaining this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
 JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls)
@@ -2846,7 +2846,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
         goto pop;
     }
     // Note that for the stealing heuristics, we try to
-    // steal chunks much more agressively than pointers,
+    // steal chunks much more aggressively than pointers,
     // since we know chunks will likely expand into a lot
     // of work for the mark loop
     steal : {

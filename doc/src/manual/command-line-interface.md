@@ -104,7 +104,7 @@ $
 ```
 
 However, note that the current best practice recommendation is to not mix application and reusable library
-code in the same package. Helper applications may be distributed as separate pacakges or as scripts with
+code in the same package. Helper applications may be distributed as separate packages or as scripts with
 separate `main` entry points in a package's `bin` folder.
 
 ## Parallel mode

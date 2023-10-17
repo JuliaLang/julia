@@ -261,8 +261,8 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(Main, :(const Distributed = $Distributed))
-            Core.eval(Main, :(using .Distributed))
+            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
 
         invokelatest(Main.Distributed.process_opts, opts)
@@ -380,19 +380,18 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(mod, :InteractiveUtils)
+    if !isdefined(MainInclude, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(mod, :(using .InteractiveUtils))
-                return InteractiveUtils
+                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
+            return nothing
         end
-        return nothing
     end
-    return getfield(mod, :InteractiveUtils)
+    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
+    return MainInclude.InteractiveUtils
 end
 
 function load_REPL()
@@ -511,10 +510,6 @@ A variable referring to the last thrown errors, automatically imported to the in
 The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
-
-# weakly exposes ans and err variables to Main
-export ans, err
-
 end
 
 """
@@ -613,7 +608,7 @@ In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be aut
 the completion of script execution.
 
 The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parenthese are required. In particular, the following are equivalent:
+case, parentheses are required. In particular, the following are equivalent:
 
 ```
 function (@main)(ARGS)

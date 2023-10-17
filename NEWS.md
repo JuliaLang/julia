@@ -22,7 +22,7 @@ Command-line option changes
 ---------------------------
 
 * The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
-(see the docstring for futher details). When opted-in, and julia is invoked to run a script or expression
+(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
 (i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
 This is intended to unify script and compilation workflows, where code loading may happen
 in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
@@ -41,6 +41,7 @@ New library functions
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
 
 New library features
 --------------------

@@ -140,7 +140,7 @@ end
 
 @sync begin
     # If we instead pass a unique dictionary to each
-    # task we can access the dictonaries race free.
+    # task we can access the dictionaries race free.
     with(sval_dict => Dict()) do
         @spawn (sval_dict[][:a] = 3)
     end
@@ -166,7 +166,7 @@ const LEVEL = ScopedValue(:GUEST)
 function serve(request, response)
     level = isAdmin(request) ? :ADMIN : :GUEST
     with(LEVEL => level) do
-        Threads.@spawn handle(request, respone)
+        Threads.@spawn handle(request, response)
     end
 end
 
@@ -194,7 +194,7 @@ const sval_dict = ScopedValue(Dict())
 
 # If you want to add new values to the dict, instead of replacing
 # it, unshare the values explicitly. In this example we use `merge`
-# to unshare the state of the dictonary in parent scope.
+# to unshare the state of the dictionary in parent scope.
 @sync begin
     with(sval_dict => merge(sval_dict[], Dict(:a => 10))) do
         @spawn @show sval_dict[][:a]

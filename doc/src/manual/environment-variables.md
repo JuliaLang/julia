@@ -16,8 +16,19 @@ including those which include `JULIA` in their names.
 
 !!! note
 
-    Some variables, such as [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) and [`JULIA_PROJECT`](@ref JULIA_PROJECT), need to be set before Julia
-    starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
+    It is recommended to avoid changing environment variables during runtime,
+    such as within a `~/.julia/config/startup.jl`.
+
+    One reason is that some julia language variables, such as [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS)
+    and [`JULIA_PROJECT`](@ref JULIA_PROJECT), need to be set before Julia starts.
+
+    Similarly, `__init__()` functions of user modules in the sysimage (via PackageCompiler) are
+    run before `startup.jl`, so setting environment variables in a `startup.jl` may be too late for
+    user code.
+
+    Further, changing environment variables during runtime can introduce data races into
+    otherwise benign code.
+
     In Bash, environment variables can either be set manually by running, e.g.,
     `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
     `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.

@@ -25,6 +25,7 @@ let ex = quote
         (::Test_y)() = "", ""
         unicode_αβγ = Test_y(1)
 
+        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
         module CompletionFoo2
 
         end
@@ -1979,7 +1980,7 @@ let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
 end
 
 # JuliaLang/julia/#51548
-# don't return wrong result due to mutable inconsistentcy
+# don't return wrong result due to mutable inconsistency
 function issue51548(T, a)
     # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
     # constant-fold `isempty(xs)::Const(true)` and return wrong result
@@ -2068,4 +2069,23 @@ end
     @test Base.ispublic(Base, :ispublic)
     # If this last test starts failing, that's okay, just pick a new example symbol:
     @test !Base.isexported(Base, :ispublic)
+end
+
+# issue #51194
+for (s, compl) in (("2*CompletionFoo.nam", "named"),
+                   (":a isa CompletionFoo.test!1", "test!12"),
+                   ("-CompletionFoo.Test_y(3).", "yy"),
+                   ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
+                   ("foo'CompletionFoo.test!1", "test!12"))
+    c, r = test_complete(s)
+    @test only(c) == compl
+end
+
+let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
+    @test t isa Core.Const
+    @test t.val == `a b`
 end

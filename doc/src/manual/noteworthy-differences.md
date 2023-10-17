@@ -392,7 +392,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     paths to the `Base.LOAD_PATH` array.
     * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
       being loaded with `import` or `using`. They are simply available to the project.
-    * Directory-based package repositories are the **quickest solution** to developping local
+    * Directory-based package repositories are the **quickest solution** to developing local
       libraries of "software modules".
 
 ### Julia &hArr; C/C++: Assembling modules
