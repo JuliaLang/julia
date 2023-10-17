@@ -451,7 +451,7 @@ threads in Julia:
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
     can be widely adopted with confidence. See the section on
-    [the safe use of finalizers](@red ma-finalizers) for further details.
+    [the safe use of finalizers](@ref man-finalizers) for further details.
 
 ## [Task Migration](@id man-task-migration)
 
