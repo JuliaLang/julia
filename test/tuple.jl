@@ -659,7 +659,7 @@ end
     @test Base.setindex(z, Int8(5), 4) === (1, Int32(2), Int128(3), Int8(5))
 
     a = (1, Int32(2), Int32(3), Int8(4))
-    @test Base.setindex(z, Int8(5), 4) === (1, Int32(2), Int32(3), Int8(5))
+    @test Base.setindex(a, Int8(5), 4) === (1, Int32(2), Int32(3), Int8(5))
 end
 
 @testset "inferable range indexing with constant values" begin
