@@ -104,4 +104,12 @@ distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))
+ifeq ($(OS),WINNT)
+install-csl:
+	mkdir -p $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
+endif
 endif
