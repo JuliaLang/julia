@@ -164,7 +164,7 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return method.sig
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
         mt, atype, sparams, method, #=int return_if_compileable=#0)
