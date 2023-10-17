@@ -994,3 +994,6 @@ end
 # Test import from module
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; using .Hello'`) == "hello"
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
+
+# test --bug-report=rr
+@test success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
