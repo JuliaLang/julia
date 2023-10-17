@@ -652,6 +652,9 @@ end
     y = Base.setindex(x, Ref(3), 1)
     @test y[1][] === 3
     @test y[2][] === 2
+
+    z = (1, Int32(2), Int128(3), Int8(1))
+    @test Base.setindex(z, Int8(5), 4) === (1, Int32(2), Int128(3), Int8(5))
 end
 
 @testset "inferable range indexing with constant values" begin

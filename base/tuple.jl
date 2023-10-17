@@ -56,10 +56,13 @@ true
 function setindex(x::T, v::V, i::Integer) where {T<:Tuple, V}
     @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
     @inline
-    if @inbounds fieldtype(T, Int(i)) == V && isbitstype(V)
+    T1 = @inbounds fieldtype(T, Int(i))
+    if V <: T1 && allocatedinline(T1)
         new_tuple = Ref(x)
         t = @_gc_preserve_begin new_tuple
-        unsafe_store!(Ptr{V}(Base.pointer_from_objref(new_tuple)), v, i)
+        new_tuple_ptr = unsafe_convert(Ptr{T}, new_tuple)
+        ith_index_ptr = Ptr{T1}(new_tuple_ptr + fieldoffset(T, i))
+        unsafe_store!(ith_index_ptr, v, 1)
         @_gc_preserve_end t
         new_tuple[]
     else
@@ -395,11 +398,11 @@ function _totuple_err(@nospecialize T)
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _tontuple_isbits(::Type{NTuple{N, T}}, itr) where {N, T}
+function _tontuple_inline(::Type{NTuple{N, T}}, itr) where {N, T}
     @inline
-    isbitstype(T) || throw(ArgumentError("tuple type $T is not isbits"))
+    allocatedinline(T) || throw(ArgumentError("tuple type $T is not allocated inline"))
     tuple = Ref{NTuple{N, T}}()
-    tuple_ptr = Ptr{T}(Base.pointer_from_objref(tuple))
+    tuple_ptr = Ptr{T}(unsafe_convert(Ptr{NTuple{N, T}}, tuple))
 
     iterations = 0
     for (i, v) in zip(1:N, itr)
@@ -416,8 +419,8 @@ end
 
 function _totuple(::Type{NTuple{N, T}}, itr) where {N, T}
     @inline
-    if isbitstype(T)
-        _tontuple_isbits(NTuple{N, T}, itr)
+    if allocatedinline(T)
+        _tontuple_inline(NTuple{N, T}, itr)
     elseif N >= 32
         # use iterative algorithm for long tuples
         elts = collect(E, Iterators.take(itr,N))
