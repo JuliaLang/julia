@@ -77,7 +77,7 @@ end
     @test eigvals(AH, BH; sortby=sf) ≈ eigvals(Hermitian(AH), Hermitian(BH); sortby=sf)
 end
 
-@testset "bk-eigen-eigals" begin
+@testset "bk-lu-eigen-eigvals" begin
     # Bunchkaufman decomposition based
 
     # eigenvalue sorting
