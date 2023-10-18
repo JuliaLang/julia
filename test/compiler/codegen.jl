@@ -574,12 +574,12 @@ end
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
 
-    # unions of immutables (JuliaLang/julia#39501)
+    # PhiNode of unions of immutables (JuliaLang/julia#39501)
     function f2(cond)
-        val = cond ? 1 : 1f0
+        val = cond ? 1 : ""
         GC.@preserve val begin end
     end
-    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
     # make sure the fix for the above doesn't regress #34241
     function f4(cond)
         val = cond ? ([1],) : ([1f0],)

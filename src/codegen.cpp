@@ -3028,9 +3028,12 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             varg2 = emit_pointer_from_objref(ctx, varg2);
             Value *gc_uses[2];
             int nroots = 0;
-            if ((gc_uses[nroots] = get_gc_root_for(arg1)))
+            // these roots may seem a bit overkill, but we want to make sure
+            // that a!=b implies (a,)!=(b,) even if a and b are unused and
+            // therefore could be freed and then the memory for a reused for b
+            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg1)))
                 nroots++;
-            if ((gc_uses[nroots] = get_gc_root_for(arg2)))
+            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg2)))
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
@@ -5790,16 +5793,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         std::vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            const jl_cgval_t &ai = argv[i];
-            if (ai.constant || ai.typ == jl_bottom_type)
-                continue;
-            if (ai.isboxed) {
-                vals.push_back(ai.Vboxed);
-            }
-            else if (jl_is_concrete_immutable(ai.typ) && !jl_is_pointerfree(ai.typ)) {
-                Type *at = julia_type_to_llvm(ctx, ai.typ);
-                vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
-            }
+            Value *gc_root = get_gc_root_for(ctx, argv[i]);
+            if (gc_root)
+                vals.push_back(gc_root);
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())

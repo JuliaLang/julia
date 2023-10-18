@@ -305,19 +305,34 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     return Call;
 }
 
-static Value *get_gc_root_for(const jl_cgval_t &x)
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile=false);
+
+static Value *get_gc_root_for(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
-    if (x.Vboxed)
+    if (x.constant || x.typ == jl_bottom_type)
+        return nullptr;
+    if (x.Vboxed) // superset of x.isboxed
         return x.Vboxed;
-    if (x.ispointer() && !x.constant) {
+    assert(!x.isboxed);
+#ifndef NDEBUG
+    if (x.ispointer()) {
         assert(x.V);
         if (PointerType *T = dyn_cast<PointerType>(x.V->getType())) {
-            if (T->getAddressSpace() == AddressSpace::Tracked ||
-                T->getAddressSpace() == AddressSpace::Derived) {
-                return x.V;
+            assert(T->getAddressSpace() != AddressSpace::Tracked);
+            if (T->getAddressSpace() == AddressSpace::Derived) {
+                // n.b. this IR would not be valid after LLVM-level inlining,
+                // since codegen does not have a way to determine the whether
+                // this argument value needs to be re-rooted
             }
         }
     }
+#endif
+    if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
+        Type *T = julia_type_to_llvm(ctx, x.typ);
+        return emit_unbox(ctx, T, x, x.typ);
+    }
+    // nothing here to root, move along
     return nullptr;
 }
 
@@ -1794,9 +1809,6 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 #endif
     return im1;
 }
-
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile=false);
 
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
