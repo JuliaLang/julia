@@ -153,7 +153,8 @@ function link_image_cmd(path, out)
     LIBDIR = "-L$(libdir())"
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     SHLIBDIR = "-L$(shlibdir())"
-    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") : ("-ljulia", "-ljulia-internal")
+    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") :
+                        ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
         LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
     end
