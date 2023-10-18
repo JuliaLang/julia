@@ -209,8 +209,8 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     # Compute generalized eigenvalues of equivalent matrix:
     #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
-    LAPACK.lapmt!(A, B.p, true)
-    LAPACK.lapmr!(A, B.p, true)
+    permutecols!(A, B.p)
+    permuterows!(A, B.p)
     ldiv!(M, A)
     rdiv!(A, M')
     ldiv!(Tridiagonal(dl, diag(LUD), du), A)
@@ -220,7 +220,7 @@ function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
     ldiv!(M', vecs)
-    LAPACK.lapmr!(vecs, B.p, false)
+    invpermuterows!(vecs, B.p)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
@@ -231,7 +231,7 @@ end
 function eigen!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
     L = UnitLowerTriangular(F.L)
     U = UpperTriangular(F.U)
-    LAPACK.lapmr!(A, F.p, true)
+    permuterows!(A, F.p)
     ldiv!(L, A)
     rdiv!(A, U)
     vals, vecs = eigen!(A; sortby)
@@ -303,8 +303,8 @@ function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
     # Compute generalized eigenvalues of equivalent matrix:
     #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
-    LAPACK.lapmt!(A, B.p, true)
-    LAPACK.lapmr!(A, B.p, true)
+    permutecols!(A, B.p)
+    permuterows!(A, B.p)
     ldiv!(M, A)
     rdiv!(A, M')
     ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
@@ -318,7 +318,7 @@ end
 function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
     L = UnitLowerTriangular(F.L)
     U = UpperTriangular(F.U)
-    LAPACK.lapmr!(A, F.p, true)
+    permuterows!(A, F.p)
     ldiv!(L, A)
     rdiv!(A, U)
     return eigvals!(A; sortby)
