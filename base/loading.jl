@@ -2252,7 +2252,7 @@ end
 Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
 """
 function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"\s*(?:@\w*\s*)*(?:bare)?module\s"
+    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
     load_rgx = r"\b(?:using|import)\s"
     load_seen = false
     inside_string = false
