@@ -104,6 +104,27 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
+static jl_array_t *newly_deleted JL_GLOBALLY_ROOTED /*FIXME*/;
+// Mutex for newly_deleted
+jl_mutex_t newly_deleted_mutex;
+
+// Register array of newly-inferred MethodInstances
+// This gets called as the first step of Base.include_package_for_output
+JL_DLLEXPORT void jl_set_newly_deleted(jl_value_t* _newly_deleted)
+{
+    assert(newly_deleted == NULL || jl_is_array(_newly_deleted));
+    newly_deleted = (jl_array_t*) _newly_deleted;
+}
+
+JL_DLLEXPORT void jl_push_newly_deleted(jl_value_t* m)
+{
+    JL_LOCK(&newly_deleted_mutex);
+    size_t end = jl_array_len(newly_deleted);
+    jl_array_grow_end(newly_deleted, 1);
+    jl_arrayset(newly_deleted, m, end);
+    JL_UNLOCK(&newly_deleted_mutex);
+}
+
 
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
@@ -832,6 +853,19 @@ static void jl_insert_methods(jl_array_t *list)
         jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
         jl_method_table_insert(mt, meth, NULL);
+    }
+}
+
+static void jl_delete_methods(jl_array_t *list)
+{
+    size_t i, l = jl_array_len(list);
+    for (i = 0; i < l; i++) {
+        jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
+        assert(jl_is_method(meth));
+        assert(!meth->is_for_opaque_closure);
+        jl_methtable_t *mt = jl_method_get_table(meth);
+        assert((jl_value_t*)mt != jl_nothing);
+        jl_method_table_disable_incremental(mt, meth);
     }
 }
 

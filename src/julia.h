@@ -932,6 +932,7 @@ extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH9(void *, void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
@@ -973,6 +974,9 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 #define JL_GC_PUSH8(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)                                     \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(8), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8}; \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+#define JL_GC_PUSH9(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)                                     \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(9), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 
@@ -1901,6 +1905,9 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
+JL_DLLEXPORT void jl_method_table_disable_incremental(jl_methtable_t *mt, jl_method_t *m);
+JL_DLLEXPORT void jl_set_newly_deleted(jl_value_t *newly_deleted);
+JL_DLLEXPORT void jl_push_newly_deleted(jl_value_t *m);
 JL_DLLEXPORT void jl_write_compiler_output(void);
 
 // parsing
