@@ -2287,8 +2287,13 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp(a,b) sigsetjmp(a,b)
 #if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
 // Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
+#if !__GLIBC_PREREQ(2, 34)
 JL_DLLIMPORT int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
 #define jl_longjmp(a,b) __libc_siglongjmp(a,b)
+#else
+// This broke with glibc 2.34, where the __libc_siglongjmp symbol was removed
+#define jl_longjmp(a,b) siglongjmp(a,b)
+#endif
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif
