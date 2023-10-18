@@ -288,17 +288,13 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
+	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
 
-	# We have a single exception; we want 7z.dll to live in private_libexecdir, not bindir, so that 7z.exe can find it.
+	# We have a single exception; we want 7z.dll to live in private_libexecdir,
+	# not bindir, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(private_libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
-	# The rest are libraries from mingw32 needed to link pkgimages, as an example memcpy is exported by msvcrt.
-	# These files must be outside of the search path of the compiler used to build julia itself,
-	# but should be picked up by the pkgimages linker.
-	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(DESTDIR)$(private_libdir)/
-	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(DESTDIR)$(private_libdir)/
-	-$(INSTALL_M) $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(DESTDIR)$(private_libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
