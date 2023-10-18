@@ -586,6 +586,9 @@ static inline std::unique_ptr<llvm::TargetLibraryInfoImpl> createTLII(llvm::Trip
         {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(2)},
         {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(4)},
         {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(8)},
+        {"julia.gcroot_flush", "julia.gcroot_flush", ElementCount::getFixed(2)},
+        {"julia.gcroot_flush", "julia.gcroot_flush", ElementCount::getFixed(4)},
+        {"julia.gcroot_flush", "julia.gcroot_flush", ElementCount::getFixed(8)},
     };
     TLII->addVectorizableFunctions(JuliaIntrinsics);
     return std::unique_ptr<llvm::TargetLibraryInfoImpl>(TLII);
