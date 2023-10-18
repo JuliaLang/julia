@@ -581,5 +581,12 @@ static inline std::unique_ptr<llvm::TargetLibraryInfoImpl> createTLII(llvm::Trip
     llvm::TargetLibraryInfoImpl *TLII = new llvm::TargetLibraryInfoImpl(TargetTriple);
     // We could add VecLib here, or disable all builtins and replace them with our own.
     // TLII->disableAllFunctions();
+
+    const VecDesc JuliaIntrinsics[] = {
+        {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(2)},
+        {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(4)},
+        {"julia.safepoint", "julia.safepoint", ElementCount::getFixed(8)},
+    };
+    TLII->addVectorizableFunctions(JuliaIntrinsics);
     return std::unique_ptr<llvm::TargetLibraryInfoImpl>(TLII);
 }
