@@ -10,6 +10,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "builtin_proto.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -390,6 +391,17 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         }
         else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
             li->has_fcall = 1;
+        }
+        else if (inline_flags->len > 0 && jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_call_sym && jl_expr_nargs(st) == 3 && jl_is_globalref(jl_exprarg(st, 0))) {
+            jl_value_t *fe = jl_exprarg(st, 0);
+            jl_module_t *fe_mod = jl_globalref_mod(fe);
+            jl_sym_t *fe_sym = jl_globalref_name(fe);
+            jl_typename_t *tn = ((jl_datatype_t*)jl_typeof(jl_builtin__typebody))->name;
+            if (fe_mod == tn->module && fe_sym == tn->mt->name) {
+                void *inline_flag = inline_flags->items[inline_flags->len - 1];
+                jl_value_t *force_inline = inline_flag ? jl_true : jl_false;
+                jl_array_ptr_1d_push(((jl_expr_t*)(st))->args, force_inline);
+            }
         }
         if (is_flag_stmt)
             jl_array_uint32_set(li->ssaflags, j, 0);

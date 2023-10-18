@@ -162,7 +162,7 @@ The fields represent:
   * `perfdata_cb`: An optional callback function to display performance data.
   * `perfdata_payload`: Payload for the performance callback.
 """
-@kwdef struct CheckoutOptions
+@inline @kwdef struct CheckoutOptions
     version::Cuint               = Cuint(1)
 
     checkout_strategy::Cuint     = Consts.CHECKOUT_SAFE
@@ -200,7 +200,7 @@ end
 Transfer progress information used by the `transfer_progress` remote callback.
 Matches the [`git_indexer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_indexer_progress) struct.
 """
-@kwdef struct TransferProgress
+@inline @kwdef struct TransferProgress
     total_objects::Cuint    = Cuint(0)
     indexed_objects::Cuint  = Cuint(0)
     received_objects::Cuint = Cuint(0)
@@ -217,7 +217,7 @@ end
 Callback settings.
 Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks) struct.
 """
-@kwdef struct RemoteCallbacks
+@inline @kwdef struct RemoteCallbacks
     version::Cuint                     = Cuint(1)
     sideband_progress::Ptr{Cvoid}      = C_NULL
     completion::Ptr{Cvoid}             = C_NULL
@@ -308,7 +308,7 @@ julia> fo = LibGit2.FetchOptions(
 julia> fetch(remote, "master", options=fo)
 ```
 """
-@kwdef struct ProxyOptions
+@inline @kwdef struct ProxyOptions
     version::Cuint               = Cuint(1)
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring                 = Cstring(C_NULL)
@@ -337,7 +337,7 @@ The fields represent:
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
      newer than or equal to 0.24.0.
 """
-@kwdef struct FetchOptions
+@inline @kwdef struct FetchOptions
     version::Cuint                     = Cuint(1)
     callbacks::RemoteCallbacks         = RemoteCallbacks()
     prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
@@ -381,7 +381,7 @@ The fields represent:
   * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
   * `remote_cb_payload`: The payload for the remote callback.
 """
-@kwdef struct CloneOptions
+@inline @kwdef struct CloneOptions
     version::Cuint                      = Cuint(1)
     checkout_opts::CheckoutOptions      = CheckoutOptions()
     fetch_opts::FetchOptions            = FetchOptions()
@@ -426,7 +426,7 @@ The fields represent:
   * `new_prefix`: the virtual file directory in which to place new files on one side
      of the diff. Default is `"b"`.
 """
-@kwdef struct DiffOptionsStruct
+@inline @kwdef struct DiffOptionsStruct
     version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
     flags::UInt32                            = Consts.DIFF_NORMAL
 
@@ -471,7 +471,7 @@ The fields represent:
   * `show_commit_oid_as_fallback`: if no matching reference can be found which describes a commit, show the
      commit's [`GitHash`](@ref) instead of throwing an error (the default behavior).
 """
-@kwdef struct DescribeOptions
+@inline @kwdef struct DescribeOptions
     version::Cuint                    = Cuint(1)
     max_candidates_tags::Cuint        = Cuint(10)
     describe_strategy::Cuint          = Consts.DESCRIBE_DEFAULT
@@ -493,7 +493,7 @@ The fields represent:
   * `always_use_long_format`: set to `1` to use the long format for strings even if a short format can be used.
   * `dirty_suffix`: if set, this will be appended to the end of the description string if the [`workdir`](@ref) is dirty.
 """
-@kwdef struct DescribeFormatOptions
+@inline @kwdef struct DescribeFormatOptions
     version::Cuint               = Cuint(1)
     abbreviated_size::Cuint      = Cuint(7)
     always_use_long_format::Cint = Cint(0)
@@ -614,7 +614,7 @@ The fields represent:
        include each unique line from both sides in the file which is put into the index.
   * `file_flags`: guidelines for merging files.
 """
-@kwdef struct MergeOptions
+@inline @kwdef struct MergeOptions
     version::Cuint                    = Cuint(1)
     flags::Cint                       = Cint(0)
     rename_threshold::Cuint           = Cuint(50)
@@ -650,7 +650,7 @@ The fields represent:
   * `max_line`: the last line of the file to which to blame. The default is `0`, meaning the
     last line of the file.
 """
-@kwdef struct BlameOptions
+@inline @kwdef struct BlameOptions
     version::Cuint                    = Cuint(1)
     flags::UInt32                     = UInt32(0)
     min_match_characters::UInt16      = UInt16(20)
@@ -679,7 +679,7 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-@kwdef struct PushOptions
+@inline @kwdef struct PushOptions
     version::Cuint                     = Cuint(1)
     parallelism::Cint                  = Cint(1)
     callbacks::RemoteCallbacks         = RemoteCallbacks()
@@ -710,7 +710,7 @@ The fields represent:
   * `checkout_opts`: options for the checkout of the commit being cherrypicked. See [`CheckoutOptions`](@ref)
      for more information.
 """
-@kwdef struct CherrypickOptions
+@inline @kwdef struct CherrypickOptions
     version::Cuint = Cuint(1)
     mainline::Cuint = Cuint(0)
     merge_opts::MergeOptions = MergeOptions()
@@ -774,7 +774,7 @@ The fields represent:
   * `checkout_opts`: checkout options for writing files when initializing the rebase, stepping
     through it, and aborting it. See [`CheckoutOptions`](@ref) for more information.
 """
-@kwdef struct RebaseOptions
+@inline @kwdef struct RebaseOptions
     version::Cuint                 = Cuint(1)
     quiet::Cint                    = Cint(1)
     @static if LibGit2.VERSION >= v"0.24.0"
@@ -837,7 +837,7 @@ The fields represent:
   * The `baseline` is the tree to be used for comparison to the working directory and
     index; defaults to HEAD.
 """
-@kwdef struct StatusOptions
+@inline @kwdef struct StatusOptions
     version::Cuint           = Cuint(1)
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
     flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
@@ -910,7 +910,8 @@ end
 
 Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
-struct ConfigEntry
+:ConfigEntry
+@inline struct ConfigEntry
     name::Cstring
     value::Cstring
     include_depth::Cuint
@@ -1138,7 +1139,7 @@ The fields represent:
     * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """
-@kwdef struct BlameHunk
+@inline @kwdef struct BlameHunk
     lines_in_hunk::Csize_t                = Csize_t(0)
 
     final_commit_id::GitHash              = GitHash()
