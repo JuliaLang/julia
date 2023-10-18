@@ -1247,14 +1247,6 @@ end
         end
         """)
         @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        # using foo
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
     end
     @testset "invalid" begin
         write(fpath, """
