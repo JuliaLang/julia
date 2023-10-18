@@ -256,15 +256,20 @@ float julia_half_to_float(uint16_t param) {
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define FLOAT16_FROM_UINT16(x) (*(_Float16*)&(x))
 // on older compilers, we need to emulate the platform-specific ABI
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+#elif defined(_CPU_X86_) || (defined(_CPU_X86_64_) && !defined(_OS_WINDOWS_))
+    // on x86, we can use __m128; except on Windows where x64 calling
+    // conventions expect to pass __m128 by reference.
     #define FLOAT16_TYPE __m128
     #define FLOAT16_TO_UINT16(x) take_from_xmm(x)
     #define FLOAT16_FROM_UINT16(x) return_in_xmm(x)
 #elif defined(_CPU_PPC64_) || defined(_CPU_PPC_)
+    // on PPC, pass Float16 as if it were an integer, similar to the old x86 ABI
+    // before _Float16
     #define FLOAT16_TYPE uint16_t
     #define FLOAT16_TO_UINT16(x) (x)
     #define FLOAT16_FROM_UINT16(x) (x)
 #else
+    // otherwise, pass using floating-point calling conventions
     #define FLOAT16_TYPE float
     #define FLOAT16_TO_UINT16(x) ((uint16_t)*(uint32_t*)&(x))
     #define FLOAT16_FROM_UINT16(x) ({ uint32_t tmp = (uint32_t)(x); *(float*)&tmp; })
@@ -332,8 +337,9 @@ static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define BFLOAT16_FROM_UINT16(x) (*(__bf16*)&(x))
-// on older compilers, we need to emulate the platform-specific ABI
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
+// on older compilers, we need to emulate the platform-specific ABI.
+// for more details, see similar code above that deals with Float16.
+#elif defined(_CPU_X86_) || (defined(_CPU_X86_64_) && !defined(_OS_WINDOWS_))
     #define BFLOAT16_TYPE __m128
     #define BFLOAT16_TO_UINT16(x) take_from_xmm(x)
     #define BFLOAT16_FROM_UINT16(x) return_in_xmm(x)
