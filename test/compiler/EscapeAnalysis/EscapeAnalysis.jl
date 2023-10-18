@@ -1,6 +1,6 @@
 module test_EA
 
-const use_core_compiler = false
+const use_core_compiler = true
 
 if use_core_compiler
     const EscapeAnalysis = Core.Compiler.EscapeAnalysis
