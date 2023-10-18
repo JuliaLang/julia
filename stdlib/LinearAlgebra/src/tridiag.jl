@@ -472,13 +472,13 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
         end
-        new{T,V}(dl, d, du)
+        new{T,V}(dl, d, Base.unalias(dl, du))
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du, du2)
         # length checks?
-        new{T,V}(dl, d, du, du2)
+        new{T,V}(dl, d, Base.unalias(dl, du), du2)
     end
 end
 

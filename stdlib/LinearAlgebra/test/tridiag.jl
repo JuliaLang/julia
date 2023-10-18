@@ -521,6 +521,14 @@ end
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
 end
 
+@testset "Prevent off-diagonal aliasing in Tridiagonal" begin
+    e = ones(4)
+    f = e[1:end-1]
+    T = Tridiagonal(f, 2e, f)
+    T ./= 10
+    @test all(==(0.1), f)
+end
+
 @testset "Issue #26994 (and the empty case)" begin
     T = SymTridiagonal([1.0],[3.0])
     x = ones(1)
