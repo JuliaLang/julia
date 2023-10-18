@@ -19,7 +19,7 @@ const TESTNAMES = [
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show", "client",
+        "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms", "atexit",
@@ -29,6 +29,7 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
+        "scopedvalues",
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -158,9 +159,9 @@ function choosetests(choices = [])
         "compiler/validation", "compiler/ssair", "compiler/irpasses",
         "compiler/codegen", "compiler/inline", "compiler/contextual",
         "compiler/invalidation", "compiler/AbstractInterpreter",
-        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
+        "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
-        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
+        "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "stdlib", STDLIBS)
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests

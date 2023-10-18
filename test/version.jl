@@ -223,7 +223,12 @@ end
 import Base.banner
 io = IOBuffer()
 @test banner(io) === nothing
-@test length(String(take!(io))) > 50
+seek(io, 0)
+@test countlines(io) == 9
+take!(io)
+@test banner(io; short=true) === nothing
+seek(io, 0)
+@test countlines(io) == 2
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())

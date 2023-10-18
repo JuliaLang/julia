@@ -140,7 +140,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module import using export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
@@ -149,7 +149,7 @@
 (define (expand-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
          (let ((last *in-expand*))

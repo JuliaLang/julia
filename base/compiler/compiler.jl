@@ -87,7 +87,6 @@ function cld(x::T, y::T) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -138,6 +137,20 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
+if false
+    import Base: Base, @show
+else
+    macro show(ex...)
+        blk = Expr(:block)
+        for s in ex
+            push!(blk.args, :(println(stdout, $(QuoteNode(s)), " = ",
+                                              begin local value = $(esc(s)) end)))
+        end
+        isempty(ex) || push!(blk.args, :value)
+        blk
+    end
+end
+
 include("compiler/cicache.jl")
 include("compiler/methodtable.jl")
 include("compiler/effects.jl")
@@ -145,10 +158,6 @@ include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 
-function argextype end # imported by EscapeAnalysis
-function stmt_effect_free end # imported by EscapeAnalysis
-function alloc_array_ndims end # imported by EscapeAnalysis
-function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")

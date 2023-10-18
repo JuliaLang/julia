@@ -17,6 +17,7 @@
     XX(jl_array_type) \
     XX(jl_array_typename) \
     XX(jl_array_uint8_type) \
+    XX(jl_array_uint32_type) \
     XX(jl_array_uint64_type) \
     XX(jl_atomicerror_type) \
     XX(jl_base_module) \
@@ -41,6 +42,7 @@
     XX(jl_float16_type) \
     XX(jl_float32_type) \
     XX(jl_float64_type) \
+    XX(jl_bfloat16_type) \
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \
@@ -126,6 +128,8 @@
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
     XX(jl_weakref_type) \
+    XX(jl_libdl_module) \
+    XX(jl_libdl_dlopen_func) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

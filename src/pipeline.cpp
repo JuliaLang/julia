@@ -12,6 +12,7 @@
 // analysis passes
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/GlobalsModRef.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -25,6 +26,7 @@
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
@@ -37,6 +39,7 @@
 #include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
+#include <llvm/Transforms/IPO/GlobalDCE.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
@@ -342,9 +345,12 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
         if (O.getSpeedupLevel() >= 2) {
             JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
         }
+        // DCE must come before simplifycfg
+        // codegen can generate unused statements when generating builtin calls,
+        // and those dead statements can alter how simplifycfg optimizes the CFG
+        FPM.addPass(DCEPass());
         FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
         if (O.getSpeedupLevel() >= 1) {
-            FPM.addPass(DCEPass());
             FPM.addPass(SROAPass());
         }
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
@@ -368,7 +374,12 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         }
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
+    if (O.getSpeedupLevel() >= 2) {
+        MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+    }
+    // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
     if (options.dump_native) {
+        MPM.addPass(StripDeadPrototypesPass());
         JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
     }
     JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
@@ -390,6 +401,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         invokePeepholeEPCallbacks(FPM, PB, O);
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
+    MPM.addPass(GlobalDCEPass());
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
 
@@ -397,6 +409,7 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
     FPM.addPass(BeforeLoopOptimizationMarkerPass());
     {
         LoopPassManager LPM;
+        LPM.addPass(LowerSIMDLoopPass());
         if (O.getSpeedupLevel() >= 2) {
             LPM.addPass(LoopRotatePass());
         }
@@ -506,13 +519,15 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         // Needed **before** LateLowerGCFrame on LLVM < 12
         // due to bug in `CreateAlignmentAssumption`.
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
-        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(LateLowerGCPass())));
-        JULIA_PASS(MPM.addPass(FinalLowerGCPass()));
-        if (O.getSpeedupLevel() >= 2) {
+        {
             FunctionPassManager FPM;
-            FPM.addPass(GVNPass());
-            FPM.addPass(SCCPPass());
-            FPM.addPass(DCEPass());
+            JULIA_PASS(FPM.addPass(LateLowerGCPass()));
+            JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
+            if (O.getSpeedupLevel() >= 2) {
+                FPM.addPass(GVNPass());
+                FPM.addPass(SCCPPass());
+                FPM.addPass(DCEPass());
+            }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
@@ -555,7 +570,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     buildEarlySimplificationPipeline(MPM, PB, O, options);
     MPM.addPass(AlwaysInlinerPass());
     buildEarlyOptimizerPipeline(MPM, PB, O, options);
-    MPM.addPass(LowerSIMDLoopPass());
     {
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);
@@ -812,6 +826,36 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
         return {{O, options}};
     }
     return {};
+}
+
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {
+    JL_TIMING(VERIFY_IR, VERIFY_Module);
+    if (verifyModule(M, &errs())) {
+        errs() << "Failed to verify module '" << M.getModuleIdentifier() << "', dumping entire module!\n\n";
+        errs() << M << "\n";
+        return true;
+    }
+    return false;
+}
+
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT {
+    JL_TIMING(VERIFY_IR, VERIFY_Function);
+    if (verifyFunction(F, &errs())) {
+        errs() << "Failed to verify function '" << F.getName() << "', dumping entire module!\n\n";
+        errs() << *F.getParent() << "\n";
+        return true;
+    }
+    return false;
+}
+
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT {
+    JL_TIMING(VERIFY_IR, VERIFY_Loop);
+    if (verifyFunction(*L.getHeader()->getParent(), &errs())) {
+        errs() << "Failed to verify loop '" << L << "', dumping entire module!\n\n";
+        errs() << *L.getHeader()->getModule() << "\n";
+        return true;
+    }
+    return false;
 }
 
 // new pass manager plugin

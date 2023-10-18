@@ -325,7 +325,7 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                 else {
                     next_offset = apoffset.getLimitedValue();
                     if (next_offset > UINT32_MAX) {
-                        LLVM_DEBUG(dbgs() << "GEP inst exceeeds 32-bit offset\n");
+                        LLVM_DEBUG(dbgs() << "GEP inst exceeds 32-bit offset\n");
                         next_offset = UINT32_MAX;
                     }
                 }

@@ -347,7 +347,7 @@ function steprange_last(start, step, stop)::typeof(stop)
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
             absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
 
-            # Compute remainder as a nonnegative number:
+            # Compute remainder as a non-negative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
                 # unlikely, but handle the signed overflow case with unsigned rem
                 overflow_case(absdiff, absstep) = (@noinline; convert(typeof(absdiff), unsigned(absdiff) % absstep))
@@ -447,7 +447,7 @@ distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
-    stop::T
+    stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
@@ -463,6 +463,8 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
+
+    global unchecked_oneto(stop::Integer) = new{typeof(stop)}(stop)
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
@@ -703,8 +705,6 @@ step(r::LinRange) = (last(r)-first(r))/r.lendiv
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
 
-axes(r::AbstractRange) = (oneto(length(r)),)
-
 # Needed to ensure `has_offset_axes` can constant-fold.
 has_offset_axes(::StepRange) = false
 
@@ -905,13 +905,20 @@ end
 
 ## indexing
 
-isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+function isassigned(r::AbstractRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    firstindex(r) <= i <= lastindex(r)
+end
+
+# `_getindex` is like `getindex` but does not check if `i isa Bool`
+function _getindex(v::AbstractRange, i::Integer)
+    @boundscheck checkbounds(v, i)
+    unsafe_getindex(v, i)
+end
 
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 
-function getindex(v::UnitRange{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+function _getindex(v::UnitRange{T}, i::Integer) where T
     val = convert(T, v.start + (i - oneunit(i)))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val
@@ -920,67 +927,37 @@ end
 const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
                            UInt8,UInt16,UInt32,UInt64,UInt128}
 
-function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     val = v.start + (i - oneunit(i))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val % T
 end
 
-function getindex(v::OneTo{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
-    convert(T, i)
-end
-
-function getindex(v::AbstractRange{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    @boundscheck checkbounds(v, i)
-    convert(T, first(v) + (i - oneunit(i))*step_hp(v))
-end
-
 let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
     function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
-        @inline
         res = widemul(step(v), i-oneunit(i)) + first(v)
         (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
     end
 end
 
-function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    @boundscheck checkbounds(r, i)
-    unsafe_getindex(r, i)
-end
-
-# This is separate to make it useful even when running with --check-bounds=yes
+# unsafe_getindex is separate to make it useful even when running with --check-bounds=yes
+# it assumes the index is inbounds but does not segfault even if the index is out of bounds.
+# it does not check if the index isa bool.
+unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
+unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     T(r.ref + u*r.step)
 end
-
-function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
-    r.ref + u*r.step
-end
-
-function unsafe_getindex(r::LinRange, i::Integer)
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
-end
+unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    @inline
     t = j/d # ∈ [0,1]
     # compute approximately fma(t, b, -fma(t, a, a))
     return T((1-t)*a + t*b)
 end
+
+# non-scalar indexing
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
@@ -1078,6 +1055,11 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         ref = _getindex_hiprec(r, first(s) + (offset - oneunit(offset)) * sstep)
         return StepRangeLen{T}(ref, rstep*sstep, len, offset)
     end
+end
+
+function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
+    u = oftype(r.offset, i) - r.offset
+    r.ref + u*r.step
 end
 
 function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
@@ -1377,8 +1359,21 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
-collect(r::AbstractRange) = vcat(r)
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
+function Array{T,1}(r::AbstractRange{T}) where {T}
+    a = Vector{T}(undef, length(r))
+    i = 1
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    return a
+end
+collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)

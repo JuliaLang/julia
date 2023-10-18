@@ -29,7 +29,7 @@ types may choose different "imaginary" character sizes as makes sense for their
 implementations (e.g. substrings may pass index arithmetic through to the
 underlying string they provide a view into). Relaxed indexing functions include
 those intended for index arithmetic: `thisind`, `nextind` and `prevind`. This
-model allows index arithmetic to work with out-of- bounds indices as
+model allows index arithmetic to work with out-of-bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 

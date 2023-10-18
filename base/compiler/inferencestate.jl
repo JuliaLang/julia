@@ -65,6 +65,8 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
     return idx in bsbmp.elems
 end
 
+iterate(bsbmp::BitSetBoundedMinPrioritySet, s...) = iterate(bsbmp.elems, s...)
+
 function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
     for val in itr
         push!(bsbmp, val)
@@ -229,6 +231,7 @@ mutable struct InferenceState
 
     #= results =#
     result::InferenceResult # remember where to put the result
+    unreachable::BitSet # statements that were found to be statically unreachable
     valid_worlds::WorldRange
     bestguess #::Type
     ipo_effects::Effects
@@ -278,6 +281,7 @@ mutable struct InferenceState
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
 
+        unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
@@ -294,7 +298,11 @@ mutable struct InferenceState
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
 
-        restrict_abstract_call_sites = isa(linfo.def, Module)
+        if def isa Method
+            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+        end
+
+        restrict_abstract_call_sites = isa(def, Module)
         @assert cache === :no || cache === :local || cache === :global
         cached = cache === :global
 
@@ -306,11 +314,18 @@ mutable struct InferenceState
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
-            result, valid_worlds, bestguess, ipo_effects,
+            result, unreachable, valid_worlds, bestguess, ipo_effects,
             restrict_abstract_call_sites, cached, insert_coverage,
             interp)
     end
 end
+
+is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
+is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable) = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
 
 is_inferred(sv::InferenceState) = is_inferred(sv.result)
 is_inferred(result::InferenceResult) = result.result !== nothing
@@ -321,10 +336,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
-    # 3: (leave 1) # == 1
+    # 3: (leave %1) # == 1
     # 4: (expr)    # == 0
-    # then we can find all trys by walking backwards from :enter statements,
-    # and all catches by looking at the statement after the :enter
+    # then we can find all `try`s by walking backwards from :enter statements,
+    # and all `catch`es by looking at the statement after the :enter
     n = length(code)
     empty!(ip)
     ip.offset = 0 # for _bits_findnext
@@ -344,16 +359,12 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     end
 
     # now forward those marks to all :leave statements
-    pc´´ = 0
     while true
         # make progress on the active ip set
-        pc = _bits_findnext(ip.bits, pc´´)::Int
+        pc = _bits_findnext(ip.bits, 0)::Int
         pc > n && break
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             pc´ = pc + 1 # next program-counter (after executing instruction)
-            if pc == pc´´
-                pc´´ = pc´
-            end
             delete!(ip, pc)
             cur_hand = handler_at[pc]
             @assert cur_hand != 0 "unbalanced try/catch"
@@ -365,9 +376,6 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 if handler_at[l] != cur_hand
                     @assert handler_at[l] == 0 "unbalanced try/catch"
                     handler_at[l] = cur_hand
-                    if l < pc´´
-                        pc´´ = l
-                    end
                     push!(ip, l)
                 end
             elseif isa(stmt, ReturnNode)
@@ -378,7 +386,20 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 if head === :enter
                     cur_hand = pc
                 elseif head === :leave
-                    l = stmt.args[1]::Int
+                    l = 0
+                    for j = 1:length(stmt.args)
+                        arg = stmt.args[j]
+                        if arg === nothing
+                            continue
+                        else
+                            enter_stmt = code[(arg::SSAValue).id]
+                            if enter_stmt === nothing
+                                continue
+                            end
+                            @assert isexpr(enter_stmt, :enter) "malformed :leave"
+                        end
+                        l += 1
+                    end
                     for i = 1:l
                         cur_hand = handler_at[cur_hand]
                     end
@@ -388,7 +409,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             if handler_at[pc´] != cur_hand
-                @assert handler_at[pc´] == 0 "unbalanced try/catch"
+                if handler_at[pc´] != 0
+                    @assert false "unbalanced try/catch"
+                end
                 handler_at[pc´] = cur_hand
             elseif !in(pc´, ip)
                 break  # already visited
@@ -531,6 +554,13 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
                     ty = fieldtype(linfo.specTypes, j)
                     @goto ty_computed
+                elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                    # then `vᵢ` is known to be `Int`
+                    if isdefined(va, :N) && va.N === vᵢ
+                        ty = Int
+                        @goto ty_computed
+                    end
                 end
             end
             ub = unwraptv_ub(v)
@@ -560,6 +590,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 constrains_param(v, sig, #=covariant=#true)
             end)
         elseif isvarargtype(v)
+            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # so the type is known to be `Int`
             ty = Int
             undef = false
         else
@@ -571,16 +603,28 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     return sptypes
 end
 
+function va_from_vatuple(@nospecialize(t))
+    @_foldable_meta
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        if n > 0
+            va = t.parameters[n]
+            if isvarargtype(va)
+               return va
+            end
+        end
+    end
+    return nothing
+end
+
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
 
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
-        # typically, we expect that old ⊑ new (that output information only
-        # gets less precise with worse input information), but to actually
-        # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
+    if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
+        ssavaluetypes[ssa_id] = new
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
@@ -768,9 +812,10 @@ end
 iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
 function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
     # iterate through the cycle before walking to the parent
-    if cyclei < length(callers_in_cycle(sv))
+    callers = callers_in_cycle(sv)
+    if callers !== () && cyclei < length(callers)
         cyclei += 1
-        parent = callers_in_cycle(sv)[cyclei]
+        parent = callers[cyclei]
     else
         cyclei = 0
         parent = frame_parent(sv)
@@ -808,14 +853,28 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
-add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
-add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] |= flag
+function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
+    curr_flag = sv.src.ssaflags[sv.currpc]
+    sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
+end
+function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32=typemax(UInt32))
+    curr_flag = sv.ir.stmts[sv.curridx][:flag]
+    sv.ir.stmts[sv.curridx][:flag] = (curr_flag & ~mask) | flag
+end
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
 
-merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects) =
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
+    if effects.effect_free === EFFECT_FREE_GLOBALLY
+        # This tracks the global effects
+        effects = Effects(effects; effect_free=ALWAYS_TRUE)
+    end
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
 struct InferenceLoopState
@@ -854,8 +913,14 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
     return true
 end
 function should_infer_for_effects(sv::InferenceState)
+    def = sv.linfo.def
+    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
     effects = sv.ipo_effects
-    return is_terminates(effects) && is_effect_free(effects)
+    override = decode_effects_override(def.purity)
+    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
+    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
+    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
+    return true
 end
 should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 

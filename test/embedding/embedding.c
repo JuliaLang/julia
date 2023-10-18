@@ -192,6 +192,12 @@ int main()
         checked_eval_string("f28825()");
     }
 
+    {
+        // jl_typeof works (#50714)
+        jl_value_t *v = checked_eval_string("sqrt(2.0)");
+        jl_value_t *t = jl_typeof(v);
+    }
+
     JL_TRY {
         jl_error("exception thrown");
     }

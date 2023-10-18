@@ -677,6 +677,21 @@ end
     @test  isempty(itr) # now it is empty
 end
 
+@testset "readuntil/copyuntil fallbacks" begin
+    # test fallback for generic delim::T
+    buf = IOBuffer()
+    fib = [1,1,2,3,5,8,13,21]
+    write(buf, fib)
+    @test readuntil(seekstart(buf), 21) == fib[1:end-1]
+    @test readuntil(buf, 21) == Int[]
+    @test readuntil(seekstart(buf), 21; keep=true) == fib
+    out = IOBuffer()
+    @test copyuntil(out, seekstart(buf), 21) === out
+    @test reinterpret(Int, take!(out)) == fib[1:end-1]
+    @test copyuntil(out, seekstart(buf), 21; keep=true) === out
+    @test reinterpret(Int, take!(out)) == fib
+end
+
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))

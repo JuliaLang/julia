@@ -225,7 +225,10 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+
+const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
+
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -238,7 +241,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering):
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -251,7 +254,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -259,7 +262,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h == 0 || !lt(o, x, l)
         length(a)
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             fld(floor(Integer, x) - f, h) + 1
         else
             fld(ceil(Integer, x) - f, h) + 1
@@ -267,7 +270,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -275,7 +278,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             cld(ceil(Integer, x) - f, h) + 1
         else
             cld(floor(Integer, x) - f, h) + 1
@@ -283,7 +286,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -335,14 +338,14 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """
     searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the first value in `v` greater than or equivalent to `x`.
-If `x` is greater than all values in `v`, return `lastindex(v) + 1`.
+Return the index of the first value in `v` that is not ordered before `x`.
+If all values in `v` are ordered before `x`, return `lastindex(v) + 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
-`insert!`ing `x` at the returned index will maintain the sorted order. Refer to
-[`sort!`](@ref) for the meaning of the keywords and the definition of
-"greater than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`.
+`insert!`ing `x` at the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
@@ -374,13 +377,14 @@ julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) 
 """
     searchsortedlast(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the last value in `v` less than or equivalent to `x`.
-If `x` is less than all values in `v` the function returns `firstindex(v) - 1`.
+Return the index of the last value in `v` that is not ordered after `x`.
+If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
 
 The vector `v` must be sorted according to the order defined by the keywords.
-Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
-"less than" and equivalence. Note that the `by` function is applied to the
-searched value `x` as well as the values in `v`.
+`insert!`ing `x` immediately after the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
 
 The index is generally found using binary search, but there are optimized
 implementations for some inputs
@@ -1295,7 +1299,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1363,7 +1367,7 @@ algorithms).
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
 resulting order is reversed if `rev=true` (this preserves forward stability:
-elements that compare equal are not reversed). The current implemention applies
+elements that compare equal are not reversed). The current implementation applies
 the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than
@@ -2013,9 +2017,9 @@ struct MergeSortAlg     <: Algorithm end
 """
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Indicate that a sorting function should use the partial quick sort algorithm.
+`PartialQuickSort(k)` is like `QuickSort`, but is only required to find and
+sort the elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
   * *not stable*: does not preserve the ordering of elements that
@@ -2024,7 +2028,7 @@ Characteristics:
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 
-  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 
 ```jldoctest
 julia> x = rand(100);

@@ -320,7 +320,7 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64})
+function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
     isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
@@ -628,11 +628,11 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
+    x == 1 && return x
+    x == -1 && return isodd(y) ? x : -x
     if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
     @noinline throw1(y) =
         throw(OverflowError("exponent $y is too large and computation will overflow"))
-    if x== 1; return x; end
-    if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
        x==0 && return x
 

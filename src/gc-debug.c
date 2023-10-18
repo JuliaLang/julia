@@ -1,7 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 // re-include assert.h without NDEBUG,
@@ -112,7 +115,7 @@ static void gc_clear_mark_outer(int bits)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             gc_clear_mark_page(pg, bits);
             pg = pg->next;
@@ -1150,7 +1153,7 @@ static void gc_count_pool_pagetable(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             if (gc_alloc_map_is_set(pg->data)) {
                 gc_count_pool_page(pg);
@@ -1217,15 +1220,25 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;
 }
 
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
     if (!gc_logging_enabled) {
         return;
     }
-    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/1e6,
+    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/(double)(1<<20),
         full ? "full" : "incr",
         recollect ? "recollect" : ""
     );
+
+    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
+        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
+        (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
+    );
+    // Should fragmentation use bytes_resident instead of heap_size?
 }
 
 #ifdef __cplusplus

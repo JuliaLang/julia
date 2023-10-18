@@ -560,6 +560,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_import_sym ||
          ((jl_expr_t*)e)->head == jl_using_sym ||
          ((jl_expr_t*)e)->head == jl_export_sym ||
+         ((jl_expr_t*)e)->head == jl_public_sym ||
          ((jl_expr_t*)e)->head == jl_thunk_sym ||
          ((jl_expr_t*)e)->head == jl_global_sym ||
          ((jl_expr_t*)e)->head == jl_const_sym ||
@@ -575,8 +576,9 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_import_sym || head == jl_using_sym ||
-        head == jl_export_sym || head == jl_thunk_sym || head == jl_toplevel_sym ||
-        head == jl_error_sym || head == jl_incomplete_sym || head == jl_method_sym) {
+        head == jl_export_sym || head == jl_public_sym || head == jl_thunk_sym ||
+        head == jl_toplevel_sym || head == jl_error_sym || head == jl_incomplete_sym ||
+        head == jl_method_sym) {
         return 0;
     }
     if (head == jl_global_sym || head == jl_const_sym) {
@@ -698,7 +700,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
             if (*n == 0 && n > n0)
-                jl_eval_errorf(m, "all-underscore identifier used as rvalue");
+                jl_eval_errorf(m, "all-underscore identifiers are write-only and their values cannot be used in expressions");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
@@ -837,12 +839,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         JL_GC_POP();
         return jl_nothing;
     }
-    else if (head == jl_export_sym) {
+    else if (head == jl_export_sym || head == jl_public_sym) {
+        int exp = (head == jl_export_sym);
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
-                jl_eval_errorf(m, "syntax: malformed \"export\" statement");
-            jl_module_export(m, name);
+                jl_eval_errorf(m, exp ? "syntax: malformed \"export\" statement" :
+                                        "syntax: malformed \"public\" statement");
+            jl_module_public(m, name, exp);
         }
         JL_GC_POP();
         return jl_nothing;
@@ -944,8 +948,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-static void jl_check_open_for(jl_module_t *m, const char* funcname)
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
 {
+    if (jl_current_task->ptls->in_pure_callback)
+        jl_errorf("%s cannot be used in a generated function", fname);
     if (jl_options.incremental && jl_generating_output()) {
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
@@ -965,25 +971,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
                           "This is likely due to some other module mutating `%s` with `%s` during "
-                          "precompilation - don't do this.", name, name, funcname);
+                          "precompilation - don't do this.", name, name, fname);
             }
         }
     }
 }
 
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
-{
-    if (jl_current_task->ptls->in_pure_callback)
-        jl_errorf("%s cannot be used in a generated function", fname);
-    jl_check_open_for(m, fname);
-}
-
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("eval cannot be used in a generated function");
-    jl_check_open_for(m, "eval");
+    jl_check_top_level_effect(m, "eval");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
@@ -1029,10 +1025,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
-        jl_error("cannot use include inside a generated function");
-    jl_check_open_for(module, "include");
+    jl_check_top_level_effect(module, "include");
 
     jl_value_t *result = jl_nothing;
     jl_value_t *ast = NULL;
@@ -1045,6 +1038,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
         jl_errorf("jl_parse_all() must generate a top level expression");
     }
 
+    jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = ct->world_age;

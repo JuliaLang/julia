@@ -137,7 +137,7 @@ public:
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress) JL_NOTSAFEPOINT;
+                        std::function<void*(void*)> lookupWriteAddress);
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;

@@ -4,10 +4,6 @@ Core.include(Main, "Base.jl")
 
 using .Base
 
-# Set up Main module
-using Base.MainInclude # ans, err, and sometimes Out
-import Base.MainInclude: eval, include
-
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
 
@@ -31,52 +27,26 @@ let
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
+        :FileWatching, # used by loading.jl -- implicit assumption that init runs
+        :Libdl, # Transitive through LinAlg
+        :Artifacts, # Transitive through LinAlg
+        :SHA, # transitive through Random
+        :Sockets, # used by stream.jl
+
+        # Transitive through LingAlg
+        # OpenBLAS_jll
+        # libblastrampoline_jll
 
         # 1-depth packages
-        :LinearAlgebra,
-        :Markdown,
-        :Printf,
-        :Random,
-        :Tar,
-
-        # 2-depth packages
-        :Dates,
-        :Future,
-        :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
-
-        # 3-depth packages
-        :REPL,
-        :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
-
-        # 6-depth packages
-        :Pkg,
+        :LinearAlgebra, # Commits type-piracy and GEMM
+        :Random, # Can't be removed due to rand being exported by Base
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
+    push!(empty!(LOAD_PATH), "@stdlib")
     m = Module()
     GC.@preserve m begin
         print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
@@ -104,7 +74,10 @@ let
     empty!(LOAD_PATH)
     Base.init_load_path() # want to be able to find external packages in userimg.jl
 
+    # Set up Main module
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
+    eval(Main, :(using Base.MainInclude: eval, include, ans, err))
+
     tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)

@@ -368,7 +368,7 @@ end
 
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be nonnegative.")
+    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
@@ -1350,6 +1350,9 @@ function sizehint!(a::Vector, sz::Integer)
     a
 end
 
+# Fall-back implementation for non-shrinkable collections
+_sizehint!(a, sz; shrink) = sizehint!(a, sz)
+
 """
     pop!(collection) -> item
 
@@ -2041,18 +2044,6 @@ function vcat(arrays::Vector{T}...) where T
 end
 vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
 
-# disambiguation with LinAlg/special.jl
-# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
-# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
-hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
-hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
-vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
-vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
-    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
-    typed_hvcat(T, rows, xs...)
-
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
 ## find ##
@@ -2498,41 +2489,18 @@ function findall(A)
 end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
-function _findall(f::Function, A::AbstractArray{Bool})
-    n = count(f, A)
+function findall(A::AbstractArray{Bool})
+    n = count(A)
     I = Vector{eltype(keys(A))}(undef, n)
-    isempty(I) && return I
-    _findall(f, I, A)
-end
-
-function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
-    len = length(I)
-    for (k, v) in pairs(A)
-        @inbounds I[cnt] = k
-        cnt += f(v)
-        cnt > len && return I
+    for (i,a) in pairs(A)
+        if a
+            I[cnt] = i
+            cnt += 1
+        end
     end
-    # In case of impure f, this line could potentially be hit. In that case,
-    # we can't assume I is the correct length.
-    resize!(I, cnt - 1)
+    I
 end
-
-function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
-    i = firstindex(A)
-    cnt = 1
-    len = length(I)
-    while cnt ≤ len
-        @inbounds I[cnt] = i
-        cnt += f(@inbounds A[i])
-        i = nextind(A, i)
-    end
-    cnt - 1 == len ? I : resize!(I, cnt - 1)
-end
-
-findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
-findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
-findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
@@ -2894,3 +2862,12 @@ function intersect(v::AbstractVector, r::AbstractRange)
     return vectorfilter(T, _shrink_filter!(seen), common)
 end
 intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
+
+# Here instead of range.jl for bootstrapping because `@propagate_inbounds` depends on Vectors.
+@propagate_inbounds function getindex(v::AbstractRange, i::Integer)
+    if i isa Bool # Not via dispatch to avoid ambiguities
+        throw(ArgumentError("invalid index: $i of type Bool"))
+    else
+        _getindex(v, i)
+    end
+end

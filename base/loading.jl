@@ -475,6 +475,8 @@ or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
+
+See also [`pkgdir`](@ref).
 """
 function pathof(m::Module)
     @lock require_lock begin
@@ -506,6 +508,8 @@ julia> pkgdir(Foo)
 julia> pkgdir(Foo, "src", "file.jl")
 "/path/to/Foo.jl/src/file.jl"
 ```
+
+See also [`pathof`](@ref).
 
 !!! compat "Julia 1.7"
     The optional argument `paths` requires at least Julia 1.7.
@@ -996,11 +1000,14 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
-cache_file_entry(pkg::PkgId) = joinpath(
-    "compiled",
-    "v$(VERSION.major).$(VERSION.minor)",
-    pkg.uuid === nothing ? ""       : pkg.name),
-    pkg.uuid === nothing ? pkg.name : package_slug(pkg.uuid)
+function cache_file_entry(pkg::PkgId)
+    uuid = pkg.uuid
+    return joinpath(
+        "compiled",
+        "v$(VERSION.major).$(VERSION.minor)",
+        uuid === nothing ? ""       : pkg.name),
+        uuid === nothing ? pkg.name : package_slug(uuid)
+end
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
@@ -1027,8 +1034,8 @@ function find_all_in_cache_path(pkg::PkgId)
     end
 end
 
-ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
-cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Base.Libc.dlext)"), ".ji")
+ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
+cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Libdl.dlext)"), ".ji")
 
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -1703,7 +1710,7 @@ If a module or file is *not* safely precompilable, it should call `__precompile_
 order to throw an error if Julia attempts to precompile it.
 """
 @noinline function __precompile__(isprecompilable::Bool=true)
-    if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
+    if !isprecompilable && generating_output()
         throw(PrecompilableError())
     end
     nothing
@@ -1767,9 +1774,10 @@ function __require(into::Module, mod::Symbol)
                     Package $mod not found in current path$hint_message.
                     - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
+                manifest_warnings = collect_manifest_warnings()
                 throw(ArgumentError("""
                 Package $(where.name) does not have $mod in its dependencies:
-                - You may have a partially installed environment. Try `Pkg.instantiate()`
+                $manifest_warnings- You may have a partially installed environment. Try `Pkg.instantiate()`
                   to ensure all packages in the environment are installed.
                 - Or, if you have $(where.name) checked out for development and have
                   added $mod as a dependency but haven't updated your primary
@@ -1786,6 +1794,55 @@ function __require(into::Module, mod::Symbol)
         LOADING_CACHE[] = nothing
     end
     end
+end
+
+function find_unsuitable_manifests_versions()
+    unsuitable_manifests = String[]
+    dev_manifests = String[]
+    for env in load_path()
+        project_file = env_project_file(env)
+        project_file isa String || continue # no project file
+        manifest_file = project_file_manifest_path(project_file)
+        manifest_file isa String || continue # no manifest file
+        m = parsed_toml(manifest_file)
+        man_julia_version = get(m, "julia_version", nothing)
+        man_julia_version isa String || @goto mark
+        man_julia_version = VersionNumber(man_julia_version)
+        thispatch(man_julia_version) != thispatch(VERSION) && @goto mark
+        isempty(man_julia_version.prerelease) != isempty(VERSION.prerelease) && @goto mark
+        isempty(man_julia_version.prerelease) && continue
+        man_julia_version.prerelease[1] != VERSION.prerelease[1] && @goto mark
+        if VERSION.prerelease[1] == "DEV"
+            # manifests don't store the 2nd part of prerelease, so cannot check further
+            # so treat them specially in the warning
+            push!(dev_manifests, manifest_file)
+        end
+        continue
+        @label mark
+        push!(unsuitable_manifests, string(manifest_file, " (v", man_julia_version, ")"))
+    end
+    return unsuitable_manifests, dev_manifests
+end
+
+function collect_manifest_warnings()
+    unsuitable_manifests, dev_manifests = find_unsuitable_manifests_versions()
+    msg = ""
+    if !isempty(unsuitable_manifests)
+        msg *= """
+        - Note that the following manifests in the load path were resolved with a different
+          julia version, which may be the cause of the error:
+            $(join(unsuitable_manifests, "\n    "))
+        """
+    end
+    if !isempty(dev_manifests)
+        msg *= """
+        - Note that the following manifests in the load path were resolved a potentially
+          different DEV version of the current version, which may be the cause
+          of the error:
+            $(join(dev_manifests, "\n    "))
+        """
+    end
+    return msg
 end
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
@@ -1811,9 +1868,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-        if uuidkey == REPL_PKGID
-            REPL_MODULE_REF[] = newm
-        end
     else
         newm = root_module(uuidkey)
     end
@@ -1843,7 +1897,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
-            if (0 != ccall(:jl_generating_output, Cint, ())) && (JLOptions().incremental != 0)
+            if generating_output(#=incremental=#true)
                 error("Replacing module `$(key.name)`")
             else
                 @warn "Replacing module `$(key.name)`"
@@ -1894,7 +1948,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
     if path !== nothing
         # Pkg needs access to the version of packages in the sysimage.
-        if Core.Compiler.generating_sysimg()
+        if generating_output(#=incremental=#false)
             pkgorigin.version = get_pkgversion_from_path(joinpath(dirname(path), ".."))
         end
     end
@@ -1948,13 +2002,13 @@ function _require(pkg::PkgId, env=nothing)
             end
         end
 
-        if JLOptions().use_compiled_modules != 0
-            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+        if JLOptions().use_compiled_modules == 1
+            if !generating_output(#=incremental=#false)
                 if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
                     finally
                         lock(require_lock)
                     end
@@ -2192,9 +2246,41 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
+"""
+    check_src_module_wrap(srcpath::String)
+
+Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
+"""
+function check_src_module_wrap(pkg::PkgId, srcpath::String)
+    module_rgx = r"^\s*(?:@\w*\s*)*(?:bare)?module\s"
+    load_rgx = r"\b(?:using|import)\s"
+    load_seen = false
+    inside_string = false
+    for s in eachline(srcpath)
+        if count("\"\"\"", s) == 1
+            # ignore module docstrings
+            inside_string = !inside_string
+        end
+        inside_string && continue
+        if startswith(s, module_rgx)
+            if load_seen
+                throw(ErrorException("Package $pkg source file $srcpath has a using/import before a module declaration."))
+            end
+            return true
+        end
+        if startswith(s, load_rgx)
+            load_seen = true
+        end
+    end
+    throw(ErrorException("Package $pkg source file $srcpath does not contain a module declaration."))
+end
+
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+
+    check_src_module_wrap(pkg, input)
+
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
@@ -2841,11 +2927,9 @@ get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uu
 get_compiletime_preferences(::Nothing) = String[]
 
 function check_clone_targets(clone_targets)
-    try
-        ccall(:jl_check_pkgimage_clones, Cvoid, (Ptr{Cchar},), clone_targets)
-        return true
-    catch
-        return false
+    rejection_reason = ccall(:jl_check_pkgimage_clones, Any, (Ptr{Cchar},), clone_targets)
+    if rejection_reason !== nothing
+        return rejection_reason
     end
 end
 
@@ -2877,6 +2961,88 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
+struct ImageTarget
+    name::String
+    flags::Int32
+    ext_features::String
+    features_en::Vector{UInt8}
+    features_dis::Vector{UInt8}
+end
+
+function parse_image_target(io::IO)
+    flags = read(io, Int32)
+    nfeature = read(io, Int32)
+    feature_en = read(io, 4*nfeature)
+    feature_dis = read(io, 4*nfeature)
+    name_len = read(io, Int32)
+    name = String(read(io, name_len))
+    ext_features_len = read(io, Int32)
+    ext_features = String(read(io, ext_features_len))
+    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+end
+
+function parse_image_targets(targets::Vector{UInt8})
+    io = IOBuffer(targets)
+    ntargets = read(io, Int32)
+    targets = Vector{ImageTarget}(undef, ntargets)
+    for i in 1:ntargets
+        targets[i] = parse_image_target(io)
+    end
+    return targets
+end
+
+function current_image_targets()
+    targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
+    return parse_image_targets(targets)
+end
+
+struct FeatureName
+    name::Cstring
+    bit::UInt32 # bit index into a `uint32_t` array;
+    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
+end
+
+function feature_names()
+    fnames = Ref{Ptr{FeatureName}}()
+    nf = Ref{Csize_t}()
+    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
+    if fnames[] == C_NULL
+        @assert nf[] == 0
+        return Vector{FeatureName}(undef, 0)
+    end
+    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
+end
+
+function test_feature(features::Vector{UInt8}, feat::FeatureName)
+    bitidx = feat.bit
+    u8idx = div(bitidx, 8) + 1
+    bit = bitidx % 8
+    return (features[u8idx] & (1 << bit)) != 0
+end
+
+function show(io::IO, it::ImageTarget)
+    print(io, it.name)
+    if !isempty(it.ext_features)
+        print(io, ",", it.ext_features)
+    end
+    print(io, "; flags=", it.flags)
+    print(io, "; features_en=(")
+    first = true
+    for feat in feature_names()
+        if test_feature(it.features_en, feat)
+            name = Base.unsafe_string(feat.name)
+            if first
+                first = false
+                print(io, name)
+            else
+                print(io, ", ", name)
+            end
+        end
+    end
+    print(io, ")")
+    # Is feature_dis useful?
+end
+
 # Set by FileWatching.__init__()
 global mkpidlock_hook
 global trymkpidlock_hook
@@ -2887,12 +3053,17 @@ global parse_pidfile_hook
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
+const compilecache_pidlock_stale_age = 10
+
 # Allows processes to wait if another process is precompiling a given source already.
-# The lock file is deleted and precompilation will proceed after `stale_age` seconds if
-#  - the locking process no longer exists
-#  - the lock is held by another host, since processes cannot be checked remotely
-# or after `stale_age * 25` seconds if the process does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
+# The lock file mtime will be updated when held at most every `stale_age/2` seconds, with expected
+# variance of 10 seconds or more being infrequent but not unusual.
+# After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
+# precompilation will proceed if the locking process no longer exists or after `stale_age * 5`
+# seconds if the process does still exist.
+# If the lock is held by another host, it will conservatively wait `stale_age * 5`
+# seconds since processes cannot be checked remotely
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
@@ -2900,9 +3071,9 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
             else
-                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
@@ -2914,7 +3085,6 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
         f()
     end
 end
-
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2948,8 +3118,12 @@ end
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true
             end
-            if !check_clone_targets(clone_targets)
-                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
+            rejection_reasons = check_clone_targets(clone_targets)
+            if !isnothing(rejection_reasons)
+                @debug("Rejecting cache file $cachefile for $modkey:",
+                    Reasons=rejection_reasons,
+                    var"Image Targets"=parse_image_targets(clone_targets),
+                    var"Current Targets"=current_image_targets())
                 return true
             end
             if !isfile(ocachefile)
@@ -3038,7 +3212,6 @@ end
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"

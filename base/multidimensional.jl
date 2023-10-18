@@ -267,7 +267,7 @@ module IteratorsMD
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
     _convert2ind(sz::Bool) = Base.OneTo(Int8(sz))
-    _convert2ind(sz::Integer) = Base.OneTo(sz)
+    _convert2ind(sz::Integer) = Base.oneto(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
@@ -424,27 +424,17 @@ module IteratorsMD
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] + step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != last(rng)
-        return valid, (I, )
+        valid = state[1] != last(rng)
+        return valid, (I,)
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] + step(rng)
-        if __is_valid_range(I, rng) && state[1] != last(rng)
+        if state[1] != last(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __inc(tail(state), tail(indices))
         return valid, (first(rng), I...)
-    end
-
-    @inline __is_valid_range(I, rng::AbstractUnitRange) = I in rng
-    @inline function __is_valid_range(I, rng::OrdinalRange)
-        if step(rng) > 0
-            lo, hi = first(rng), last(rng)
-        else
-            lo, hi = last(rng), first(rng)
-        end
-        lo <= I <= hi
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -556,13 +546,13 @@ module IteratorsMD
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] - step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != first(rng)
+        valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] - step(rng)
-        if __is_valid_range(I, rng) && state[1] != first(rng)
+        if state[1] != first(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __dec(tail(state), tail(indices))
@@ -1564,7 +1554,7 @@ end
 
 isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
 function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(i...))
+    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
     ninds = length(i)
@@ -1843,7 +1833,7 @@ but the result order will be row-major instead.
 
 # Higher dimensional examples
 ```
-julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
+julia> A = [4 3; 2 1 ;;; 'A' 'B'; 'C' 'D']
 2×2×2 Array{Any, 3}:
 [:, :, 1] =
  4  3

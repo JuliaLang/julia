@@ -43,7 +43,7 @@ endif
 SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array staticdata toplevel jl_uv datatype \
-	simplevector runtime_intrinsics precompile jloptions \
+	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
@@ -153,7 +153,7 @@ endif
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
 ifeq ($(OS), Darwin)
 CLANG_LDFLAGS += -Wl,-undefined,dynamic_lookup
-OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld_dlopen_atfork_parent -Wl,-U,__dyld_dlopen_atfork_prepare
+OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld_dlopen_atfork_parent -Wl,-U,__dyld_dlopen_atfork_prepare -Wl,-U,_jl_image_pointers -Wl,-U,_jl_system_image_data -Wl,-U,_jl_system_image_size
 LIBJULIA_PATH_REL := @rpath/libjulia
 else
 LIBJULIA_PATH_REL := libjulia
@@ -252,6 +252,8 @@ $(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/juli
 	$(INSTALL_F) $^ $(build_includedir)/julia/uv
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+libccalllazyfoo: $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+libccalllazybar: $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT)
 libllvmcalltest: $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT)
 
 ifeq ($(OS), Linux)
@@ -275,6 +277,12 @@ endif
 	@#rm -rf $@.dSYM && mv $@.tmp.dSYM $@.dSYM
 	mv $@.tmp $@
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
+
+$(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,ccalllazyfoo.$(SHLIB_EXT)))
+
+$(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,ccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(FLAGS) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
@@ -520,7 +528,12 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # set the exports for the source files based on where they are getting linked
-clang-sa-% clang-sagc-% clang-tidy-%: DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS
+$(addprefix clang-sa-,$(SRCS)):      DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sagc-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-tidy-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sa-,$(CODEGEN_SRCS)):   DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))

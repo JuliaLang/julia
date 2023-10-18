@@ -96,7 +96,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -107,7 +107,7 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a

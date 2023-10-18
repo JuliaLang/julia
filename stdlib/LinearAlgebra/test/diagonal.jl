@@ -54,7 +54,9 @@ Random.seed!(1)
     end
 
     @testset "Basic properties" begin
-        @test_throws ArgumentError size(D,0)
+        @test_throws BoundsError size(D,0)
+        @test size(D,1) == size(D,2) == length(dd)
+        @test size(D,3) == 1
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
@@ -460,6 +462,12 @@ Random.seed!(1)
     end
 end
 
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
+end
+
 @testset "rdiv! (#40887)" begin
     @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
     @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
@@ -764,6 +772,28 @@ end
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
     end
+end
+
+@testset "Eigensystem for block diagonal (issue #30681)" begin
+    I2 = Matrix(I, 2,2)
+    D = Diagonal([2.0*I2, 3.0*I2])
+    eigD = eigen(D)
+    evals = [ 2.0, 2.0, 3.0, 3.0 ]
+    evecs = [ [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]]  [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]];
+              [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]]  [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]] ]
+    @test eigD.values == evals
+    @test eigD.vectors == evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
+
+    I3 = Matrix(I, 3,3)
+    D = Diagonal([[0.0 -1.0; 1.0 0.0], 2.0*I3])
+    eigD = eigen(D)
+    evals = [ -1.0im, 1.0im, 2.0, 2.0, 2.0 ]
+    evecs = [ [[ 1/sqrt(2)+0im, 1/sqrt(2)*im ]]  [[ 1/sqrt(2)+0im, -1/sqrt(2)*im ]]  [[ 0.0, 0.0 ]]       [[ 0.0, 0.0 ]]      [[ 0.0, 0.0]];
+              [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
+    @test eigD.values == evals
+    @test eigD.vectors ≈ evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 end
 
 @testset "linear solve for block diagonal matrices" begin

@@ -164,7 +164,7 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return method.sig
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
         mt, atype, sparams, method, #=int return_if_compileable=#0)
@@ -390,6 +390,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
+            isdefined(e, :val) || continue
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
@@ -489,8 +490,7 @@ end
 # using a function to ensure we can infer this
 @inline function slot_id(s)
     isa(s, SlotNumber) && return s.id
-    isa(s, Argument) && return s.n
-    return (s::TypedSlot).id
+    return (s::Argument).n
 end
 
 ###########
@@ -501,7 +501,7 @@ is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
-    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
         m = moduleroot(m)
