@@ -189,38 +189,22 @@ function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby:
     eigen!(copy(A), copy(B); sortby)
 end
 function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
-   # NOTE: Copy of BunchKaufman's getproperty(B, :D) and getproperty(B, :L/U) in bunchkaufman.jl as 'getproperty' is not in place.
-   if B.rook
-        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
-    else
-        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
-    end
-    if B.uplo == 'U'
-        M = UnitUpperTriangular(LUD)
-        du = od[2:end]
-        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
-        dl = B.symmetric ? copy(du) : conj.(du)
-    else
-        M = UnitLowerTriangular(LUD)
-        dl = od[1:end-1]
-        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
-        du = B.symmetric ? copy(dl) : conj.(dl)
-    end
+    M, TD, p = getproperties!(B)
     # Compute generalized eigenvalues of equivalent matrix:
     #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
-    permutecols!(A, B.p)
-    permuterows!(A, B.p)
+    permutecols!(A, p)
+    permuterows!(A, p)
     ldiv!(M, A)
     rdiv!(A, M')
-    ldiv!(Tridiagonal(dl, diag(LUD), du), A)
+    ldiv!(TD, A)
     vals, vecs = eigen!(A; sortby)
     # Compute generalized eigenvectors from 'vecs':
     #   vecs = P'*inv(M')*vecs
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
     ldiv!(M', vecs)
-    invpermuterows!(vecs, B.p)
+    invpermuterows!(vecs, p)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
@@ -283,31 +267,15 @@ function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortb
     eigvals!(copy(A), copy(B); sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
-   # NOTE: Copy of BunchKaufman's getproperty(B, :D) and getproperty(B, :L/U) in bunchkaufman.jl as 'getproperty' is not in place.
-   if B.rook
-        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
-    else
-        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
-    end
-    if B.uplo == 'U'
-        M = UnitUpperTriangular(LUD)
-        du = od[2:end]
-        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
-        dl = B.symmetric ? copy(du) : conj.(du)
-    else
-        M = UnitLowerTriangular(LUD)
-        dl = od[1:end-1]
-        # Aliasing of dl and du is not allowed for lu!(Tridiagonal(dl, diag(LUD), du) below.
-        du = B.symmetric ? copy(dl) : conj.(dl)
-    end
+    M, TD, p = getproperties!(B)
     # Compute generalized eigenvalues of equivalent matrix:
     #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
     # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
-    permutecols!(A, B.p)
-    permuterows!(A, B.p)
+    permutecols!(A, p)
+    permuterows!(A, p)
     ldiv!(M, A)
     rdiv!(A, M')
-    ldiv!(lu!(Tridiagonal(dl, diag(LUD), du)), A)
+    ldiv!(TD, A)
     return eigvals!(A; sortby)
 end
 

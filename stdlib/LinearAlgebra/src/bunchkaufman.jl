@@ -278,6 +278,27 @@ end
 Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
+function getproperties!(B::BunchKaufman{T,<:StridedMatrix}) where {T<:BlasFloat}
+    # NOTE: Copy of BunchKaufman's getproperty(B, :D) and getproperty(B, :L/U) since 'getproperty' is not in place.
+    if B.rook
+        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
+    else
+        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
+    end
+    if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
+        du = od[2:end]
+        # Avoid aliasing dl and du.
+        dl = B.symmetric ? copy(du) : conj.(du)
+    else
+        M = UnitLowerTriangular(LUD)
+        dl = od[1:end-1]
+        # Avoid aliasing dl and du.
+        du = B.symmetric ? copy(dl) : conj.(dl)
+    end
+    return (M, Tridiagonal(dl, diag(LUD), du), B.p)
+end
+
 issuccess(B::BunchKaufman) = B.info == 0
 
 function adjoint(B::BunchKaufman)
