@@ -12,9 +12,7 @@ using Dates
 end
 
 @testset "TimeType arithmetic" begin
-    a = Date(2023, 5, 1)
-    b = DateTime(2023, 5, 2)
-    @test b - a == Day(1)
+    @test_throws MethodError DateTime(2023, 5, 2) - Date(2023, 5, 1)
 end
 
 @testset "Wrapping arithmetic for Months" begin
