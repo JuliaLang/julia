@@ -2414,6 +2414,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
+    ccall(:jl_set_newly_deleted, Cvoid, (Any,), Core.Compiler.newly_deleted)
     Core.Compiler.track_newly_inferred.x = true
     try
         Base.include(Base.__toplevel__, input)

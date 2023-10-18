@@ -2566,7 +2566,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_ext_cis, jl_array_t *method_roots_list,
-                                           jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
+                                           jl_array_t *ext_targets, jl_array_t *edges, jl_array_t *newly_deleted) JL_GC_DISABLED
 {
     htable_new(&field_replace, 0);
     // strip metadata and IR when requested
@@ -2688,6 +2688,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, ext_targets);
             jl_queue_for_serialization(&s, edges);
         }
+        if (newly_deleted) {
+            jl_queue_for_serialization(&s, newly_deleted);
+        }
+
         jl_serialize_reachable(&s);
         // step 1.2: ensure all gvars are part of the sysimage too
         record_gvars(&s, &gvars);
@@ -2841,6 +2845,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, method_roots_list);
             jl_write_value(&s, ext_targets);
             jl_write_value(&s, edges);
+            jl_write_value(&s, newly_deleted);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags, uint32_t), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
@@ -2926,11 +2931,11 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL;
-    jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL, *_newly_deleted = NULL;
     int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
-    JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+    JL_GC_PUSH7(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &_newly_deleted);
 
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
@@ -2977,7 +2982,10 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
+    // Otherwise serialization will be confused.
+    if (newly_deleted)
+        _newly_deleted = jl_array_copy(newly_deleted);
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges, _newly_deleted);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3061,6 +3069,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                                                  jl_array_t **extext_methods,
                                                  jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
                                                  jl_array_t **ext_targets, jl_array_t **edges,
+                                                 jl_array_t **newly_deleted,
                                                  char **base, arraylist_t *ccallable_list, pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
     int en = jl_gc_enable(0);
@@ -3122,7 +3131,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext_cis = 0, offset_method_roots_list = 0;
-    uintptr_t offset_ext_targets = 0, offset_edges = 0;
+    uintptr_t offset_ext_targets = 0, offset_edges = 0, offset_newly_deleted = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -3157,6 +3166,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_method_roots_list = jl_read_offset(&s);
         offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
+        offset_newly_deleted = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
     size_t nlinks_gctags = read_uint32(f);
@@ -3190,8 +3200,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *ext_targets = (jl_array_t*)jl_delayed_reloc(&s, offset_ext_targets);
         *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
+        *newly_deleted = (jl_array_t*)jl_delayed_reloc(&s, offset_newly_deleted);
     }
-    s.s = NULL;
 
     // step 3: apply relocations
     assert(!ios_eof(f));
@@ -3378,6 +3388,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         assert(jl_is_datatype(obj));
         jl_cache_type_((jl_datatype_t*)obj);
     }
+
+    // Delete methods before inserting new ones.
+    if (newly_deleted)
+        jl_delete_methods(*newly_deleted);
+
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
@@ -3598,11 +3613,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
     assert(datastartpos > 0 && datastartpos < dataendpos);
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL, *newly_deleted = NULL;
     jl_svec_t *cachesizes_sv = NULL;
     char *base;
     arraylist_t ccallable_list;
-    JL_GC_PUSH8(&restored, &init_order, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &cachesizes_sv);
+    JL_GC_PUSH9(&restored, &init_order, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &newly_deleted, &cachesizes_sv);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -3627,7 +3642,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &new_ext_cis, &method_roots_list,
-                                                 &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
+                                                 &ext_targets, &edges, &newly_deleted, &base, &ccallable_list, &cachesizes);
             JL_SIGATOMIC_END();
 
             // Insert method extensions
@@ -3668,7 +3683,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)

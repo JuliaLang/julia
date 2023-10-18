@@ -1872,9 +1872,9 @@ static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_RO
 }
 #endif
 
-static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world)
+static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world, int tracked)
 {
-    if (jl_options.incremental && jl_generating_output())
+    if (!tracked && jl_options.incremental && jl_generating_output())
         jl_error("Method deletion is not possible during Module precompile.");
     jl_method_t *method = methodentry->func.method;
     assert(!method->is_for_opaque_closure);
@@ -1931,9 +1931,21 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
     size_t world = jl_atomic_fetch_add(&jl_world_counter, 1);
-    jl_method_table_invalidate(mt, methodentry, world);
+    jl_method_table_invalidate(mt, methodentry, world, 0);
     JL_UNLOCK(&mt->writelock);
 }
+
+JL_DLLEXPORT void jl_method_table_disable_incremental(jl_methtable_t *mt, jl_method_t *method)
+{
+    jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
+    JL_LOCK(&mt->writelock);
+    // Narrow the world age on the method to make it uncallable
+    // size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    size_t world = jl_atomic_fetch_add(&jl_world_counter, 1);
+    jl_method_table_invalidate(mt, methodentry, world, 1);
+    JL_UNLOCK(&mt->writelock);
+}
+
 
 static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect JL_REQUIRE_ROOTED_SLOT, jl_value_t **isect2 JL_REQUIRE_ROOTED_SLOT)
 {
@@ -2025,7 +2037,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         oldvalue = (jl_value_t*)replaced;
         invalidated = 1;
         method_overwrite(newentry, replaced->func.method);
-        jl_method_table_invalidate(mt, replaced, max_world);
+        jl_method_table_invalidate(mt, replaced, max_world, 0);
     }
     else {
         jl_method_t *const *d;
