@@ -446,7 +446,8 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             Dia = Diagonal(T.dv)
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T) ≈ rmul!(copy(Tri), T)
+            @test Array(T*Tri) ≈ Array(T)*Array(Tri) ≈ lmul!(T, copy(Tri))
             # test mul! itself for these types
             for AA in (Tri, Dia)
                 for f in (identity, transpose, adjoint)
@@ -459,8 +460,10 @@ Random.seed!(1)
             for f in (identity, transpose, adjoint)
                 C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
                 B = rand(elty, n, n)
-                D = copy(C) + 2.0 * Array(T*f(B))
-                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                D = C + 2.0 * Array(T*f(B))
+                @test mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                @test lmul!(T, copy(f(B))) ≈ T * f(B)
+                @test rmul!(copy(f(B)), T) ≈ f(B) * T
             end
 
             # Issue #31870
