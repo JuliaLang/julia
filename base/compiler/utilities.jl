@@ -321,6 +321,44 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
+"""
+    add_invalidation_callback!(callback, mi::MethodInstance)
+
+Register `callback` to be triggered upon the invalidation of `mi`.
+`callback` should a function taking a single argument, `replaced::MethodInstance`,
+and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
+"""
+add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance) =
+    _add_invalidation_callback!(mi, InvalidationCallback(callback))
+
+function _add_invalidation_callback!(mi::MethodInstance, @nospecialize(callback))
+    if !isdefined(mi, :callbacks)
+        callbacks = mi.callbacks = Any[callback]
+    else
+        callbacks = mi.callbacks::Vector{Any}
+        if !any(@nospecialize(cb)->cb===callback, callbacks)
+            push!(callbacks, callback)
+        end
+    end
+    return callbacks
+end
+
+struct InvalidationCallback{Callback}
+    callback::Callback
+end
+function (callback::InvalidationCallback)(replaced::MethodInstance, max_world::UInt32,
+                                          seen::IdSet{MethodInstance}=IdSet{MethodInstance}())
+    push!(seen, replaced)
+    callback.callback(replaced)
+    if isdefined(replaced, :backedges)
+        for mi in replaced.backedges::Vector{Any}
+            isa(mi, MethodInstance) || continue # might be `Type` object representing an `invoke` signature
+            mi in seen && continue # otherwise fail into an infinite loop
+            callback(mi, max_world, seen)
+        end
+    end
+end
+
 #########
 # types #
 #########
