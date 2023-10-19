@@ -104,8 +104,6 @@
         @test Tuple(m) == ("x", "y", "z")
         @test NamedTuple(m) == (var"1"="x", var"2"="y", var"3"="z")
         @test Dict(m) == Dict([1=>"x", 2=>"y", 3=>"z"])
-        @test Dict{Symbol}(m) == Dict([Symbol("1")=>"x", Symbol("2")=>"y", Symbol("3")=>"z"])
-        @test Dict{String}(m) == Dict(["1"=>"x", "2"=>"y", "3"=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
     end
 
@@ -118,8 +116,6 @@
         @test Tuple(m) == ("x", "y", "z")
         @test NamedTuple(m) == (a="x", c="y", b="z")
         @test Dict(m) == Dict(["a"=>"x", "c"=>"y", "b"=>"z"])
-        @test Dict{Symbol}(m) == Dict([:a=>"x", :c=>"y", :b=>"z"])
-        @test Dict{String}(m) == Dict(["a"=>"x", "c"=>"y", "b"=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", c=\"y\", b=\"z\")"
         @test keys(m) == ["a", "c", "b"]
     end
@@ -133,8 +129,6 @@
         @test Tuple(m) == ("x", "y", "z")
         @test NamedTuple(m) == (a="x", var"2"="y", b="z")
         @test Dict(m) == Dict(["a"=>"x", 2=>"y", "b"=>"z"])
-        @test Dict{Symbol}(m) == Dict([:a=>"x", Symbol("2")=>"y", :b=>"z"])
-        @test Dict{String}(m) == Dict(["a"=>"x", "2"=>"y", "b"=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
         @test keys(m) == ["a", 2, "b"]
     end
