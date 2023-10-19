@@ -2252,7 +2252,7 @@ end
 Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
 """
 function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^\s*(?:@\w*\s*)*(?:bare)?module\s"
+    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
     load_rgx = r"\b(?:using|import)\s"
     load_seen = false
     inside_string = false
@@ -2262,7 +2262,7 @@ function check_src_module_wrap(pkg::PkgId, srcpath::String)
             inside_string = !inside_string
         end
         inside_string && continue
-        if startswith(s, module_rgx)
+        if contains(s, module_rgx)
             if load_seen
                 throw(ErrorException("Package $pkg source file $srcpath has a using/import before a module declaration."))
             end
