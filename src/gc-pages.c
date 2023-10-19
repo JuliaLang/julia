@@ -1,6 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#ifdef MMTK_GC
+#error "This file should not be compiled when using MMTK GC."
+#endif
+
+#include "gc-stock.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif

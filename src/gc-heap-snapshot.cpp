@@ -1,10 +1,14 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifdef THIRD_PARY_GC
+#error "This file should not be compiled with MMTK GC"
+#endif
+
 #include "gc-heap-snapshot.h"
 
 #include "julia_internal.h"
 #include "julia_assert.h"
-#include "gc.h"
+#include "gc-stock.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"

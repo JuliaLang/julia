@@ -25,8 +25,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid) JL_NOTSAFEPOINT;
 
 // provided by a threading infrastructure
 void jl_init_threadinginfra(void);
+#ifdef MMTK_GC
+#error "No GC threading infrastructure defined for MMTK GC"
+#else
 void jl_parallel_gc_threadfun(void *arg);
 void jl_concurrent_gc_threadfun(void *arg);
+#endif
 void jl_threadfun(void *arg);
 
 #ifdef __cplusplus

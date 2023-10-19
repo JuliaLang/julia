@@ -7,7 +7,11 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "gc.h"
+#ifdef MMTK_GC
+#error "No GC threading infrastructure defined for MMTK GC"
+#else
+#include "gc-stock.h"
+#endif
 #include "threading.h"
 
 #ifdef __cplusplus
@@ -109,15 +113,14 @@ void jl_init_threadinginfra(void)
     }
 }
 
-
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-static inline int may_mark(void) JL_NOTSAFEPOINT
+STATIC_INLINE int may_mark(void) JL_NOTSAFEPOINT
 {
     return (jl_atomic_load(&gc_n_threads_marking) > 0);
 }
 
-static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
+STATIC_INLINE int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     return (jl_atomic_load(&ptls->gc_sweeps_requested) > 0);
 }

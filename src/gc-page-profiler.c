@@ -1,5 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifdef MMTK_GC
+#error "This file should not be compiled when using MMTK GC."
+#endif
+
 #include "gc-page-profiler.h"
 
 #ifdef __cplusplus

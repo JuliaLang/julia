@@ -1,9 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifdef MMTK_GC
+#error "This file should not be compiled when using MMTK GC."
+#endif
+
 #ifndef GC_PAGE_PROFILER_H
 #define GC_PAGE_PROFILER_H
 
-#include "gc.h"
+#include "gc-stock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,4 +64,4 @@ void gc_page_profile_write_to_file(gc_page_profiler_serializer_t *serializer) JL
 }
 #endif
 
-#endif // GC_PAGE_PROFILER_H
+#endif // MMTK_GC

@@ -71,11 +71,18 @@
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
+// `jl_taggedvalue_t` layout is defined in `src/object-layout.h`
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 typedef struct _jl_tls_states_t *jl_ptls_t;
 
 #ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
+#endif
+#include "object-layout.h"
+#ifdef MMTK_GC
+#error "No runtime write barrier defined for third-party GC"
+#else
+#include "gc-impl-runtime-barriers.h"
 #endif
 #include "julia_atomics.h"
 #include "julia_threads.h"
@@ -91,54 +98,6 @@ extern "C" {
 // used to indicate which types below are subtypes of jl_value_t
 #define JL_DATA_TYPE
 
-typedef struct _jl_value_t jl_value_t;
-
-struct _jl_taggedvalue_bits {
-    uintptr_t gc:2;
-    uintptr_t in_image:1;
-    uintptr_t unused:1;
-#ifdef _P64
-    uintptr_t tag:60;
-#else
-    uintptr_t tag:28;
-#endif
-};
-
-JL_EXTENSION struct _jl_taggedvalue_t {
-    union {
-        uintptr_t header;
-        jl_taggedvalue_t *next;
-        jl_value_t *type; // 16-byte aligned
-        struct _jl_taggedvalue_bits bits;
-    };
-    // jl_value_t value;
-};
-
-static inline jl_value_t *jl_to_typeof(uintptr_t t) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-#ifdef __clang_gcanalyzer__
-JL_DLLEXPORT jl_taggedvalue_t *_jl_astaggedvalue(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_astaggedvalue(v) _jl_astaggedvalue((jl_value_t*)(v))
-jl_value_t *_jl_valueof(jl_taggedvalue_t *tv JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_valueof(v) _jl_valueof((jl_taggedvalue_t*)(v))
-JL_DLLEXPORT jl_value_t *_jl_typeof(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_typeof(v) (_jl_typeof((jl_value_t*)(v)))
-#define jl_typetagof(v) ((uintptr_t)_jl_typeof((jl_value_t*)(v)))
-#else
-#define jl_astaggedvalue(v)                                             \
-    ((jl_taggedvalue_t*)((char*)(v) - sizeof(jl_taggedvalue_t)))
-#define jl_valueof(v)                                                   \
-    ((jl_value_t*)((char*)(v) + sizeof(jl_taggedvalue_t)))
-#define jl_typeof(v)                                                    \
-    jl_to_typeof(jl_typetagof(v))
-#define jl_typetagof(v)                                                 \
-    ((jl_astaggedvalue(v)->header) & ~(uintptr_t)15)
-#endif
-static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
-{
-    // Do not call this on a value that is already initialized.
-    jl_taggedvalue_t *tag = jl_astaggedvalue(v);
-    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)&tag->type, (jl_value_t*)t);
-}
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 #define jl_typetagis(v,t) (jl_typetagof(v)==(uintptr_t)(t))
 #define jl_set_typetagof(v,t,gc) (jl_set_typeof((v), (void*)(((uintptr_t)(t) << 4) | (gc))))
@@ -162,7 +121,7 @@ typedef struct _jl_ssavalue_t {
 
 // A SimpleVector is an immutable pointer array
 // Data is stored at the end of this variable-length struct.
-typedef struct {
+typedef struct _jl_svec_t {
     JL_DATA_TYPE
     size_t length;
     // pointer size aligned
@@ -485,7 +444,7 @@ typedef struct {
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
 // including a cache for hash-consed allocation of DataType objects.
-typedef struct {
+typedef struct _jl_typename_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *module;
@@ -534,55 +493,6 @@ typedef struct {
     uint32_t size:31;
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
-
-typedef struct {
-    uint32_t size;
-    uint32_t nfields;
-    uint32_t npointers; // number of pointers embedded inside
-    int32_t first_ptr; // index of the first pointer (or -1)
-    uint16_t alignment; // strictest alignment over all fields
-    struct { // combine these fields into a struct so that we can take addressof them
-        uint16_t haspadding : 1; // has internal undefined bytes
-        uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32, 3 -> foreign type
-        // metadata bit only for GenericMemory eltype layout
-        uint16_t arrayelem_isboxed : 1;
-        uint16_t arrayelem_isunion : 1;
-        uint16_t padding : 11;
-    } flags;
-    // union {
-    //     jl_fielddesc8_t field8[nfields];
-    //     jl_fielddesc16_t field16[nfields];
-    //     jl_fielddesc32_t field32[nfields];
-    // };
-    // union { // offsets relative to data start in words
-    //     uint8_t ptr8[npointers];
-    //     uint16_t ptr16[npointers];
-    //     uint32_t ptr32[npointers];
-    // };
-} jl_datatype_layout_t;
-
-typedef struct _jl_datatype_t {
-    JL_DATA_TYPE
-    jl_typename_t *name;
-    struct _jl_datatype_t *super;
-    jl_svec_t *parameters;
-    jl_svec_t *types;
-    jl_value_t *instance;  // for singletons
-    const jl_datatype_layout_t *layout;
-    // memoized properties (set on construction)
-    uint32_t hash;
-    uint16_t hasfreetypevars:1; // majority part of isconcrete computation
-    uint16_t isconcretetype:1; // whether this type can have instances
-    uint16_t isdispatchtuple:1; // aka isleaftupletype
-    uint16_t isbitstype:1; // relevant query for C-api and type-parameters
-    uint16_t zeroinit:1; // if one or more fields requires zero-initialization
-    uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
-    uint16_t maybe_subtype_of_cache:1; // Computational bit for has_concrete_supertype. See description in jltypes.c.
-    uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
-    uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
-    uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
-    uint16_t smalltag:6; // whether this type has a small-tag optimization
-} jl_datatype_t;
 
 typedef struct _jl_vararg_t {
     JL_DATA_TYPE
@@ -1047,40 +957,6 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void);
 
 JL_DLLEXPORT void jl_clear_malloc_data(void);
-
-// GC write barriers
-JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *root) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_queue_multiroot(const jl_value_t *root, const void *stored, jl_datatype_t *dt) JL_NOTSAFEPOINT;
-
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
-{
-    // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 && // parent is old and not in remset
-                   (jl_astaggedvalue(ptr)->bits.gc & 1) == 0)) // ptr is young
-        jl_gc_queue_root((jl_value_t*)parent);
-}
-
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
-{
-    // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
-        jl_gc_queue_root((jl_value_t*)ptr);
-    }
-}
-
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
-{
-    // 3 == GC_OLD_MARKED
-    // ptr is an immutable object
-    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
-        return; // parent is young or in remset
-    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
-        return; // ptr is old and not in remset (thus it does not point to young)
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
-    const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
-        jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
-}
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
