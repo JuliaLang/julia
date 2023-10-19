@@ -997,5 +997,7 @@ end
 
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
-    @test success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
+    @test success(pipeline(setenv(`$(Base.julia_cmd()) --color=yes --bug-report=rr-local -e 'exit()'`,
+                                  "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore");
+                           stdout, stderr))
 end
