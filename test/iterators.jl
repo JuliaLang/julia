@@ -1001,3 +1001,7 @@ end
     end
     @test v == ()
 end
+
+@testset "collect partition substring" begin
+    @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
+end
