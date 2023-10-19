@@ -912,9 +912,6 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
     dl = A.dl
     d = A.d
     du = A.du
-    if dl === du
-        throw(ArgumentError("off-diagonals of `A` must not alias"))
-    end
 
     @inbounds begin
         for i in 1:n-1
