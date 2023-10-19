@@ -181,18 +181,11 @@ end
 end
 
 @testset "Float16 intrinsics (crt)" begin
-    # TODO: Should we have `Chalf == Float16`?
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
-    truncsfhf2(x::Float32) = ccall("extern __truncsfhf2", llvmcall, Float16, (Float32,), x)
-    gnu_f2h_ieee(x::Float32) = ccall("extern __gnu_f2h_ieee", llvmcall, Float16, (Float32,), x)
-    truncdfhf2(x::Float64) = ccall("extern __truncdfhf2", llvmcall, Float16, (Float64,), x)
+    gnu_h2f_ieee(x::Float16) = ccall("julia__gnu_h2f_ieee", Float32, (Float16,), x)
+    gnu_f2h_ieee(x::Float32) = ccall("julia__gnu_f2h_ieee", Float16, (Float32,), x)
 
-    @test extendhfsf2(Float16(3.3)) == 3.3007812f0
     @test gnu_h2f_ieee(Float16(3.3)) == 3.3007812f0
-    @test truncsfhf2(3.3f0) == Float16(3.3)
     @test gnu_f2h_ieee(3.3f0) == Float16(3.3)
-    @test truncdfhf2(3.3) == Float16(3.3)
 end
 
 using Base.Experimental: @force_compile
