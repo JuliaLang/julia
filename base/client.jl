@@ -246,7 +246,7 @@ function exec_options(opts)
             # If we're doing a bug report, don't load anything else. We will
             # spawn a child in which to execute these options.
             let InteractiveUtils = load_InteractiveUtils()
-                InteractiveUtils.report_bug(arg)
+                invokelatest(InteractiveUtils.report_bug, arg)
             end
             return nothing
         else
