@@ -990,15 +990,19 @@ parsestmt_test_specs = [
     "x in'c'"   => "(call-i x in (char 'c'))"
     "1where'c'" => "(where 1 (char 'c'))"
     ":+'y'"     => "(juxtapose (call-post (quote-: +) ') (call-post y '))"
+    # Empty character consumes trailing ' delimiter (ideally this could be
+    # tested above but we don't require the input stream to be consumed in the
+    # unit tests there.
+    "''" => "(char (error))"
 
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
     "@(x y)" => "(macrocall (parens @x (error-t y)))"
     "|(&\nfunction" => "(call | (& (function (error (error)) (block (error)) (error-t))) (error-t))"
 
-    # The following are currently broken but at least the parser shouldn't
+    # The following is currently broken but at least the parser shouldn't
     # crash.
-    "x in' '" => "(wrapper (call-i x in (char (error))) (error-t '))"
+    "x in' '" => "(call-i x in (char (error)))"
 ]
 
 @testset "Parser does not crash on broken code" begin

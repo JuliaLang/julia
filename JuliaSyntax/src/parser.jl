@@ -3402,6 +3402,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         if k == K"'"
             # ''  ==>  (char (error))
             bump_invisible(ps, K"error", error="empty character literal")
+            bump(ps, TRIVIA_FLAG)
         elseif k == K"EndMarker"
             # '   ==>  (char (error))
             bump_invisible(ps, K"error", error="unterminated character literal")
