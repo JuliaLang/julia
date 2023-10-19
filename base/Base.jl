@@ -7,7 +7,7 @@ using Core.Intrinsics, Core.IR
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
 # start this big so that we don't have to resize before we have defined how to grow an array
-const _included_files = Array{Tuple{Module,String},1}(Core.undef, 50)
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 400)
 setfield!(_included_files, :size, (1,))
 function include(mod::Module, path::String)
     len = getfield(_included_files.size, 1)
