@@ -247,10 +247,11 @@ float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 
-// starting with GCC 12 and Clang 15, we have _Float16 which does the right thing
+// starting with GCC 12 and Clang 15, we have _Float16 on most platforms
 // (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
 #if ((defined(__GNUC__) && __GNUC__ > 11) || \
      (defined(__clang__) && __clang_major__ > 14)) && \
+    !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
     !defined(_OS_WINDOWS_)
     #define FLOAT16_TYPE _Float16
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
@@ -329,10 +330,11 @@ static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
 
 // bfloat16 conversion API
 
-// starting with GCC 13 and Clang 17, we have __bf16 which does the right thing
+// starting with GCC 13 and Clang 17, we have __bf16 on most platforms
 // (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
      (defined(__clang__) && __clang_major__ > 16)) && \
+    !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
     !defined(_OS_WINDOWS_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
