@@ -850,11 +850,11 @@ void gc_time_pool_end(int sweep_full)
     double sweep_speed = sweep_gb / sweep_pool_sec;
     jl_safe_printf("GC sweep pools end %.2f ms at %.1f GB/s "
                    "(skipped %.2f %% of %" PRId64 ", swept %" PRId64 " pgs, "
-                   "%" PRId64 " freed with %" PRId64 " lazily) %s\n",
+                   "%" PRId64 " freed) %s\n",
                    sweep_pool_sec * 1000, sweep_speed,
                    (total_pages ? ((double)skipped_pages * 100) / total_pages : 0),
                    total_pages, total_pages - skipped_pages,
-                   freed_pages, lazy_freed_pages,
+                   freed_pages,
                    sweep_full ? "full" : "quick");
 }
 
@@ -946,12 +946,12 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
     jl_safe_printf("GC sweep pause %.2f ms live %" PRId64 " kB "
                    "(freed %" PRId64 " kB EST %" PRId64 " kB "
                    "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
-                   "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
+                   "(%.2f ms in post_mark) %s\n",
                    jl_ns2ms(sweep_pause), live_bytes / 1024,
                    gc_num.freed / 1024, estimate_freed / 1024,
                    gc_num.freed - estimate_freed, pct, gc_num.allocd / 1024,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
-                   sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
+                   sweep_full ? "full" : "quick");
 }
 
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
@@ -971,10 +971,36 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
         jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64
                        " live = %" PRIu64 "m new interval = %" PRIu64 "m pause time = %"
                        PRIu64 "ms ttsp = %" PRIu64 "us mark time = %" PRIu64
-                       "ms sweep time = %" PRIu64 "ms \n",
+                       "ms sweep time = %" PRIu64 "ms\n",
                        end, freed, live/1024/1024,
                        interval/1024/1024, pause/1000000, ttsp,
                        mark/1000000,sweep/1000000);
+}
+
+void gc_heuristics_summary(
+        uint64_t old_alloc_diff, uint64_t alloc_mem,
+        uint64_t old_nongc_time, uint64_t nongc_time,
+        uint64_t old_mut_time, uint64_t alloc_time,
+        uint64_t old_freed_diff, uint64_t gc_mem,
+        uint64_t old_pause_time, uint64_t gc_time,
+        int thrash_counter,
+        uint64_t current_heap, uint64_t target_heap)
+{
+    jl_safe_printf("Estimates: alloc_diff=%" PRIu64 "kB (%" PRIu64 ")"
+                            "  nongc_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  mut_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  freed_diff=%" PRIu64 "kB (%" PRIu64 ")"
+                            "  pause_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  thrash_counter=%d"
+                            "  current_heap=%" PRIu64 " MB"
+                            "  target_heap=%" PRIu64 " MB\n",
+                   old_alloc_diff/1024, alloc_mem/1024,
+                   old_nongc_time/1000, nongc_time/1000,
+                   old_mut_time/1000, alloc_time/1000,
+                   old_freed_diff/1024, gc_mem/1024,
+                   old_pause_time/1000, gc_time/1000,
+                   thrash_counter,
+                   current_heap/1024/1024, target_heap/1024/1024);
 }
 #endif
 

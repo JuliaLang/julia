@@ -693,11 +693,13 @@ static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
 // heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
-static uint64_t old_pause_time = 0;
-static uint64_t old_mut_time = 0;
+// start with values that are in the target ranges to reduce transient hiccups at startup
+static uint64_t old_pause_time = 1e7; // 10 ms
+static uint64_t old_mut_time = 1e9; // 1 second
+static uint64_t old_nongc_time = 1e9; // 1 second
 static uint64_t old_heap_size = 0;
-static uint64_t old_alloc_diff = 0;
-static uint64_t old_freed_diff = 0;
+static uint64_t old_alloc_diff = default_collect_interval;
+static uint64_t old_freed_diff = default_collect_interval;
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
 static int thrashing = 0;
@@ -3328,9 +3330,14 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
-double jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
+uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
 {
-    return factor * old_val + (1.0-factor) * new_val;
+    double est = factor * old_val + (1 - factor) * new_val;
+    if (est <= 1)
+        return 1; // avoid issues with <= 0
+    if (est > (uint64_t)2<<36)
+        return (uint64_t)2<<36; // avoid overflow
+    return est;
 }
 
 size_t jl_maxrss(void);
@@ -3347,7 +3354,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
-    uint64_t mutator_time = gc_start_time - gc_end_time;
+    uint64_t mutator_time = gc_end_time == 0 ? old_nongc_time : gc_start_time - gc_end_time;
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
@@ -3526,31 +3533,34 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     freed_in_runtime = 0;
     size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     double target_allocs = 0.0;
-    double min_interval = default_collect_interval;
+    uint64_t min_interval = default_collect_interval;
+    uint64_t alloc_diff = before_free_heap_size - old_heap_size;
+    uint64_t freed_diff = before_free_heap_size - heap_size;
     if (collection == JL_GC_AUTO) {
-        uint64_t alloc_diff = before_free_heap_size - old_heap_size;
-        uint64_t freed_diff = before_free_heap_size - heap_size;
+        // do not update any heuristics when the user forces GC
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
         double tuning_factor = 0.03;
-        double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
-        double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
-        double gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
-        old_alloc_diff = alloc_diff;
-        old_mut_time = mutator_time;
-        old_freed_diff = freed_diff;
-        old_pause_time = pause;
-        old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-        if (gc_time > alloc_time * 95 && !(thrash_counter < 4))
+        uint64_t alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
+        uint64_t nongc_time = jl_gc_smooth(old_nongc_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
+        uint64_t alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor); // TODO: subtract estimated finalizer time?
+        uint64_t gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
+        uint64_t gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
+        old_alloc_diff = alloc_mem;
+        old_nongc_time = nongc_time;
+        old_mut_time = alloc_time;
+        old_freed_diff = gc_mem;
+        old_pause_time = gc_time;
+        if (gc_time > alloc_time && !(thrash_counter < 4)) // thrashing if GC marking more than 50% of the runtime
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;
         if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
-            double alloc_rate = alloc_mem/alloc_time;
-            double gc_rate = gc_mem/gc_time;
+            double alloc_rate = (double)alloc_mem/alloc_time;
+            double gc_rate = (double)gc_mem/gc_time;
             target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
         }
+        old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
     }
     if (thrashing == 0 && thrash_counter >= 3)
         thrashing = 1;
@@ -3611,8 +3621,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.max_memory = max_memory;
     }
     gc_final_pause_end(gc_start_time, gc_end_time);
-    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
-                        estimate_freed, sweep_full);
+    gc_time_sweep_pause(gc_end_time, gc_num.allocd, live_bytes,
+                        gc_num.freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.allocd;
@@ -3622,6 +3632,16 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                     live_bytes, gc_num.interval, pause,
                     gc_num.time_to_safepoint,
                     gc_num.mark_time, gc_num.sweep_time);
+    if (collection == JL_GC_AUTO) {
+        gc_heuristics_summary(
+            old_alloc_diff, alloc_diff,
+            old_nongc_time, mutator_time + sweep_time,
+            old_mut_time, mutator_time,
+            old_freed_diff, freed_diff,
+            old_pause_time, pause - sweep_time,
+            thrash_counter,
+            heap_size, target_heap);
+    }
 
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
