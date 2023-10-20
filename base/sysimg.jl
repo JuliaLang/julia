@@ -59,8 +59,9 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            dep[3] == 0.0 && continue
-            push!(Base._included_files, dep[1:2])
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
         Base._track_dependencies[] = false
