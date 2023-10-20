@@ -2442,6 +2442,9 @@ static void jl_init_function(Function *F, const Triple &TT)
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
 #endif
     }
+#ifndef NDEBUG
+    attr.addAttribute(Attribute::StackProtectStrong);
+#endif
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
     if (!TT.isOSWindows()) {
