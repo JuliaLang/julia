@@ -1798,7 +1798,7 @@ In a module, declare that the file, directory, or symbolic link specified by `pa
 (relative or absolute) is a dependency for precompilation; that is, the module will need
 to be recompiled if the modification time `mtime` of `path` changes.
 If `track_content=true` recompilation is triggered when the content of `path` changes
-(if `path` is a directory the content equals `readdir(path)`).
+(if `path` is a directory the content equals `join(readdir(path))`).
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
