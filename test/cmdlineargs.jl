@@ -997,6 +997,10 @@ end
 
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
-    # TODO: get this to work on CI
-    @test_skip success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
+    mktempdir() do temp_trace_dir
+        @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                                      "_RR_TRACE_DIR" => temp_trace_dir);
+                               #=stdout, stderr=#))
+    end
 end
