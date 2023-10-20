@@ -994,3 +994,9 @@ end
 # Test import from module
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; using .Hello'`) == "hello"
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
+
+# test --bug-report=rr
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
+    # TODO: get this to work on CI
+    @test_skip success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`, "JULIA_RR_RECORD_ARGS" => "-n"))
+end

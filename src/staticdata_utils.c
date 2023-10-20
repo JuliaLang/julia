@@ -706,6 +706,10 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
     ct->world_age = last_age;
 
+    static jl_value_t *replace_depot_func = NULL;
+    if (!replace_depot_func)
+        replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
+
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
     initial_pos = ios_pos(s);
@@ -713,11 +717,25 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_len(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *dep = jl_fieldref(deptuple, 1);              // file abspath
-        size_t slen = jl_string_len(dep);
+        jl_value_t *abspath = jl_fieldref(deptuple, 1);
+
+        jl_value_t **replace_depot_args;
+        JL_GC_PUSHARGS(replace_depot_args, 2);
+        replace_depot_args[0] = replace_depot_func;
+        replace_depot_args[1] = abspath;
+        ct = jl_current_task;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
+        ct->world_age = last_age;
+        JL_GC_POP();
+
+        size_t slen = jl_string_len(depalias);
         write_int32(s, slen);
-        ios_write(s, jl_string_data(dep), slen);
-        write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
+        ios_write(s, jl_string_data(depalias), slen);
+        write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
+        write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
+        write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
