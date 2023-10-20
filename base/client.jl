@@ -248,7 +248,7 @@ function exec_options(opts)
             let InteractiveUtils = load_InteractiveUtils()
                 invokelatest(InteractiveUtils.report_bug, arg)
             end
-            return nothing
+            return false
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
