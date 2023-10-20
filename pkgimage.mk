@@ -70,6 +70,7 @@ $(eval $(call stdlib_builder,Serialization,))
 $(eval $(call stdlib_builder,Sockets,))
 $(eval $(call stdlib_builder,Unicode,))
 $(eval $(call stdlib_builder,Profile,))
+$(eval $(call stdlib_builder,StyledStrings,))
 
 # 1-depth packages
 $(eval $(call stdlib_builder,GMP_jll,Artifacts Libdl))
