@@ -88,8 +88,10 @@ if !test_relocated_depot
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
+            rm(joinpath(@__DIR__, pkgname, "src", "foodir"))
             @test Base.isprecompiled(pkg) == false
             touch(joinpath(@__DIR__, pkgname, "src", "foo.txt"))
+            mkdir(joinpath(@__DIR__, pkgname, "src", "foodir"))
             Base.require(pkg) # precompile
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
         end
@@ -210,6 +212,8 @@ else
             @test Base.isprecompiled(pkg) == false # moving depot changes mtime of include_dependency
             Base.require(pkg) # re-precompile
             @test Base.isprecompiled(pkg) == true
+            touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg2", "src", "foodir", "foofoo"))
+            @test Base.isprecompiled(pkg) == false
         end
     end
 
