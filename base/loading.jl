@@ -1780,13 +1780,11 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
     if _track_dependencies[]
         @lock require_lock begin
             if track_content
-                @assert isfile(path) "can only hash files"
+                hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(_require_dependencies,
-                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
+                push!(_require_dependencies, (mod, path, filesize(path), hash, -1.0))
             else
-                push!(_require_dependencies,
-                      (mod, path, UInt64(0), UInt32(0), mtime(path)))
+                push!(_require_dependencies, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
         end
     end
@@ -3478,7 +3476,7 @@ end
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = open(_crc32c, f, "r")
+                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")
