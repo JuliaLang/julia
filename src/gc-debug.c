@@ -979,27 +979,25 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
 
 void gc_heuristics_summary(
         uint64_t old_alloc_diff, uint64_t alloc_mem,
-        uint64_t old_nongc_time, uint64_t nongc_time,
         uint64_t old_mut_time, uint64_t alloc_time,
         uint64_t old_freed_diff, uint64_t gc_mem,
         uint64_t old_pause_time, uint64_t gc_time,
-        int thrash_counter,
+        int thrash_counter, const char *reason,
         uint64_t current_heap, uint64_t target_heap)
 {
     jl_safe_printf("Estimates: alloc_diff=%" PRIu64 "kB (%" PRIu64 ")"
-                            "  nongc_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            //"  nongc_time=%" PRIu64 "ns (%" PRIu64 ")"
                             "  mut_time=%" PRIu64 "ns (%" PRIu64 ")"
                             "  freed_diff=%" PRIu64 "kB (%" PRIu64 ")"
                             "  pause_time=%" PRIu64 "ns (%" PRIu64 ")"
-                            "  thrash_counter=%d"
+                            "  thrash_counter=%d%s"
                             "  current_heap=%" PRIu64 " MB"
                             "  target_heap=%" PRIu64 " MB\n",
                    old_alloc_diff/1024, alloc_mem/1024,
-                   old_nongc_time/1000, nongc_time/1000,
                    old_mut_time/1000, alloc_time/1000,
                    old_freed_diff/1024, gc_mem/1024,
                    old_pause_time/1000, gc_time/1000,
-                   thrash_counter,
+                   thrash_counter, reason,
                    current_heap/1024/1024, target_heap/1024/1024);
 }
 #endif

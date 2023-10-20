@@ -527,11 +527,10 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t sweep);
 void gc_heuristics_summary(
         uint64_t old_alloc_diff, uint64_t alloc_mem,
-        uint64_t old_nongc_time, uint64_t nongc_time,
         uint64_t old_mut_time, uint64_t alloc_time,
         uint64_t old_freed_diff, uint64_t gc_mem,
         uint64_t old_pause_time, uint64_t gc_time,
-        int thrash_counter,
+        int thrash_counter, const char *reason,
         uint64_t current_heap, uint64_t target_heap);
 #else
 #define gc_time_pool_start()
@@ -562,11 +561,10 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
                          interval, pause, ttsp, mark, sweep)
 #define gc_heuristics_summary( \
         old_alloc_diff, alloc_mem, \
-        old_nongc_time, nongc_time, \
         old_mut_time, alloc_time, \
         old_freed_diff, gc_mem, \
         old_pause_time, gc_time, \
-        thrash_counter, \
+        thrash_counter, reason, \
         current_heap, target_heap)
 #endif
 

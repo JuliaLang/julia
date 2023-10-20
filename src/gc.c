@@ -696,7 +696,6 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 // start with values that are in the target ranges to reduce transient hiccups at startup
 static uint64_t old_pause_time = 1e7; // 10 ms
 static uint64_t old_mut_time = 1e9; // 1 second
-static uint64_t old_nongc_time = 1e9; // 1 second
 static uint64_t old_heap_size = 0;
 static uint64_t old_alloc_diff = default_collect_interval;
 static uint64_t old_freed_diff = default_collect_interval;
@@ -3340,6 +3339,29 @@ uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
     return est;
 }
 
+// an overallocation curve inspired by array allocations
+// grows very fast initially, then much slower at large heaps
+static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
+{
+    // compute maxsize = maxsize + 8*maxsize^(7/8) + maxsize/4
+    // for small n, we grow much faster than O(n)
+    // for large n, we grow at O(n/4)
+    // and as we reach O(memory) for memory>>1MB,
+    // this means we end by adding about 20% of memory each time at most
+    int exp2 = sizeof(old_val) * 8 -
+#ifdef _P64
+        __builtin_clzll(old_val);
+#else
+        __builtin_clz(old_val);
+#endif
+    uint64_t inc = (uint64_t)((size_t)1 << (exp2 * 7 / 8)) * 8 + old_val / 4;
+    // once overallocation would exceed max_val, grow by no more than 10% of max_val
+    if (inc + val > max_val)
+        if (inc > max_val / 10)
+            return max_val / 10;
+    return inc;
+}
+
 size_t jl_maxrss(void);
 
 // Only one thread should be running in this function
@@ -3354,7 +3376,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
-    uint64_t mutator_time = gc_end_time == 0 ? old_nongc_time : gc_start_time - gc_end_time;
+    uint64_t mutator_time = gc_end_time == 0 ? old_mut_time : gc_start_time - gc_end_time;
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
@@ -3529,60 +3551,102 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.last_incremental_sweep = gc_end_time;
     }
 
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_in_runtime);
+    size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_in_runtime;
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, heap_size);
     freed_in_runtime = 0;
-    size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
-    double target_allocs = 0.0;
-    uint64_t min_interval = default_collect_interval;
+    uint64_t user_max = max_total_memory * 0.8;
     uint64_t alloc_diff = before_free_heap_size - old_heap_size;
     uint64_t freed_diff = before_free_heap_size - heap_size;
+    uint64_t target_heap;
+    const char *reason = ""; (void)reason; // for GC_TIME output stats
+    old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
     if (collection == JL_GC_AUTO) {
-        // do not update any heuristics when the user forces GC
+        // update any heuristics only when the user does not force the GC
+        // but still update the timings, since GC was run and reset, even if it was too early
+        uint64_t target_allocs = 0.0;
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
-        double tuning_factor = 0.03;
+        double tuning_factor = 1e5;
         uint64_t alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        uint64_t nongc_time = jl_gc_smooth(old_nongc_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
         uint64_t alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor); // TODO: subtract estimated finalizer time?
         uint64_t gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
         uint64_t gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
         old_alloc_diff = alloc_mem;
-        old_nongc_time = nongc_time;
         old_mut_time = alloc_time;
         old_freed_diff = gc_mem;
         old_pause_time = gc_time;
-        if (gc_time > alloc_time && !(thrash_counter < 4)) // thrashing if GC marking more than 50% of the runtime
+        // thrashing estimator: if GC time more than 50% of the runtime
+        if (pause > mutator_time && !(thrash_counter < 4))
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;
-        if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
+        if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0) {
             double alloc_rate = (double)alloc_mem/alloc_time;
             double gc_rate = (double)gc_mem/gc_time;
-            target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
+            target_allocs = sqrt((double)heap_size * alloc_rate / gc_rate) * tuning_factor;
         }
-        old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-    }
-    if (thrashing == 0 && thrash_counter >= 3)
-        thrashing = 1;
-    else if (thrashing == 1 && thrash_counter <= 2)
-        thrashing = 0; // maybe we should report this to the user or error out?
 
-    int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
-    if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
-        target_allocs = 2*sqrt((double)heap_size/min_interval);
-    uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
-    if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
-        target_heap = max_total_memory;
-    else if (target_heap < default_collect_interval)
-        target_heap = default_collect_interval;
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+        if (thrashing == 0 && thrash_counter >= 3) {
+            // require 3 consecutive thrashing cycles to force the default allocator rate
+            thrashing = 1;
+            // and require 4 default allocations to clear
+            thrash_counter = 6;
+        }
+        else if (thrashing == 1 && thrash_counter <= 2) {
+            thrashing = 0; // maybe we should report this to the user or error out?
+        }
+
+        target_heap = target_allocs + heap_size;
+        // optionally smooth this:
+        //   target_heap = jl_gc_smooth(jl_atomic_load_relaxed(&gc_heap_stats.heap_target), target_heap, alloc_smooth_factor);
+
+        // compute some guardrails values
+        uint64_t min_target_allocs = heap_size / 10; // minimum 10% of current heap
+        if (min_target_allocs < default_collect_interval / 8) // unless the heap is small
+            min_target_allocs = default_collect_interval / 8;
+        uint64_t max_target_allocs = overallocation(before_free_heap_size, heap_size, user_max);
+        if (max_target_allocs < min_target_allocs)
+            max_target_allocs = min_target_allocs;
+        // respect max_total_memory first
+        if (target_heap > user_max) {
+            target_allocs = heap_size < user_max ? user_max - heap_size : 1;
+            reason = " user limit";
+        }
+        // If we are thrashing use a default only (an average) for a couple collections
+        if (thrashing) {
+            uint64_t thrashing_allocs = sqrt((double)min_target_allocs * max_target_allocs);
+            if (target_allocs < thrashing_allocs) {
+                target_allocs = thrashing_allocs;
+                reason = " thrashing";
+            }
+        }
+        // then add the guardrails for transient issues
+        if (target_allocs > max_target_allocs) {
+            target_allocs = max_target_allocs;
+            reason = " rate limit max";
+        }
+        else if (target_allocs < min_target_allocs) {
+            target_allocs = min_target_allocs;
+            reason = " min limit";
+        }
+        // and set the heap detection threshold
+        target_heap = target_allocs + heap_size;
+        if (target_heap < default_collect_interval) {
+            target_heap = default_collect_interval;
+            reason = " min heap";
+        }
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+    }
+    else {
+        target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    if (heap_size > max_total_memory * 0.8 || old_ratio > 0.15)
+    if (heap_size > user_max || old_ratio > 0.15)
         next_sweep_full = 1;
     else
         next_sweep_full = 0;
-    if (heap_size > max_total_memory * 0.8 || thrashing)
+    if (heap_size > user_max || thrashing)
         under_pressure = 1;
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
@@ -3635,11 +3699,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (collection == JL_GC_AUTO) {
         gc_heuristics_summary(
             old_alloc_diff, alloc_diff,
-            old_nongc_time, mutator_time + sweep_time,
             old_mut_time, mutator_time,
             old_freed_diff, freed_diff,
             old_pause_time, pause - sweep_time,
-            thrash_counter,
+            thrash_counter, reason,
             heap_size, target_heap);
     }
 
