@@ -136,6 +136,44 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     a
 end
 
+# Row and column permutations for AbstractMatrix
+permutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swapcols!)
+permuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swaprows!)
+@inline function _permute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = i
+        in = p[j] = -p[j]
+        while p[in] < 0
+            swapfun!(a, in, j)
+            j = in
+            in = p[in] = -p[in]
+        end
+    end
+    a
+end
+invpermutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swapcols!)
+invpermuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swaprows!)
+@inline function _invpermute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = p[i] = -p[i]
+        while j != i
+           swapfun!(a, j, i)
+           j = p[j] = -p[j]
+        end
+     end
+    a
+end
+
 """
     permute!(v, p)
 
@@ -266,44 +304,6 @@ function invperm(P::Tuple)
 end
 
 invperm(P::Any32) = Tuple(invperm(collect(P)))
-
-# Row and column permutations for AbstractMatrix
-permutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
-    _permute!(a, p, Base.swapcols!)
-permuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
-    _permute!(a, p, Base.swaprows!)
-@inline function _permute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
-    require_one_based_indexing(a, p)
-    p .= .-p
-    for i in 1:length(p)
-        p[i] > 0 && continue
-        j = i
-        in = p[j] = -p[j]
-        while p[in] < 0
-            swapfun!(a, in, j)
-            j = in
-            in = p[in] = -p[in]
-        end
-    end
-    a
-end
-invpermutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
-    _invpermute!(a, p, Base.swapcols!)
-invpermuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
-    _invpermute!(a, p, Base.swaprows!)
-@inline function _invpermute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
-    require_one_based_indexing(a, p)
-    p .= .-p
-    for i in 1:length(p)
-        p[i] > 0 && continue
-        j = p[i] = -p[i]
-        while j != i
-           swapfun!(a, j, i)
-           j = p[j] = -p[j]
-        end
-     end
-    a
-end
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
