@@ -118,7 +118,12 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     // Arguments are either scalar or passed by value
-    size_t size = jl_datatype_size(dt);
+
+    // LLVM passes Float16 in floating-point registers, but this doesn't match the ABI.
+    // No C compiler seems to support _Float16 yet, so in the meantime, pass as i16
+    if (dt == jl_float16_type || dt == jl_bfloat16_type)
+        return Type::getInt16Ty(ctx);
+
     // don't need to change bitstypes
     if (!jl_datatype_nfields(dt))
         return NULL;
@@ -143,6 +148,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     }
     // rewrite integer-sized (non-HFA) struct to an array
     // the bitsize of the integer gives the desired alignment
+    size_t size = jl_datatype_size(dt);
     if (size > 8) {
         if (jl_datatype_align(dt) <= 8) {
             Type  *T_int64 = Type::getInt64Ty(ctx);

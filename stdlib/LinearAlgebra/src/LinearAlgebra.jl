@@ -619,7 +619,9 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
         return 2*Float64(n)^3 / minimum(t)
