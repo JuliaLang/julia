@@ -1794,17 +1794,19 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
 end
 
 """
-    include_dependency(path::AbstractString)
+    include_dependency(path::AbstractString; track_content::Bool=false)
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if the modification time of `path` changes.
+to be recompiled if the modification time `mtime` of `path` changes.
+If `track_content=true` recompilation is triggered when the content of `path` changes
+(if `path` is a directory the content equals `readdir(path)`).
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
-function include_dependency(path::AbstractString)
-    _include_dependency(Main, path, track_content=false)
+function include_dependency(path::AbstractString; track_content::Bool=false)
+    _include_dependency(Main, path, track_content=track_content)
     return nothing
 end
 
