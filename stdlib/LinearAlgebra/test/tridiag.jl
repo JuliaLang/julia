@@ -82,7 +82,7 @@ end
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
-            @test TT.du === y
+            @test TT.du == y
             @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
