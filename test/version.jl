@@ -219,17 +219,6 @@ for major=0:3, minor=0:3, patch=0:3
     end
 end
 
-# banner
-import Base.banner
-io = IOBuffer()
-@test banner(io) === nothing
-seek(io, 0)
-@test countlines(io) == 9
-take!(io)
-@test banner(io; short=true) === nothing
-seek(io, 0)
-@test countlines(io) == 2
-
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
 @test VERSION.minor == ccall(:jl_ver_minor, Cint, ())

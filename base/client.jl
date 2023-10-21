@@ -425,7 +425,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || Base.banner(term, short=banner==:short)
+            banner == :no || REPL.banner(term, short=banner==:short)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -445,7 +445,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        banner == :no || Base.banner(short=banner==:short)
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
