@@ -386,3 +386,53 @@ annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
 Get all annotations of `chr`.
 """
 annotations(c::AnnotatedChar) = c.annotations
+
+## AnnotatedIOBuffer
+
+struct AnnotatedIOBuffer <: IO
+    io::IOBuffer
+    annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
+end
+
+AnnotatedIOBuffer(io::IOBuffer) = AnnotatedIOBuffer(io, Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}())
+AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
+
+function show(io::IO, annio::AnnotatedIOBuffer)
+    show(io, AnnotatedIOBuffer)
+    print(io, '(', annio.io.size, " bytes)")
+end
+
+position(io::AnnotatedIOBuffer) = position(io.io)
+lock(io::AnnotatedIOBuffer) = lock(io.io)
+unlock(io::AnnotatedIOBuffer) = unlock(io.io)
+
+function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
+    astr = AnnotatedString(astr)
+    offset = position(io.io)
+    for (region, annot) in astr.annotations
+        start, stop = first(region), last(region)
+        push!(io.annotations, (start+offset:stop+offset, annot))
+    end
+    write(io.io, String(astr))
+end
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, AnnotatedString(c))
+write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
+write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
+write(io::AnnotatedIOBuffer, x::UInt8) = write(io.io, x)
+
+"""
+    read(io::AnnotatedIOBuffer, AnnotatedString)
+
+Read the entirety of `io`, as an `AnnotatedString`. This preserves the
+annotations of any `AnnotatedString`s written to `io` and otherwise acts like
+`read(io::IO, String)`.
+"""
+function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{String}})
+    str = String(take!(io.io))
+    annots = copy(io.annotations)
+    empty!(io.annotations)
+    seekstart(io.io)
+    AnnotatedString(str, annots)
+end
+read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
+read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
