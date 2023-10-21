@@ -212,7 +212,7 @@ function annotatedstring(xs...)
             for (region, annot) in x.string.annotations
                 start, stop = first(region), last(region)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = s.io.size + max(0, start - x.offset) + 1
+                    rstart = s.io.size + max(0, start - x.offset - 1) + 1
                     rstop = s.io.size + min(stop, x.offset + x.ncodeunits) - x.offset
                     push!(annotations, (rstart:rstop, annot))
                 end
