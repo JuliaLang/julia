@@ -1457,22 +1457,22 @@ end
     c, r = test_complete("CompletionFoo.kwtest3(a;foob")
     @test c == ["foobar="]
     c, r = test_complete("CompletionFoo.kwtest3(a; le")
-    @test "length" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete("CompletionFoo.kwtest3.(a;\nlength")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a, length=4, l")
     @test "length" ∈ c
     @test "length=" ∉ c # since it was already used, do not suggest it again
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; kwargs..., fo")
-    @test "foreach" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "foreach" ∉ c
     @test "foobar=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, le")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c # the first method could be called and `anotherkwarg` slurped
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!")
@@ -1486,7 +1486,7 @@ end
     c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
     @test c == ["namedarg="]
     c, r = test_complete_foo("kwtest3(blabla; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     @test "namedarg=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(blabla; named.")
@@ -1494,11 +1494,11 @@ end
     c, r = test_complete_foo("kwtest3(blabla; named..., another!")
     @test c == ["another!kwarg="]
     c, r = test_complete_foo("kwtest3(blabla; named..., len")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     c, r = test_complete_foo("kwtest3(1+3im; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     # TODO: @test "namedarg=" ∉ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(1+3im; named.")
