@@ -3064,9 +3064,12 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             varg2 = emit_pointer_from_objref(ctx, varg2);
             Value *gc_uses[2];
             int nroots = 0;
-            if ((gc_uses[nroots] = get_gc_root_for(arg1)))
+            // these roots may seem a bit overkill, but we want to make sure
+            // that a!=b implies (a,)!=(b,) even if a and b are unused and
+            // therefore could be freed and then the memory for a reused for b
+            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg1)))
                 nroots++;
-            if ((gc_uses[nroots] = get_gc_root_for(arg2)))
+            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg2)))
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
@@ -5863,16 +5866,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            const jl_cgval_t &ai = argv[i];
-            if (ai.constant || ai.typ == jl_bottom_type)
-                continue;
-            if (ai.isboxed) {
-                vals.push_back(ai.Vboxed);
-            }
-            else if (jl_is_concrete_immutable(ai.typ) && !jl_is_pointerfree(ai.typ)) {
-                Type *at = julia_type_to_llvm(ctx, ai.typ);
-                vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
-            }
+            Value *gc_root = get_gc_root_for(ctx, argv[i]);
+            if (gc_root)
+                vals.push_back(gc_root);
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
@@ -9148,58 +9144,6 @@ static JuliaVariable *julia_const_gv(jl_value_t *val)
     return nullptr;
 }
 
-// Handle FLOAT16 ABI v2
-#if JULIA_FLOAT16_ABI == 2
-static void makeCastCall(Module &M, StringRef wrapperName, StringRef calledName, FunctionType *FTwrapper, FunctionType *FTcalled, bool external)
-{
-    Function *calledFun = M.getFunction(calledName);
-    if (!calledFun) {
-        calledFun = Function::Create(FTcalled, Function::ExternalLinkage, calledName, M);
-    }
-    auto linkage = external ? Function::ExternalLinkage : Function::InternalLinkage;
-    auto wrapperFun = Function::Create(FTwrapper, linkage, wrapperName, M);
-    wrapperFun->addFnAttr(Attribute::AlwaysInline);
-    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", wrapperFun));
-    SmallVector<Value *, 4> CallArgs;
-    if (wrapperFun->arg_size() != calledFun->arg_size()){
-        llvm::errs() << "FATAL ERROR: Can't match wrapper to called function";
-        abort();
-    }
-    for (auto wrapperArg = wrapperFun->arg_begin(), calledArg = calledFun->arg_begin();
-            wrapperArg != wrapperFun->arg_end() && calledArg != calledFun->arg_end(); ++wrapperArg, ++calledArg)
-    {
-        CallArgs.push_back(builder.CreateBitCast(wrapperArg, calledArg->getType()));
-    }
-    auto val = builder.CreateCall(calledFun, CallArgs);
-    auto retval = builder.CreateBitCast(val,wrapperFun->getReturnType());
-    builder.CreateRet(retval);
-}
-
-void emitFloat16Wrappers(Module &M, bool external)
-{
-    auto &ctx = M.getContext();
-    makeCastCall(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
-                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
-    makeCastCall(M, "__extendhfsf2", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
-                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
-    makeCastCall(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
-                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
-    makeCastCall(M, "__truncsfhf2", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
-                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
-    makeCastCall(M, "__truncdfhf2", "julia__truncdfhf2", FunctionType::get(Type::getHalfTy(ctx), { Type::getDoubleTy(ctx) }, false),
-                FunctionType::get(Type::getInt16Ty(ctx), { Type::getDoubleTy(ctx) }, false), external);
-}
-
-static void init_f16_funcs(void)
-{
-    auto ctx = jl_ExecutionEngine->acquireContext();
-    auto TSM =  jl_create_ts_module("F16Wrappers", ctx);
-    auto aliasM = TSM.getModuleUnlocked();
-    emitFloat16Wrappers(*aliasM, true);
-    jl_ExecutionEngine->addModule(std::move(TSM));
-}
-#endif
-
 static void init_jit_functions(void)
 {
     add_named_global(jl_small_typeof_var, &jl_small_typeof);
@@ -9442,9 +9386,6 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_init_codegen_impl(void)
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
     init_jit_functions();
-#if JULIA_FLOAT16_ABI == 2
-    init_f16_funcs();
-#endif
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT

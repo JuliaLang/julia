@@ -246,9 +246,9 @@ function exec_options(opts)
             # If we're doing a bug report, don't load anything else. We will
             # spawn a child in which to execute these options.
             let InteractiveUtils = load_InteractiveUtils()
-                InteractiveUtils.report_bug(arg)
+                invokelatest(InteractiveUtils.report_bug, arg)
             end
-            return nothing
+            return false
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -261,8 +261,8 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(Main, :(const Distributed = $Distributed))
-            Core.eval(Main, :(using .Distributed))
+            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
 
         invokelatest(Main.Distributed.process_opts, opts)
@@ -270,6 +270,10 @@ function exec_options(opts)
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
+
+    # load terminfo in for styled printing
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    global current_terminfo = load_terminfo(term_env)
 
     # load ~/.julia/config/startup.jl file
     if startup
@@ -380,19 +384,18 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(mod, :InteractiveUtils)
+    if !isdefined(MainInclude, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(mod, :(using .InteractiveUtils))
-                return InteractiveUtils
+                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
+            return nothing
         end
-        return nothing
     end
-    return getfield(mod, :InteractiveUtils)
+    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
+    return MainInclude.InteractiveUtils
 end
 
 function load_REPL()
@@ -417,11 +420,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     end
     # TODO cleanup REPL_MODULE_REF
-
     if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner == :no || Base.banner(term, short=banner==:short)
             if term.term_type == "dumb"
@@ -511,10 +512,6 @@ A variable referring to the last thrown errors, automatically imported to the in
 The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
-
-# weakly exposes ans and err variables to Main
-export ans, err
-
 end
 
 """

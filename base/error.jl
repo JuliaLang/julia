@@ -37,7 +37,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline

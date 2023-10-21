@@ -118,7 +118,8 @@ struct Classification {
 void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
 {
     // Floating point types
-    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_bfloat16_type) {
+    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float16_type ||
+        dt == jl_bfloat16_type) {
         accum.addField(offset, Sse);
     }
     // Misc types

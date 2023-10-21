@@ -4,10 +4,6 @@ Core.include(Main, "Base.jl")
 
 using .Base
 
-# Set up Main module
-using Base.MainInclude # ans, err, and sometimes Out
-import Base.MainInclude: eval, include
-
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
 
@@ -63,8 +59,9 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            dep[3] == 0.0 && continue
-            push!(Base._included_files, dep[1:2])
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
         Base._track_dependencies[] = false
@@ -78,7 +75,10 @@ let
     empty!(LOAD_PATH)
     Base.init_load_path() # want to be able to find external packages in userimg.jl
 
+    # Set up Main module
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
+    eval(Main, :(using Base.MainInclude: eval, include, ans, err))
+
     tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)

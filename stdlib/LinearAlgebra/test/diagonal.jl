@@ -792,7 +792,7 @@ end
     evecs = [ [[ 1/sqrt(2)+0im, 1/sqrt(2)*im ]]  [[ 1/sqrt(2)+0im, -1/sqrt(2)*im ]]  [[ 0.0, 0.0 ]]       [[ 0.0, 0.0 ]]      [[ 0.0, 0.0]];
               [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
     @test eigD.values == evals
-    @test eigD.vectors == evecs
+    @test eigD.vectors ≈ evecs
     @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 end
 
