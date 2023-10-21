@@ -234,7 +234,11 @@ For custom matrix and vector types, it is recommended to implement
 if possible.
 """
 @inline function mul!(C, A, B)
-    return mul!(C, A, B, true, false)
+    if eltype(C) <: BlasFloat && eltype(C) === eltype(A) === eltype(B)
+        return mul!(C, A, B, true, false)
+    else
+        return _generic_matmatmul!(C, A, B)
+    end
 end
 
 """
@@ -260,7 +264,13 @@ julia> C
  730.0  740.0
 ```
 """
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
+@inline function mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number)
+    if (!((eltype(C) <: BlasFloat && eltype(C) === eltype(A) === eltype(B)))) ||
+        (!(C isa StridedVecOrMat && A isa StridedVecOrMat && B isa StridedVecOrMat)) && 
+         α == true && (β == true || β == false)
+       β == false && fill!(C, zero(eltype(C)))
+       return _generic_matmatmuladd!(C, A, B)
+    end
     generic_matmatmul!(
         C,
         wrapper_char(A),
@@ -269,6 +279,33 @@ julia> C
         _unwrap(B),
         MulAddMul(α, β)
     )
+end
+
+function _generic_matmatmuladd!(C, A, B)
+    AxM = axes(A, 1)
+    AxK = axes(A, 2) # we use two `axes` calls in case of `AbstractVector`
+    BxK = axes(B, 1)
+    BxN = axes(B, 2)
+    CxM = axes(C, 1)
+    CxN = axes(C, 2)
+    if AxM != CxM
+        throw(DimensionMismatch(lazy"matrix A has axes ($AxM,$AxK), matrix C has axes ($CxM,$CxN)"))
+    end
+    if AxK != BxK
+        throw(DimensionMismatch(lazy"matrix A has axes ($AxM,$AxK), matrix B has axes ($BxK,$CxN)"))
+    end
+    if BxN != CxN
+        throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
+    end
+    for n = BxN, k = BxK, m = AxM
+        C[m,n] = muladd(A[m,k], B[k,n], C[m,n])
+    end
+    return C
+end
+function _generic_matmatmul!(C, A, B)
+    _generic_matmatmuladd!(fill!(C, zero(eltype(C))), A, B)
+end
+
 
 """
     rmul!(A, B)
