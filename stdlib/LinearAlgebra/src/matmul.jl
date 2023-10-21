@@ -266,7 +266,7 @@ julia> C
 """
 @inline function mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number)
     if (!((eltype(C) <: BlasFloat && eltype(C) === eltype(A) === eltype(B)))) ||
-        (!(C isa StridedVecOrMat && A isa StridedVecOrMat && B isa StridedVecOrMat)) && 
+        (!(C isa StridedVecOrMat && A isa StridedVecOrMat && B isa StridedVecOrMat)) &&
          α == true && (β == true || β == false)
        β == false && fill!(C, zero(eltype(C)))
        return _generic_matmatmuladd!(C, A, B)
