@@ -627,7 +627,7 @@ function uripath(path::String)
         s, r"[^A-Za-z0-9\-_.~]+" => percent_escape)
     string("file://", gethostname(), '/',
            join(map(encode_uri_component,
-                    split(path, Filesystem.path_separator, keepempty=false)),
+                    split(path, path_separator_re, keepempty=false)),
                 '/'))
 end
 
