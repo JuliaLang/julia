@@ -1,3 +1,12 @@
+"""
+Nontrivia tokens (leaf nodes / literals) which are malformed are parsed into
+ErrorVal when `ignore_errors=true` during parsing.
+"""
+struct ErrorVal
+end
+
+Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
+
 #-------------------------------------------------------------------------------
 # This file contains utility functions for converting undecorated source
 # strings into Julia values.  For example, string->number, string unescaping, etc.
@@ -364,7 +373,6 @@ end
 
 #-------------------------------------------------------------------------------
 function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
-    # Leaf node
     k = kind(head)
     # Any errors parsing literals are represented as ErrorVal() - this can
     # happen when the user sets `ignore_errors=true` during parsing.
@@ -404,6 +412,7 @@ function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
         return false
     end
 
+    # TODO: Avoid allocating temporary String here
     val_str = String(txtbuf[srcrange])
     if k == K"Integer"
         parse_int_literal(val_str)
@@ -417,9 +426,6 @@ function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
         else
             Symbol(normalize_identifier(val_str))
         end
-    elseif is_keyword(k)
-        # This should only happen for tokens nested inside errors
-        Symbol(val_str)
     elseif is_operator(k)
         isempty(srcrange)  ?
             Symbol(untokenize(k)) : # synthetic invisible tokens
@@ -436,9 +442,12 @@ function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
         Symbol("core_@cmd")
     elseif is_syntax_kind(head)
         nothing
+    elseif is_keyword(k)
+        # This should only happen for tokens nested inside errors
+        Symbol(val_str)
     else
-        # FIXME: this allows us to recover from trivia is_error nodes
-        # that we insert below
+        # Other kinds should only happen for tokens nested inside errors
+        # TODO: Consolidate this with the is_keyword() above? Something else?
         ErrorVal()
     end
 end

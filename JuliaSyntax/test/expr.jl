@@ -743,7 +743,11 @@
         @test parsestmt("(x", ignore_errors=true) ==
             Expr(:block, :x, Expr(:error))
         @test parsestmt("x do", ignore_errors=true) ==
-            Expr(:block, :x, Expr(:error, Expr(:do_lambda)))
+            Expr(:block, :x, Expr(:error, :do))
+        @test parsestmt("x var\"y\"", ignore_errors=true) ==
+            Expr(:block, :x, Expr(:error, :var, ErrorVal(), "y", ErrorVal()))
+        @test parsestmt("var\"y", ignore_errors=true) ==
+            Expr(:var, :y, Expr(:error))
     end
 
     @testset "import" begin

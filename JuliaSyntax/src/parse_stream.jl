@@ -1021,7 +1021,7 @@ function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
     while true
         last_token = j <= lastindex(ranges) ?
                      ranges[j].last_token : lastindex(tokens)
-        # Process tokens to nodes for all tokens used by the next internal node
+        # Process tokens to leaf nodes for all tokens used by the next internal node
         while i <= last_token
             t = tokens[i]
             if kind(t) == K"TOMBSTONE"
@@ -1031,9 +1031,7 @@ function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
             srcrange = (stream.tokens[i-1].next_byte:
                         stream.tokens[i].next_byte - 1)
             h = head(t)
-            children = (is_syntax_kind(h) || is_keyword(h)) ?
-                (stack[n].node for n=1:0) : nothing
-            node = make_node(h, srcrange, children)
+            node = make_node(h, srcrange, nothing)
             if !isnothing(node)
                 push!(stack, (first_token=i, node=node))
             end

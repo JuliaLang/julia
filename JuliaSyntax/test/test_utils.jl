@@ -19,6 +19,7 @@ using .JuliaSyntax:
     # Nodes
     GreenNode,
     SyntaxNode,
+    ErrorVal,
     # Node inspection
     kind,
     flags,
