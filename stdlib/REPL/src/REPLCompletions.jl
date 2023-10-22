@@ -970,8 +970,12 @@ function complete_keyword_argument(partial, last_idx, context_module)
     end
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
-    append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
-    append!(suggestions, complete_keyval(last_word))
+
+    # Only add these if not in kwarg space. i.e. not in `foo(; `
+    if kwargs_flag == 0
+        append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+        append!(suggestions, complete_keyval(last_word))
+    end
 
     return sort!(suggestions, by=completion_text), wordrange
 end
