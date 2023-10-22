@@ -128,7 +128,7 @@ end
     # Check the first key in Artifacts.toml is hashed correctly
     @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
             SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
-    
+
     # Check the second key in Artifacts.toml is hashed correctly
     @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
             SHA1("43563e7631a7eafae1f9f8d9d332e3de44ad7239")
