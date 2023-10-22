@@ -196,8 +196,10 @@ end
 # Convert internal node of the JuliaSyntax parse tree to an Expr
 function _internal_node_to_Expr(source, srcrange, head, childranges, childheads, args)
     k = kind(head)
-    if k == K"var" || k == K"char"
-        @check length(args) == 1
+    if (k == K"var" || k == K"char") && length(args) == 1
+        # Ideally we'd like `@check length(args) == 1` as an invariant for all
+        # K"var" and K"char" nodes, but this discounts having embedded error
+        # nodes when ignore_errors=true is set.
         return args[1]
     elseif k == K"string" || k == K"cmdstring"
         return _string_to_Expr(k, args)

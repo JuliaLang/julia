@@ -1955,7 +1955,8 @@ function parse_resword(ps::ParseState)
     elseif word in KSet"break continue"
         # break     ==>  (break)
         # continue  ==>  (continue)
-        bump(ps)
+        bump(ps, TRIVIA_FLAG)
+        emit(ps, mark, word)
         k = peek(ps)
         if !(k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol))
             recover(is_closer_or_newline, ps, TRIVIA_FLAG,

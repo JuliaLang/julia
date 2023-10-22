@@ -491,7 +491,7 @@ tests = [
         ((v=v"1.8",), "struct A const a end") => "(struct A (block (const a)))"
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
         "struct A end"    =>  "(struct A (block))"
-        "struct try end"  =>  "(struct (error (try)) (block))"
+        "struct try end"  =>  "(struct (error try) (block))"
         # return
         "return\nx"   =>  "(return)"
         "return)"     =>  "(return)"
@@ -503,7 +503,7 @@ tests = [
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
-        "module do \n end"  =>  "(module (error (do)) (block))"
+        "module do \n end"  =>  "(module (error do) (block))"
         "module \$A end"    =>  "(module (\$ A) (block))"
         "module A \n a \n b \n end"  =>  "(module A (block a b))"
         """module A \n "x"\na\n end""" => """(module A (block (doc (string "x") a)))"""

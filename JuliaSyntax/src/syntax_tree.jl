@@ -53,12 +53,6 @@ text by calling one of the parser API functions such as [`parseall`](@ref)
 """
 const SyntaxNode = TreeNode{SyntaxData}
 
-# Value of an error node with no children
-struct ErrorVal
-end
-
-Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
-
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
                     keep_parens=false, position::Integer=1)
     GC.@preserve source begin
@@ -71,7 +65,7 @@ end
 function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
                         raw::GreenNode{SyntaxHead},
                         position::Int, keep_parens::Bool)
-    if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
+    if !haschildren(raw)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
         valrange = position:position + span(raw) - 1
