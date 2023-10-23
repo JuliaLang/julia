@@ -36,6 +36,7 @@ Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
+using StyledStrings
 
 export
     AbstractREPL,
@@ -91,10 +92,10 @@ include("docview.jl")
 
 answer_color(::AbstractREPL) = ""
 
-const JULIA_PROMPT = "julia> "
-const PKG_PROMPT = "pkg> "
-const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
+const JULIA_PROMPT = styled"{repl_prompt_julia:julia> }"
+const PKG_PROMPT = styled"{repl_prompt_pkg:pkg> }"
+const SHELL_PROMPT = styled"{repl_prompt_shell:shell> }"
+const HELP_PROMPT = styled"{repl_prompt_help:help?> }"
 
 mutable struct REPLBackend
     "channel for AST"
@@ -1024,18 +1025,18 @@ function setup_interface(
     # Set up the main Julia prompt
     julia_prompt = Prompt(contextual_prompt(repl, JULIA_PROMPT);
         # Copy colors from the prompt object
-        prompt_prefix = hascolor ? repl.prompt_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+        # prompt_prefix = hascolor ? repl.prompt_color : "",
+        # prompt_suffix = hascolor ?
+            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt(contextual_prompt(repl, "help?> "),
-        prompt_prefix = hascolor ? repl.help_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+    help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
+        # prompt_prefix = hascolor ? repl.help_color : "",
+        # prompt_suffix = hascolor ?
+            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
@@ -1045,9 +1046,9 @@ function setup_interface(
 
     # Set up shell mode
     shell_mode = Prompt(SHELL_PROMPT;
-        prompt_prefix = hascolor ? repl.shell_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+        # prompt_prefix = hascolor ? repl.shell_color : "",
+        # prompt_suffix = hascolor ?
+            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)

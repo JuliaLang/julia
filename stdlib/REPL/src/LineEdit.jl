@@ -9,7 +9,8 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, show, AnyDict, position
+import Base: ensureroom, show, AnyDict, position, 
+                        AnnotatedString
 using Base: something
 
 using InteractiveUtils: InteractiveUtils
@@ -43,15 +44,23 @@ end
 
 mutable struct Prompt <: TextInterface
     # A string or function to be printed as the prompt.
-    prompt::Union{String,Function}
+    prompt::Union{AnnotatedString{String},String,Function}
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
-    prompt_prefix::Union{String,Function}
+    # TODO remove
+    # prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
-    prompt_suffix::Union{String,Function}
-    output_prefix::Union{String,Function}
-    output_prefix_prefix::Union{String,Function}
-    output_prefix_suffix::Union{String,Function}
+    
+    # TODO remove
+    # prompt_suffix::Union{String,Function}
+
+    # used for things like IPython mode
+    output_prefix::Union{AnnotatedString{String},String,Function}
+
+    # TODO remove
+    # output_prefix_prefix::Union{String,Function}
+    # TODO remove
+    # output_prefix_suffix::Union{String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -201,6 +210,7 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
         errormonitor(@async begin
             trylock(s.refresh_lock) || return
             try
+                # TODO what can be refactored in light of StyledStrings?
                 orig_prefix = s.p.prompt_prefix
                 use_current && push!(colors, prompt_string(orig_prefix))
                 i = 0
@@ -211,7 +221,7 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
                     sleep(blink)
                     s.beeping -= blink
                 end
-                s.p.prompt_prefix = orig_prefix
+                # s.p.prompt_prefix = orig_prefix
                 refresh_multi_line(s, beeping=true)
                 s.beeping = 0.0
             finally
@@ -1534,27 +1544,24 @@ default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
-    prefix = prompt_string(p.prompt_prefix)
-    suffix = prompt_string(p.prompt_suffix)
-    write(terminal, prefix)
-    color && write(terminal, Base.text_colors[:bold])
+    # write(terminal, prefix)
+    # color && write(terminal, Base.text_colors[:bold])
     width = write_prompt(terminal, p.prompt, color)
-    color && write(terminal, Base.text_colors[:normal])
-    write(terminal, suffix)
+    # color && write(terminal, Base.text_colors[:normal])
+    # write(terminal, suffix)
     return width
 end
-
+# TODO remove
 function write_output_prefix(io::IO, p::Prompt, color::Bool)
-    prefix = prompt_string(p.output_prefix_prefix)
-    suffix = prompt_string(p.output_prefix_suffix)
-    print(io, prefix)
-    color && write(io, Base.text_colors[:bold])
+    # prefix = prompt_string(p.output_prefix_prefix)
+    # suffix = prompt_string(p.output_prefix_suffix)
+    # print(io, prefix)
+    # color && write(io, Base.text_colors[:bold])
     width = write_prompt(io, p.output_prefix, color)
-    color && write(io, Base.text_colors[:normal])
-    print(io, suffix)
+    # color && write(io, Base.text_colors[:normal])
+    # print(io, suffix)
     return width
 end
-
 # On Windows, when launching external processes, we cannot control what assumption they make on the
 # console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
 # not leave the console mode in a corrupt state.
