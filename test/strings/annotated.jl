@@ -13,16 +13,23 @@
     @test str * "a" == Base.AnnotatedString("some stringa")
     @test str * str == Base.AnnotatedString("some stringsome string")
     Base.annotate!(str, 1:4, :thing => 0x01)
-    Base.annotate!(str, 5:11, :other => 0x02)
+    Base.annotate!(str, 6:11, :other => 0x02)
     Base.annotate!(str, 1:11, :all => 0x03)
+    #  :thing :other
+    #  ┌┸─┐ ┌──┸─┐
+    # "some string"
+    #  └───┰─────┘
+    #     :all
     @test str[3:4] == SubString(str, 3, 4)
     @test Base.AnnotatedString(str[3:4]) ==
         Base.AnnotatedString("me", [(1:2, :thing => 0x01), (1:2, :all => 0x03)])
-    @test str == Base.AnnotatedString("some string", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (5:11, :other => 0x02)])
+    @test Base.AnnotatedString(str[3:6]) ==
+        Base.AnnotatedString("me s", [(1:2, :thing => 0x01), (1:4, :all => 0x03), (4:4, :other => 0x02)])
+    @test str == Base.AnnotatedString("some string", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (6:11, :other => 0x02)])
     @test str != Base.AnnotatedString("some string")
-    @test str != Base.AnnotatedString("some string", [(1:1, :thing => 0x01), (5:5, :other => 0x02), (11:11, :all => 0x03)])
-    @test str != Base.AnnotatedString("some string", [(1:4, :thing => 0x11), (1:11, :all => 0x13), (5:11, :other => 0x12)])
-    @test str != Base.AnnotatedString("some thingg", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (5:11, :other => 0x02)])
+    @test str != Base.AnnotatedString("some string", [(1:1, :thing => 0x01), (6:6, :other => 0x02), (11:11, :all => 0x03)])
+    @test str != Base.AnnotatedString("some string", [(1:4, :thing => 0x11), (1:11, :all => 0x13), (6:11, :other => 0x12)])
+    @test str != Base.AnnotatedString("some thingg", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (6:11, :other => 0x02)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [:aaa => 0x04]),
         "a string", Base.AnnotatedString("a string"),
@@ -62,7 +69,7 @@ end
 end
 
 @testset "Styling preservation" begin
-    str = Base.AnnotatedString("some string", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (5:11, :other => 0x02)])
+    str = Base.AnnotatedString("some string", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (6:11, :other => 0x02)])
     @test match(r".e", str).match == str[3:4]
     @test  match(r"(.e)", str).captures == [str[3:4]]
     let m0 = match(r"(.)e", str)
@@ -74,11 +81,11 @@ end
     @test lpad(str, 12) ==
         Base.AnnotatedString(" some string", [(2:5, :thing => 0x01),
                                       (2:12, :all => 0x03),
-                                      (6:12, :other => 0x02)])
+                                      (7:12, :other => 0x02)])
     @test rpad(str, 12) ==
         Base.AnnotatedString("some string ", [(1:4, :thing => 0x01),
                                       (1:11, :all => 0x03),
-                                      (5:11, :other => 0x02)])
+                                      (6:11, :other => 0x02)])
     str1 = Base.AnnotatedString("test", [(1:4, :label => 5)])
     str2 = Base.AnnotatedString("case", [(2:3, :label => "oomph")])
     @test join([str1, str1], Base.AnnotatedString(" ")) ==
