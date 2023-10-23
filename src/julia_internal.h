@@ -194,7 +194,6 @@ int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_set_peek_cond(uintptr_t);
 JL_DLLEXPORT double jl_get_profile_peek_duration(void);
 JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 

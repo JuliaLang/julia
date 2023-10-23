@@ -86,12 +86,10 @@ void jl_wait_empty_begin(void)
     }
     JL_UV_UNLOCK();
 }
-
 void jl_wait_empty_end(void)
 {
-    JL_UV_LOCK();
+    // n.b. caller must be holding jl_uv_mutex
     uv_close((uv_handle_t*)&wait_empty_worker, NULL);
-    JL_UV_UNLOCK();
 }
 
 

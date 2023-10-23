@@ -285,21 +285,27 @@ void jl_set_profile_peek_duration(double t)
     profile_peek_duration = t;
 }
 
-uintptr_t profile_show_peek_cond_loc;
-JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+jl_mutex_t profile_show_peek_cond_lock;
+static uv_async_t *profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
 {
+    JL_LOCK_NOGC(&profile_show_peek_cond_lock);
     profile_show_peek_cond_loc = cond;
+    JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
 static void jl_check_profile_autostop(void)
 {
-    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+    if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
         jl_profile_stop_timer();
         jl_safe_printf("\n==============================================================\n");
         jl_safe_printf("Profile collected. A report will print at the next yield point\n");
         jl_safe_printf("==============================================================\n\n");
-        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+        JL_LOCK_NOGC(&profile_show_peek_cond_lock);
+        if (profile_show_peek_cond_loc != NULL)
+            uv_async_send(profile_show_peek_cond_loc);
+        JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
     }
 }
 
