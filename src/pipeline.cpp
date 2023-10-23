@@ -710,44 +710,101 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
     }
 
 #ifdef USE_TAPIR
-    using ValueSet = llvm::SetVector<llvm::Value *>;
-    void marshalInputsCallback(Function &F, const ValueSet &Inputs, ValueSet &Args,
-                           ValueToValueMapTy &InputMap,
-                           IRBuilder<> &StoreBuilder, IRBuilder<> &LoadBuilder,
-                           IRBuilder<> &StaticAllocaInserter) {
-        dbgs() << "marshalInputsCallback called!\n";
+    // using ValueSet = llvm::SetVector<llvm::Value *>;
+    // void marshalInputsCallback(Function &F, const ValueSet &Inputs, ValueSet &Args,
+    //                        ValueToValueMapTy &InputMap,
+    //                        IRBuilder<> &StoreBuilder, IRBuilder<> &LoadBuilder,
+    //                        IRBuilder<> &StaticAllocaInserter) {
+    //     dbgs() << "marshalInputsCallback called!\n";
 
-        LLVMContext &Ctx = F.getContext();
-        // Get vectors of inputs and their types to define argument structure.                                                                                                                                                                                             
+    //     LLVMContext &Ctx = F.getContext();
+    //     // Get vectors of inputs and their types to define argument structure.
+    //     SmallVector<Value *, 8> StructInputs;
+    //     SmallVector<Type *, 8> StructIT;
+    //     for (Value *V : Inputs) {
+    //         StructInputs.push_back(V);
+    //         StructIT.push_back(V->getType());
+    //     }
+    //     // Derive type of argument structure.
+    //     StructType *STy = StructType::get(Ctx, StructIT);
+    //     // Allocate the argument structure.
+    //     AllocaInst *Closure = StaticAllocaInserter.CreateAlloca(STy);
+    //     for (unsigned i = 0; i < StructInputs.size(); ++i) {
+    //         // Populate the argument structure.
+    //         StoreBuilder.CreateStore(
+    //             StructInputs[i], StoreBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
+    //         // Load argument from the argument structure.  Store the load into InputMap
+    //         // so that uses of the argument can be remapped to use the loaded value
+    //         // instead.
+    //         // InputMap[StructInputs[i]] = LoadBuilder.CreateLoad(
+    //             // StructIT[i], LoadBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
+    //     }
+
+    //     // Modify Args to contain just the argument structure.
+    //     // Args.clear();
+    //     // Args.insert(Closure);
+    // }
+
+    void loopLaunchCallback(CallBase &CB, SyncInst *SI) {
+        auto &Ctx = CB.getContext();
+        auto *M = CB.getModule();
+        // void* (void *module, void *name);
+        auto lookupOrCompileFT = FunctionType::get(Type::getInt8PtrTy(Ctx), {Type::getInt8PtrTy(Ctx), M->getDataLayout().getIntPtrType(Ctx), Type::getInt8PtrTy(Ctx)}, false);
+        auto lookupOrCompile = M->getOrInsertFunction("__chi_lookup_or_compile", lookupOrCompileFT);
+
+        // auto chiModule = M->getNamedGlobal("__chiabi_kernel_module");
+        // assert(chiModule);
+        auto chiModule = M->getNamedGlobal(Twine("__chiabi_kernel_module." +  CB.getCalledFunction()->getName()).str());
+        assert(chiModule);
+
+        auto kernelName = ConstantDataArray::getString(Ctx, CB.getCalledFunction()->getName());
+        auto kernel = new GlobalVariable(*M, kernelName->getType(), true, GlobalValue::InternalLinkage, kernelName, "");
+
+        auto nbytes = ConstantInt::get(M->getDataLayout().getIntPtrType(Ctx),
+            static_cast<ConstantDataArray*>(chiModule->getInitializer())->getNumElements());
+
+        IRBuilder<> builder(&CB);
+        auto arg0 = builder.CreateBitOrPointerCast(chiModule, Type::getInt8PtrTy(Ctx));
+        auto arg1 = builder.CreateBitOrPointerCast(kernel, Type::getInt8PtrTy(Ctx));
+        auto func = builder.CreateCall(lookupOrCompile, {arg0, nbytes, arg1});
+
         SmallVector<Value *, 8> StructInputs;
         SmallVector<Type *, 8> StructIT;
-        for (Value *V : Inputs) {
+        for (Value *V : CB.args()) {
             StructInputs.push_back(V);
             StructIT.push_back(V->getType());
         }
-        // Derive type of argument structure.                                                                                                                                                                             
+        // Derive type of argument structure.
         StructType *STy = StructType::get(Ctx, StructIT);
-        // Allocate the argument structure.                                                                                                                                                                                                                                
-        AllocaInst *Closure = StaticAllocaInserter.CreateAlloca(STy);
+        // Allocate the argument structure.
+        AllocaInst *Closure = builder.CreateAlloca(STy);
         for (unsigned i = 0; i < StructInputs.size(); ++i) {
-            // Populate the argument structure.                                                                                                                                                                                                                              
-            StoreBuilder.CreateStore(
-                StructInputs[i], StoreBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
-            // Load argument from the argument structure.  Store the load into InputMap                                                                                                                                                                                      
-            // so that uses of the argument can be remapped to use the loaded value                                                                                                                                                                                          
-            // instead.                                                                                                                                                                                                                                                      
-            InputMap[StructInputs[i]] = LoadBuilder.CreateLoad(
-                StructIT[i], LoadBuilder.CreateConstGEP2_32(STy, Closure, 0, i));
+            // Populate the argument structure.
+            builder.CreateStore(
+                StructInputs[i], builder.CreateConstGEP2_32(STy, Closure, 0, i));
         }
 
-        // Modify Args to contain just the argument structure.                                                                                                                                                                                                             
-        Args.clear();
-        Args.insert(Closure);
-    }
+        // void (func, args, sizeof(args), N)
+        auto launchFT = FunctionType::get(Type::getVoidTy(Ctx), {Type::getInt8PtrTy(Ctx),
+                                                                 Type::getInt8PtrTy(Ctx), M->getDataLayout().getIntPtrType(Ctx),
+                                                                 M->getDataLayout().getIntPtrType(Ctx)}, false);
+        auto launch = M->getOrInsertFunction("__chi_launch", launchFT);
 
-    void loopLaunchCallback(CallBase &CB, SyncInst *SI) {
-        dbgs() << "loopLaunchCallback called!\n";
-        dbgs() << "Callbase" << CB;
+        auto N = builder.CreateSub(CB.getArgOperand(1), CB.getArgOperand(0));
+        auto szClosure = ConstantInt::get(M->getDataLayout().getIntPtrType(Ctx), M->getDataLayout().getTypeSizeInBits(STy) / 8);
+        builder.CreateCall(launch, {func, builder.CreateBitOrPointerCast(Closure, Type::getInt8PtrTy(Ctx)), szClosure, N});
+
+        CB.eraseFromParent();
+
+        if (SI) {
+            dbgs() << "SI: " << *SI;
+            // void ()
+            auto syncFT = FunctionType::get(Type::getVoidTy(Ctx), {}, false);
+            auto sync = M->getOrInsertFunction("__chi_sync", syncFT);
+            builder.SetInsertPoint(SI);
+            builder.CreateCall(sync);
+            SI->eraseFromParent();
+        }
     }
 #endif
 
@@ -767,7 +824,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         std::string bcPathHost = "";
         std::string bcPathDevice = "";
         TLII->setTapirTargetOptions(
-            std::make_unique<llvm::ChiABIOptions>(bcPathHost, bcPathDevice, marshalInputsCallback, loopLaunchCallback));
+            std::make_unique<llvm::ChiABIOptions>(bcPathHost, bcPathDevice, nullptr, loopLaunchCallback, /*UseSingleKernelModule*/ false));
 #endif
         return std::unique_ptr<TargetLibraryInfoImpl>(TLII);
     }
