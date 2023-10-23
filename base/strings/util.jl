@@ -571,6 +571,8 @@ end
 
 # Specialization for partition(s,n) to return a SubString
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+# SubStrings do not nest
+eltype(::Type{PartitionIterator{T}}) where {T<:SubString} = T
 
 function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
     state > ncodeunits(itr.c) && return nothing
