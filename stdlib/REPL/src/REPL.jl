@@ -49,7 +49,8 @@ import Base:
     display,
     show,
     AnyDict,
-    ==
+    ==,
+    AnnotatedString
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -476,11 +477,6 @@ end
 mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
-    prompt_color::String
-    input_color::String
-    answer_color::String
-    shell_color::String
-    help_color::String
     history_file::Bool
     in_shell::Bool
     in_help::Bool
@@ -511,11 +507,6 @@ hascolor(r::LineEditREPL) = r.hascolor
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
-        hascolor ? Base.text_colors[:green] : "",
-        hascolor ? Base.input_color() : "",
-        hascolor ? Base.answer_color() : "",
-        hascolor ? Base.text_colors[:red] : "",
-        hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
 
@@ -970,11 +961,11 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
+function contextual_prompt(repl::LineEditREPL, prompt::Union{AnnotatedString,String,Function})
     function ()
         mod = active_module(repl)
         prefix = mod == Main ? "" : string('(', mod, ") ")
-        pr = prompt isa String ? prompt : prompt()
+        pr = prompt isa AbstractString ? prompt : prompt()
         prefix * pr
     end
 end
@@ -1024,19 +1015,12 @@ function setup_interface(
 
     # Set up the main Julia prompt
     julia_prompt = Prompt(contextual_prompt(repl, JULIA_PROMPT);
-        # Copy colors from the prompt object
-        # prompt_prefix = hascolor ? repl.prompt_color : "",
-        # prompt_suffix = hascolor ?
-            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         on_enter = return_callback)
 
     # Setup help mode
     help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
-        # prompt_prefix = hascolor ? repl.help_color : "",
-        # prompt_suffix = hascolor ?
-            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
@@ -1046,9 +1030,6 @@ function setup_interface(
 
     # Set up shell mode
     shell_mode = Prompt(SHELL_PROMPT;
-        # prompt_prefix = hascolor ? repl.shell_color : "",
-        # prompt_suffix = hascolor ?
-            # (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
