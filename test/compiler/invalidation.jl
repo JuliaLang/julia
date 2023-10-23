@@ -46,9 +46,9 @@ CC.get(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance, default)
 CC.getindex(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
 function CC.setindex!(wvc::WorldView{InvalidationTesterCacheView}, ci::CodeInstance, mi::MethodInstance)
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
         delete!(wvc.cache.dict, replaced)
-        # Core.println(replaced) # debug
+        # Core.println("[InvalidationTester] ", replaced) # debug
     end
     setindex!(wvc.cache.dict, ci, mi)
 end

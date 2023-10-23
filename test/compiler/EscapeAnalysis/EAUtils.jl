@@ -137,7 +137,7 @@ CC.getindex(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = getin
 function CC.setindex!(wvc::WorldView{EscapeAnalyzerCacheView}, ci::CodeInstance, mi::MethodInstance)
     wvc.cache.code_cache.cache[mi] = ci
     # register the callback on invalidation
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
         delete!(wvc.cache.code_cache.cache, replaced)
         delete!(wvc.cache.escape_cache.cache, replaced)
     end
