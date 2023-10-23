@@ -634,6 +634,12 @@ define IMPLIB_FLAGS
 endef
 endif
 
+# On MacOS use old, slower linker for now to avoid linker warnings such as
+# ld: warning: no platform load command found in '../julia/usr/lib/julia/sys-o.a[2](text#0.o)', assuming: macOS
+ifeq ($(OS),Darwin)
+LDFLAGS += -Wl,-ld_classic
+endif
+
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 # We also don't really have a private bindir on windows right now, due to lack of RPATH.
 ifeq ($(OS),WINNT)
