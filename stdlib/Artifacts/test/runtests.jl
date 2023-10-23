@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+import Base: SHA1
 
 using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
@@ -118,6 +119,23 @@ end
         @test basename(@artifact_str("HelloWorldC", win64)) == "2f1a6d4f82cd1eea785a5141b992423c09491f1b"
         @test basename(@artifact_str("HelloWorldC", mac64)) == "f8ab5a03697f9afc82210d8a2be1d94509aea8bc"
     end
+end
+
+@testset "artifact_hash()" begin
+    # Use the Linus OS on an ARMv7L architecture for the tests to make tests reproducible
+    armv7l_linux = Platform("armv7l", "linux")
+
+    # Check the first key in Artifacts.toml is hashed correctly
+    @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+
+    # Check the second key in Artifacts.toml is hashed correctly
+    @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("43563e7631a7eafae1f9f8d9d332e3de44ad7239")
+
+    # Check artifact_hash() works for any AbstractString
+    @test artifact_hash(SubString("HelloWorldC0", 1, 11), joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
 end
 
 @testset "select_downloadable_artifacts()" begin
