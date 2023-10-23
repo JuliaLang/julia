@@ -1012,7 +1012,7 @@ static void sweep_weak_refs(void)
 }
 
 
-STATIC_INLINE void jl_batch_accum_heap_size(jl_ptls_t ptls, uint64_t sz)
+STATIC_INLINE void jl_batch_accum_heap_size(jl_ptls_t ptls, uint64_t sz) JL_NOTSAFEPOINT
 {
     uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc) + sz;
     if (alloc_acc < 16*1024)
@@ -1023,7 +1023,7 @@ STATIC_INLINE void jl_batch_accum_heap_size(jl_ptls_t ptls, uint64_t sz)
     }
 }
 
-STATIC_INLINE void jl_batch_accum_free_size(jl_ptls_t ptls, uint64_t sz)
+STATIC_INLINE void jl_batch_accum_free_size(jl_ptls_t ptls, uint64_t sz) JL_NOTSAFEPOINT
 {
     jl_atomic_store_relaxed(&ptls->gc_num.free_acc, jl_atomic_load_relaxed(&ptls->gc_num.free_acc) + sz);
 }
