@@ -489,14 +489,13 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
-    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
+    function LineEditREPL(t,hascolor,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+        new(t,hascolor,history_file,in_shell,in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
 outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
@@ -961,11 +960,11 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function contextual_prompt(repl::LineEditREPL, prompt::Union{AnnotatedString,String,Function})
+function contextual_prompt(repl::LineEditREPL, prompt::Union{AnnotatedString,Function})
     function ()
         mod = active_module(repl)
         prefix = mod == Main ? "" : string('(', mod, ") ")
-        pr = prompt isa AbstractString ? prompt : prompt()
+        pr = prompt isa AnnotatedString ? prompt : prompt()
         prefix * pr
     end
 end
@@ -1482,19 +1481,19 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     while !eof(repl.stream)::Bool
-        if have_color
-            print(repl.stream,repl.prompt_color)
-        end
-        print(repl.stream, "julia> ")
-        if have_color
-            print(repl.stream, input_color(repl))
-        end
+        # if have_color
+        #     print(repl.stream,repl.prompt_color)
+        # end
+        print(repl.stream, JULIA_PROMPT)
+        # if have_color
+        #     print(repl.stream, input_color(repl))
+        # end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
             ast = Base.parse_input_line(line)
-            if have_color
-                print(repl.stream, Base.color_normal)
-            end
+            # if have_color
+            #     print(repl.stream, Base.color_normal)
+            # end
             response = eval_with_backend(ast, backend)
             print_response(repl, response, !ends_with_semicolon(line), have_color)
         end

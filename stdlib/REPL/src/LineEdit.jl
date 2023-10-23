@@ -1532,13 +1532,22 @@ default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
-    width = write_prompt(terminal, p.prompt, color)
-    return width
+    @static Sys.iswindows() && _reset_console_mode()
+    # width = write_prompt(terminal, p.prompt, color)
+
+    promptstr = prompt_string(p)::AnnotatedString
+    # TODO this write is not dispatching to `StyledStrings`
+    write(terminal, promptstr)
+    return textwidth(promptstr)
+    # return width
 end
 # TODO remove
 function write_output_prefix(io::IO, p::Prompt, color::Bool)
-    width = write_prompt(io, p.output_prefix, color)
-    return width
+    @static Sys.iswindows() && _reset_console_mode()
+    promptstr = prompt_string(p.output_prefix)::String
+    # TODO this write is not dispatching to `StyledStrings`
+    write(io, promptstr)
+    return textwidth(promptstr)
 end
 # On Windows, when launching external processes, we cannot control what assumption they make on the
 # console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
@@ -1573,7 +1582,8 @@ end
 # returns the width of the written prompt
 function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
-    promptstr = prompt_string(s)::Union{String,AnnotatedString}
+    promptstr = prompt_string(s)::AbstractString
+    # TODO this write is not dispatching to `StyledStrings`
     write(terminal, promptstr)
     return textwidth(promptstr)
 end

@@ -46,3 +46,7 @@ When running with incremental precompilation, the above code causes issues with 
 I'm sure that the `_PROMPT` consts could be declared in a precompile-friendly way, but I wonder if this could be fixed within the `styled` macro. Maybe there are macros beyond base/stdlib which solve the same problem.
 
 - [ ] report precompilation issue to `StyledStrings.jl`
+
+Relevant PRs
+https://github.com/JuliaLang/julia/pull/36689
+https://github.com/JuliaLang/julia/pull/46474/
