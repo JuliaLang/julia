@@ -1165,6 +1165,7 @@ end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
 Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+Base.unaliascopy(S::Strider)::typeof(S) = (typeof(S))(Base.unaliascopy(S.data), S.offset, S.strides, S.size)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1294,6 +1295,18 @@ end
     end
 end
 
+@testset "PermutedDimsArray unaliasing" begin
+    A = [1 2; 3 4]
+    P = permutedims(A, (2,1))
+    A .= PermutedDimsArray(A, (2,1))
+    @test A == P
+
+    A = [1 2; 3 4]
+    S = Strider(vec(A), strides(A), size(A))
+    A .= PermutedDimsArray(S, (2, 1))
+    @test A == P
+end
+
 @testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
                                                                [1 4 7; 2 5 8; 3 6 9],
                                                                ntuple(identity, 9))
@@ -1314,6 +1327,59 @@ end
         @test last(2:typemax(Int), typemax(Int)÷2) ===
             range(stop=typemax(Int), length=typemax(Int)÷2)
     end
+end
+
+# Ensure dataids are inferrable for custom arrays
+struct M0 <: AbstractArray{Int,2} end
+struct M1{T} <: AbstractArray{Int,2}
+    x::T
+end
+struct M2{T,S} <: AbstractArray{Int,2}
+    x::T
+    y::S
+end
+struct M10{A,B,C,D,E,F,G,H,I,J} <: AbstractArray{Int,2}
+    a::A
+    b::B
+    c::C
+    d::D
+    e::E
+    f::F
+    g::G
+    h::H
+    i::I
+    j::J
+end
+
+@testset "dataids" begin
+    @test @inferred(Base.dataids(M0())) === ()
+    @test @inferred(Base.dataids(M1(1))) === ()
+    @test @inferred(Base.dataids(M1(1:10))) === ()
+    @test @inferred(Base.dataids(M10(1,2,3,4,5,6,7,8,9,0))) === ()
+
+    @test @inferred(Base.dataids(M1(M1([1])))) != Base.dataids(M1(M1([1])))
+    @test @inferred(Base.dataids(M1(M2([1],2)))) != Base.dataids(M1(M2([1],2)))
+    @test @inferred(Base.dataids(M1(M2([1],[2])))) != Base.dataids(M1(M2([1],[2])))
+    @test @inferred(Base.dataids(M10([1],[2],[3],[4],[5],[6],[7],[8],[9],[0]))) != Base.dataids(M10([1],[2],[3],[4],[5],[6],[7],[8],[9],[0]))
+
+    x = [1]
+    y = [1]
+    mx = M1(x)
+    mxx = M2(x,x)
+    mxy = M2(x,y)
+    @test @inferred(Base.mightalias(mx,mx))
+    @test @inferred(Base.mightalias(mx,mxx))
+    @test @inferred(Base.mightalias(mx,mxy))
+    @test @inferred(Base.mightalias(mxx,x))
+    @test @inferred(Base.mightalias(x,mxy))
+    @test !@inferred(Base.mightalias(mx, y))
+    @test !@inferred(Base.mightalias(mxx, y))
+    @test !@inferred(Base.mightalias(mxx, [1]))
+    @test !@inferred(Base.mightalias(mxy, 1:10))
+    @test !@inferred(Base.mightalias(mxy, M0()))
+    @test !@inferred(Base.mightalias(mxy, [1]))
+    @test !@inferred(Base.mightalias(mxy, M1(1:10)))
+    @test !@inferred(Base.mightalias(mxy, M1([1])))
 end
 
 @testset "Base.rest" begin
