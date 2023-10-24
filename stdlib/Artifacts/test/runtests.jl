@@ -2,11 +2,125 @@
 import Base: SHA1
 
 using Artifacts, Test, Base.BinaryPlatforms
-using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
+using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
+using TOML
 
 # prepare for the package tests by ensuring the required artifacts are downloaded now
 artifacts_dir = mktempdir()
 run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
+
+@testset "Load Overrides()" begin
+    # -- helper functions to create the test `Overrides.toml` and restore the status quo afterwards
+    """
+        create_test_overrides_toml()::Tuple{Bool, Bool}
+
+    Create "Overrides.toml" in the "~/.julia/artifacts" dir if it is not already there.
+    Otherwise, do nothing.
+
+    Return two parameters:
+    The first parameter returns true if the artifacts directory did not exist and was created.
+    Otherwise return false.
+
+    The second parameter returns true if "Overrides.toml" did not exist and was created.
+    Otherwise return false.
+    """
+    function create_test_overrides_toml()::Tuple{Bool, Bool}
+        # Define the overrides
+        overrides = Dict(
+            "78f35e74ff113f02274ce60dab6e92b4546ef806" => "/path/to/replacement",
+            "c76f8cda85f83a06d17de6c57aabf9e294eb2537" => "fb886e813a4aed4147d5979fcdf27457d20aa35d",
+            "d57dbccd-ca19-4d82-b9b8-9d660942965b" => Dict(
+                "c_simple" => "/path/to/c_simple_dir",
+                "libfoo" => "fb886e813a4aed4147d5979fcdf27457d20aa35d"
+            )
+        )
+
+        # Get the path to the default depot
+        depot_path = DEPOT_PATH[1]
+
+        # Get the artifacts directory
+        artifacts_dir = joinpath(depot_path, "artifacts")
+
+        # Check if the directory already exists
+        created_artifacts_dir = !isdir(artifacts_dir)
+
+        # Ensure the artifacts directory exists
+        isdir(artifacts_dir) || mkdir(artifacts_dir)
+
+        # Get the path to the Overrides.toml file
+        overrides_path = joinpath(artifacts_dir, "Overrides.toml")
+
+        # Create the Overrides.toml file if it doesn't exist
+        if !isfile(overrides_path)
+            open(overrides_path, "w") do io
+                TOML.print(io, overrides)
+            end
+            return created_artifacts_dir, true
+        else
+            return created_artifacts_dir, false
+        end
+    end
+
+    """
+        clear_test_overrides_toml(created_artifacts_dir::Bool, created_overrides_toml::Bool)
+
+    Delete "Overrides.toml" in the "~/.julia/artifacts" dir and the artifacts directory
+    if they were created by `create_test_overrides_toml()`.
+    Otherwise, do nothing.
+    """
+    function clear_test_overrides_toml(created_artifacts_dir::Bool, created_overrides_toml::Bool)
+        # Get the path to the default depot
+        depot_path = DEPOT_PATH[1]
+
+        # Get the artifacts directory
+        artifacts_dir = joinpath(depot_path, "artifacts")
+
+        # Get the path to the Overrides.toml file
+        overrides_path = joinpath(artifacts_dir, "Overrides.toml")
+
+        # Delete the Overrides.toml file if it exists
+        if created_overrides_toml
+            if isfile(overrides_path)
+                # Overrides.toml file deleted.
+                rm(overrides_path)
+            else
+                # Overrides.toml file does not exist.
+            end
+        end
+
+        # Delete the artifacts directory if it exists and is empty
+        if created_artifacts_dir
+            if isdir(artifacts_dir)
+                if isempty(readdir(artifacts_dir))
+                    # Artifacts directory deleted.
+                    rm(artifacts_dir)
+                else
+                    # Artifacts directory is not empty. Not deleting.
+                end
+            else
+                # Artifacts directory does not exist.
+            end
+        end
+    end
+
+    # -- Overrides.toml in the artifacts directory    
+    # Create "Overrides.toml" for the test
+    created_artifacts_dir, created_overrides_toml = create_test_overrides_toml()
+
+    # Run test
+    expected_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b") => Dict("c_simple" => "/path/to/c_simple_dir", "libfoo" => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))), 
+        :hash => Dict{SHA1, Union{SHA1, String}}(SHA1("78f35e74ff113f02274ce60dab6e92b4546ef806") => "/path/to/replacement", SHA1("c76f8cda85f83a06d17de6c57aabf9e294eb2537") => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))
+    )
+    @test load_overrides() == expected_output
+
+    # -- Overrides.toml not in the artifacts directory
+    # Delete test "Overrides.toml"
+    clear_test_overrides_toml(created_artifacts_dir, created_overrides_toml)
+
+    # Run test
+    @test load_overrides() == expected_output
+end
 
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
