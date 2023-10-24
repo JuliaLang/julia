@@ -159,7 +159,8 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
-hascolor(t::Union{TTYTerminal,TerminalBuffer}) = get(t.out_stream, :color, false)::Bool
+hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
+hascolor(t::TerminalBuffer) = error("TerminalBuffer needs to be modified to have access to the original terminal's IO context")
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
