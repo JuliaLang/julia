@@ -9310,17 +9310,6 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-#if JL_LLVM_VERSION >= 150000
-    clopt = llvmopts.lookup("opaque-pointers");
-    if (clopt && clopt->getNumOccurrences() == 0) {
-#ifdef JL_LLVM_OPAQUE_POINTERS
-        cl::ProvidePositionalOption(clopt, "true", 1);
-#else
-        cl::ProvidePositionalOption(clopt, "false", 1);
-#endif
-    }
-#endif
-
     jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
