@@ -14,6 +14,7 @@ finally
     Base._track_dependencies[] = true
 end
 using Base.Meta
+using StyledStrings
 
 import Markdown
 import StyledStrings
@@ -57,14 +58,14 @@ cd("complete_path\t\t$CTRL_C
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
-const JULIA_PROMPT = "julia> "
-const PKG_PROMPT = "pkg> "
-const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
-# const JULIA_PROMPT = styled"{repl_prompt_julia:julia> }"
-# const PKG_PROMPT = styled"{repl_prompt_pkg:pkg> }"
-# const SHELL_PROMPT = styled"{repl_prompt_shell:shell> }"
-# const HELP_PROMPT = styled"{repl_prompt_help:help?> }"
+# const JULIA_PROMPT = "julia> "
+# const PKG_PROMPT = "pkg> "
+# const SHELL_PROMPT = "shell> "
+# const HELP_PROMPT = "help?> "
+const JULIA_PROMPT = styled"{repl_prompt_julia:julia> }"
+const PKG_PROMPT = styled"{repl_prompt_pkg:pkg> }"
+const SHELL_PROMPT = styled"{repl_prompt_shell:shell> }"
+const HELP_PROMPT = styled"{repl_prompt_help:help?> }"
 
 blackhole = Sys.isunix() ? "/dev/null" : "nul"
 procenv = Dict{String,Any}(

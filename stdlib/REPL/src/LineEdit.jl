@@ -1541,11 +1541,20 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     return textwidth(promptstr)
     # return width
 end
+# returns the width of the written prompt
+function write_prompt(io::IO, s::Union{AbstractString,Function}, color::Bool)
+    @static Sys.iswindows() && _reset_console_mode()
+    promptstr = prompt_string(s)::AbstractString
+    # TODO this write is not dispatching to `StyledStrings`
+    write(io, promptstr)
+    return textwidth(promptstr)
+end
 # TODO remove
 function write_output_prefix(io::IO, p::Prompt, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(p.output_prefix)::String
     # TODO this write is not dispatching to `StyledStrings`
+    # write(io, which(write, (REPL.Terminals.TTYTerminal, AnnotatedString)))
     write(io, promptstr)
     return textwidth(promptstr)
 end
@@ -1579,14 +1588,6 @@ function _reset_console_mode()
 end
 end
 
-# returns the width of the written prompt
-function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
-    @static Sys.iswindows() && _reset_console_mode()
-    promptstr = prompt_string(s)::AbstractString
-    # TODO this write is not dispatching to `StyledStrings`
-    write(terminal, promptstr)
-    return textwidth(promptstr)
-end
 
 ### Keymap Support
 
