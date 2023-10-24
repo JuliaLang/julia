@@ -211,13 +211,13 @@ void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
-    // This is nopl 0(%rax, %rax, 1), but assembler are incosistent about whether
+    // This is nopl 0(%rax, %rax, 1), but assembler are inconsistent about whether
     // they emit that as a 4 or 5 byte sequence and we need to be guaranteed to use
     // the 5 byte one.
 #define NOP5_OVERRIDE_NOP ".byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n\t"
     uint64_t low, high;
     // This instruction sequence is promised by rr to be patchable. rr can usually
-    // also patch `rdtsc` in regular code, but without the preceeding nop, there could
+    // also patch `rdtsc` in regular code, but without the preceding nop, there could
     // be an interfering branch into the middle of rr's patch region. Using this
     // sequence prevents a massive rr-induced slowdown if the compiler happens to emit
     // an unlucky pattern. See https://github.com/rr-debugger/rr/pull/3580.
@@ -892,7 +892,7 @@ extern char *jl_safepoint_pages;
 STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
 {
     uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
-    return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
+    return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 4;
 }
 extern _Atomic(uint32_t) jl_gc_running;
 extern _Atomic(uint32_t) jl_gc_disable_counter;
@@ -918,7 +918,8 @@ void jl_safepoint_end_gc(void);
 // Wait for the GC to finish
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
-void jl_safepoint_wait_gc(void);
+void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
 
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -946,8 +947,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
-static inline void jl_set_gc_and_wait(void)
+static inline void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
 {
     jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
@@ -956,8 +956,8 @@ static inline void jl_set_gc_and_wait(void)
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
     jl_atomic_store_release(&ct->ptls->gc_state, state);
+    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
 }
-#endif
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
@@ -1397,7 +1397,8 @@ extern jl_mutex_t typecache_lock;
 extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
-void jl_mach_gc_end(void);
+void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
+void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPOINT;
 #endif
 
 // -- smallintset.c -- //
@@ -1660,18 +1661,12 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
 #endif
 
-JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint32_t julia__fixunshfsi(uint16_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint64_t julia__fixunshfdi(uint16_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint16_t julia__floatsihf(int32_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint16_t julia__floatdihf(int64_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT float julia__gnu_h2f_ieee(half param) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT half julia__gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT half julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT;
+//JL_DLLEXPORT double julia__extendhfdf2(half n) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 

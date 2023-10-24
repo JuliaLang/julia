@@ -3403,6 +3403,8 @@ void post_boot_hooks(void)
     //XX(float32);
     jl_float64_type = (jl_datatype_t*)core("Float64");
     //XX(float64);
+    jl_bfloat16_type = (jl_datatype_t*)core("BFloat16");
+    //XX(bfloat16);
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
     jl_number_type  = (jl_datatype_t*)core("Number");
     jl_signed_type  = (jl_datatype_t*)core("Signed");

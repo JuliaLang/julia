@@ -217,6 +217,8 @@ primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
+primitive type BFloat16 <: AbstractFloat 16 end
+
 #primitive type Bool <: Integer 8 end
 abstract type AbstractChar end
 primitive type Char <: AbstractChar 32 end

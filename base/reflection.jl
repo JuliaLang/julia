@@ -1336,6 +1336,11 @@ struct CodegenParams
     debug_info_kind::Cint
 
     """
+    Controls the debug_info_level parameter, equivalent to the -g command line option.
+    """
+    debug_info_level::Cint
+
+    """
     If enabled, generate a GC safepoint at the entry to every function. Emitting
     these extra safepoints can reduce the amount of time that other threads are
     waiting for the currently running thread to reach a safepoint. The cost for
@@ -1349,7 +1354,7 @@ struct CodegenParams
     using the `swiftself` convention, which in the ordinary case means that the
     pointer is kept in a register and accesses are thus very fast. If this option
     is disabled, the task local state pointer must be loaded from thread local
-    stroage, which incurs a small amount of additional overhead. The option is enabled by
+    storage, which incurs a small amount of additional overhead. The option is enabled by
     default.
     """
     gcstack_arg::Cint
@@ -1376,15 +1381,15 @@ struct CodegenParams
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
-                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   safepoint_on_entry::Bool=true,
+                   gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
-            Cint(safepoint_on_entry),
+            debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt),
             lookup)
     end
@@ -1761,13 +1766,13 @@ This function will return an `Effects` object with information about the computa
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
-                       world = get_world_counter(),
-                       interp = Core.Compiler.NativeInterpreter(world))
+                       world::UInt=get_world_counter(),
+                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        argtypes = Any[Core.Const(f), types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
         return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
             Core.Compiler.ArgInfo(nothing, argtypes), rt)

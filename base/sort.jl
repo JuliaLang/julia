@@ -225,7 +225,10 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+
+const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
+
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -238,7 +241,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering):
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -251,7 +254,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -259,7 +262,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h == 0 || !lt(o, x, l)
         length(a)
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             fld(floor(Integer, x) - f, h) + 1
         else
             fld(ceil(Integer, x) - f, h) + 1
@@ -267,7 +270,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -275,7 +278,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             cld(ceil(Integer, x) - f, h) + 1
         else
             cld(floor(Integer, x) - f, h) + 1
@@ -283,7 +286,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -1296,7 +1299,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1364,7 +1367,7 @@ algorithms).
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
 resulting order is reversed if `rev=true` (this preserves forward stability:
-elements that compare equal are not reversed). The current implemention applies
+elements that compare equal are not reversed). The current implementation applies
 the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than

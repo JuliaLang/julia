@@ -1491,6 +1491,11 @@ end
     filter!(x -> x.first < 10, d)
     sizehint!(d, 10)
     @test length(d.slots) < 100
+    sizehint!(d, 1000)
+    Base._sizehint!(d, 1; shrink = false)
+    @test length(d.slots) >= 1000
+    Base._sizehint!(d, 1; shrink = true)
+    @test length(d.slots) < 1000
 end
 
 # getindex is :effect_free and :terminates but not :consistent
@@ -1501,4 +1506,25 @@ for T in (Int, Float64, String, Symbol)
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test_broken Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end
+end
+
+struct BadHash
+    i::Int
+end
+Base.hash(::BadHash, ::UInt)=UInt(1)
+@testset "maxprobe reset #51595" begin
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    empty!(d)
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    for _ in 1:20
+        pop!(d)
+    end
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
 end

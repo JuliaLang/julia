@@ -1022,7 +1022,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->__r14 = ((uint64_t*)mctx)[5];
         mc->__r15 = ((uint64_t*)mctx)[6];
         mc->__rip = ((uint64_t*)mctx)[7];
-        // added in libsystem_plaform 177.200.16 (macOS Mojave 10.14.3)
+        // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
         // prior to that _os_ptr_munge_token was (hopefully) typically 0,
         // so x ^ 0 == x and this is a no-op
         mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
@@ -1158,23 +1158,30 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             continue;
         }
         jl_ptls_t ptls2 = allstates[i];
-        if (ptls2 == NULL)
+        if (ptls2 == NULL) {
             continue;
+        }
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
+        int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;
-        int t_state = jl_atomic_load_relaxed(&t->_state);
+        if (t != NULL)
+            t_state = jl_atomic_load_relaxed(&t->_state);
         jl_safe_printf("==== Thread %d created %zu live tasks\n",
                 ptls2->tid + 1, n + (t_state != JL_TASK_STATE_DONE));
         if (show_done || t_state != JL_TASK_STATE_DONE) {
             jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
-            jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                    t->sticky, t->started, t_state,
-                    jl_atomic_load_relaxed(&t->tid) + 1);
-            if (t->stkbuf != NULL)
-                jlbacktracet(t);
-            else
-                jl_safe_printf("      no stack\n");
+            if (t != NULL) {
+                jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+                        t->sticky, t->started, t_state,
+                        jl_atomic_load_relaxed(&t->tid) + 1);
+                if (t->stkbuf != NULL) {
+                    jlbacktracet(t);
+                }
+                else {
+                    jl_safe_printf("      no stack\n");
+                }
+            }
             jl_safe_printf("     ---- End root task\n");
         }
 

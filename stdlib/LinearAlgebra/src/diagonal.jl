@@ -112,6 +112,7 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
+AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
@@ -300,7 +301,7 @@ end
 (*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+    mul!(similar(A, promote_op(*, eltype(D.diag), eltype(A))), D, A)
 (*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
@@ -768,11 +769,32 @@ function pinv(D::Diagonal{T}, tol::Real) where T
     Diagonal(Di)
 end
 
+# TODO Docstrings for eigvals, eigvecs, eigen all mention permute, scale, sortby as keyword args
+# but not all of them below provide them. Do we need to fix that?
 #Eigensystem
 eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
+    reduce(vcat, eigvals(x) for x in D.diag) #For block matrices, etc.
+function eigvecs(D::Diagonal{T}) where T<:AbstractMatrix
+    diag_vecs = [ eigvecs(x) for x in D.diag ]
+    matT = reduce((a,b) -> promote_type(typeof(a),typeof(b)), diag_vecs)
+    ncols_diag = [ size(x, 2) for x in D.diag ]
+    nrows = size(D, 1)
+    vecs = Matrix{Vector{eltype(matT)}}(undef, nrows, sum(ncols_diag))
+    for j in axes(D, 2), i in axes(D, 1)
+        jj = sum(view(ncols_diag,1:j-1))
+        if i == j
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = diag_vecs[i][:,k]
+            end
+        else
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = zeros(eltype(T), ncols_diag[i])
+            end
+        end
+    end
+    return vecs
+end
 function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -788,6 +810,19 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         end
     else
         evecs = Matrix{Td}(I, size(D))
+    end
+    Eigen(λ, evecs)
+end
+function eigen(D::Diagonal{<:AbstractMatrix}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
+    if any(any(!isfinite, x) for x in D.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    λ = eigvals(D)
+    evecs = eigvecs(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p]
+        evecs = evecs[:,p]
     end
     Eigen(λ, evecs)
 end

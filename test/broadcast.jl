@@ -1153,6 +1153,9 @@ Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) 
         MyBroadcastStyleWithField(1)
     @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
                                                        MyBroadcastStyleWithField(2))
+    dest = [0, 0]
+    dest .= Broadcast.Broadcasted(MyBroadcastStyleWithField(1), +, (1:2, 2:3))
+    @test dest == [3, 5]
 end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation

@@ -1350,6 +1350,9 @@ function sizehint!(a::Vector, sz::Integer)
     a
 end
 
+# Fall-back implementation for non-shrinkable collections
+_sizehint!(a, sz; shrink) = sizehint!(a, sz)
+
 """
     pop!(collection) -> item
 

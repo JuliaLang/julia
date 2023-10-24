@@ -197,18 +197,20 @@ is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
-is_noub(effects::Effects, noinbounds::Bool=true) = effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
 is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
 
+is_noub(effects::Effects, noinbounds::Bool=true) =
+    effects.noub === ALWAYS_TRUE || (noinbounds && effects.noub === NOUB_IF_NOINBOUNDS)
+
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
-is_foldable(effects::Effects, noinbounds::Bool=true) =
+is_foldable(effects::Effects) =
     is_consistent(effects) &&
-    is_noub(effects, noinbounds) &&
+    is_noub(effects) &&
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_foldable_nothrow(effects::Effects, noinbounds::Bool=true) =
-    is_foldable(effects, noinbounds) &&
+is_foldable_nothrow(effects::Effects) =
+    is_foldable(effects) &&
     is_nothrow(effects)
 
 # TODO add `is_noub` here?
