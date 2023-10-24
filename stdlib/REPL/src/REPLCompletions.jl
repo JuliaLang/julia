@@ -1053,6 +1053,11 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             if isinfix
                 ex = ex.args[end]
             end
+        elseif isexpr(ex, :macrocall) && length(ex.args) > 1
+            # allow symbol completions within potentially incomplete macrocalls
+            if s[end] ≠ '`' && s[end] ≠ ')'
+                ex = ex.args[end]
+            end
         end
     end
     append!(suggestions, complete_symbol(ex, name, ffunc, context_module))
