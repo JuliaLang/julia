@@ -44,7 +44,6 @@ extern void mmtk_post_alloc(MMTk_Mutator mutator, void* refer,
 extern bool mmtk_is_live_object(void* ref);
 extern bool mmtk_is_mapped_object(void* ref);
 extern bool mmtk_is_mapped_address(void* addr);
-extern void mmtk_modify_check(void* ref);
 extern int mmtk_object_is_managed_by_mmtk(void* addr);
 extern void mmtk_runtime_panic(void);
 extern void mmtk_unreachable(void);

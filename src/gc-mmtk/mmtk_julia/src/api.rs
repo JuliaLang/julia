@@ -290,11 +290,6 @@ pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_modify_check(object: ObjectReference) {
-    memory_manager::modify_check(&SINGLETON, object)
-}
-
-#[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
     if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
@@ -306,13 +301,9 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
         // auto
         0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
         // full
-        1 => SINGLETON
-            .get_plan()
-            .handle_user_collection_request(tls, true, true),
+        1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental
-        2 => SINGLETON
-            .get_plan()
-            .handle_user_collection_request(tls, true, false),
+        2 => SINGLETON.handle_user_collection_request(tls, true, false),
         _ => unreachable!(),
     }
 }

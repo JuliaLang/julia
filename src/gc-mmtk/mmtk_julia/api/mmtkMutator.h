@@ -1,6 +1,9 @@
 #ifndef MMTK_JULIA_MMTK_MUTATOR_H
 #define MMTK_JULIA_MMTK_MUTATOR_H
 
+// mmtk_julia_types.h refers to the types in this file.
+// So if this file is updated, make sure you regenerate Rust types for mmtk_julia_types.h.
+
 enum Allocator {
   AllocatorDefault = 0,
   AllocatorImmortal = 1,
@@ -29,13 +32,13 @@ typedef struct {
   void* cursor;
   void* limit;
   RustDynPtr space;
-  RustDynPtr plan;
+  void* context;
 } BumpAllocator;
 
 typedef struct {
   void* tls;
   void* space;
-  RustDynPtr plan;
+  void* context;
 } LargeObjectAllocator;
 
 typedef struct {
@@ -43,7 +46,7 @@ typedef struct {
   void* cursor;
   void* limit;
   void* immix_space;
-  RustDynPtr plan;
+  void* context;
   uint8_t hot;
   uint8_t copy;
   void* large_cursor;
@@ -68,7 +71,7 @@ typedef struct {
 typedef struct {
   void* tls;
   void* space;
-  RustDynPtr plan;
+  void* context;
   FLBlockList* available_blocks;
   FLBlockList* available_blocks_stress;
   FLBlockList* unswept_blocks;
@@ -78,7 +81,7 @@ typedef struct {
 typedef struct {
   void* tls;
   void* space;
-  RustDynPtr plan;
+  void* context;
 } MMTkMallocAllocator; // Prefix with MMTk to avoid name clash
 
 typedef struct {

@@ -1,10 +1,9 @@
 use crate::JuliaVM;
-use crate::{MUTATORS, SINGLETON};
+use crate::MUTATORS;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::vm::ActivePlan;
 use mmtk::Mutator;
-use mmtk::Plan;
 use mmtk::{plan::ObjectQueue, scheduler::GCWorker, util::ObjectReference};
 
 use std::collections::HashMap;
@@ -44,10 +43,6 @@ impl<'a> Iterator for JuliaMutatorIterator<'a> {
 pub struct VMActivePlan {}
 
 impl ActivePlan<JuliaVM> for VMActivePlan {
-    fn global() -> &'static dyn Plan<VM = JuliaVM> {
-        SINGLETON.get_plan()
-    }
-
     fn number_of_mutators() -> usize {
         Self::mutators().count()
     }
