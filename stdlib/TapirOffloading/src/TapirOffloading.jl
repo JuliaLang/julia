@@ -1,19 +1,31 @@
 module TapirOffloading
 
+abstract type Backend end
+
+const BACKENDS = Dict{Symbol, Backend}()
+
+function register(name, backend)
+    if haskey(BACKENDS, name)
+        error("$name is already a registered backend")
+    end
+    BACKENDS[name] = backend
+end
+
+function runtime end
+function compiler_config end
+function link_kernel end
+function launch end
+function sync end
+function pin end
+
+sync() = sync(current_backend())
+pin(x) = pin(current_backend(), x)
+
+const CURRENT_BACKEND = ScopedValue{Symbol}(:cuda)
+current_backend() = BACKENDS[CURRENT_BACKEND[]]
+
 using Tapir
 using LLVM
-
-##
-# Offloading
-##
-
-
-
-
-# For now only support one backend
-
-using LLVM
-using CUDA
 using GPUCompiler
 
 function initialize()
@@ -28,27 +40,17 @@ function initialize()
     end
 end
 
-module TapirCUDARuntime
-    import CUDA: blockIdx, blockDim, threadIdx, i32
-
-    function __rts_get_iteration_64(base::Int64, grainsize::Int64)::Int64
-        idx = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
-        base + (idx-1i32) * grainsize
-    end
-end
-
 const rt_methods = [
     GPUCompiler.Runtime.RuntimeMethodInstance(
-        TapirCUDARuntime.__rts_get_iteration_64,
+        :__rts_get_iteration_64,
         Int64, (Int64, Int64),
         :__rts_get_iteration_64,
         nothing, nothing,
         "__rts_get_iteration_64"
     ),
-
 ]
 
-function build_runtime(config)
+function build_runtime(backend, config)
     mod = LLVM.Module("Tapir run-time library")
 
     # the compiler job passed into here is identifies the job that requires the runtime.
@@ -56,8 +58,11 @@ function build_runtime(config)
     config = CompilerConfig(config; kernel=false)
 
     for method in rt_methods
-        @assert !isa(method.def, Symbol)
-        def = method.def
+        def = if isa(method.def, Symbol)
+            getglobal(runtime(backend), method.def)
+        else
+            method.def
+        end
         GPUCompiler.emit_function!(mod, config, typeof(def), method)
     end
 
@@ -72,18 +77,11 @@ const Key = Tuple{Ptr{Int8}, Ptr{Int8}}
 # TODO: memoize on device
 # See CUDA.jl -- src/compiler/compilation.jl
 
-const KERNEL_CACHE = Dict{Key, CUDA.CuFunction}
-
 function placeholder() end
 
-function codegen(ir::LLVM.Module, entry_fn)
+function codegen(backend, ir::LLVM.Module, entry_fn)
     initialize()
-
-    cuda = CUDA.active_state()
-    cfg = CUDA.compiler_config(cuda.device)::CUDA.CUDACompilerConfig
-    # caps = CUDA.llvm_compat(LLVM.version()).cap
-    # cap = last(caps)
-    # cfg = CompilerConfig(PTXCompilerTarget(; cap), CUDA.CUDACompilerParams())
+    cfg = compiler_config(backend)
 
     @info "Compiling for" target=cfg.target
 
@@ -95,7 +93,7 @@ function codegen(ir::LLVM.Module, entry_fn)
         datalayout!(ir, GPUCompiler.julia_datalayout(job.config.target))
     end
 
-    rt_mod = build_runtime(cfg)
+    rt_mod = build_runtime(backend, cfg)
     LLVM.link!(ir, rt_mod)
 
     # finalize the current module. this needs to happen before linking deferred modules,
@@ -140,56 +138,30 @@ end
 
 import Base: @ccallable
 
-const ROOTED_FUNCTIONS = Vector{CuFunction}()
-
 @ccallable function __chi_lookup_or_compile(mod::Ptr{Int8}, nbytes::Csize_t, name::Ptr{Int8})::Ptr{Cvoid}
+    backend = current_backend()
     name = Base.unsafe_string(name)
     mod = unsafe_wrap(Vector{Int8}, mod, nbytes)
     @info "Lookup or Compile called" name nbytes
     image, name = ThreadSafeContext() do ts_ctx
         LLVM.context!(LLVM.context(ts_ctx)) do
             mod = parse(LLVM.Module, mod)
-            codegen(mod, name)
+            codegen(backend, mod, name)
         end
     end
-    @info "Emitted NVPTX"
-    write(stdout, image)
-    cu_mod = CuModule(image)
-    cu_func = CuFunction(cu_mod, name)
-    push!(ROOTED_FUNCTIONS, cu_func)
-    return Base.unsafe_convert(Ptr{Cvoid}, cu_func.handle)
+    return link_kernel(backend, image, name)::Ptr{Cvoid}
 end
 
 @ccallable function __chi_launch(func::Ptr{Int8}, args::Ptr{Int8}, args_sz::Csize_t, N::Csize_t)::Cvoid
     @assert func !== C_NULL
-
-    func = Base.unsafe_convert(CUDA.CUfunction, func)
-
-    # config = launch_configuration(kernel.fun)
-    # threads = min(N, config.threads)
-    threads = min(N, 256)
-    blocks = cld(N, threads)
-
-    argBufferSize = Ref{Csize_t}(args_sz)
-    GC.@preserve argBufferSize begin
-        config = Vector{Ptr{Cvoid}}(undef, 5)
-        config[1] = reinterpret(Ptr{Cvoid}, UInt(CUDA.CU_LAUNCH_PARAM_BUFFER_POINTER_AS_INT))
-        config[2] = Base.unsafe_convert(Ptr{Cvoid}, args)
-        config[3] = reinterpret(Ptr{Cvoid}, UInt(CUDA.CU_LAUNCH_PARAM_BUFFER_SIZE_AS_INT))
-        config[4] = Base.unsafe_convert(Ptr{Cvoid}, argBufferSize)
-        config[5] = reinterpret(Ptr{Cvoid}, UInt(CUDA.CU_LAUNCH_PARAM_END_AS_INT))
-
-        CUDA.cuLaunchKernel(func,
-                    blocks, 1, 1,
-                    threads, 1, 1,
-                    #=shmem=#0, CUDA.stream(), C_NULL, config)
-    end
-
+    backend = current_backend()
+    launch(backend, func, args, args_sz, N)
     return nothing
 end
 
 @ccallable function __chi_sync()::Cvoid
-    CUDA.synchronize()
+    backend = current_backend()
+    sync(backend)
 end
 
 end # module TapirOffloading

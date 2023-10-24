@@ -4,7 +4,12 @@ authors = ["Valentin Churavy <v.churavy@gmail.com>"]
 version = "0.1.0"
 
 [deps]
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 GPUCompiler = "61eb1bfa-7361-4325-ad38-22787b887f55"
 LLVM = "929cbde3-209d-540e-8aea-75f648917ca0"
 Tapir = "fa01832b-62c2-42ce-ae03-728543422898"
+
+[weakdeps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+
+[extensions]
+TapirOffloadingCUDA = "CUDA"

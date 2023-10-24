@@ -2,14 +2,14 @@ import Tapir, TapirOffloading, CUDA
 
 function saxpy(Z, X, Y, a)
     # TODO: Move to TapirOffloading?
-    CUDA.CUDAKernels.__pin!(Z)
-    CUDA.CUDAKernels.__pin!(X)
-    CUDA.CUDAKernels.__pin!(Y)
+    TapirOffloading.pin(Z)
+    TapirOffloading.pin(X)
+    TapirOffloading.pin(Y)
 
     Tapir.foreach(eachindex(Z, Y, X)) do I
         @inbounds Z[I] = a*X[I] + Y[I]
     end
-    CUDA.synchronize()
+    TapirOffloading.sync()
     Z
 end
 using InteractiveUtils
