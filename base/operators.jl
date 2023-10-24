@@ -955,8 +955,12 @@ end
 """
     f ∘ g
 
-Compose functions: i.e. `(f ∘ g)(args...; kwargs...)` means `f(g(args...; kwargs...))`. The `∘` symbol can be
-entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
+Compose functions: i.e. `(f ∘ g)(args...; kwargs...)` means `f(g(args...; kwargs...))`.
+
+The `∘` symbol can be entered in the Julia REPL (and most editors,
+appropriately configured) by typing `\\circ<tab>`. If you need to avoid
+Unicode, use the [`ComposedFunction`](@ref) constructor instead, possibly with
+[`foldl`](@ref) to support more than 2 functions.
 
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
