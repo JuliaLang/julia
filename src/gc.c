@@ -3269,6 +3269,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
+    if (live_bytes > max_total_memory) {
+        sweep_full = 1;
+    }
     if (gc_sweep_always_full) {
         sweep_full = 1;
     }
