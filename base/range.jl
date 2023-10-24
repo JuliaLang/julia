@@ -595,7 +595,7 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, "LinRange{")
     show(io, T)
     print(io, "}(")
-    ioc = IOContext(io, :typeinto=>T)
+    ioc = IOContext(io, :typeinfo=>T)
     show(ioc, first(r))
     print(io, ", ")
     show(ioc, last(r))
