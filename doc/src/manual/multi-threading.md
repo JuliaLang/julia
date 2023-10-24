@@ -167,7 +167,7 @@ julia> begin
        end
 ```
 
-We can use this pattern to perform some other operation on another thread, with the guarantee that the operations do not happen at the same time.
+We can use this pattern to perform some other operation on another thread. As long the same lock is used, the operations are guaranteed to happen one at a time.
 
 To ensure that the lock is always unlocked, the line that performs the operation should be put inside a `try`-statement, and the unlocking should be put inside the `finally`-clause. This is done automatically by the method of `lock` that takes a function and a lock. Typically, one would use Julia's `do`-syntax as follows:
 ```julia-repl
