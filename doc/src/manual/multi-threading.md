@@ -149,26 +149,37 @@ and nothing promised here can be assumed if you do not observe that
 requirement. The observed results may be highly unintuitive.
 
 The best way to ensure this is to acquire a lock around any access to data that
-can be observed from multiple threads. For example, in most cases you should
-use the following code pattern:
+can be observed from multiple threads. If there is only a single lock, and we require that any thread has to "hold the lock" in order to read or mutate a variable, we ensure that the operations can never happen simultaneously.
+
+For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`:
 
 ```julia-repl
-julia> lock(lk) do
-           use(a)
-       end
+julia> my_lock = ReentrantLock();
+
+julia> my_variable = [1, 2, 3];
+
+julia> my_operation() = (my_variable[1] = 100);
 
 julia> begin
-           lock(lk)
-           try
-               use(a)
-           finally
-               unlock(lk)
-           end
+           lock(my_lock)
+           my_operation()
+           unlock(my_lock)
        end
-
-julia> @lock lk use(a)
 ```
-where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
+
+We can use this pattern to perform some other operation on another thread, with the guarantee that the operations do not happen at the same time.
+
+To ensure that the lock is always unlocked, the line that performs the operation should be put inside a `try`-statement, and the unlocking should be put inside the `finally`-clause. This is done automatically by the method of `lock` that takes a function and a lock. Typically, one would use Julia's `do`-syntax as follows:
+```julia-repl
+julia> lock(my_lock) do
+           my_operation()
+       end
+```
+which is equivalent to `lock(my_operation, my_lock)`. Finally, the same can be accomplished by the `@lock` macro:
+
+```julia-repl
+julia> @lock my_lock my_operation()
+```
 
 Additionally, Julia is not memory safe in the presence of a data race. Be very
 careful about reading _any_ data if another thread might write to it!
@@ -520,3 +531,4 @@ There are a few approaches to dealing with this problem:
    runs on, so `do_cleanup` would still need to acquire a lock. That
    doesn't need to be true if you implement your own queue, as you can explicitly
    only drain that queue from your thread.
+
