@@ -293,7 +293,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))
+cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
 
 # Add a few handy specializations to further speed up views of reshaped ranges
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
@@ -304,9 +304,13 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange
     (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
+# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} = V
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+    parent = V.parent
+    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
+    return Ptr{S}(unsafe_convert(Ptr{T}, p) + (first_index(V)-1)*sizeof(T))
+end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
 # `strides(A::DenseArray)` calls `size_to_strides` by default.

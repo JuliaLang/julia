@@ -200,7 +200,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
 function cconvert(::Type{Cwstring}, s::AbstractString)
     v = transcode(Cwchar_t, String(s))
     push!(v, 0)
-    return v
+    return cconvert(Cwstring, v)
 end
 
 eltype(::Type{Cstring}) = Cchar
@@ -218,16 +218,19 @@ function unsafe_convert(::Type{Cstring}, s::String)
     return Cstring(p)
 end
 
-function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
+unsafe_convert(::Type{Cstring}, s::Union{Vector{UInt8},Vector{Int8}}) = Cstring(unsafe_convert(Ptr{Cvoid}, s))
+
+function cconvert(::Type{Cwstring}, v::Vector{Cwchar_t})
     for i = 1:length(v)-1
         v[i] == 0 &&
             throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
     end
     v[end] == 0 ||
         throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
-    p = unsafe_convert(Ptr{Cwchar_t}, v)
-    return Cwstring(p)
+    return cconvert(Ptr{Cwchar_t}, v)
 end
+unsafe_convert(::Type{Cwstring}, s) = Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
+unsafe_convert(::Type{Cwstring}, s::Cwstring) = s
 
 # symbols are guaranteed not to contain embedded NUL
 cconvert(::Type{Cstring}, s::Symbol) = s

@@ -800,8 +800,8 @@ IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
-unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
-unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
+cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
 """
     codeunits(s::AbstractString)
