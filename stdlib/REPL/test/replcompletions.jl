@@ -2089,3 +2089,6 @@ let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inf
     @test t isa Core.Const
     @test t.val == `a b`
 end
+
+# issue #51823
+@test "include" in test_complete_context("inc", Main)[1]
