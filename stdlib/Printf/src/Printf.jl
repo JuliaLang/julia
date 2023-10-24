@@ -6,6 +6,8 @@ using Base.Ryu
 
 export @printf, @sprintf
 
+public format, Format
+
 # format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
 const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
