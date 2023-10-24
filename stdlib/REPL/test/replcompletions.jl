@@ -2094,7 +2094,7 @@ end
 let s = "@issue51827 Base.ac"
     c, r, res = test_complete_context(s)
     @test res
-    "aquire" in c
+    @test "acquire" in c
 end
 
 let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
