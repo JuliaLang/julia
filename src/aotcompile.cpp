@@ -1500,7 +1500,13 @@ void jl_dump_native_impl(void *native_code,
         TheTriple.setObjectFormat(Triple::COFF);
     } else if (TheTriple.isOSDarwin()) {
         TheTriple.setObjectFormat(Triple::MachO);
-        TheTriple.setOS(llvm::Triple::MacOSX);
+        SmallString<16> Str;
+        Str += "macosx";
+        if (TheTriple.isAArch64())
+            Str += "11.0.0"; // Update this if MACOSX_VERSION_MIN changes
+        else
+            Str += "10.14.0";
+        TheTriple.setOSName(Str);
     }
     Optional<Reloc::Model> RelocModel;
     if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
