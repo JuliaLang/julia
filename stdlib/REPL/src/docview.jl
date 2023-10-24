@@ -193,6 +193,8 @@ function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Modu
     md
 end
 function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}})
+    # We don't know how to insert an internal symbol warning into non-markdown
+    # content, so we don't.
     other
 end
 
@@ -241,8 +243,6 @@ function doc(binding::Binding, sig::Type = Union{})
         md = catdoc(mapany(parsedoc, results)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
-            # We don't know how to insert an internal symbol warning into non-markdown
-            # content, so we don't.
             md.meta[:results] = results
             md.meta[:binding] = binding
             md.meta[:typesig] = sig
