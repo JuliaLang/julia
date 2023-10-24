@@ -55,7 +55,6 @@ UpperHessenberg{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
 UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
 Array(H::UpperHessenberg) = Matrix(H)
-size(H::UpperHessenberg, d) = size(H.data, d)
 size(H::UpperHessenberg) = size(H.data)
 parent(H::UpperHessenberg) = H.data
 
@@ -63,7 +62,8 @@ parent(H::UpperHessenberg) = H.data
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
-AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H)
+AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H

@@ -59,11 +59,18 @@ end
     @test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
 end
 
-@testset "Infinite CartesianIndices" begin
+@testset "Infinite axes" begin
     r = OneToInf()
-    C = CartesianIndices(size(r))
-    ax = to_indices(r, (C,))[1]
-    @test ax === r
+    @testset "CartesianIndices" begin
+        C = CartesianIndices(size(r))
+        ax = to_indices(r, (C,))[1]
+        @test ax === r
+    end
+    @testset "LinearIndices" begin
+        L = LinearIndices(size(r))
+        ax = to_indices(r, (L,))[1]
+        @test ax === L
+    end
 end
 
 @testset "vector indices" begin
@@ -1854,3 +1861,9 @@ end
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
+
+@testset "isassigned with a Bool index" begin
+    A = zeros(2,2)
+    @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
+    @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end

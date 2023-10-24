@@ -20,7 +20,7 @@ for (T, c) in (
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
     )
@@ -374,8 +374,8 @@ let ft = Base.datatype_fieldtypes
     @test ft(elT2.body)[1].parameters[1] === elT2
     @test Base.isconcretetype(ft(elT2.body)[1])
 end
-#struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
-@test_broken @isdefined S22624
+struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
+@test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
 
 # issue #42297
 mutable struct Node42297{T, V}
@@ -414,6 +414,18 @@ mutable struct FooFoo{A,B} y::FooFoo{A} end
 
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
+# make sure this self-referential struct doesn't crash type layout
+struct SelfTyA{V}
+    a::Base.RefValue{V}
+end
+struct SelfTyB{T}
+    a::T
+    b::SelfTyA{SelfTyB{T}}
+end
+let T = Base.RefValue{SelfTyB{Int}}
+    @test sizeof(T) === sizeof(Int)
+    @test sizeof(T.types[1]) === 2 * sizeof(Int)
+end
 
 let x = (2,3)
     @test +(x...) == 5
@@ -4110,7 +4122,29 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
 end
+struct Z14477B
+    fld::Union{Nothing,Z14477B}
+    Z14477B() = new(new(nothing))
+end
+let z1 = Z14477B()
+    @test isa(z1, Z14477B)
+    @test isa(z1.fld, Z14477B)
+    @test isa(z1.fld.fld, Nothing)
+end
+struct Z14477C{T}
+    fld::Z14477C{Int8}
+    Z14477C() = new{Int16}(new{Int8}())
+end
+let z1 = Z14477C()
+    @test isa(z1, Z14477C)
+    @test isa(z1.fld, Z14477C)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
+end
+
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -4518,48 +4552,6 @@ function test_shared_array_resize(::Type{T}) where T
 end
 test_shared_array_resize(Int)
 test_shared_array_resize(Any)
-end
-
-module TestArrayNUL
-using Test
-function check_nul(a::Vector{UInt8})
-    b = ccall(:jl_array_cconvert_cstring,
-              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
-    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
-    return b === a
-end
-
-a = UInt8[]
-b = "aaa"
-c = [0x2, 0x1, 0x3]
-
-@test check_nul(a)
-@test check_nul(unsafe_wrap(Vector{UInt8},b))
-@test check_nul(c)
-d = [0x2, 0x1, 0x3]
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
-@test check_nul(d)
-ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-f = unsafe_wrap(Array, pointer(d), length(d))
-@test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
-@test !check_nul(f)
 end
 
 # Copy of `#undef`
@@ -7559,6 +7551,19 @@ end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+struct S36104{K,V}
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
+@test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
+@test !isdefined(S36104.body.body.name, :partial)
+@test hasfield(typeof(S36104.body.body.name), :partial)
+struct S36104{K,V}   # check that redefining it works
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
 # with a gensymmed unionall
 struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
@@ -8018,7 +8023,7 @@ for T in (Int, String, Symbol, Module)
 end
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
-# objectid for datatypes is inconsistant for types that have unbound type parameters.
+# objectid for datatypes is inconsistent for types that have unbound type parameters.
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
 

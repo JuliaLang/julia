@@ -532,7 +532,7 @@ Base.getindex(A::WrappedArray, i::Int) = A.A[i]
 Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
 Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
-Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
+Base.cconvert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.cconvert(Ptr{T}, A.A)
 
 Base.strides(A::WrappedArray) = strides(A.A)
 Base.elsize(::Type{WrappedArray{T,N}}) where {T,N} = Base.elsize(Array{T,N})

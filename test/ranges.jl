@@ -1286,6 +1286,8 @@ end
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
+
+    @test sprint(show, LinRange{Float32}(1.5, 2.5, 10)) == "LinRange{Float32}(1.5, 2.5, 10)"
 end
 
 @testset "Issue 11049, and related" begin
@@ -2527,4 +2529,11 @@ end
         @test_throws ArgumentError isassigned(r, true)
     end
 
+end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
 end

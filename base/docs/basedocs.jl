@@ -52,12 +52,26 @@ kw"import"
 """
     export
 
-`export` is used within modules to tell Julia which functions should be
+`export` is used within modules to tell Julia which names should be
 made available to the user. For example: `export foo` makes the name
 `foo` available when [`using`](@ref) the module.
 See the [manual section about modules](@ref modules) for details.
 """
 kw"export"
+
+"""
+    public
+
+`public` is used within modules to tell Julia which names are part of the
+public API of the module . For example: `public foo` indicates that the name
+`foo` is public, without making it available when [`using`](@ref)
+the module. See the [manual section about modules](@ref modules) for details.
+
+!!! compat "Julia 1.11"
+    The public keyword was added in Julia 1.11. Prior to this the notion
+    of publicness was less explicit.
+"""
+kw"public"
 
 """
     as
@@ -101,7 +115,7 @@ kw"abstract type", kw"abstract"
 
 `module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting).
+specify which of your names are intended to be public (via `export` and `public`).
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
 See the [manual section about modules](@ref modules) for more details.
@@ -1315,7 +1329,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -1743,6 +1761,12 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest

@@ -499,7 +499,7 @@ Bool[]
 first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
-    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
     v[range(begin, length=min(n, checked_length(v)))]
 end
 
@@ -549,7 +549,7 @@ Float64[]
 last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), n)))
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
-    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
     v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
@@ -993,7 +993,7 @@ end
 # this method must be separate from the above since src might not have a length
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::Integer)
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",n,
-        ", elements, but n should be nonnegative")))
+        ", elements, but n should be non-negative")))
     n == 0 && return dest
     dmax = dstart + n - 1
     inds = LinearIndices(dest)
@@ -1124,7 +1124,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
                n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
-        n," elements, but n should be nonnegative")))
+        n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
@@ -1229,10 +1229,10 @@ end
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
+pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
-    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
+    pointer(x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
@@ -1256,6 +1256,11 @@ end
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be,
 for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+
+When `inds` selects multiple elements, this function returns a newly
+allocated array. To index multiple elements without making a copy,
+use [`view`](@ref) instead.
+
 See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
@@ -1288,11 +1293,7 @@ end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
 @propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
-function unsafe_getindex(A::AbstractArray, I...)
-    @inline
-    @inbounds r = getindex(A, I...)
-    r
-end
+@inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
 struct CanonicalIndexError <: Exception
     func::String
@@ -1506,7 +1507,7 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !isempty(A) && !isempty(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
@@ -1587,10 +1588,14 @@ eltypeof(x::AbstractArray) = eltype(x)
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
+promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
+promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 #TODO: ERROR CHECK
 _cat(catdim::Int) = Vector{Any}()
@@ -1811,16 +1816,15 @@ function __cat_offset1!(A, shape, catdims, offsets, x)
     inds = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
-    if x isa AbstractArray
-        A[inds...] = x
-    else
-        fill!(view(A, inds...), x)
-    end
+    _copy_or_fill!(A, inds, x)
     newoffsets = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
     end
     return newoffsets
 end
+
+_copy_or_fill!(A, inds, x) = fill!(view(A, inds...), x)
+_copy_or_fill!(A, inds, x::AbstractArray) = (A[inds...] = x)
 
 """
     vcat(A...)
@@ -2287,13 +2291,13 @@ _typed_hvncat_0d_only_one() =
 
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 end
 
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
@@ -2305,7 +2309,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, Val(N - 1))..., length(as), 1), false, as...)
@@ -2338,7 +2342,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
+        throw(ArgumentError("concatenation dimension must be non-negative"))
     nd = N
     Ndim = 0
     for i ∈ eachindex(as)

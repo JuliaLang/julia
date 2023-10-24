@@ -25,7 +25,6 @@
     XX(jl_arrayref) \
     XX(jl_arrayset) \
     XX(jl_arrayunset) \
-    XX(jl_array_cconvert_cstring) \
     XX(jl_array_copy) \
     XX(jl_array_del_at) \
     XX(jl_array_del_beg) \
@@ -176,6 +175,7 @@
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
     XX(jl_gc_is_in_finalizer) \
+    XX(jl_gc_pool_live_bytes) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -328,13 +328,14 @@
     XX(jl_methtable_lookup) \
     XX(jl_mi_cache_insert) \
     XX(jl_module_build_id) \
-    XX(jl_module_export) \
     XX(jl_module_exports_p) \
     XX(jl_module_globalref) \
     XX(jl_module_import) \
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_public) \
+    XX(jl_module_public_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
@@ -362,6 +363,7 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
+    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -414,6 +416,8 @@
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
+    XX(jl_safepoint_suspend_thread) \
+    XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
@@ -562,27 +566,10 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
-    YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraAddLowerSimdLoopPass) \
-    YY(LLVMExtraAddFinalLowerGCPass) \
-    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
-    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraAddCombineMulAddPass) \
-    YY(LLVMExtraAddMultiVersioningPass) \
-    YY(LLVMExtraAddLowerExcHandlersPass) \
-    YY(LLVMExtraAddLateLowerGCFramePass) \
-    YY(LLVMExtraJuliaLICMPass) \
-    YY(LLVMExtraAddAllocOptPass) \
-    YY(LLVMExtraAddLowerPTLSPass) \
-    YY(LLVMExtraAddRemoveNIPass) \
-    YY(LLVMExtraAddGCInvariantVerifierPass) \
-    YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
-    YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \
     YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
     YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
@@ -596,6 +583,7 @@
     YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
     YY(LLVMExtraFPMAddFinalLowerGCPass) \
     YY(LLVMExtraLPMAddJuliaLICMPass) \
+    YY(LLVMExtraLPMAddLowerSIMDLoopPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

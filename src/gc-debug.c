@@ -115,7 +115,7 @@ static void gc_clear_mark_outer(int bits)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             gc_clear_mark_page(pg, bits);
             pg = pg->next;
@@ -1153,7 +1153,7 @@ static void gc_count_pool_pagetable(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             if (gc_alloc_map_is_set(pg->data)) {
                 gc_count_pool_page(pg);

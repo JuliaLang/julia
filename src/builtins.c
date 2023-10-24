@@ -222,7 +222,7 @@ JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const j
 JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
     if (dtag < jl_max_tags << 4) {
-        switch ((enum jlsmall_typeof_tags)(dtag >> 4)) {
+        switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
             return *(uint8_t*)a == *(uint8_t*)b;
@@ -1694,36 +1694,48 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 // inline it. The only way fields can reference this type (due to
 // syntax-enforced restrictions) is via being passed as a type parameter. Thus
 // we can conservatively check this by examining only the parameters of the
-// dependent types.
-// affects_layout is a hack introduced by #35275 to workaround a problem
-// introduced by #34223: it checks whether we will potentially need to
-// compute the layout of the object before we have fully computed the types of
-// the fields during recursion over the allocation of the parameters for the
-// field types (of the concrete subtypes)
-static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
+// dependent types. Additionally, a field might have already observed this
+// object for layout purposes before we got around to deciding if inlining
+// would be possible, so we cannot change the layout now if so.
+// affects_layout is a (conservative) analysis of layout_uses_free_typevars
+// freevars is a (conservative) analysis of what calling jl_has_bound_typevars from name->wrapper gives (TODO: just call this instead?)
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
 {
-    if (jl_is_uniontype(p))
-        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
-               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
-    if (jl_is_unionall(p))
-        return references_name((jl_value_t*)((jl_unionall_t*)p)->var->lb, name, 0) ||
-               references_name((jl_value_t*)((jl_unionall_t*)p)->var->ub, name, 0) ||
-               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
+    if (freevars && !jl_has_free_typevars(p))
+        freevars = 0;
+    while (jl_is_unionall(p)) {
+        if (references_name((jl_value_t*)((jl_unionall_t*)p)->var->lb, name, 0, freevars) ||
+            references_name((jl_value_t*)((jl_unionall_t*)p)->var->ub, name, 0, freevars))
+            return 1;
+       p = ((jl_unionall_t*)p)->body;
+    }
+    if (jl_is_uniontype(p)) {
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout, freevars) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout, freevars);
+    }
     if (jl_is_typevar(p))
         return 0; // already checked by unionall, if applicable
     if (jl_is_datatype(p)) {
         jl_datatype_t *dp = (jl_datatype_t*)p;
         if (affects_layout && dp->name == name)
             return 1;
-        // affects_layout checks whether we will need to attempt to layout this
-        // type (based on whether all copies of it have the same layout) in
-        // that case, we still need to check the recursive parameters for
-        // layout recursion happening also, but we know it won't itself cause
-        // problems for the layout computation
         affects_layout = ((jl_datatype_t*)jl_unwrap_unionall(dp->name->wrapper))->layout == NULL;
+        // and even if it has a layout, the fields themselves might trigger layouts if they use tparam i
+        // rather than checking this for each field, we just assume it applies
+        if (!affects_layout && freevars && jl_field_names(dp) != jl_emptysvec) {
+            jl_svec_t *types = ((jl_datatype_t*)jl_unwrap_unionall(dp->name->wrapper))->types;
+            size_t i, l = jl_svec_len(types);
+            for (i = 0; i < l; i++) {
+                jl_value_t *ft = jl_svecref(types, i);
+                if (!jl_is_typevar(ft) && jl_has_free_typevars(ft)) {
+                    affects_layout = 1;
+                    break;
+                }
+            }
+        }
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
-            if (references_name(jl_tparam(p, i), name, affects_layout))
+            if (references_name(jl_tparam(p, i), name, affects_layout, freevars))
                 return 1;
         }
     }
@@ -1759,12 +1771,12 @@ JL_CALLABLE(jl_f__typebody)
             // able to compute the layout of the object before needing to
             // publish it, so we must assume it cannot be inlined, if that
             // check passes, then we also still need to check the fields too.
-            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 1))) {
+            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
                 int mayinlinealloc = 1;
                 size_t i;
                 for (i = 0; i < nf; i++) {
                     jl_value_t *fld = jl_svecref(ft, i);
-                    if (references_name(fld, dt->name, 1)) {
+                    if (references_name(fld, dt->name, 1, 1)) {
                         mayinlinealloc = 0;
                         break;
                     }
@@ -1927,7 +1939,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_const(inm, sym, i);
-    jl_module_export(inm, sym);
+    jl_module_public(inm, sym, 1);
 }
 
 void jl_init_intrinsic_properties(void) JL_GC_DISABLED

@@ -821,6 +821,28 @@ end
     @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
     @test replace((1, missing), missing=>0) === (1, 0)
+
+    # test that MethodError is thrown for pairs
+    @test_throws MethodError replace(identity, 1=>2)
+    @test_throws MethodError replace(identity, 1=>2, 3=>4)
+    @test_throws MethodError replace!(identity, 1=>2)
+    @test_throws MethodError replace!(identity, 1=>2, 3=>4)
+
+    # test replace and friends for AbstractDicts
+    d1 = GenericDict(Dict(1=>2, 3=>4))
+    d2 = replace(d1, (1=>2) => (1=>"a"))
+    @test d2 == Dict(1=>"a", 3=>4)
+    @test d2 isa Dict{Int, Any}
+    @test d1 === replace!(d1, (1=>2) => (1=>-2))
+    @test d1 == Dict(1=>-2, 3=>4)
+
+    dd = Dict(1=>2, 3=>1, 5=>1, 7=>1)
+    for d1 in (dd, GenericDict(dd))
+        @test replace(d1, (1=>2) => (1=>"a"), count=0) == d1
+        d2 = replace(kv->(kv[2] == 1 ? kv[1]=>2 : kv), d1, count=2)
+        @test count(==(2), values(d2)) == 3
+        @test count(==(1), values(d2)) == 1
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

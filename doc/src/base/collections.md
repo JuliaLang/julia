@@ -64,6 +64,7 @@ Base.LinRange
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
 Base.checked_length
@@ -89,6 +90,7 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique
@@ -202,6 +204,7 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
+Base.PersistentDict
 Base.haskey
 Base.get
 Base.get!
@@ -234,6 +237,7 @@ Partially implemented by:
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`PersistentDict`](@ref Base.PersistentDict)
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections

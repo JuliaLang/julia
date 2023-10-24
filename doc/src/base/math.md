@@ -118,7 +118,7 @@ Base.exp10
 Base.Math.ldexp
 Base.Math.modf
 Base.expm1
-Base.round(::Type, ::Any)
+Base.round
 Base.Rounding.RoundingMode
 Base.Rounding.RoundNearest
 Base.Rounding.RoundNearestTiesAway

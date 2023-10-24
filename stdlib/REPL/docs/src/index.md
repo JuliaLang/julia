@@ -312,7 +312,7 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 ## Tab completion
 
-In both the Julian and help modes of the REPL, one can enter the first few characters of a function
+In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
@@ -333,6 +333,13 @@ If you hit tab again, then you get the list of things that might complete this:
 julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
+
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+
+!!! compat "Julia 1.11"
+    Tab-complete hinting was added in Julia 1.11
 
 Like other components of the REPL, the search is case-sensitive:
 
@@ -570,8 +577,8 @@ Main
 
 It is possible to change this contextual module via the function
 `REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
-and pressing the keybinding Alt-m (the cursor must be on the module name). The
-active module is shown in the prompt:
+and pressing the keybinding Alt-m (the cursor must be on the module name). The `Main` module can be "activated" with an empty prompt plus the keybinding. The
+active module is shown in the prompt (unless it is `Main`):
 
 ```julia-repl
 julia> using REPL
@@ -591,7 +598,7 @@ julia> Core<Alt-m> # using the keybinding to change module
 
 (Core) julia>
 
-(Core) julia> Main<Alt-m> # going back to Main via keybinding
+(Core) julia> <Alt-m> # going back to Main via keybinding
 
 julia>
 ```

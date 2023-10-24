@@ -1710,7 +1710,7 @@ let getfield_tfunc(@nospecialize xs...) =
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
-# TODO: Remove compute sparams for vararg_retrival
+# TODO: Remove compute sparams for vararg_retrieval
 fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN_inline(args...) = fvarargN_inline(args)
 let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
@@ -1770,15 +1770,15 @@ let interp = Core.Compiler.NativeInterpreter()
     ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
         @noinline a*b
     end |> only
-    i = findfirst(isinvoke(:*), ir.stmts.inst)
+    i = findfirst(isinvoke(:*), ir.stmts.stmt)
     @test i !== nothing
 
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test count(isinvoke(:*), ir.stmts.inst) == 0
-    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+    @test count(isinvoke(:*), ir.stmts.stmt) == 0
+    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) == 1
 end
 
 # Test special purpose inliner for Core.ifelse

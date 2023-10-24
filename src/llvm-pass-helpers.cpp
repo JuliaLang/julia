@@ -311,3 +311,10 @@ namespace jl_well_known {
             return addGCAllocAttributes(allocTypedFunc);
         });
 }
+
+void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info)
+{
+    if (debug_info >= 2 && !llvm::isa<llvm::Constant>(V)) {
+        V->setName(Name);
+    }
+}

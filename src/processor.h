@@ -41,6 +41,8 @@ enum {
     JL_TARGET_CLONE_CPU = 1 << 8,
     // Clone when the function uses fp16
     JL_TARGET_CLONE_FLOAT16 = 1 << 9,
+    // Clone when the function uses bf16
+    JL_TARGET_CLONE_BFLOAT16 = 1 << 10,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
@@ -88,7 +90,7 @@ typedef struct {
     const int32_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
-    void **small_typeof;
+    void **jl_small_typeof;
 } jl_image_t;
 
 // The header for each image
@@ -197,8 +199,8 @@ typedef struct {
     const jl_image_shard_t *shards; // points to header->nshards length array
     // The TLS data pointer
     const jl_image_ptls_t *ptls;
-    // A copy of small_typeof[]
-    void **small_typeof;
+    // A copy of jl_small_typeof[]
+    void **jl_small_typeof;
 
     //  serialized target data
     //  This contains the number of targets
@@ -247,7 +249,7 @@ extern JL_DLLEXPORT bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
@@ -262,7 +264,7 @@ struct jl_target_spec_t {
     // LLVM feature string
     std::string cpu_features;
     // serialized identification data
-    std::vector<uint8_t> data;
+    llvm::SmallVector<uint8_t, 0> data;
     // Clone condition.
     uint32_t flags;
     // Base target index.
@@ -271,7 +273,7 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
 

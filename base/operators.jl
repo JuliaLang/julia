@@ -1287,17 +1287,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function in(x, itr::$ItrT)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for y in itr
+            v = (y == x)
+            if ismissing(v)
+                anymissing = true
+            elseif v
+                return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 const ∈ = in

@@ -505,19 +505,17 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
                     assert(jl_is_method_instance(callee));
-                    jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                    if ((jl_value_t*)mt == jl_nothing) {
-                        callee_ids = NULL; // invalid
-                        break;
-                    }
-                    else {
-                        matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
-                        if (matches == jl_nothing) {
-                            callee_ids = NULL; // invalid
-                            break;
+                    jl_method_t *m = ((jl_method_instance_t*)callee)->def.method;
+                    matches = (jl_value_t*)m; // valid because there is no method replacement permitted
+#ifndef NDEBUG
+                    jl_methtable_t *mt = jl_method_get_table(m);
+                    if ((jl_value_t*)mt != jl_nothing) {
+                        jl_value_t *matches = jl_gf_invoke_lookup_worlds(invokeTypes, (jl_value_t*)mt, world, &min_valid, &max_valid);
+                        if (matches != jl_nothing) {
+                            assert(m == ((jl_method_match_t*)matches)->method);
                         }
-                        matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
                     }
+#endif
                 }
                 else {
                     if (jl_is_method_instance(callee)) {
@@ -708,6 +706,10 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
     ct->world_age = last_age;
 
+    static jl_value_t *replace_depot_func = NULL;
+    if (!replace_depot_func)
+        replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
+
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
     initial_pos = ios_pos(s);
@@ -715,11 +717,25 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_len(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *dep = jl_fieldref(deptuple, 1);              // file abspath
-        size_t slen = jl_string_len(dep);
+        jl_value_t *abspath = jl_fieldref(deptuple, 1);
+
+        jl_value_t **replace_depot_args;
+        JL_GC_PUSHARGS(replace_depot_args, 2);
+        replace_depot_args[0] = replace_depot_func;
+        replace_depot_args[1] = abspath;
+        ct = jl_current_task;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
+        ct->world_age = last_age;
+        JL_GC_POP();
+
+        size_t slen = jl_string_len(depalias);
         write_int32(s, slen);
-        ios_write(s, jl_string_data(dep), slen);
-        write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
+        ios_write(s, jl_string_data(depalias), slen);
+        write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
+        write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
+        write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
@@ -855,19 +871,27 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
         size_t max_valid = ~(size_t)0;
         if (invokesig) {
             assert(callee && "unsupported edge");
-            jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-            if ((jl_value_t*)mt == jl_nothing) {
-                max_valid = 0;
+            jl_method_t *m = ((jl_method_instance_t*)callee)->def.method;
+            if (jl_egal(invokesig, m->sig)) {
+                // the invoke match is `m` for `m->sig`, unless `m` is invalid
+                if (m->deleted_world < max_valid)
+                    max_valid = 0;
             }
             else {
-                matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, minworld, &min_valid, &max_valid);
-                if (matches == jl_nothing) {
-                     max_valid = 0;
+                jl_methtable_t *mt = jl_method_get_table(m);
+                if ((jl_value_t*)mt == jl_nothing) {
+                    max_valid = 0;
                 }
                 else {
-                    matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
-                    if (matches != expected) {
-                        max_valid = 0;
+                    matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, minworld, &min_valid, &max_valid);
+                    if (matches == jl_nothing) {
+                         max_valid = 0;
+                    }
+                    else {
+                        matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
+                        if (matches != expected) {
+                            max_valid = 0;
+                        }
                     }
                 }
             }

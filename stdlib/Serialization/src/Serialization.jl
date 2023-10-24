@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 24 # do not make changes without bumping the version #!
+const ser_version = 25 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1160,7 +1160,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if length(ssaflags) ≠ length(code)
         # make sure the length of `ssaflags` matches that of `code`
         # so that the latest inference doesn't throw on IRs serialized from old versions
-        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+        ssaflags = UInt32[0x00 for _ in 1:length(code)]
+    elseif eltype(ssaflags) != UInt32
+        ssaflags = map(UInt32, ssaflags)
     end
     ci.ssaflags = ssaflags
     if pre_12

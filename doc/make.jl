@@ -112,6 +112,7 @@ BaseDocs = [
     "base/arrays.md",
     "base/parallel.md",
     "base/multi-threading.md",
+    "base/scopedvalues.md",
     "base/constants.md",
     "base/file.md",
     "base/io-network.md",

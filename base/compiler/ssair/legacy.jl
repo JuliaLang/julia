@@ -72,7 +72,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     resize!(ci.slotflags, nargs)
     resize!(ci.slottypes, nargs)
     stmts = ir.stmts
-    code = ci.code = stmts.inst
+    code = ci.code = stmts.stmt
     ssavaluetypes = ci.ssavaluetypes = stmts.type
     codelocs = ci.codelocs = stmts.line
     ssaflags = ci.ssaflags = stmts.flag

@@ -6,13 +6,13 @@ Interface to libc, the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
-# these need to be defined seperately for bootstrapping but belong to Libc
+# these need to be defined separately for bootstrapping but belong to Libc
 import Base: memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
     memmove, memset, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
-    transcode
+    transcode, mkfifo
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
@@ -435,6 +435,33 @@ Set a value for the current global `seed`.
 """
 function srand(seed::Integer=_make_uint64_seed())
     ccall(:jl_srand, Cvoid, (UInt64,), seed % UInt64)
+end
+
+"""
+    mkfifo(path::AbstractString, [mode::Integer]) -> path
+
+Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
+
+`mkfifo` is supported only in Unix platforms.
+
+!!! compat "Julia 1.11"
+    `mkfifo` requires at least Julia 1.11.
+"""
+function mkfifo(
+    path::AbstractString,
+    mode::Integer = Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IWGRP |
+                    Base.S_IROTH | Base.S_IWOTH,
+)
+    @static if Sys.isunix()
+        # Default `mode` is compatible with `mkfifo` CLI in coreutils.
+        ret = ccall(:mkfifo, Cint, (Cstring, Base.Cmode_t), path, mode)
+        systemerror("mkfifo", ret == -1)
+        return path
+    else
+        # Using normal `error` because `systemerror("mkfifo", ENOTSUP)` does not
+        # seem to work on Windows.
+        error("mkfifo: Operation not supported")
+    end
 end
 
 struct Cpasswd

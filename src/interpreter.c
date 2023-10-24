@@ -65,7 +65,8 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 // we define this separately so that we can populate the frame before we add it to the backtrace
 // it's recommended to mark the containing function with NOINLINE, though not essential
 #define JL_GC_ENABLEFRAME(frame) \
-  ((void**)&frame[1])[0] = __builtin_frame_address(0);
+    jl_signal_fence(); \
+    ((void**)&frame[1])[0] = __builtin_frame_address(0);
 
 #endif
 
@@ -553,18 +554,30 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 }
             }
             else if (head == jl_leave_sym) {
-                int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
-                assert(hand_n_leave > 0);
-                // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
-                jl_handler_t *eh = ct->eh;
-                while (--hand_n_leave > 0)
-                    eh = eh->prev;
-                jl_eh_restore_state(eh);
-                // leave happens during normal control flow, but we must
-                // longjmp to pop the eval_body call for each enter.
-                s->continue_at = next_ip;
-                asan_unpoison_task_stack(ct, &eh->eh_ctx);
-                jl_longjmp(eh->eh_ctx, 1);
+                int hand_n_leave = 0;
+                for (int i = 0; i < jl_expr_nargs(stmt); ++i) {
+                    jl_value_t *arg = jl_exprarg(stmt, i);
+                    if (arg == jl_nothing)
+                        continue;
+                    assert(jl_is_ssavalue(arg));
+                    jl_value_t *enter_stmt = jl_array_ptr_ref(stmts, ((jl_ssavalue_t*)arg)->id - 1);
+                    if (enter_stmt == jl_nothing)
+                        continue;
+                    hand_n_leave += 1;
+                }
+                if (hand_n_leave > 0) {
+                    assert(hand_n_leave > 0);
+                    // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
+                    jl_handler_t *eh = ct->eh;
+                    while (--hand_n_leave > 0)
+                        eh = eh->prev;
+                    jl_eh_restore_state(eh);
+                    // leave happens during normal control flow, but we must
+                    // longjmp to pop the eval_body call for each enter.
+                    s->continue_at = next_ip;
+                    asan_unpoison_task_stack(ct, &eh->eh_ctx);
+                    jl_longjmp(eh->eh_ctx, 1);
+                }
             }
             else if (head == jl_pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));

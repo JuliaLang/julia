@@ -75,24 +75,103 @@ end
 """
     names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the names exported by a `Module`, excluding deprecated names.
-If `all` is true, then the list also includes non-exported names defined in the module,
+Get an array of the public names of a `Module`, excluding deprecated names.
+If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
 
-As a special case, all names defined in `Main` are considered \"exported\",
-since it is not idiomatic to explicitly export names from `Main`.
+As a special case, all names defined in `Main` are considered \"public\",
+since it is not idiomatic to explicitly mark names from `Main` as public.
 
-See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(unsorted_names(m; all, imported))
 unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
+"""
+    isexported(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is exported from a module.
+
+See also: [`ispublic`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Mod
+
+julia> Base.isexported(Mod, :foo)
+true
+
+julia> Base.isexported(Mod, :bar)
+false
+
+julia> Base.isexported(Mod, :baz)
+false
+```
+"""
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
+
+"""
+    ispublic(m::Module, s::Symbol) -> Bool
+
+Returns whether a symbol is marked as public in a module.
+
+Exported symbols are considered public.
+
+!!! compat "Julia 1.11"
+    This function and the notion of publicity were added in Julia 1.11.
+
+See also: [`isexported`](@ref), [`names`](@ref)
+
+```jldoctest
+julia> module Mod
+           export foo
+           public bar
+       end
+Mod
+
+julia> Base.ispublic(Mod, :foo)
+true
+
+julia> Base.ispublic(Mod, :bar)
+true
+
+julia> Base.ispublic(Mod, :baz)
+false
+```
+"""
+ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
+
+# TODO: this is vaguely broken because it only works for explicit calls to
+# `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
+
+"""
+    isbindingresolved(m::Module, s::Symbol) -> Bool
+
+Returns whether the binding of a symbol in a module is resolved.
+
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+
+```jldoctest
+julia> module Mod
+           foo() = 17
+       end
+Mod
+
+julia> Base.isbindingresolved(Mod, :foo)
+true
+
+julia> Base.isbindingresolved(Mod, :bar)
+false
+```
+"""
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 function binding_module(m::Module, s::Symbol)
@@ -257,11 +336,13 @@ end
 Determine whether a field `s` is declared `const` in a given type `t`.
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
+    @_foldable_meta
     t = unwrap_unionall(t)
     isa(t, DataType) || return false
     return isconst(t, fieldindex(t, s, false))
 end
 function isconst(@nospecialize(t::Type), s::Int)
+    @_foldable_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
@@ -279,11 +360,13 @@ end
 Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
 function isfieldatomic(@nospecialize(t::Type), s::Symbol)
+    @_foldable_meta
     t = unwrap_unionall(t)
     isa(t, DataType) || return false
     return isfieldatomic(t, fieldindex(t, s, false))
 end
 function isfieldatomic(@nospecialize(t::Type), s::Int)
+    @_foldable_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
@@ -521,6 +604,7 @@ ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
@@ -539,6 +623,7 @@ ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
+If `T` is not a type, then return `false`.
 """
 function isstructtype(@nospecialize t)
     @_total_meta
@@ -553,6 +638,7 @@ end
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
+If `T` is not a type, then return `false`.
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -573,6 +659,7 @@ Typical examples are numeric types such as [`UInt8`](@ref),
 This category of types is significant since they are valid as type parameters,
 may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
 and have a defined layout that is compatible with C.
+If `T` is not a type, then return `false`.
 
 See also [`isbits`](@ref), [`isprimitivetype`](@ref), [`ismutable`](@ref).
 
@@ -622,18 +709,20 @@ _objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
+If `T` is not a type, then return `false`.
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
 datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
 
 """
-    ismutationfree(T)
+    Base.ismutationfree(T)
 
 Determine whether type `T` is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
+If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -649,10 +738,11 @@ end
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
 
 """
-    isidentityfree(T)
+    Base.isidentityfree(T)
 
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
+If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -667,7 +757,7 @@ end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+has_free_typevars(@nospecialize(t)) = (@_total_meta; ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0)
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
@@ -684,6 +774,8 @@ isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
+Note that this is not the negation of `isabstracttype(T)`.
+If `T` is not a type, then return `false`.
 
 See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
@@ -715,6 +807,8 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
+Note that this is not the negation of `isconcretetype(T)`.
+If `T` is not a type, then return `false`.
 
 # Examples
 ```jldoctest
@@ -737,6 +831,7 @@ end
 
 Determine whether type `T` has exactly one possible instance; for example, a
 struct type with no fields.
+If `T` is not a type, then return `false`.
 """
 issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance))
 
@@ -1067,6 +1162,7 @@ See also: [`which`](@ref) and `@which`.
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -1080,8 +1176,7 @@ methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
-    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
@@ -1200,32 +1295,112 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
+    """
+    If enabled, generate the necessary code to support the --track-allocations
+    command line flag to julia itself. Note that the option itself does not enable
+    allocation tracking. Rather, it merely generates the support code necessary
+    to perform allocation tracking if requested by the command line option.
+    """
     track_allocations::Cint
+
+    """
+    If enabled, generate the necessary code to support the --code-coverage
+    command line flag to julia itself. Note that the option itself does not enable
+    code coverage. Rather, it merely generates the support code necessary
+    to code coverage if requested by the command line option.
+    """
     code_coverage::Cint
+
+    """
+    If enabled, force the compiler to use the specialized signature
+    for all generated functions, whenever legal. If disabled, the choice is made
+    heuristically and specsig is only used when deemed profitable.
+    """
     prefer_specsig::Cint
+
+    """
+    If enabled, enable emission of `.debug_names` sections.
+    """
     gnu_pubnames::Cint
+
+    """
+    Controls what level of debug info to emit. Currently supported values are:
+    - 0: no debug info
+    - 1: full debug info
+    - 2: Line tables only
+    - 3: Debug directives only
+
+    The integer values currently match the llvm::DICompilerUnit::DebugEmissionKind enum,
+    although this is not guaranteed.
+    """
     debug_info_kind::Cint
+
+    """
+    Controls the debug_info_level parameter, equivalent to the -g command line option.
+    """
+    debug_info_level::Cint
+
+    """
+    If enabled, generate a GC safepoint at the entry to every function. Emitting
+    these extra safepoints can reduce the amount of time that other threads are
+    waiting for the currently running thread to reach a safepoint. The cost for
+    a safepoint is small, but non-zero. The option is enabled by default.
+    """
     safepoint_on_entry::Cint
+
+    """
+    If enabled, add an implicit argument to each function call that is used to
+    pass down the current task local state pointer. This argument is passed
+    using the `swiftself` convention, which in the ordinary case means that the
+    pointer is kept in a register and accesses are thus very fast. If this option
+    is disabled, the task local state pointer must be loaded from thread local
+    storage, which incurs a small amount of additional overhead. The option is enabled by
+    default.
+    """
     gcstack_arg::Cint
 
-    lookup::Ptr{Cvoid}
+    """
+    If enabled, use the Julia PLT mechanism to support lazy-resolution of `ccall`
+    targets. The option may be disabled for use in environments where the julia
+    runtime is unavailable, but is otherwise recommended to be enabled, even if
+    lazy resolution is not required, as the Julia PLT mechanism may have superior
+    performance compared to the native platform mechanism. The options is enabled by default.
+    """
+    use_jlplt::Cint
 
-    generic_context::Any
+    """
+    A pointer of type
+
+    typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
+    size_t min_world, size_t max_world);
+
+    that may be used by external compilers as a callback to look up the code instance corresponding
+    to a particular method instance.
+    """
+    lookup::Ptr{Cvoid}
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
-                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true,
-                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
-                   generic_context = nothing)
+                   gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
+                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
-            Cint(safepoint_on_entry),
-            Cint(gcstack_arg),
-            lookup, generic_context)
+            debug_info_level, Cint(safepoint_on_entry),
+            Cint(gcstack_arg), Cint(use_jlplt),
+            lookup)
+    end
+end
+
+# this type mirrors jl_emission_params_t (documented in julia.h)
+struct EmissionParams
+    emit_metadata::Cint
+
+    function EmissionParams(; emit_metadata::Bool=true)
+        return new(Cint(emit_metadata))
     end
 end
 
@@ -1305,15 +1480,6 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
         end
     end
     return true
-end
-
-# give a decent error message if we try to instantiate a staged function on non-leaf types
-function func_for_method_checked(m::Method, @nospecialize(types), sparams::SimpleVector)
-    if isdefined(m, :generator) && !may_invoke_generator(m, types, sparams)
-        error("cannot call @generated function `", m, "` ",
-              "with abstract argument types: ", types)
-    end
-    return m
 end
 
 """
@@ -1398,10 +1564,9 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
-            push!(asts, meth => Any)
+            push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
             push!(asts, code => ty)
@@ -1495,16 +1660,9 @@ function code_ircode_by_type(
     asts = []
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_ircode(
-            interp,
-            meth,
-            match.spec_types,
-            match.sparams,
-            optimize_until,
-        )
+        (code, ty) = Core.Compiler.typeinf_ircode(interp, match, optimize_until)
         if code === nothing
-            push!(asts, meth => Any)
+            push!(asts, match.method => Any)
         else
             push!(asts, code => ty)
         end
@@ -1565,8 +1723,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, types, match.sparams)
-        ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
+        ty = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
         push!(rts, something(ty, Any))
     end
     return rts
@@ -1609,24 +1766,24 @@ This function will return an `Effects` object with information about the computa
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
-                       world = get_world_counter(),
-                       interp = Core.Compiler.NativeInterpreter(world))
+                       world::UInt=get_world_counter(),
+                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        argtypes = Any[Core.Const(f), types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
         return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
             Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
-    result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if result === missing
-        # unanalyzable call, return the unknown effects
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if matches === nothing
+        # unanalyzable call, i.e. the interpreter world might be newer than the world where
+        # the `f` is defined, return the unknown effects
         return Core.Compiler.Effects()
     end
-    (; matches) = result
     effects = Core.Compiler.EFFECTS_TOTAL
     if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -1634,10 +1791,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     for match in matches.matches
         match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp,
-            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#true)
         frame === nothing && return Core.Compiler.Effects()
-        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+        effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
     return effects
 end
@@ -1657,14 +1813,14 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world::UInt=get_world_counter(),
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
     for match in matches
         match = match::Core.MethodMatch
-        meth = func_for_method_checked(match.method, tt, match.sparams)
-        println(io, meth)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        println(io, match.method)
+        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
@@ -1948,6 +2104,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             has_bottom_parameter(ti) && return false
         end
         world = get_world_counter()
+        world == typemax(UInt) && return true # intersecting methods are always ambiguous in the generator world, which is true, albeit maybe confusing for some
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
@@ -2252,4 +2409,24 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
         throw(ArgumentError("expected a `:call` expression `f(args...; kwargs...)`"))
     end
     return f, args, kwargs
+end
+
+"""
+    Base.generating_output([incremental::Bool])::Bool
+
+Return `true` if the current process is being used to pre-generate a
+code cache via any of the `--output-*` command line arguments. The optional
+`incremental` argument further specifies the precompilation mode: when set
+to `true`, the function will return `true` only for package precompilation;
+when set to `false`, it will return `true` only for system image generation.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+function generating_output(incremental::Union{Bool,Nothing}=nothing)
+    ccall(:jl_generating_output, Cint, ()) == 0 && return false
+    if incremental !== nothing
+        JLOptions().incremental == incremental || return false
+    end
+    return true
 end

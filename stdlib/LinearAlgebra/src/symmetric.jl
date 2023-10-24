@@ -222,7 +222,6 @@ const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
-size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function Base.isassigned(A::HermOrSym, i::Int, j::Int)
     @boundscheck checkbounds(Bool, A, i, j) || return false
@@ -309,9 +308,11 @@ parent(A::HermOrSym) = A.data
 Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix{T}} = A
 Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix{T}} = Symmetric{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
+AbstractMatrix{T}(A::Symmetric{T}) where {T} = copy(A)
 Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix{T}} = A
 Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix{T}} = Hermitian{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
+AbstractMatrix{T}(A::Hermitian{T}) where {T} = copy(A)
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))

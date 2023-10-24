@@ -2,11 +2,9 @@
 
 using Test
 using Base.Meta
-import Core:
-    CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
-    QuoteNode, ReturnNode
+using Core.IR
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
 
 # domsort
 # =======
@@ -42,7 +40,7 @@ let m = Meta.@lower 1 + 1
     domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    phi = ir.stmts.inst[3]
+    phi = ir.stmts.stmt[3]
     @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
@@ -688,7 +686,7 @@ let nt = (a=1, b=2)
 end
 
 # Expr(:new) annotated as PartialStruct
-struct FooPartial
+struct FooPartialNew
     x
     y
     global f_partial
@@ -838,17 +836,18 @@ end
 
 # Test cfg_simplify in complicated sequences of dropped and merged bbs
 using Core.Compiler: Argument, IRCode, GotoNode, GotoIfNot, ReturnNode, NoCallInfo, BasicBlock, StmtRange, SSAValue
-bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:inst]
+bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:stmt]
 
 function each_stmt_a_bb(stmts, preds, succs)
     ir = IRCode()
-    empty!(ir.stmts.inst)
-    append!(ir.stmts.inst, stmts)
+    empty!(ir.stmts.stmt)
+    append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
     empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
+    empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
     Core.Compiler.verify_ir(ir)
     return ir
 end
@@ -949,7 +948,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.stmt[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
@@ -1140,8 +1139,8 @@ let
     @test all(alloc -> alloc in preserves, refs)
 end
 
-# test `stmt_effect_free` and DCE
-# ===============================
+# test `flags_for_effects` and DCE
+# ================================
 
 let # effect-freeness computation for array allocation
 
@@ -1195,9 +1194,9 @@ let ci = code_typed1(optimize=false) do
         end
     end
     ir = Core.Compiler.inflate_ir(ci)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    @test any(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt)
     ir = Core.Compiler.compact!(ir, true)
-    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+    @test !any(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.stmt)
 end
 
 # Test that adce_pass! can drop phi node uses that can be concluded unused
@@ -1223,7 +1222,7 @@ function foo_cfg_empty(b)
         @goto x
     end
     @label x
-    return 1
+    return b
 end
 let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Core.Compiler.inflate_ir(ci)
@@ -1233,7 +1232,7 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) <= 2
-    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
+    @test isa(ir.stmts[length(ir.stmts)][:stmt], ReturnNode)
 end
 
 @test Core.Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
@@ -1438,3 +1437,133 @@ function foo(b, x)
     getfield(f, :x) + 1
 end
 @test foo(true, 1) == 2
+
+# ifelse folding
+@test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+@test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return Core.ifelse(true, x, exp(x))
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
+end
+fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+    return ifelse(isa(x, Float64), x, exp(x))
+end
+
+# PhiC fixup of compact! with cfg modification
+@inline function big_dead_throw_catch()
+    x = 1
+    try
+        x = 2
+        if Ref{Bool}(false)[]
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            Base.donotdelete(x)
+            x = 3
+        end
+    catch
+        return x
+    end
+end
+
+function call_big_dead_throw_catch()
+    if Ref{Bool}(false)[]
+        return big_dead_throw_catch()
+    end
+    return 4
+end
+
+# Issue #51159 - Unreachable reached in try-catch block
+function f_with_early_try_catch_exit()
+    result = false
+    for i in 3
+        x = try
+        catch
+            # This introduces an early Expr(:leave) that we must respect when building
+            # φᶜ-nodes in slot2ssa. In particular, we have to ignore the `result = x`
+            # assignment that occurs outside of this try-catch block
+            continue
+        end
+        result = x
+    end
+    result
+end
+
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+    for i = 1:length(ir.stmts)
+        expr = ir.stmts[i][:stmt]
+        if isa(expr, PhiCNode)
+            # The φᶜ should only observe the value of `result` at the try-catch :enter
+            # (from the `result = false` assignment), since `result = x` assignment is
+            # dominated by an Expr(:leave).
+            @test length(expr.values) == 1
+        end
+    end
+end
+
+@test isnothing(f_with_early_try_catch_exit())
+
+# Issue #51144 - UndefRefError during compaction
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1  → 2, 3
+        #=  %1: =# Expr(:(=), Core.SlotNumber(4), Core.Argument(2)),
+        #=  %2: =# Expr(:call, :(===), Core.SlotNumber(4), nothing),
+        #=  %3: =# GotoIfNot(Core.SSAValue(1), 5),
+        # block 2
+        #=  %4: =# ReturnNode(nothing),
+        # block 3  → 4, 5
+        #=  %5: =# Expr(:(=), Core.SlotNumber(4), false),
+        #=  %6: =# GotoIfNot(Core.Argument(2), 8),
+        # block 4  → 5
+        #=  %7: =# Expr(:(=), Core.SlotNumber(4), true),
+        # block 5
+        #=  %8: =# ReturnNode(nothing), # Must not insert a π-node here
+    ]
+    nstmts = length(src.code)
+    nslots = 4
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    src.slotflags = fill(0, nslots)
+    src.slottypes = Any[Any, Union{Bool, Nothing}, Bool, Union{Bool, Nothing}]
+    ir = Core.Compiler.inflate_ir(src)
+
+    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    mi.specTypes = Tuple{}
+    mi.def = Module()
+
+    # Simulate the important results from inference
+    interp = Core.Compiler.NativeInterpreter()
+    sv = Core.Compiler.OptimizationState(mi, src, interp)
+    slot_id = 4
+    for block_id = 3:5
+        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
+    end
+
+    ir = Core.Compiler.convert_to_ircode(src, sv)
+    ir = Core.Compiler.slot2reg(ir, src, sv)
+    ir = Core.Compiler.compact!(ir)
+
+    Core.Compiler.verify_ir(ir)
+end

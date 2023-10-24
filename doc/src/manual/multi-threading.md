@@ -27,7 +27,7 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
@@ -76,7 +76,7 @@ julia> Threads.threadid()
 
 The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
 of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
-[`JULIA_NUM_GC_THREADS`](@ref env-gc-threads) environment variable.
+[`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
@@ -102,7 +102,7 @@ Julia may be started with one or more threads reserved to run interactive tasks:
 $ julia --threads 3,1
 ```
 
-The environment variable `JULIA_NUM_THREADS` can also be used similarly:
+The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
 ```bash
 export JULIA_NUM_THREADS=3,1
 ```
@@ -165,6 +165,8 @@ julia> begin
                unlock(lk)
            end
        end
+
+julia> @lock lk use(a)
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
@@ -439,7 +441,7 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * The schedule used by `@spawn` is nondeterministic and should not be relied on.
+  * The schedule used by [`@spawn`](@ref Threads.@spawn) is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may
     be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.
@@ -448,7 +450,8 @@ threads in Julia:
     method, and module definitions in parallel.
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
-    can be widely adopted with confidence. See the next section for further details.
+    can be widely adopted with confidence. See the section on
+    [the safe use of finalizers](@ref man-finalizers) for further details.
 
 ## [Task Migration](@id man-task-migration)
 
@@ -464,7 +467,7 @@ and therefore should not be used to index into a vector of buffers or stateful o
     Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
     started on.
 
-## Safe use of Finalizers
+## [Safe use of Finalizers](@id man-finalizers)
 
 Because finalizers can interrupt any code, they must be very careful in how
 they interact with any global state. Unfortunately, the main reason that

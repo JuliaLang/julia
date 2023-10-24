@@ -23,6 +23,9 @@ let ex = quote
         end
         type_test = Test_x(Test_y(1))
         (::Test_y)() = "", ""
+        unicode_αβγ = Test_y(1)
+
+        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
         module CompletionFoo2
 
         end
@@ -154,7 +157,7 @@ end
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -251,6 +254,11 @@ let s = "Main.CompletionFoo.type_test.x"
     @test "xx" in c
     @test r == 30:30
     @test s[r] == "x"
+end
+
+let s = "Main.CompletionFoo.unicode_αβγ.y"
+    c, r = test_complete(s)
+    @test "yy" in c
 end
 
 let s = "Main.CompletionFoo.bar.no_val_available"
@@ -495,7 +503,7 @@ end
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
+    @test only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -566,7 +574,7 @@ end
 let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
 
 # method completions with kwargs
@@ -1449,22 +1457,22 @@ end
     c, r = test_complete("CompletionFoo.kwtest3(a;foob")
     @test c == ["foobar="]
     c, r = test_complete("CompletionFoo.kwtest3(a; le")
-    @test "length" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete("CompletionFoo.kwtest3.(a;\nlength")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a, length=4, l")
     @test "length" ∈ c
     @test "length=" ∉ c # since it was already used, do not suggest it again
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; kwargs..., fo")
-    @test "foreach" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "foreach" ∉ c
     @test "foobar=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, le")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c # the first method could be called and `anotherkwarg` slurped
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!")
@@ -1478,7 +1486,7 @@ end
     c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
     @test c == ["namedarg="]
     c, r = test_complete_foo("kwtest3(blabla; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     @test "namedarg=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(blabla; named.")
@@ -1486,11 +1494,11 @@ end
     c, r = test_complete_foo("kwtest3(blabla; named..., another!")
     @test c == ["another!kwarg="]
     c, r = test_complete_foo("kwtest3(blabla; named..., len")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     c, r = test_complete_foo("kwtest3(1+3im; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     # TODO: @test "namedarg=" ∉ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(1+3im; named.")
@@ -1817,7 +1825,7 @@ function Base.getproperty(v::Issue36437, s::Symbol)
 end
 
 let s = "Issue36437(42)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1825,16 +1833,47 @@ let s = "Issue36437(42)."
 end
 
 let s = "Some(Issue36437(42)).value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
     end
 end
 
+some_issue36437 = Some(Issue36437(42))
+
+let s = "some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# get completions for :toplevel/:tuple expressions
+let s = "some_issue36437.value.a, some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+let s = "@show some_issue36437.value.a; some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+# https://github.com/JuliaLang/julia/issues/51505
+let s = "()."
+    c, r, res = test_complete_context(s)
+    @test res
+end
+
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1842,13 +1881,121 @@ let s = "Ref(Issue36437(42))[]."
     @test "v" ∉ c
 end
 
+# concrete evaluation through `getindex`ing dictionary
+global_dict = Dict{Symbol, Any}(:r => r"foo")
+let s = "global_dict[:r]."
+    c, r, res = test_complete_context(s)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
+let s = "global_dict_nested[:g][:r]."
+    c, r, res = test_complete_context(s)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+
+# dict completions through nested `getindex`ing
+let s = "global_dict_nested["
+    c, r, res = test_complete_context(s)
+    @test res
+    @test ":g]" in c
+end
+let s = "global_dict_nested[:g]["
+    c, r, res = test_complete_context(s)
+    @test res
+    @test ":r]" in c
+end
+
 const global_xs = [Some(42)]
 let s = "pop!(global_xs)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# https://github.com/JuliaLang/julia/issues/51499
+# allow aggressive concrete evaluation for child uncached frames
+struct Issue51499CompletionDict
+    inner::Dict{Symbol,Any}
+    leaf_func # Function that gets invoked on leaf objects before being returned.
+    function Issue51499CompletionDict(inner::Dict, leaf_func=identity)
+        inner = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in inner)
+        return new(inner, leaf_func)
+    end
+end
+function Base.getproperty(tcd::Issue51499CompletionDict, name::Symbol)
+    prop = getfield(tcd, :inner)[name]
+    isa(prop, Issue51499CompletionDict) && return prop
+    return getfield(tcd, :leaf_func)(prop)
+end
+Base.propertynames(tcd::Issue51499CompletionDict) = keys(getfield(tcd, :inner))
+
+const issue51499 = Ref{Any}(nothing)
+tcd3 = Issue51499CompletionDict(
+    Dict(:a => 1.0, :b => 2.0),
+    function (x)
+        issue51499[] = x
+        return sin(x)
+    end)
+tcd2 = Issue51499CompletionDict(
+    Dict(:v => tcd3, :w => 1.0))
+tcd1 = Issue51499CompletionDict(
+    Dict(:x => tcd2, :y => 1.0))
+let (c, r, res) = test_complete_context("tcd1.")
+    @test res
+    @test "x" in c && "y" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.")
+    @test res
+    @test "v" in c && "w" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.v.")
+    @test res
+    @test "a" in c && "b" in c
+    @test isnothing(issue51499[])
+end
+@test tcd1.x.v.a == sin(1.0)
+@test issue51499[] == 1.0
+
+# aggressive constant propagation for mutable `Const`s
+mutable_const_prop = Dict{Symbol,Any}(:key => Any[Some(r"x")])
+getkeyelem(d) = d[:key][1]
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).")
+    @test res
+    @test "value" in c
+end
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
+    @test res
+    for name in fieldnames(Regex)
+        @test String(name) in c
+    end
+end
+
+# JuliaLang/julia/#51548
+# don't return wrong result due to mutable inconsistency
+function issue51548(T, a)
+    # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
+    # constant-fold `isempty(xs)::Const(true)` and return wrong result
+    xs = T[]
+    if a isa T
+        push!(xs, a)
+    end
+    return Val(isempty(xs))
+end;
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(issue51548(Any, r"issue51548")), @__MODULE__; limit_aggressive_inference=true)
+    @test !isnothing(inferred)
+    RT = Core.Compiler.widenconst(inferred)
+    @test Val{false} <: RT
+end
 
 # Test completion of var"" identifiers (#49280)
 let s = "var\"complicated "
@@ -1874,16 +2021,74 @@ let s = "`abc`.e"
     @test c == Any["env", "exec"]
 end
 
+# suppress false positive field completions (when `getproperty`/`propertynames` is overloaded)
+struct Issue51499_2
+    inner::Dict{Symbol,Any}
+end
+Base.getproperty(issue51499::Issue51499_2, name::Symbol) = getfield(issue51499, :inner)[name]
+Base.propertynames(issue51499::Issue51499_2) = keys(getfield(issue51499, :inner))
+const issue51499_2_1 = Issue51499_2(Dict(:a => nothing))
+const issue51499_2_2 = Issue51499_2(Dict(:b => nothing))
+let s = "(rand(Bool) ? issue51499_2_1 : issue51499_2_2)."
+    c, r, res = test_complete_context(s)
+    @test "inner" ∉ c
+end
+
 # Test completion for a case when type inference returned `Union` of the same types
 union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
 let s = "union_somes(1, 1.0)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c
 end
 union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
 let s = "union_some_ref(1, 1.0)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c && "x" in c
 end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
+end
+
+# issue #51194
+for (s, compl) in (("2*CompletionFoo.nam", "named"),
+                   (":a isa CompletionFoo.test!1", "test!12"),
+                   ("-CompletionFoo.Test_y(3).", "yy"),
+                   ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
+                   ("foo'CompletionFoo.test!1", "test!12"))
+    c, r = test_complete(s)
+    @test only(c) == compl
+end
+
+let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
+    @test t isa Core.Const
+    @test t.val == `a b`
+end
+
+# issue #51823
+@test "include" in test_complete_context("inc", Main)[1]

@@ -99,7 +99,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int)
+    haslength(itr) && _sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break
@@ -338,13 +338,17 @@ function issubset(a, b)
 end
 
 """
-    hasfastin(T)
+    Base.hasfastin(T)
 
 Determine whether the computation `x ∈ collection` where `collection::T` can be considered
 as a "fast" operation (typically constant or logarithmic complexity).
 The definition `hasfastin(x) = hasfastin(typeof(x))` is provided for convenience so that instances
 can be passed instead of types.
 However the form that accepts a type argument should be defined for new types.
+
+The default for `hasfastin(T)` is `true` for subtypes of
+[`AbstractSet`](@ref), [`AbstractDict`](@ref) and [`AbstractRange`](@ref)
+and `false` otherwise.
 """
 hasfastin(::Type) = false
 hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true

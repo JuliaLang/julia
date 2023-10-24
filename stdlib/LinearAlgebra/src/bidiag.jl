@@ -214,7 +214,7 @@ Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
-promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
+promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
 function Tridiagonal{T}(A::Bidiagonal) where T
@@ -228,7 +228,8 @@ promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
 promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+AbstractMatrix{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A)
+AbstractMatrix{T}(A::Bidiagonal{T}) where {T} = copy(A)
 
 convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 
@@ -271,16 +272,7 @@ function show(io::IO, M::Bidiagonal)
     print_matrix(io, (M.ev)')
 end
 
-size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-function size(M::Bidiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.dv)
-    else
-        return 1
-    end
-end
+size(M::Bidiagonal) = (n = length(M.dv); (n, n))
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)

@@ -247,7 +247,7 @@ end
 
            Shifts | 0  4 10 14 18 24  8 20 12 26
 
-    The shifts that represent each state were derived using teh SMT solver Z3, to ensure when encoded into
+    The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
     Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
@@ -404,7 +404,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return iterate_continued(s, i, u)
 end
 
-function iterate_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function iterate_continued(s, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -433,7 +434,8 @@ end
     return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function getindex_continued(s, i::Int, u::UInt32)
     if u < 0xc0000000
         # called from `getindex` which checks bounds
         @inbounds isvalid(s, i) && @goto ret

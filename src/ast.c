@@ -28,6 +28,7 @@ JL_DLLEXPORT jl_sym_t *jl_top_sym;
 JL_DLLEXPORT jl_sym_t *jl_module_sym;
 JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 JL_DLLEXPORT jl_sym_t *jl_export_sym;
+JL_DLLEXPORT jl_sym_t *jl_public_sym;
 JL_DLLEXPORT jl_sym_t *jl_import_sym;
 JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_quote_sym;
@@ -304,6 +305,7 @@ void jl_init_common_symbols(void)
     jl_lambda_sym = jl_symbol("lambda");
     jl_module_sym = jl_symbol("module");
     jl_export_sym = jl_symbol("export");
+    jl_public_sym = jl_symbol("public");
     jl_import_sym = jl_symbol("import");
     jl_using_sym = jl_symbol("using");
     jl_assign_sym = jl_symbol("=");

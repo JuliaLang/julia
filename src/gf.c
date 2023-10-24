@@ -1266,7 +1266,7 @@ static jl_method_instance_t *cache_method(
     intptr_t max_varargs = get_max_varargs(definition, kwmt, mt, NULL);
     jl_compilation_sig(tt, sparams, definition, max_varargs, &newparams);
     if (newparams) {
-        temp2 = jl_apply_tuple_type(newparams);
+        temp2 = jl_apply_tuple_type(newparams, 1);
         // Now there may be a problem: the widened signature is more general
         // than just the given arguments, so it might conflict with another
         // definition that does not have cache instances yet. To fix this, we
@@ -1389,7 +1389,7 @@ static jl_method_instance_t *cache_method(
         }
     }
     if (newparams) {
-        simplett = (jl_datatype_t*)jl_apply_tuple_type(newparams);
+        simplett = (jl_datatype_t*)jl_apply_tuple_type(newparams, 1);
         temp2 = (jl_value_t*)simplett;
     }
 
@@ -2130,7 +2130,10 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 int replaced_edge;
                                 if (invokeTypes) {
                                     // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
-                                    replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
+                                    if (jl_egal(invokeTypes, caller->def.method->sig))
+                                        replaced_edge = 0; // if invokeTypes == m.sig, then the only way to change this invoke is to replace the method itself
+                                    else
+                                        replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
                                 }
                                 else {
                                     replaced_edge = replaced_dispatch;
@@ -2325,11 +2328,24 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 }
 
 jl_mutex_t precomp_statement_out_lock;
+ios_t f_precompile;
+JL_STREAM* s_precompile = NULL;
+
+static void init_precompile_output(void)
+{
+    const char *t = jl_options.trace_compile;
+    if (!strncmp(t, "stderr", 6)) {
+        s_precompile = JL_STDERR;
+    }
+    else {
+        if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+            jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+        s_precompile = (JL_STREAM*) &f_precompile;
+    }
+}
 
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
     jl_method_t *def = mi->def.method;
     if (jl_options.trace_compile == NULL)
         return;
@@ -2338,15 +2354,7 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
-        const char *t = jl_options.trace_compile;
-        if (!strncmp(t, "stderr", 6)) {
-            s_precompile = JL_STDERR;
-        }
-        else {
-            if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-            s_precompile = (JL_STREAM*) &f_precompile;
-        }
+        init_precompile_output();
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
         jl_printf(s_precompile, "precompile(");
@@ -2355,6 +2363,20 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
+    JL_UNLOCK(&precomp_statement_out_lock);
+}
+
+JL_DLLEXPORT void jl_write_precompile_statement(char* statement)
+{
+    if (jl_options.trace_compile == NULL)
+        return;
+    JL_LOCK(&precomp_statement_out_lock);
+    if (s_precompile == NULL) {
+        init_precompile_output();
+    }
+    jl_printf(s_precompile, "%s\n", statement);
+    if (s_precompile != JL_STDERR)
+        ios_flush(&f_precompile);
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 
@@ -2576,7 +2598,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_compilation_sig(ti, env, m, max_varargs, &newparams);
     int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple;
     if (newparams) {
-        tt = (jl_datatype_t*)jl_apply_tuple_type(newparams);
+        tt = (jl_datatype_t*)jl_apply_tuple_type(newparams, 1);
         if (!is_compileable) {
             // compute new env, if used below
             jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)m->sig, &newparams);
@@ -2831,7 +2853,7 @@ jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_v
     jl_svecset(tt, 0, ft);
     for (size_t i = 0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
-    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
+    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt, 1);
     tt = jl_rewrap_unionall_(tt, types0);
     JL_GC_POP();
     return tt;
@@ -3370,7 +3392,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             continue; // already part of this cycle
         jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
         jl_method_t *m2 = matc2->method;
-        int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+        int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
         // TODO: we could change this to jl_has_empty_intersection(ti, (jl_value_t*)matc2->spec_types);
         // since we only care about sorting of the intersections the user asked us about
         if (!subt2 && jl_has_empty_intersection(m2->sig, m->sig))
@@ -3515,7 +3537,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                     size_t idx2 = (size_t)stack->items[j];
                     jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
                     jl_method_t *m2 = matc2->method;
-                    int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+                    int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
                     // if their intersection contributes to the ambiguity cycle
                     // and the contribution of m is fully ambiguous with the portion of the cycle from m2
                     if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {

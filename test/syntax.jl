@@ -501,6 +501,10 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
+
+    m_error = try @eval method_c6(a::Vararg{:A}) = 1; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument a in method definition for method_c6 at $filename:")
 end
 
 # issue #7272
@@ -3183,6 +3187,22 @@ end
     end
     @test err == 5 + 6
     @test x == 1
+
+    x = 0
+    try
+    catch
+    else
+        x = 1
+    end
+    @test x == 1
+
+    try
+    catch
+    else
+        tryelse_in_local_scope = true
+    end
+
+    @test !@isdefined(tryelse_in_local_scope)
 end
 
 @test_parseerror """
@@ -3531,4 +3551,27 @@ end
 # Test that bad lowering does not segfault (ref #50518)
 @test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
     $(Symbol("#unused#"))
+end
+
+@testset "public keyword" begin
+    p(str) = Base.remove_linenums!(Meta.parse(str))
+    # tests ported from JuliaSyntax.jl
+    @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
+    @test p("public A, B") == Expr(:public, :A, :B)
+    @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
+    @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
+    @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
+    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
+    @test_throws Meta.ParseError p("begin \n public A, B \n end")
+    @test_throws Meta.ParseError p("if true \n public A, B \n end")
+    @test_throws Meta.ParseError p("public export=true foo, bar")
+    @test_throws Meta.ParseError p("public experimental=true foo, bar")
+    @test p("public(x::String) = false") == Expr(:(=), Expr(:call, :public, Expr(:(::), :x, :String)), Expr(:block, false))
+    @test p("module M; export @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :var"@a")))
+    @test p("module M; public @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :var"@a")))
+    @test p("module M; export ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :⤈)))
+    @test p("module M; public ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :⤈)))
+    @test p("public = 4") == Expr(:(=), :public, 4)
+    @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
+    @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end

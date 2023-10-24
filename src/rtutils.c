@@ -275,15 +275,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ct->world_age = eh->world_age;
     ct->ptls->defer_signal = eh->defer_signal;
-    if (old_gc_state != eh->gc_state) {
+    if (old_gc_state != eh->gc_state)
         jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
-        if (old_gc_state) {
-            jl_gc_safepoint_(ct->ptls);
-        }
-    }
-    if (old_defer_signal && !eh->defer_signal) {
+    if (!eh->gc_state)
+        jl_gc_safepoint_(ct->ptls);
+    if (old_defer_signal && !eh->defer_signal)
         jl_sigint_safepoint(ct->ptls);
-    }
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
             unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
@@ -325,7 +322,7 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
     dest->top = src->top;
 }
 
-static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+static void jl_reserve_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                                 size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
@@ -339,13 +336,14 @@ static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
     if (s)
         jl_copy_excstack(new_s, s);
     *stack = new_s;
+    jl_gc_wb(task, new_s);
 }
 
-void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    jl_reserve_excstack(task, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
