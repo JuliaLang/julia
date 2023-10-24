@@ -952,9 +952,9 @@ end
 
 
 # for backward compat
-arrayref(inbounds::Bool, A::Array, i::Int...) = Base.getindex(A, i...)
-const_arrayref(inbounds::Bool, A::Array, i::Int...) = Base.getindex(A, i...)
-arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Base.setindex!(A, x::T, i...)
+arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
+const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
+arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.setindex!(A, x::T, i...)
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref

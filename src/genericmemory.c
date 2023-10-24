@@ -164,7 +164,6 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     size_t align = layout->alignment;
     int isboxed = layout->flags.arrayelem_isboxed;
     int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)mtype)->zeroinit;
     if (isboxed)
         elsz = sizeof(void*);
     if (isunion)
@@ -173,7 +172,13 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    m = _new_genericmemory_(mtype, nel, isunion, zi, elsz);
+    wideint_t prod = (wideint_t)nel * elsz;
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        prod += nel;
+    }
+    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size");
     int tsz = sizeof(jl_genericmemory_t) + sizeof(void*);
     m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, mtype);
     m->ptr = data;
