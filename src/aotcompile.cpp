@@ -246,7 +246,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         else {
             *src_out = jl_type_infer(mi, world, 0);
             if (*src_out) {
-                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                codeinst = jl_get_codeinst_for_src(mi, *src_out);
                 if ((*src_out)->inferred) {
                     jl_value_t *null = nullptr;
                     jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);

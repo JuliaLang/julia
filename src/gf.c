@@ -472,6 +472,16 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
     return codeinst;
 }
 
+JL_DLLEXPORT jl_code_instance_t *jl_get_codeinst_for_src(
+        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_info_t *src)
+{
+    // TODO: copy backedges from src to mi
+    size_t max_world = src->max_world;
+    if (max_world >= jl_atomic_load_acquire(&jl_world_counter))
+        max_world = ~(size_t)0;
+    return jl_get_method_inferred(mi, src->rettype, src->min_world, max_world);
+}
+
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,

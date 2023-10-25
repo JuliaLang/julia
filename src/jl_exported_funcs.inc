@@ -226,7 +226,6 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
-    XX(jl_get_method_inferred) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
