@@ -5450,7 +5450,6 @@ end
 @test Base.return_types(phic_type8) |> only === Int
 @test phic_type8() === 2
 
-
 function phic_type9()
     local a
     try
