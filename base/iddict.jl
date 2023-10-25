@@ -132,8 +132,8 @@ function delete!(d::IdDict{K}, @nospecialize(key)) where K
     d
 end
 
-function empty!(d::IdDict)
-    resize!(d.ht, 32)
+function empty!(d::IdDict; preserve_capacity=false)
+    preserve_capacity || resize!(d.ht, 32)
     ht = d.ht
     t = @_gc_preserve_begin ht
     memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht))
