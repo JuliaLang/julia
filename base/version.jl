@@ -266,4 +266,3 @@ else
 end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
-
