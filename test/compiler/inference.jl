@@ -98,6 +98,16 @@ end
 @test !Core.Compiler.type_more_complex(Tuple{Vararg{Tuple{}}}, Tuple{Vararg{Tuple}}, Core.svec(), 0, 0, 0)
 @test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
+# issue #51694
+@test Core.Compiler.type_more_complex(
+       Base.Generator{Base.Iterators.Flatten{Array{Bool, 1}}, typeof(identity)},
+       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Core.svec(), 0, 0, 0)
+@test Core.Compiler.type_more_complex(
+       Base.Generator{Base.Iterators.Flatten{Base.Generator{Array{Bool, 1}, typeof(identity)}}, typeof(identity)},
+       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Core.svec(), 0, 0, 0)
+
 let # 40336
     t = Type{Type{Type{Int}}}
     c = Type{Type{Int}}
