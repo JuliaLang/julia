@@ -357,6 +357,17 @@ endif
 
 	# Install `dsymutil` into private_libexecdir/
 	$(INSTALL_M) $(build_depsbindir)/dsymutil$(EXE) $(DESTDIR)$(private_libexecdir)/
+	
+	# Fix the rpath of the installed tools
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+	install_name_tool -add_rpath @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/lld$(EXE);
+	install_name_tool -add_rpath @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/dsymutil$(EXE);
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_private_libexecdir_rel)' $(DESTDIR)$(private_libexecdir)/lld$(EXE);
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_private_libexecdir_rel)' $(DESTDIR)$(private_libexecdir)/dsymutil$(EXE);
+endif
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia

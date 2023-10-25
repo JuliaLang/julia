@@ -332,6 +332,12 @@ $(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),
 reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
 
+reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
+reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
+
+build_depsbindir_libdir_rel_eval = $(call rel_path,$(build_depsbindir),$(build_libdir))
+build_depsbindir_libdir_rel = $(call hit_cache,build_depsbindir_libdir_rel_eval)
+
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
