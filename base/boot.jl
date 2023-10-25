@@ -442,10 +442,12 @@ struct NotImplementedError <: Exception
         new(f, args, msg, interface)
     NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(msg::AbstractString)) =
         new(f, args, msg, Any)
+    NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(interface)) =
+        new(f, args, "", interface)
     NotImplementedError(@nospecialize(f), @nospecialize(args)) =
         new(f, args, "", Any)
     NotImplementedError(@nospecialize(msg::AbstractString)) =
-        new(msg)
+        new(nothing, nothing, msg, Any)
 end
 
 const typemax_UInt = Intrinsics.sext_int(UInt, 0xFF)
