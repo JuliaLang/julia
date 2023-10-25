@@ -5363,3 +5363,11 @@ function phic_type3()
 end
 @test Base.return_types(phic_type3) |> only === Union{Int, Float64}
 @test phic_type3() === 2
+
+# Test that `exit` returns `Union{}` (issue #51856)
+function test_error_bottom(s)
+    n = tryparse(Int, s)
+    isnothing(n) && exit()
+    n
+end
+@test only(Base.return_types(test_error_bottom, Tuple{String})) == Int
