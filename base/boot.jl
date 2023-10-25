@@ -433,6 +433,20 @@ end
 struct UndefKeywordError <: Exception
     var::Symbol
 end
+struct NotImplementedError <: Exception
+    f
+    args
+    msg::AbstractString
+    interface
+    NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(msg::AbstractString), @nospecialize(interface)) =
+        new(f, args, msg, interface)
+    NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(msg::AbstractString)) =
+        new(f, args, msg, Any)
+    NotImplementedError(@nospecialize(f), @nospecialize(args)) =
+        new(f, args, "", Any)
+    NotImplementedError(@nospecialize(msg::AbstractString)) =
+        new(msg)
+end
 
 const typemax_UInt = Intrinsics.sext_int(UInt, 0xFF)
 const typemax_Int = Core.Intrinsics.udiv_int(Core.Intrinsics.sext_int(Int, 0xFF), 2)
