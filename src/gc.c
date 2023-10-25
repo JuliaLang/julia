@@ -420,7 +420,7 @@ JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
     jl_rng_split(finalizer_rngState, jl_current_task->rngState);
 }
 
-static void run_finalizers(jl_task_t *ct)
+static void run_finalizers(jl_task_t *ct, int finalizers_thread)
 {
     // Racy fast path:
     // The race here should be OK since the race can only happen if
@@ -448,7 +448,7 @@ static void run_finalizers(jl_task_t *ct)
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
-    ct->ptls->in_finalizer = 1;
+    ct->ptls->in_finalizer = !finalizers_thread;
     jl_gc_run_finalizers_in_list(ct, &copied_list);
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
@@ -462,7 +462,7 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
         ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
-        run_finalizers(ct);
+        run_finalizers(ct, 0);
     }
 }
 
@@ -555,7 +555,7 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     JL_UNLOCK_NOGC(&finalizers_lock);
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
-    run_finalizers(ct);
+    run_finalizers(ct, 1);
 }
 
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
@@ -3466,7 +3466,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         JL_TIMING(GC, GC_Finalizers);
-        run_finalizers(ct);
+        run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
 
