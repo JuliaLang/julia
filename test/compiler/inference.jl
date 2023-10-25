@@ -5365,9 +5365,9 @@ end
 @test phic_type3() === 2
 
 # Test that `exit` returns `Union{}` (issue #51856)
-function test_error_bottom(s)
+function test_exit_bottom(s)
     n = tryparse(Int, s)
     isnothing(n) && exit()
     n
 end
-@test only(Base.return_types(test_error_bottom, Tuple{String})) == Int
+@test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
