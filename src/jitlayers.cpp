@@ -1629,6 +1629,12 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
+        if (!ctx->hasSetOpaquePointersValue())
+#ifndef JL_LLVM_OPAQUE_POINTERS
+            ctx->setOpaquePointers(false);
+#else
+            ctx->setOpaquePointers(true);
+#endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
