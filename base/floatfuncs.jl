@@ -55,7 +55,7 @@ function round(x::Real, r::RoundingMode=RoundNearest;
         if sigdigits === nothing
             if base === nothing
                 # avoid recursive calls
-                throw(MethodError(round, (x,r)))
+                throw(NotImplementedError(round, (x,r), Real))
             else
                 round(x,r)
                 # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))

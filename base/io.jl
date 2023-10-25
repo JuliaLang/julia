@@ -805,7 +805,7 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
-write(io::IO, x) = throw(MethodError(write, (io, x)))
+write(io::IO, x) = throw(NotImplementedError(write, (io, x)))
 function write(io::IO, x1, xs...)
     written::Int = write(io, x1)
     for x in xs
