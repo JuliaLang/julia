@@ -157,7 +157,7 @@ end
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -1841,7 +1841,7 @@ function Base.getproperty(v::Issue36437, s::Symbol)
 end
 
 let s = "Issue36437(42)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1849,7 +1849,7 @@ let s = "Issue36437(42)."
 end
 
 let s = "Some(Issue36437(42)).value."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1858,7 +1858,7 @@ end
 
 # aggressive concrete evaluation on mutable allocation in `repl_frame`
 let s = "Ref(Issue36437(42))[]."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("a", "b", "c")
         @test n in c
@@ -1868,7 +1868,7 @@ end
 
 const global_xs = [Some(42)]
 let s = "pop!(global_xs)."
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     @test "value" in c
 end
@@ -1900,7 +1900,7 @@ end
 
 Issue49892(x) = x
 let s = "Issue49892(fal"
-    c, r, res = test_complete_context(s, @__MODULE__)
+    c, r, res = test_complete_context(s)
     @test res
     for n in ("false", "falses")
         @test n in c
@@ -1919,4 +1919,16 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    ("foo'CompletionFoo.test!1", "test!12"))
     c, r = test_complete(s)
     @test only(c) == compl
+end
+
+# allows symbol completion within incomplete :macrocall
+# https://github.com/JuliaLang/julia/issues/51827
+macro issue51827(args...)
+    length(args) ≥ 2 || error("@issue51827: incomplete arguments")
+    return args
+end
+let s = "@issue51827 Base.ac"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "acquire" in c
 end
