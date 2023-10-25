@@ -9196,17 +9196,12 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-#if JL_LLVM_VERSION >= 150000
+    // we want the opaque-pointers to be opt-in, per LLVMContext, for this release
+    // so change the default value back to pre-14.x, without changing the NumOccurrences flag for it
     clopt = llvmopts.lookup("opaque-pointers");
     if (clopt && clopt->getNumOccurrences() == 0) {
-#ifdef JL_LLVM_OPAQUE_POINTERS
-        cl::ProvidePositionalOption(clopt, "true", 1);
-#else
-        cl::ProvidePositionalOption(clopt, "false", 1);
-#endif
+        clopt->addOccurrence(1, clopt->ArgStr, "false", true);
     }
-#endif
-
     jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
