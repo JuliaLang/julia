@@ -26,14 +26,27 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
             )
         )
 
+        # Get the artifacts directory
+        artifacts_dir = joinpath(temp_dir, "artifacts")
+
+        # Ensure the artifacts directory exists
+        isdir(artifacts_dir) || mkdir(artifacts_dir)
+
         # Get the path to the Overrides.toml file
-        overrides_path = joinpath(temp_dir, "Overrides.toml")
+        overrides_path = joinpath(artifacts_dir, "Overrides.toml")
+        println("runtests.Load Artifacts.create_test_overrides_toml(): overrides_path=$overrides_path")
 
         # Create the Overrides.toml file
         open(overrides_path, "w") do io
             TOML.print(io, overrides)
         end
     end
+
+    # Specify the expected test result when depot path does not exist
+    empty_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(),
+        :hash => Dict{SHA1, Union{SHA1, String}}()
+    )
 
     # Specify the expected test result
     expected_output = Dict{Symbol, Any}(
@@ -42,24 +55,37 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
     )
 
     # Test `load_overrides()` works with *no* "Overrides.toml" file
-    @test load_overrides() == expected_output
+    @test load_overrides() == empty_output
 
-    # Create a temporary directory and set DEPOT_PATH to that directory
-    temp_dir = mktempdir()
-    old_depot_path = DEPOT_PATH[1]
-    DEPOT_PATH[1] = temp_dir
+    # Create a temporary directory
+    mktempdir() do temp_dir
+        # Back up the old `DEPOT_PATH``
+        old_depot_path = copy(Base.DEPOT_PATH)
 
-    # Create "Overrides.toml" for the test
-    create_test_overrides_toml(temp_dir)
+        # Set `DEPOT_PATH` to that directory
+        empty!(Base.DEPOT_PATH)
+        push!(Base.DEPOT_PATH, temp_dir)
 
-    # Test `load_overrides()` works *with* "Overrides.toml" file
-    @test load_overrides() == expected_output
+        try
+            # Create "Overrides.toml" for the test
+            create_test_overrides_toml(temp_dir)
 
-    # Restore DEPOT_PATH
-    DEPOT_PATH[1] = old_depot_path
+            # Test `load_overrides()` works *with* "Overrides.toml" file but non-nothing ARTIFACT_OVERRIDES[]
+            @test load_overrides() == empty_output
 
+            # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter
+            @test load_overrides(force=true) == expected_output
+        finally # Make sure `DEPOT_PATH` will be restored to the status quo in the event of a bug
+            # Restore the old `DEPOT_PATH` to avoid messing with any other code
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, old_depot_path)
+        end
+    end
     # Temporary directory and test "Overrides.toml" file will be automatically deleted when out of scope
-    # This means after the function exits, the system *should* and will behave like this test never happened.
+    # This means after this block, the system *should* behave like this test never happened.
+
+    # Test the "Overrides.toml" file is cleared back to the status quo
+    @test load_overrides(force=true) == empty_output
 end
 
 @testset "Artifact Paths" begin
