@@ -411,7 +411,7 @@ end
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Int, history_file::Bool, color_set::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
@@ -424,7 +424,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || REPL.banner(term, short=banner==:short)
+            banner > 0 && REPL.banner(term, banner)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -549,12 +549,11 @@ end
 function repl_main(_)
     opts = Base.JLOptions()
     interactiveinput = isa(stdin, Base.TTY)
-    b = opts.banner
-    auto = b == -1
-    banner = b == 0 || (auto && !interactiveinput) ? :no  :
-             b == 1 || (auto && interactiveinput)  ? :yes :
-             :short # b == 2
-
+    banner = if opts.banner == -1
+        10 * Int(interactiveinput)
+    else
+        Int(opts.banner)
+    end
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0) # --color!=auto
