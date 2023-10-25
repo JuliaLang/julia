@@ -2085,6 +2085,18 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
     @test only(c) == compl
 end
 
+# allows symbol completion within incomplete :macrocall
+# https://github.com/JuliaLang/julia/issues/51827
+macro issue51827(args...)
+    length(args) ≥ 2 || error("@issue51827: incomplete arguments")
+    return args
+end
+let s = "@issue51827 Base.ac"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "acquire" in c
+end
+
 let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
     @test t isa Core.Const
     @test t.val == `a b`
