@@ -426,6 +426,7 @@ end
 
 const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or BiDiTriSym
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
+const TriSym = Union{Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
@@ -560,12 +561,7 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     require_one_based_indexing(C, B)
     nA = size(A,1)
     nB = size(B,2)
-    if !(size(C,1) == size(B,1) == nA)
-        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if size(C,2) != nB
-        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
-    end
+    check_A_mul_B!_sizes(C, A, B)
     iszero(nA) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
@@ -586,7 +582,7 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     C
 end
 
-function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, _add::MulAddMul = MulAddMul())
+function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(C, A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
@@ -618,6 +614,32 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, _add::MulAddMu
             end
         end
     end # inbounds
+    C
+end
+
+function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul = MulAddMul())
+    require_one_based_indexing(C, A)
+    check_A_mul_B!_sizes(C, A, B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    if size(A, 1) <= 3 || size(B, 2) <= 1
+        return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    end
+    m, n = size(A)
+    @inbounds if B.uplo == 'U'
+        for i in 1:m
+            for j in n:-1:2
+                _modify!(_add, A[i,j] * B.dv[j] + A[i,j-1] * B.ev[j-1], C, (i, j))
+            end
+            _modify!(_add, A[i,1] * B.dv[1], C, (i, 1))
+        end
+    else # uplo == 'L'
+        for i in 1:m
+            for j in 1:n-1
+                _modify!(_add, A[i,j] * B.dv[j] + A[i,j+1] * B.ev[j], C, (i, j))
+            end
+            _modify!(_add, A[i,n] * B.dv[n], C, (i, n))
+        end
+    end
     C
 end
 
