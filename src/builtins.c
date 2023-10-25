@@ -1298,7 +1298,7 @@ JL_CALLABLE(jl_f_set_binding_type)
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(m->name), jl_symbol_name(s));
     }
-    jl_gc_wb_binding(b, ty);
+    jl_gc_wb(b, ty);
     return jl_nothing;
 }
 

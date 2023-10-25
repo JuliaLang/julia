@@ -167,7 +167,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
             jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
             old = jl_atomic_exchange(&b->value, (jl_value_t*)newm);
         }
-        jl_gc_wb_binding(b, newm);
+        jl_gc_wb(b, newm);
         if (old != NULL) {
             // create a hidden gc root for the old module
             JL_LOCK(&jl_modules_mutex);
