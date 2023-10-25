@@ -1590,8 +1590,17 @@ struct jl_cgval_t {
     // runtime values) if `(TIndex | UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
-    // If this is non-NULL, it is always of type `T_prjlvalue`
+
+    // If this is non-NULL (at compile time), it is always of type `T_prjlvalue`.
+    // N.B.: In general we expect this to always be a dereferenceable pointer at runtime.
+    //       However, there are situations where this value may be a runtime NULL
+    //       (PhiNodes with undef predecessors or PhiC with undef UpsilonNode).
+    //       The middle-end arranges appropriate error checks before any use
+    //       of this value that may read a non-dereferenceable Vboxed, with two
+    //       exceptions: PhiNode and UpsilonNode arguments which need special
+    //       handling to account for the possibility that this may be NULL.
     Value *Vboxed;
+
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
     jl_value_t *constant; // constant value (rooted in linfo.def.roots)
     jl_value_t *typ; // the original type of V, never NULL
@@ -2408,29 +2417,28 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         return ghostValue(ctx, typ);
     Value *new_tindex = NULL;
     if (jl_is_concrete_type(typ)) {
-        if (v.TIndex && !jl_is_pointerfree(typ)) {
-            // discovered that this union-split type must actually be isboxed
-            if (v.Vboxed) {
-                return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ));
-            }
-            else {
-                // type mismatch: there weren't any boxed values in the union
-                if (skip)
-                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-                else
-                    CreateTrap(ctx.builder);
-                return jl_cgval_t();
-            }
-        }
         if (jl_is_concrete_type(v.typ)) {
-            if (jl_is_concrete_type(typ)) {
-                // type mismatch: changing from one leaftype to another
-                if (skip)
-                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-                else
-                    CreateTrap(ctx.builder);
-                return jl_cgval_t();
+            // type mismatch: changing from one leaftype to another
+            if (skip)
+                *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+            else
+                CreateTrap(ctx.builder);
+            return jl_cgval_t();
+        }
+        bool mustbox_union = v.TIndex && !jl_is_pointerfree(typ);
+        if (v.Vboxed && (v.isboxed || mustbox_union)) {
+            if (skip) {
+                *skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, v, (jl_datatype_t*)typ, true));
             }
+            return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ));
+        }
+        if (mustbox_union) {
+            // type mismatch: there weren't any boxed values in the union
+            if (skip)
+                *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+            else
+                CreateTrap(ctx.builder);
+            return jl_cgval_t();
         }
     }
     else {
@@ -5302,9 +5310,13 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     // If allow_mismatch is set, type mismatches will not result in traps.
     // This is used for upsilon nodes, where the destination can have a narrower
     // type than the store, if inference determines that the store is never read.
-    Value *dummy = NULL;
-    Value **skip = allow_mismatch ? &dummy : NULL;
-    rval_info = convert_julia_type(ctx, rval_info, slot_type, skip);
+    Value *skip = NULL;
+    rval_info = convert_julia_type(ctx, rval_info, slot_type, &skip);
+    if (!allow_mismatch && skip) {
+        CreateTrap(ctx.builder);
+        return;
+    }
+
     if (rval_info.typ == jl_bottom_type)
         return;
 
@@ -5349,8 +5361,13 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
 
     // store unboxed variables
     if (!vi.boxroot || (vi.pTIndex && rval_info.TIndex)) {
-        emit_vi_assignment_unboxed(ctx, vi, isboxed, rval_info);
+        emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&]{
+            emit_vi_assignment_unboxed(ctx, vi, isboxed, rval_info);
+            return nullptr;
+        });
     }
+
+    return;
 }
 
 static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssize_t ssaval)
@@ -5362,7 +5379,8 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         int sl = jl_slot_number(l) - 1;
         // it's a local variable
         jl_varinfo_t &vi = ctx.slots[sl];
-        return emit_varinfo_assign(ctx, vi, rval_info, l);
+        emit_varinfo_assign(ctx, vi, rval_info, l);
+        return;
     }
 
     jl_module_t *mod;
@@ -5393,15 +5411,17 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
     // upsilon node is not dynamically observed.
     if (val) {
         jl_cgval_t rval_info = emit_expr(ctx, val);
-        if (rval_info.typ == jl_bottom_type)
+        if (rval_info.typ == jl_bottom_type) {
             // as a special case, PhiC nodes are allowed to use undefined
             // values, since they are just copy operations, so we need to
             // ignore the store (it will not by dynamically observed), while
             // normally, for any other operation result, we'd assume this store
             // was unreachable and dead
             val = NULL;
-        else
+        }
+        else {
             emit_varinfo_assign(ctx, vi, rval_info, NULL, true);
+        }
     }
     if (!val) {
         if (vi.boxroot) {

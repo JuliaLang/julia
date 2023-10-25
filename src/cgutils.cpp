@@ -1406,6 +1406,9 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck = 
 template<typename Func>
 static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, Func &&func)
 {
+    if (!ifnot) {
+        return func();
+    }
     if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
         if (Cond->isZero())
             return defval;
@@ -1544,7 +1547,7 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 }
 
 // a simple case of emit_isa that is obvious not to include a safe-point
-static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt)
+static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null=false)
 {
     assert(jl_is_concrete_type((jl_value_t*)dt));
     if (arg.TIndex) {
@@ -1559,6 +1562,10 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         else if (arg.Vboxed) {
             // test for (arg.TIndex == UNION_BOX_MARKER && typeof(arg.V) == type)
             Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
+            if (could_be_null) {
+                isboxed = ctx.builder.CreateAnd(isboxed,
+                    ctx.builder.CreateNot(null_pointer_cmp(ctx, arg.Vboxed)));
+            }
             setName(ctx.emission_context, isboxed, "isboxed");
             BasicBlock *currBB = ctx.builder.GetInsertBlock();
             BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "isa", ctx.f);
@@ -1579,9 +1586,16 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         }
     }
-    auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
-    setName(ctx.emission_context, isa, "exactly_isa");
-    return isa;
+    Value *isnull = NULL;
+    if (could_be_null && arg.isboxed) {
+        isnull = null_pointer_cmp(ctx, arg.Vboxed);
+    }
+    Constant *Vfalse = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
+    return emit_guarded_test(ctx, isnull, Vfalse, [&]{
+        auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
+        setName(ctx.emission_context, isa, "exactly_isa");
+        return isa;
+    });
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,

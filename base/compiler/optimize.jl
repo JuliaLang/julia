@@ -396,7 +396,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref(x)
+        return abstract_eval_globalref_type(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)
