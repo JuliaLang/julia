@@ -656,7 +656,6 @@ end
 
 function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
-    flag = inst[:flag]
 
     if isexpr(stmt, :enter)
         # try/catch not yet modeled
@@ -707,9 +706,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, true)
+    scan!(ScanStmt(sv), scanner, false)
     complete!(sv.tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(sv.tpdum, scanner)
+
     (; ir, inconsistent, tpdum) = sv
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in sv.inconsistent

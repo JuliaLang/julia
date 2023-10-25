@@ -1130,3 +1130,15 @@ let effects = Base.infer_effects(x -> `a $x`, (Any,))
     @test !Core.Compiler.is_noub(effects)
     @test !Core.Compiler.is_consistent(effects)
 end
+
+function issue51837(; openquotechar::Char, newlinechar::Char)
+    ncodeunits(openquotechar) == 1 || throw(ArgumentError("`openquotechar` must be a single-byte character"))
+    if !isnothing(newlinechar)
+        ncodeunits(newlinechar) > 1 && throw(ArgumentError("`newlinechar` must be a single-byte character."))
+    end
+    return nothing
+end
+@test Base.infer_effects() do openquotechar::Char, newlinechar::Char
+    issue51837(; openquotechar, newlinechar)
+end |> !Core.Compiler.is_nothrow
+@test_throws ArgumentError issue51837(; openquotechar='α', newlinechar='\n')
