@@ -873,7 +873,7 @@ read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
 function read!(s::IO, A::AbstractArray{T}) where {T}
     if isbitstype(T) && _checkcontiguous(Bool, A)
-        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))       
+        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
         if isbitstype(T)
             r = Ref{T}()
