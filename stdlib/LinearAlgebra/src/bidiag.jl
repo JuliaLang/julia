@@ -464,7 +464,11 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
-function _mul!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, _add::MulAddMul = MulAddMul())
+_mul!(C::AbstractMatrix, A::BiTriSym, B::TriSym, _add::MulAddMul = MulAddMul()) =
+    _bibimul!(C, A, B, _add)
+_mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul = MulAddMul()) =
+    _bibimul!(C, A, B, _add)
+function _bibimul!(C, A, B, _add)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
