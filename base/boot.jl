@@ -436,18 +436,18 @@ end
 struct NotImplementedError <: Exception
     f
     args
-    msg::AbstractString
     interface
-    NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(msg::AbstractString), @nospecialize(interface)) =
-        new(f, args, msg, interface)
+    msg::AbstractString
+    NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(interface), @nospecialize(msg::AbstractString)) =
+        new(f, args, interface, msg)
     NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(msg::AbstractString)) =
-        new(f, args, msg, Any)
+        new(f, args, Any, msg)
     NotImplementedError(@nospecialize(f), @nospecialize(args), @nospecialize(interface)) =
-        new(f, args, "", interface)
+        new(f, args, interface, "")
     NotImplementedError(@nospecialize(f), @nospecialize(args)) =
-        new(f, args, "", Any)
+        new(f, args, Any, "")
     NotImplementedError(@nospecialize(msg::AbstractString)) =
-        new(nothing, nothing, msg, Any)
+        new(nothing, nothing, Any, msg)
 end
 
 const typemax_UInt = Intrinsics.sext_int(UInt, 0xFF)
