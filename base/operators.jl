@@ -953,7 +953,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(NotImplementedError(widen, (T,)))
-widen(x::Type{Union{}}, slurp...) = throw(NotImplementedError(widen, (Union{},)))
+widen(x::Type{Union{}}, slurp...) = throw(ArgumentError("Cannot widen an empty Union."))
 
 # function pipelining
 

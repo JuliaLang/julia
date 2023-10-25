@@ -256,7 +256,10 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
 end
 
 function showerror(io::IO, ex::NotImplementedError)
-    print(io, "NotImplementedError: ")
+    print(io, "NotImplementedError")
+    if ex.f !== nothing || !isempty(ex.msg)
+        print(io, ": ")
+    end
     if ex.f !== nothing
         is_arg_types = isa(ex.args, DataType)
         arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
