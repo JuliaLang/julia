@@ -1164,7 +1164,7 @@ end
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
     @test Base.elsize(code_units) == sizeof(UInt8)
-    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
+    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
 end
 
 @testset "LazyString" begin

@@ -54,20 +54,17 @@ See also [`cconvert`](@ref)
 """
 function unsafe_convert end
 
-# convert strings to String etc. to pass as pointers
-cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
-cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
+# convert strings to String etc. to pass as pointers
+cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
+cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
 unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
-# TODO: add this deprecation to give a better error:
-# cconvert(::Type{<:Ptr}, a::AbstractArray) = error("conversion to pointer not defined for $(typeof(a))")
-# unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("missing call to cconvert for call to unsafe_convert for AbstractArray")
 
 # unsafe pointer to array conversions
 """

@@ -466,11 +466,8 @@ find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
-# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} = V
-function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {S,T,N,P}
-    parent = V.parent
-    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + _memory_offset(parent, map(first, V.indices)...))
+function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
+    return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
 end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)

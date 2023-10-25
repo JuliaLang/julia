@@ -49,8 +49,10 @@ Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
 Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
+
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
-Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
+
+Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage

@@ -115,10 +115,7 @@ end
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
-        let rc = Base.cconvert(Ptr{Int}, r), rs = Base.cconvert(Ptr{Int}, s)
-            @test rc == rs
-            @test Base.unsafe_convert(Ptr{Int}, rc) == Base.unsafe_convert(Ptr{Int}, rs)
-        end
+        @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
         @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
@@ -134,7 +131,6 @@ end
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,5]
-        # @test_throws ErrorException Base.cconvert(Ptr{Int}, r) broken=true
         @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
         r[2] = -1
         @test a[3] == -1

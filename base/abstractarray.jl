@@ -1250,10 +1250,10 @@ end
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
+pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
-    pointer(x) + Int(_memory_offset(x, i))::Int
+    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
