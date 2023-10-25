@@ -34,7 +34,7 @@ end
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
-using Base.Meta, Sockets
+using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
 
 export

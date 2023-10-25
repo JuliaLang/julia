@@ -16,6 +16,7 @@ end
 using Base.Meta
 
 import Markdown
+import StyledStrings
 
 ## Debugging options
 # Disable parallel precompiles generation by setting `false`
