@@ -791,7 +791,7 @@ _os_tsd_get_direct(unsigned long slot)
 // Unconditionally defined ptrauth_strip (instead of using the ptrauth.h header)
 // since libsystem will likely be compiled with -mbranch-protection, and we currently are not.
 // code from https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/compiler-rt/lib/sanitizer_common/sanitizer_ptrauth.h
-static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
+static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) JL_NOTSAFEPOINT {
   // On the stack the link register is protected with Pointer
   // Authentication Code when compiled with -mbranch-protection.
   // Let's strip the PAC unconditionally because xpaclri is in the NOP space,
@@ -809,7 +809,7 @@ static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
 
 __attribute__((always_inline, pure))
 static __inline__ void**
-_os_tsd_get_base(void)
+_os_tsd_get_base(void) JL_NOTSAFEPOINT
 {
 #if defined(__arm__)
     uintptr_t tsd;
@@ -831,7 +831,7 @@ _os_tsd_get_base(void)
 #ifdef _os_tsd_get_base
 __attribute__((always_inline))
 static __inline__ void*
-_os_tsd_get_direct(unsigned long slot)
+_os_tsd_get_direct(unsigned long slot) JL_NOTSAFEPOINT
 {
     return _os_tsd_get_base()[slot];
 }
@@ -839,14 +839,14 @@ _os_tsd_get_direct(unsigned long slot)
 
 __attribute__((always_inline, pure))
 static __inline__ uintptr_t
-_os_ptr_munge_token(void)
+_os_ptr_munge_token(void) JL_NOTSAFEPOINT
 {
     return (uintptr_t)_os_tsd_get_direct(__TSD_PTR_MUNGE);
 }
 
 __attribute__((always_inline, pure))
 JL_UNUSED static __inline__ uintptr_t
-_os_ptr_munge(uintptr_t ptr)
+_os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 {
     return ptr ^ _os_ptr_munge_token();
 }
