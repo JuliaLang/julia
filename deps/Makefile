@@ -242,6 +242,7 @@ include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
 include $(SRCDIR)/nvtx.mk
 include $(SRCDIR)/llvm.mk
+include $(SRCDIR)/llvmdialects.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
