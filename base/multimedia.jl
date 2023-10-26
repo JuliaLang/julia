@@ -257,7 +257,7 @@ display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
 function display(d::TextDisplay, M::MIME, @nospecialize x)
-    displayable(d, M) || throw(MethodError(display, (d, M, x)))
+    displayable(d, M) || throw(NotImplementedError(display, (d, M, x)))
     show(d.io, M, x); println(d.io)
 end
 
@@ -339,12 +339,12 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && (e.f === display || e.f === show) ||
+                isa(e, NotImplementedError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(display, (x,)))
+    throw(NotImplementedError(display, (x,)))
 end
 
 function display(m::MIME, @nospecialize x)
@@ -353,12 +353,12 @@ function display(m::MIME, @nospecialize x)
             try
                 return display(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f == display ||
+                isa(e, NotImplementedError) && e.f == display ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(display, (m, x)))
+    throw(NotImplementedError(display, (m, x)))
 end
 
 displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
@@ -398,12 +398,12 @@ function redisplay(@nospecialize x)
             try
                 return redisplay(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display, show) ||
+                isa(e, NotImplementedError) && e.f in (redisplay, display, show) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(redisplay, (x,)))
+    throw(NotImplementedError(redisplay, (x,)))
 end
 
 function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
@@ -412,12 +412,12 @@ function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
             try
                 return redisplay(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display) ||
+                isa(e, NotImplementedError) && e.f in (redisplay, display) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(redisplay, (m, x)))
+    throw(NotImplementedError(redisplay, (m, x)))
 end
 
 # default redisplay is simply to call display
