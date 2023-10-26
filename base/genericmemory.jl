@@ -58,7 +58,7 @@ end
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T)
 sizeof(a::GenericMemory) = Core.sizeof(a)
 
-# multi arg case will be overwritten later. This is needed for bootstraping
+# multi arg case will be overwritten later. This is needed for bootstrapping
 function isassigned(a::Memory, i::Int)
     @inline
     @boundscheck (i - 1)%UInt < length(a)%UInt || return false
