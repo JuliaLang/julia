@@ -34,7 +34,6 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
 
         # Get the path to the Overrides.toml file
         overrides_path = joinpath(artifacts_dir, "Overrides.toml")
-        println("runtests.Load Artifacts.create_test_overrides_toml(): overrides_path=$overrides_path")
 
         # Create the Overrides.toml file
         open(overrides_path, "w") do io
@@ -42,13 +41,13 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
         end
     end
 
-    # Specify the expected test result when depot path does not exist
+    # Specify the expected test result when depot path does not exist or no overriding happened
     empty_output = Dict{Symbol, Any}(
         :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(),
         :hash => Dict{SHA1, Union{SHA1, String}}()
     )
 
-    # Specify the expected test result
+    # Specify the expected test result when overriding happened
     expected_output = Dict{Symbol, Any}(
         :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b") => Dict("c_simple" => "/path/to/c_simple_dir", "libfoo" => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))),
         :hash => Dict{SHA1, Union{SHA1, String}}(SHA1("78f35e74ff113f02274ce60dab6e92b4546ef806") => "/path/to/replacement", SHA1("c76f8cda85f83a06d17de6c57aabf9e294eb2537") => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))
@@ -73,7 +72,7 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
             # Test `load_overrides()` works *with* "Overrides.toml" file but non-nothing ARTIFACT_OVERRIDES[]
             @test load_overrides() == empty_output
 
-            # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter
+            # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter, which overrides even when `ARTIFACT_OVERRIDES[] !== nothing``
             @test load_overrides(force=true) == expected_output
         finally # Make sure `DEPOT_PATH` will be restored to the status quo in the event of a bug
             # Restore the old `DEPOT_PATH` to avoid messing with any other code
