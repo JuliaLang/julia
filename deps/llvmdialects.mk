@@ -34,7 +34,7 @@ define LLVMDIALECTS_INSTALL
 	mkdir -p $2/$$(build_libdir)
 	mkdir -p $2/$$(build_depsbindir)
 	cp $1/llvm-dialects-tblgen $2/$$(build_depsbindir)
-	cp $1/llvm-dialects.a $2/$$(build_libdir)
+	cp $1/libllvm_dialects.a $2/$$(build_libdir)
 	cp -r $(LLVMDIALECTS_SRC_PATH)/include/llvm-dialects $2/$$(build_includedir)/
 endef
 

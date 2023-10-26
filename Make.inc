@@ -823,6 +823,8 @@ JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
 endif
 
+LLVMDIALECTS:=-lllvm_dialects
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler
