@@ -367,4 +367,4 @@ endif
 endif # USE_BINARYBUILDER_LLVM
 
 get-lld: get-llvm
-install-lld install-clang install-llvm-tools: install-llvm
+install-lld install-clang install-llvm-tools: install-patchelf install-llvm
