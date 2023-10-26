@@ -108,7 +108,12 @@ pipe_writer(t::UnixTerminal) = t.out_stream::IO
 # Array{AnnotatedChar}
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
+    buf::IOBuffer
 end
+
+TerminalBuffer(terminal::TextTerminal) = TerminalBuffer(terminal, IOBuffer())
+
+Base.take!(termbuf::TerminalBuffer) = take!(termbuf.buf)
 
 mutable struct TTYTerminal <: UnixTerminal
     term_type::String
@@ -169,5 +174,14 @@ Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
 Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)::T
+
+Base.in(key_value::Pair, t::TerminalBuffer) = in(key_value, t.out_stream)
+Base.haskey(t::TerminalBuffer, key) = haskey(t.out_stream, key)
+Base.getindex(t::TerminalBuffer, key) = getindex(t.out_stream, key)
+Base.get(t::TerminalBuffer, key, default) = get(t.out_stream, key, default)
+
+Base.peek(t::TerminalBuffer, ::Type{T}) where {T} = error("Not implemented")
+
+
 
 end # module

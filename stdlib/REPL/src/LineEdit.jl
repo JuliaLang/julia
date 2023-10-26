@@ -612,11 +612,10 @@ function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
-    outbuf = IOBuffer()
-    termbuf = TerminalBuffer(outbuf)
+    termbuf = TerminalBuffer(terminal)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, take!(outbuf))
+    write(terminal, take!(termbuf))
     flush(terminal)
     return ret
 end
@@ -1546,6 +1545,7 @@ function write_prompt(io::IO, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::AbstractString
     # TODO this write is not dispatching to `StyledStrings`
+    error("writing IO")
     write(io, promptstr)
     return textwidth(promptstr)
 end
@@ -2628,7 +2628,7 @@ end
 activate(m::ModalInterface, s::MIState, termbuf::AbstractTerminal, term::TextTerminal) =
     activate(mode(s), s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, take!(termbuf.out_stream)); nothing)
+commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, take!(termbuf)); nothing)
 
 function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol})
     cancel_beep(s)
@@ -2643,8 +2643,8 @@ function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol
     if !haskey(s.mode_state, newmode)
         s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
-    termbuf = TerminalBuffer(IOBuffer())
     t = terminal(s)
+    termbuf = TerminalBuffer(t)
     s.mode_state[mode(s)] = deactivate(mode(s), state(s), termbuf, t)
     s.current_mode = newmode
     f()
