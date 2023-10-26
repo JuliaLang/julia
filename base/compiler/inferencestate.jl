@@ -307,7 +307,7 @@ mutable struct InferenceState
 
         # some more setups
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-        cache_mode !== :no && push!(get_inference_cache(interp), result)
+        cache_mode === :local && push!(get_inference_cache(interp), result)
 
         return new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,

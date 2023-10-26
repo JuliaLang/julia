@@ -239,7 +239,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         # but that is what !must_be_codeinf permits
         # This is hopefully unreachable when must_be_codeinf is true
     end
-    return
+    return nothing
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
@@ -270,8 +270,11 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if caller.cache_mode === :global
             cache_result!(caller.interp, caller.result)
         end
-        # n.b. We do not drop result.src here, even though that wastes memory while it is still in the local cache
-        # since the user might have requested call-site inlining of it.
+        # Drop result.src here since otherwise it can waste memory.
+        # N.B. If the `cache_mode === :local`, the inliner may request to use it later.
+        if caller.cache_mode !== :local
+            caller.result.src = nothing
+        end
     end
     empty!(frames)
     return true
@@ -563,8 +566,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
-        else
-            me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
     end
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
