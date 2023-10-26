@@ -11,6 +11,8 @@
 /julia_flisp.boot.inc
 /flisp.boot.inc
 /jl_internal_funcs.inc
+/JuliaDialect.cpp.inc
+/JuliaDialect.h.inc
 
 /libjulia-debug.a
 /libjulia-debug.so

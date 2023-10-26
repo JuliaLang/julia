@@ -29,10 +29,16 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+define LLVMDIALECTS_INSTALL
+	mkdir -p $2/$$(build_includedir)
+	mkdir -p $2/$$(build_depsbindir)
+	cp $1/llvm-dialects-tblgen $2/$$(build_depsbindir)
+	cp -r $(LLVMDIALECTS_SRC_PATH)/include/llvm-dialects $2/$$(build_includedir)/
+endef
+
 $(eval $(call staged-install, \
 	llvmdialects,$(LLVMDIALECTS_SRC_DIR), \
-	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)llvmdialects.$$(SHLIB_EXT) $$(build_shlibdir)/llvmdialects.$$(SHLIB_EXT)))
+	LLVMDIALECTS_INSTALL,,,))
 
 clean-llvmdialects:
 	-rm -f $(BUILDDIR)/$(LLVMDIALECTS_SRC_DIR)/build-configured $(BUILDDIR)/$(LLVMDIALECTS_SRC_DIR)/build-compiled

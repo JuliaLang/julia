@@ -36,7 +36,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS := JuliaSyntax
+DEP_LIBS := JuliaSyntax llvmdialects
 
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
@@ -202,7 +202,7 @@ DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
-	terminfo
+	terminfo llvmdialects
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
