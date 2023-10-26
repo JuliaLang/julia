@@ -10,7 +10,7 @@ $(BUILDDIR)/$(LLVMDIALECTS_SRC_DIR)/build-configured: | $(build_prefix)/manifest
 endif
 
 # TODO: We are not shipping `lib/cmake/llvm`
-LLVMDIALECTS_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DLLVM_ROOT=/home/vchuravy/.julia/artifacts/37aff39f8136bf0e699383f120c151d890207338/lib/cmake/llvm
+LLVMDIALECTS_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DLLVM_ROOT=$(build_libdir)/cmake/llvm
 LLVMDIALECTS_SRC_PATH := $(SRCCACHE)/$(LLVMDIALECTS_SRC_DIR)
 
 $(BUILDDIR)/$(LLVMDIALECTS_SRC_DIR)/build-configured: $(LLVMDIALECTS_SRC_PATH)/source-extracted
@@ -31,8 +31,10 @@ endif
 
 define LLVMDIALECTS_INSTALL
 	mkdir -p $2/$$(build_includedir)
+	mkdir -p $2/$$(build_libdir)
 	mkdir -p $2/$$(build_depsbindir)
 	cp $1/llvm-dialects-tblgen $2/$$(build_depsbindir)
+	cp $1/llvm-dialects.a $2/$$(build_libdir)
 	cp -r $(LLVMDIALECTS_SRC_PATH)/include/llvm-dialects $2/$$(build_includedir)/
 endef
 
