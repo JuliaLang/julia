@@ -37,7 +37,7 @@ if !test_relocated_depot
         pkgname = "RelocationTestPkg2"
         test_harness() do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__)
+            push!(DEPOT_PATH, string(@__DIR__, "/"))
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
