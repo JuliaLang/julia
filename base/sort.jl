@@ -1583,7 +1583,7 @@ v[ix[k]] == partialsort(v, k)
 The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
 
-$(_DOCS_ALIASING_WARNING)
+$(Base._DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1709,7 +1709,7 @@ end
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
 `ix` is initialized to contain the values `LinearIndices(A)`.
 
-$(_DOCS_ALIASING_WARNING)
+$(Base._DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.9"
     The method accepting `dims` requires at least Julia 1.9.
