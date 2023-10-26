@@ -5,12 +5,16 @@ module LineEdit
 import ..REPL
 using REPL: AbstractREPL, Options
 
+# TODO remove after https://github.com/JuliaLang/StyledStrings.jl/pull/17 is merged
+import StyledStrings: Face, loadface!
+import StyledStrings: @styled_str
+
 using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, show, AnyDict, position, 
-                        AnnotatedString
+import Base: ensureroom, show, AnyDict, position,
+                        AnnotatedString, annotations
 using Base: something
 
 using InteractiveUtils: InteractiveUtils
@@ -184,39 +188,40 @@ complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-
 function beep(s::PromptState, duration::Real=options(s).beep_duration,
-              blink::Real=options(s).beep_blink,
-              maxduration::Real=options(s).beep_maxduration;
-              colors=options(s).beep_colors,
+    blink::Real=options(s).beep_blink,
+    maxduration::Real=options(s).beep_maxduration;
+              beep_face=options(s).beep_face,
               use_current::Bool=options(s).beep_use_current)
     isinteractive() || return # some tests fail on some platforms
     s.beeping = min(s.beeping + duration, maxduration)
-    let colors = Base.copymutable(colors)
-        errormonitor(@async begin
-            trylock(s.refresh_lock) || return
-            try
-                # TODO what can be refactored in light of StyledStrings?
-                #=
-                orig_prefix = s.p.prompt_prefix
-                use_current && push!(colors, prompt_string(orig_prefix))
-                i = 0
-                while s.beeping > 0.0
-                    prefix = colors[mod1(i+=1, end)]
-                    s.p.prompt_prefix = prefix
-                    refresh_multi_line(s, beeping=true)
-                    sleep(blink)
-                    s.beeping -= blink
-                end
-                s.p.prompt_prefix = orig_prefix
-                refresh_multi_line(s, beeping=true)
-                s.beeping = 0.0
-                =#
-            finally
-                unlock(s.refresh_lock)
+    errormonitor(@async begin
+        trylock(s.refresh_lock) || return
+        try
+            # TODO remove after https://github.com/JuliaLang/StyledStrings.jl/pull/17 is merged
+            loadface!(:repl_prompt_beep => Face(foreground=:shadow, inherit=[:repl_prompt]))
+            og_prompt = s.p.prompt
+            beep_prompt = styled"{$beep_face:$(prompt_string(og_prompt))}"
+            s.p.prompt = beep_prompt
+            # @timothy: do you have feedback on this approach, or
+            # guidance for a better one? the issue is that we need to
+            # override the styling of `s.p.prompt` with :repl_prompt_beep.
+            # `withfaces` could work, altough that requires overriding all
+            # of `:repl_prompt_*` faces, and hardcoding those would
+            # 1) make future modifications slightly more fragile and
+            # 2) exclude user-defined REPL modes.
+            refresh_multi_line(s, beeping=true)
+            while s.beeping > 0.0
+                sleep(blink)
+                s.beeping -= blink
             end
-        end)
-    end
+            s.p.prompt = og_prompt
+            refresh_multi_line(s, beeping=true)
+            s.beeping = 0.0
+        finally
+            unlock(s.refresh_lock)
+        end
+    end)
     nothing
 end
 

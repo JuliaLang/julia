@@ -492,9 +492,6 @@ mutable struct LineEditREPL <: AbstractREPL
     function LineEditREPL(t,hascolor,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
-        if !hascolor
-            opts.beep_colors = [""]
-        end
         new(t,hascolor,history_file,in_shell,in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
