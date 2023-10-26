@@ -1183,7 +1183,7 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTS
             dest->freed += jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
             if (update_heap) {
                 uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_num.alloc_acc);
-                freed_in_runtime = jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
+                freed_in_runtime += jl_atomic_load_relaxed(&ptls->gc_num.free_acc);
                 jl_atomic_store_relaxed(&gc_heap_stats.heap_size, alloc_acc + jl_atomic_load_relaxed(&gc_heap_stats.heap_size));
                 jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
                 jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
