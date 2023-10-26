@@ -733,6 +733,40 @@ split(str::AbstractString;
     split(str, isspace; limit, keepempty)
 
 """
+    split(str, dlm, ::Val{N}; keepempty=true)
+    split(str, ::Val{N}; keepempty=false)
+
+Return an `NTuple{N, SubString}` obtained from the splitting at the first `N-1`
+occurrences of `dlm`. Will throw an error if `dlm` occurs fewer than `N-1` times in `str`.
+
+To check if `dlm` occurs more than `N-1` times, check for the presence of `dlm` in the last
+element of the result.
+The `keepempty` argument is the same as for [`split`](@ref).
+
+!!! compat "Julia 1.11"
+    This method requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> split("abc  γβ  ακ xyz", Val(3))
+("abc", "γβ", " ακ xyz")
+
+julia> split("a.b.c.d.e", '.', Val(4))
+("a", "b", "c", "d.e")
+
+julia> split("a.b", '.', Val(3))
+ERROR: ArgumentError: too few elements for tuple type Tuple{T} where T
+[...]
+```
+"""
+function split(str::AbstractString, dlm, ::Val{N}; keepempty=true) where N
+    n = Int(N)
+    NTuple{n}(eachsplit(str, dlm; limit=n, keepempty))
+end
+
+split(str::AbstractString, n::Val; keepempty=false) = split(str, isspace, n; keepempty)
+
+"""
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
     rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
@@ -770,6 +804,41 @@ end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
     rsplit(str, isspace; limit, keepempty)
+
+"""
+    rsplit(str, dlm, ::Val{N}; keepempty=true)
+    rsplit(str, ::Val{N}; keepempty=false)
+
+Return an `NTuple{N, SubString}` obtained from the splitting at the last `N-1`
+occurrences of `dlm`. Will throw an error if `dlm` occurs fewer than `N-1` times in `str`.
+
+To check if `dlm` occurs more than `N-1` times, check for the presence of `dlm` in the last
+element of the result.
+The `keepempty` argument is the same as for [`rsplit`](@ref).
+
+!!! compat "Julia 1.11"
+    This method requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> rsplit("abc  γβ  ακ xyz", Val(3))
+("abc  γβ ", "ακ", "xyz")
+
+julia> rsplit("a.b.c.d.e", '.', Val(4))
+("a.b", "c", "d", "e")
+
+julia> rsplit("a.b", '.', Val(3))
+ERROR: ArgumentError: too few elements for tuple type Tuple{T} where T
+[...]
+```
+"""
+function rsplit(str::AbstractString, dlm, ::Val{N}; keepempty=true) where N
+    n = Int(N)
+    # eachrsplit iterates from right to left, but rsplit returns its elements left to right
+    reverse(NTuple{n}(eachrsplit(str, dlm; limit=n, keepempty)))
+end
+
+rsplit(str::AbstractString, n::Val; keepempty=false) = rsplit(str, isspace, n; keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
