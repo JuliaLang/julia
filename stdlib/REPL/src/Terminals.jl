@@ -99,13 +99,6 @@ abstract type UnixTerminal <: TextTerminal end
 pipe_reader(t::UnixTerminal) = t.in_stream::IO
 pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
-# TODO somehow pass color context to TerminalBuffer.
-# The issue is that :color => false when creating
-# a TerminalBuffer like TerminalBuffer(IOBuffer()).
-# Also, we're double buffering if you include TerminalBuffer
-# and the IOBuffer() in StyledStrings/io.jl/_ansi_writer()
-# Another possibility is to replace IOBuffer with a 
-# Array{AnnotatedChar}
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
     buf::IOBuffer
@@ -165,7 +158,6 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
 hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
-hascolor(t::TerminalBuffer) = error("TerminalBuffer needs to be modified to have access to the original terminal's IO context")
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))

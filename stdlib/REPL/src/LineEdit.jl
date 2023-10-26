@@ -514,7 +514,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     regstart, regstop = region(buf)
     written = 0
     # Write out the prompt string
-    lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
+    lindent = write_prompt(termbuf, prompt)::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
 
@@ -1529,35 +1529,23 @@ refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(term
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
-    @static Sys.iswindows() && _reset_console_mode()
-    # width = write_prompt(terminal, p.prompt, color)
+write_prompt(terminal::AbstractTerminal, s::PromptState) = write_prompt(terminal, s.p)
 
-    promptstr = prompt_string(p)::AnnotatedString
-    # TODO this write is not dispatching to `StyledStrings`
-    write(terminal, promptstr)
-    return textwidth(promptstr)
-    # return width
-end
 # returns the width of the written prompt
-function write_prompt(io::IO, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(io::IO, p::Union{AbstractString,Function,Prompt})
     @static Sys.iswindows() && _reset_console_mode()
-    promptstr = prompt_string(s)::AbstractString
-    # TODO this write is not dispatching to `StyledStrings`
-    error("writing IO")
+    promptstr = prompt_string(p)::AbstractString
     write(io, promptstr)
     return textwidth(promptstr)
 end
-# TODO remove
-function write_output_prefix(io::IO, p::Prompt, color::Bool)
+
+function write_output_prefix(io::IO, p::Prompt)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(p.output_prefix)::String
-    # TODO this write is not dispatching to `StyledStrings`
-    # write(io, which(write, (REPL.Terminals.TTYTerminal, AnnotatedString)))
     write(io, promptstr)
     return textwidth(promptstr)
 end
+
 # On Windows, when launching external processes, we cannot control what assumption they make on the
 # console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
 # not leave the console mode in a corrupt state.
@@ -2054,7 +2042,7 @@ end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
-write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
+write_prompt(terminal, s::PrefixSearchState,) = write_prompt(terminal, s.histprompt.parent_prompt)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal

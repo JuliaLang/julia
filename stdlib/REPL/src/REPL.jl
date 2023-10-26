@@ -279,7 +279,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
             if mode isa LineEdit.Prompt
-                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+                LineEdit.write_output_prefix(io, mode)
             end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))

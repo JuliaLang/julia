@@ -50,3 +50,11 @@ I'm sure that the `_PROMPT` consts could be declared in a precompile-friendly wa
 Relevant PRs
 https://github.com/JuliaLang/julia/pull/36689
 https://github.com/JuliaLang/julia/pull/46474/
+
+
+## PR 
+Btw, you mentioned running into some trouble with `get(io, :color, false)`. Could I get your perspective on the existing color-related logic? Specifically regarding how the `:color` attribute is first initialized, down to it being
+
+My impression while working around this code is that the color "propagation" throughout the REPL code down to the final `write` to the terminal is quite fragile, and I'm wondering if the complexity is necessary (to reflect a complex. Here are a few examples of the brittleness, and I'd like your input on which direction might be the most appropriate solution:
+-  It took me quite a while to debug why the final `io::IO` struct in `StyledStrings/src/io.jl#_ansi_writer` never had `:color = true`. It turns out that somewhere in the callstack above in [LineEdit.jl](https://github.com/JuliaLang/julia/blob/c54a3f2b83bfca5f79a1b482abaa9b8e7f0da9ce/stdlib/REPL/src/LineEdit.jl#L617-L622) the soon-to-be-written output is first written to a new `IOBuffer`. So instead of a `UnixTerminal` being passed to `_ansi_writer` (where `:color = true`), an `IOBuffer` is passed, and anything which might behave in a way which would correctly say that `:color = true`, such as a `IOContext`, `REPL.Terminals.UnixTerminal` or other `IO` subtype is lost.
+- methods throughout `REPL.jl` and `LineEdit.jl` have a `color` parameter that must be propagated all the way from `REPL.run_frontend` down through `print_response`
