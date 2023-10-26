@@ -432,18 +432,19 @@ struct DataTypeLayout
     # fielddesc_type : 2;
 end
 
+function DataTypeLayout(dt::DataType)
+    dt.layout == C_NULL && throw(UndefRefError())
+    unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout))
+end
+
 """
     Base.datatype_alignment(dt::DataType) -> Int
 
 Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`.
 """
-function datatype_alignment(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return Int(alignment)
-end
+datatype_alignment(dt::DataType) = (@_foldable_meta; datatype_alignment(DataTypeLayout(dt)))
+datatype_alignment(dtl::DataTypeLayout) = Int(dtl.alignment)
 
 function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
@@ -481,24 +482,17 @@ Return whether the fields of instances of this type are packed in memory,
 with no intervening padding bytes.
 Can be called on any `isconcretetype`.
 """
-function datatype_haspadding(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return flags & 1 == 1
-end
+datatype_haspadding(dt::DataType) = (@_foldable_meta; datatype_haspadding(DataTypeLayout(dt)))
+datatype_haspadding(dtl::DataTypeLayout) = dtl.flags & 1 == 1
 
 """
-    Base.datatype_nfields(dt::DataType) -> Bool
+    Base.datatype_nfields(dt::DataType) -> Int
 
 Return the number of fields known to this datatype's layout.
 Can be called on any `isconcretetype`.
 """
-function datatype_nfields(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
-end
+datatype_nfields(dt::DataType) = (@_foldable_meta; datatype_nfields(DataTypeLayout(dt)))
+datatype_nfields(dtl::DataTypeLayout) = Int(dtl.nfields)
 
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
@@ -506,12 +500,8 @@ end
 Return whether instances of this type can contain references to gc-managed memory.
 Can be called on any `isconcretetype`.
 """
-function datatype_pointerfree(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
-    return npointers == 0
-end
+datatype_pointerfree(dt::DataType) = (@_foldable_meta; datatype_pointerfree(DataTypeLayout(dt)))
+datatype_pointerfree(dtl::DataTypeLayout) = dtl.npointers == 0
 
 """
     Base.datatype_fielddesc_type(dt::DataType) -> Int
@@ -522,12 +512,8 @@ Can be called on any `isconcretetype`.
 
 See also [`fieldoffset`](@ref).
 """
-function datatype_fielddesc_type(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags >> 1) & 3
-end
+datatype_fielddesc_type(dt::DataType) = (@_foldable_meta; datatype_fielddesc_type(DataTypeLayout(dt)))
+datatype_fielddesc_type(dtl::DataTypeLayout) = (dtl.flags >> 1) & 3
 
 # For type stability, we only expose a single struct that describes everything
 struct FieldDesc
