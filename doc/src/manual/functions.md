@@ -104,7 +104,7 @@ the call site that at least one of the arguments (often the first one) is being 
 
 !!! warning "Shared memory between arguments"
     The behavior of a mutating function can be unexpected when a mutated argument shares memory with another argument, a situation known as aliasing (e.g. when one is a view of the other).
-    Unless the function docstring explicitly indicates that aliasing is safe, it is the responsibility of the caller to ensure proper behavior on such inputs.
+    Unless the function docstring explicitly indicates that aliasing produces the expected result, it is the responsibility of the caller to ensure proper behavior on such inputs.
 
 ## Argument-type declarations
 
