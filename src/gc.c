@@ -7,7 +7,6 @@
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -1167,7 +1166,7 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
     jl_batch_accum_heap_size(ptls, sz);
 }
 // Only safe to update the heap inside the GC
-static void combine_thread_gc_counts(jl_gc_num_t *dest, bool update_heap) JL_NOTSAFEPOINT
+static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTSAFEPOINT
 {
     int gc_n_threads;
     jl_ptls_t* gc_all_tls_states;
@@ -1216,7 +1215,7 @@ static int64_t inc_live_bytes(int64_t inc) JL_NOTSAFEPOINT
 
 void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 {
-    combine_thread_gc_counts(&gc_num, false);
+    combine_thread_gc_counts(&gc_num, 0);
     inc_live_bytes(gc_num.deferred_alloc + gc_num.allocd);
     gc_num.allocd = 0;
     gc_num.deferred_alloc = 0;
@@ -3153,7 +3152,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void)
 JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
 {
     jl_gc_num_t num = gc_num;
-    combine_thread_gc_counts(&num, false);
+    combine_thread_gc_counts(&num, 0);
     // Sync this logic with `base/util.jl:GC_Diff`
     *bytes = (num.total_allocd + num.deferred_alloc + num.allocd);
 }
@@ -3166,7 +3165,7 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
 JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 {
     jl_gc_num_t num = gc_num;
-    combine_thread_gc_counts(&num, false);
+    combine_thread_gc_counts(&num, 0);
     return num;
 }
 
@@ -3216,7 +3215,7 @@ size_t jl_maxrss(void);
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
-    combine_thread_gc_counts(&gc_num, true);
+    combine_thread_gc_counts(&gc_num, 1);
 
     // We separate the update of the graph from the update of live_bytes here
     // so that the sweep shows a downward trend in memory usage.
