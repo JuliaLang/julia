@@ -35,8 +35,6 @@ def GetPGCStack : JuliaOp<"get_pgcstack",
   let results = (outs Ptr:$result);
   let arguments = (ins);
 
-  let defaultBuilderHasExplicitResultType = true;
-
   let summary = "Obtain hidden pgcstack pointer";
   let description = [{}];
 }
@@ -45,8 +43,6 @@ def GetPGCStackOrNew : JuliaOp<"get_pgcstack_or_new",
                        [Memory<[(read InaccessibleMem)]>, NoUnwind]> {
   let results = (outs Ptr:$result);
   let arguments = (ins);
-
-  let defaultBuilderHasExplicitResultType = true;
 
   let summary = "Obtain hidden pgcstack pointer";
   let description = [{}];
