@@ -2614,7 +2614,7 @@ using ..Mod
 end
 @test Mod3.f(10) == 21
 @test !isdefined(Mod3, :func)
-@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported or prefixed with a module path to be extended") Core.eval(Mod3, :(f(x::Int) = x))
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
 @test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
 @test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
@@ -3525,7 +3525,7 @@ macro z49984(s); :(let a; $(esc(s)); end); end
 # issues #37783, #39929, #42552, #43379, and #48332
 let x = 1 => 2
     @test_throws ErrorException @eval a => b = 2
-    @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
+    @test_throws "function Base.=> must be explicitly imported or prefixed with a module path to be extended" @eval a => b = 2
 end
 
 # Splatting in non-final default value (Ref #50518)
