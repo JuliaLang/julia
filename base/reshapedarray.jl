@@ -309,7 +309,12 @@ substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
     parent = V.parent
     p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + (first_index(V)-1)*sizeof(T))
+    Δmem = if _checkcontiguous(Bool, parent)
+        (first_index(V) - firstindex(parent)) * elsize(parent)
+    else
+        _memory_offset(parent, map(first, V.indices)...)
+    end
+    return Ptr{S}(unsafe_convert(Ptr{T}, p) + Δmem)
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
