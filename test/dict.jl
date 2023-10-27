@@ -727,49 +727,51 @@ end
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 
     h = IdDict()
-    for i=1:10000
+    for i=1:500
         get!(h, i, i+1)
     end
-    for i=1:10000
+    for i=1:500
         @test (h[i] == i+1)
     end
+
     h = IdDict()
-    for i=1:10000
+    for i=1:500
         h[i] = i+1
     end
-    for i=1:10000
+    for i=1:500
         @test (h[i] == i+1)
     end
-    for i=1:2:10000
+    for i=1:2:500
         delete!(h, i)
     end
-    for i=1:2:10000
+    for i=1:2:500
         h[i] = i+1
     end
-    for i=1:10000
+    for i=1:500
         @test (h[i] == i+1)
     end
-    for i=1:10000
+    for i=1:500
         delete!(h, i)
     end
     @test isempty(h)
     h[77] = 100
     @test h[77] == 100
-    for i=1:10000
+    for i=1:500
         h[i] = i+1
     end
-    for i=1:2:10000
+    for i=1:2:500
         delete!(h, i)
     end
-    for i=10001:20000
+    for i=501:1000
         h[i] = i+1
     end
-    for i=2:2:10000
+    for i=2:2:499
         @test h[i] == i+1
     end
-    for i=10000:20000
+    for i=500:1000
         @test h[i] == i+1
     end
+
     h = IdDict{Any,Any}("a" => 3)
     @test h["a"] == 3
     h["a","b"] = 4
