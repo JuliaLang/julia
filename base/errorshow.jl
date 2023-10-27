@@ -250,6 +250,7 @@ function show_convert_error(io::IO, ex::NotImplementedError, arg_types_param)
     printstyled(io, " to an object of type ")
     print_one_line || printstyled(io, "\n  ")
     print_with_compare(io, T, p2, :light_red)
+    printstyled(io, ".")
 end
 
 function showerror(io::IO, ex::NotImplementedError)
@@ -260,7 +261,7 @@ function showerror(io::IO, ex::NotImplementedError)
     if ex.f !== nothing
         is_arg_types = isa(ex.args, DataType)
         arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
-        f, _, arg_types_param, kwargs = unwrap_kwargs(ex.f, ex.args, arg_types, is_arg_types)
+        f, _, arg_types_param, kwargs = unwrap_kwcall(ex.f, ex.args, arg_types, is_arg_types)
         print(io, "no implementation has been provided matching the signature ")
         print_method_signature(io, f, arg_types_param, kwargs)
         interfacestr = ex.interface == Any ?
@@ -269,6 +270,7 @@ function showerror(io::IO, ex::NotImplementedError)
         print(io, interfacestr)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
+        print(io, " ")
         show_convert_error(io, ex, arg_types_param)
     end
 
