@@ -188,7 +188,7 @@ julia> a
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
 ### Using `@threads` without data-races
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors. 
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
@@ -530,4 +530,3 @@ There are a few approaches to dealing with this problem:
    runs on, so `do_cleanup` would still need to acquire a lock. That
    doesn't need to be true if you implement your own queue, as you can explicitly
    only drain that queue from your thread.
-
