@@ -640,12 +640,14 @@ end
 
 import Core: typename
 
-_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(NotImplementedError(convert, (T, x))))
 
+convert(x, _) = throw(ArgumentError("First argument to `convert` must be a Type, got $x"))
+convert(T::Type, x) = throw(NotImplementedError(convert, (T, x))) # should maybe be a separate ConvertError type
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     # First see if there could be any conversion of the input type that'd be a subtype of the output.
-    # If not, we'll throw an explicit MethodError (otherwise, it might throw a typeassert).
+    # If not, we'll throw a NotImplementedError (otherwise, it might throw a typeassert).
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
