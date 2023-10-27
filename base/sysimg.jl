@@ -28,16 +28,7 @@ let
     stdlibs = [
         # No dependencies
         :FileWatching, # used by loading.jl -- implicit assumption that init runs
-        :Libdl, # Transitive through LinAlg
-        :Artifacts, # Transitive through LinAlg
         :Sockets, # used by stream.jl
-
-        # Transitive through LingAlg
-        # OpenBLAS_jll
-        # libblastrampoline_jll
-
-        # 1-depth packages
-        :LinearAlgebra, # Commits type-piracy and GEMM
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)

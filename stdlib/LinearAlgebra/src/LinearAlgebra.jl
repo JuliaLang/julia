@@ -7,6 +7,9 @@ functionality.
 """
 module LinearAlgebra
 
+# Remove the shim methods
+Base.Stubs.delete_stubs(Base.Stubs.LinearAlgebra)
+
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
