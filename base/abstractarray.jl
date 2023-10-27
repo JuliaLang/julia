@@ -905,6 +905,8 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
@@ -1390,6 +1392,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -3364,6 +3368,8 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 

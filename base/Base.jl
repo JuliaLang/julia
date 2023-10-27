@@ -115,6 +115,12 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 start_base_include = time_ns()
 
+# A warning to be interpolated in the docstring of every dangerous mutating function in Base, see PR #50824
+const _DOCS_ALIASING_WARNING = """
+!!! warning
+    Behavior can be unexpected when any mutated argument shares memory with any other argument.
+"""
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")

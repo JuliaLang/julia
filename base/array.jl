@@ -322,6 +322,8 @@ source and `do` in the destination (1-indexed).
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
 that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
@@ -1784,6 +1786,8 @@ place of the removed items; in this case, `indices` must be a `AbstractUnitRange
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 !!! compat "Julia 1.5"
     Prior to Julia 1.5, `indices` must always be a `UnitRange`.
 
@@ -2761,6 +2765,8 @@ end
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
 Items which are kept are shifted to fill the resulting gaps.
+
+$(_DOCS_ALIASING_WARNING)
 
 `inds` must be an iterator of sorted and unique integer indices.
 See also [`deleteat!`](@ref).
