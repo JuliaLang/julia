@@ -245,7 +245,7 @@ struct ExponentialBackOff
     jitter::Float64
 
     function ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-        all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || throw(ArgumentError("all inputs must be non-negative"))
+        all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || throw(DomainError((;n, first_delay, max_delay, factor, jitter)[findall(<(0), (n, first_delay, max_delay, factor, jitter))] ,"all inputs must be non-negative"))
         new(n, first_delay, max_delay, factor, jitter)
     end
 end
