@@ -33,7 +33,7 @@ You can wait for a remote call to finish by calling [`wait`](@ref) on the return
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
-co-ordinate their processing by referencing the same remote `Channel`.
+coordinate their processing by referencing the same remote `Channel`.
 
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an `id` equal to 1. The processes used by default for parallel operations are referred
@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: MyType not defined
+UndefVarError: `MyType` not defined
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -249,6 +249,11 @@ The base Julia installation has in-built support for two types of clusters:
     `port` to the standard ssh port. `count` is the number of workers to spawn on the node, and defaults
     to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
     should use to connect to this worker.
+
+!!! note
+    While Julia generally strives for backward compatibility, distribution of code to worker processes relies on
+    [`Serialization.serialize`](@ref). As pointed out in the corresponding documentation, this can not be guaranteed to work across
+    different Julia versions, so it is advised that all workers on all machines use the same version.
 
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.

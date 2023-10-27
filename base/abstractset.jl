@@ -99,7 +99,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int)
+    haslength(itr) && _sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break
@@ -248,7 +248,6 @@ end
 
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
-Note that in this case the multiplicity of elements matters.
 
 See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
 
@@ -261,11 +260,6 @@ julia> symdiff([1,2,3], [3,4,5], [4,5,6])
  6
 
 julia> symdiff([1,2,1], [2, 1, 2])
-2-element Vector{Int64}:
- 1
- 2
-
-julia> symdiff(unique([1,2,1]), unique([2, 1, 2]))
 Int64[]
 ```
 """
@@ -286,7 +280,9 @@ function symdiff!(s::AbstractSet, itrs...)
     return s
 end
 
-function symdiff!(s::AbstractSet, itr)
+symdiff!(s::AbstractSet, itr) = symdiff!(s::AbstractSet, Set(itr))
+
+function symdiff!(s::AbstractSet, itr::AbstractSet)
     for x in itr
         x in s ? delete!(s, x) : push!(s, x)
     end
@@ -342,13 +338,17 @@ function issubset(a, b)
 end
 
 """
-    hasfastin(T)
+    Base.hasfastin(T)
 
 Determine whether the computation `x ∈ collection` where `collection::T` can be considered
 as a "fast" operation (typically constant or logarithmic complexity).
 The definition `hasfastin(x) = hasfastin(typeof(x))` is provided for convenience so that instances
 can be passed instead of types.
 However the form that accepts a type argument should be defined for new types.
+
+The default for `hasfastin(T)` is `true` for subtypes of
+[`AbstractSet`](@ref), [`AbstractDict`](@ref) and [`AbstractRange`](@ref)
+and `false` otherwise.
 """
 hasfastin(::Type) = false
 hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true
@@ -478,6 +478,27 @@ function isdisjoint(a, b)
         return _isdisjoint(b, a)
     end
     _isdisjoint(a, b)
+end
+
+function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
+    (isempty(a) || isempty(b)) && return true
+    fa, la = extrema(a)
+    fb, lb = extrema(b)
+    if (la < fb) | (lb < fa)
+        return true
+    else
+        return _overlapping_range_isdisjoint(a, b)
+    end
+end
+
+_overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
+
+function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Integer
+    if abs(step(a)) == abs(step(b))
+        return mod(minimum(a), step(a)) != mod(minimum(b), step(a))
+    else
+        return invoke(isdisjoint, Tuple{Any,Any}, a, b)
+    end
 end
 
 ## partial ordering of sets by containment

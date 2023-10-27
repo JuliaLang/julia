@@ -1,11 +1,17 @@
 ## UNWIND ##
+include $(SRCDIR)/unwind.version
+include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz
+LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz $(SANITIZE_OPTS)
 LIBUNWIND_CPPFLAGS :=
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
+ifeq ($(USE_SYSTEM_LLVM),0)
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | $(build_prefix)/manifest/llvm
 endif
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
@@ -20,26 +26,17 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UN
 checksum-unwind: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-prefer-extbl.patch
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-revert_prelink_unwind.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-static-arm.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-cfa-rsp.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u < $(SRCDIR)/patches/libunwind-cfa-rsp.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-cfa-rsp.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-dwarf-table.patch
-	echo 1 > $@
-
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
+# note minidebuginfo requires liblzma, which we do not have a source build for
+# (it will be enabled in BinaryBuilder-based downloads however)
+# since https://github.com/JuliaPackaging/Yggdrasil/commit/0149e021be9badcb331007c62442a4f554f3003c
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured

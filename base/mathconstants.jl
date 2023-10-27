@@ -10,11 +10,11 @@ module MathConstants
 
 export π, pi, ℯ, e, γ, eulergamma, catalan, φ, golden
 
-Base.@irrational π        3.14159265358979323846  pi
-Base.@irrational ℯ        2.71828182845904523536  exp(big(1))
-Base.@irrational γ        0.57721566490153286061  euler
-Base.@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
-Base.@irrational catalan  0.91596559417721901505  catalan
+Base.@irrational π        pi
+Base.@irrational ℯ        exp(big(1))
+Base.@irrational γ        euler
+Base.@irrational φ        (1+sqrt(big(5)))/2
+Base.@irrational catalan  catalan
 
 # aliases
 """

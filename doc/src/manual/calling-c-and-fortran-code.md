@@ -817,7 +817,7 @@ end
 ## Garbage Collection Safety
 
 When passing data to a `@ccall`, it is best to avoid using the [`pointer`](@ref) function.
-Instead define a convert method and pass the variables directly to the `@ccall`. `@ccall`
+Instead define a [`Base.cconvert`](@ref) method and pass the variables directly to the `@ccall`. `@ccall`
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the `@ccall`
 returns, you must ensure that the object remains visible to the garbage collector. The suggested
@@ -1000,7 +1000,7 @@ A table of translations between the macro and function interfaces is given below
 
 ## [Calling Convention](@id calling-convention)
 
-The second argument to `ccall` (immediatel preceding return type) can optionally
+The second argument to `ccall` (immediately preceding return type) can optionally
 be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,
@@ -1118,9 +1118,7 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
-bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
-
+For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
 
 
 [^1]: Non-library function calls in both C and Julia can be inlined and thus may have

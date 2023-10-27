@@ -7,14 +7,13 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/InstIterator.h>
-#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
-#include "codegen_shared.h"
-#include "julia.h"
 #include "passes.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "remove_addrspaces"
 
@@ -51,7 +50,7 @@ public:
             else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
-                        remapType(Ty->getPointerElementType()),
+                        remapType(Ty->getNonOpaquePointerElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
         }
@@ -161,7 +160,7 @@ public:
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
                     //Remove once opaque pointer transition is complete
                     if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getPointerElementType());
+                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
                         DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
                     }
                 }
@@ -336,18 +335,14 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GlobalVariable *NGV = cast<GlobalVariable>(VMap[GV]);
         if (GV->hasInitializer())
-            NGV->setInitializer(MapValue(GV->getInitializer(), VMap));
+            NGV->setInitializer(MapValue(GV->getInitializer(), VMap, RF_None, &TypeRemapper, &Materializer));
 
         SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
         GV->getAllMetadata(MDs);
         for (auto MD : MDs)
             NGV->addMetadata(
                     MD.first,
-#if JL_LLVM_VERSION >= 130000
                     *MapMetadata(MD.second, VMap));
-#else
-                    *MapMetadata(MD.second, VMap, RF_MoveDistinctMDs));
-#endif
 
         copyComdat(NGV, GV);
 
@@ -356,11 +351,9 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
-        if (F->isDeclaration())
-            continue;
-
         Function *NF = cast<Function>(VMap[F]);
         LLVM_DEBUG(dbgs() << "Processing function " << NF->getName() << "\n");
+        // we also need this to run for declarations, or attributes won't be copied
 
         Function::arg_iterator DestI = NF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(); I != F->arg_end();
@@ -374,45 +367,28 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 NF,
                 F,
                 VMap,
-#if JL_LLVM_VERSION >= 130000
                 CloneFunctionChangeType::GlobalChanges,
-#else
-                /*ModuleLevelChanges=*/true,
-#endif
                 Returns,
                 "",
                 nullptr,
                 &TypeRemapper,
                 &Materializer);
 
-        // CloneFunctionInto unconditionally copies the attributes from F to NF,
-        // without considering e.g. the byval attribute type.
+        // Update function attributes that contain types
         AttributeList Attrs = F->getAttributes();
         LLVMContext &C = F->getContext();
         for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
             for (Attribute::AttrKind TypedAttr :
                  {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
-#if JL_LLVM_VERSION >= 140000
                 auto Attr = Attrs.getAttributeAtIndex(i, TypedAttr);
-#else
-                auto Attr = Attrs.getAttribute(i, TypedAttr);
-#endif
                 if (Type *Ty = Attr.getValueAsType()) {
-#if JL_LLVM_VERSION >= 140000
                     Attrs = Attrs.replaceAttributeTypeAtIndex(
                         C, i, TypedAttr, TypeRemapper.remapType(Ty));
-#else
-                    Attrs = Attrs.replaceAttributeType(
-                        C, i, TypedAttr, TypeRemapper.remapType(Ty));
-#endif
                     break;
                 }
             }
         }
         NF->setAttributes(Attrs);
-
-        if (F->hasPersonalityFn())
-            NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
 
         copyComdat(NF, F);
 
@@ -424,7 +400,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
     for (GlobalAlias *GA : Aliases) {
         GlobalAlias *NGA = cast<GlobalAlias>(VMap[GA]);
         if (const Constant *C = GA->getAliasee())
-            NGA->setAliasee(MapValue(C, VMap));
+            NGA->setAliasee(MapValue(C, VMap, RF_None, &TypeRemapper, &Materializer));
 
         GA->setAliasee(nullptr);
     }
@@ -456,36 +432,14 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 }
 
 
-struct RemoveAddrspacesPassLegacy : public ModulePass {
-    static char ID;
-    AddrspaceRemapFunction ASRemapper;
-    RemoveAddrspacesPassLegacy(
-            AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
-        : ModulePass(ID), ASRemapper(ASRemapper){};
-
-public:
-    bool runOnModule(Module &M) override {
-        return removeAddrspaces(M, ASRemapper);
-    }
-};
-
-char RemoveAddrspacesPassLegacy::ID = 0;
-static RegisterPass<RemoveAddrspacesPassLegacy>
-        X("RemoveAddrspaces",
-          "Remove IR address space information.",
-          false,
-          false);
-
-Pass *createRemoveAddrspacesPass(
-        AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
-{
-    return new RemoveAddrspacesPassLegacy(ASRemapper);
-}
-
 RemoveAddrspacesPass::RemoveAddrspacesPass() : RemoveAddrspacesPass(removeAllAddrspaces) {}
 
 PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
-    if (removeAddrspaces(M, ASRemapper)) {
+    bool modified = removeAddrspaces(M, ASRemapper);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyLLVMIR(M));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();
@@ -505,31 +459,7 @@ unsigned removeJuliaAddrspaces(unsigned AS)
         return AS;
 }
 
-struct RemoveJuliaAddrspacesPassLegacy : public ModulePass {
-    static char ID;
-    RemoveAddrspacesPassLegacy Pass;
-    RemoveJuliaAddrspacesPassLegacy() : ModulePass(ID), Pass(removeJuliaAddrspaces){};
-
-    bool runOnModule(Module &M) override { return Pass.runOnModule(M); }
-};
-
-char RemoveJuliaAddrspacesPassLegacy::ID = 0;
-static RegisterPass<RemoveJuliaAddrspacesPassLegacy>
-        Y("RemoveJuliaAddrspaces",
-          "Remove IR address space information.",
-          false,
-          false);
-
-Pass *createRemoveJuliaAddrspacesPass()
-{
-    return new RemoveJuliaAddrspacesPassLegacy();
-}
 
 PreservedAnalyses RemoveJuliaAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
     return RemoveAddrspacesPass(removeJuliaAddrspaces).run(M, AM);
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

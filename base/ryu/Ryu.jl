@@ -1,5 +1,6 @@
 module Ryu
 
+using .Base.Libc
 import .Base: significand_bits, significand_mask, exponent_bits, exponent_mask, exponent_bias, exponent_max, uinttype
 
 include("utils.jl")

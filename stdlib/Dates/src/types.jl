@@ -103,7 +103,7 @@ end
 UTM(x) = UTInstant(Millisecond(x))
 UTD(x) = UTInstant(Day(x))
 
-# Calendar types provide rules for interpretating instant
+# Calendar types provide rules for interpreting instant
 # timelines in human-readable form.
 abstract type Calendar <: AbstractTime end
 
@@ -142,8 +142,28 @@ abstract type AbstractDateTime <: TimeType end
 """
     DateTime
 
-`DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
-Gregorian calendar.
+`DateTime` represents a point in time according to the proleptic Gregorian calendar.
+The finest resolution of the time is millisecond (i.e., microseconds or
+nanoseconds cannot be represented by this type). The type supports fixed-point
+arithmetic, and thus is prone to underflowing (and overflowing). A notable
+consequence is rounding when adding a `Microsecond` or a `Nanosecond`:
+
+```jldoctest
+julia> dt = DateTime(2023, 8, 19, 17, 45, 32, 900)
+2023-08-19T17:45:32.900
+
+julia> dt + Millisecond(1)
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(1000) # 1000us == 1ms
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(999) # 999us rounded to 1000us
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(1499) # 1499 rounded to 1000us
+2023-08-19T17:45:32.901
+```
 """
 struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
@@ -199,19 +219,10 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 """
     validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Nothing}
 
-Determine whether the given arguments consitute valid inputs for the given type.
+Determine whether the given arguments constitute valid inputs for the given type.
 Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
 """
 function validargs end
-
-"""
-    argerror([msg]) -> Union{ArgumentError, Nothing}
-
-Return an `ArgumentError` object with the given message,
-or [`nothing`](@ref) if no message is provided. For use by `validargs`.
-"""
-argerror(msg::String) = ArgumentError(msg)
-argerror() = nothing
 
 # Julia uses 24-hour clocks internally, but user input can be AM/PM with 12pm == noon and 12am == midnight.
 @enum AMPM AM PM TWENTYFOURHOUR
@@ -240,18 +251,18 @@ end
 
 function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM=TWENTYFOURHOUR)
-    0 < m < 13 || return argerror("Month: $m out of range (1:12)")
-    0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
+    0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
     if ampm == TWENTYFOURHOUR # 24-hour clock
         -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
-            return argerror("Hour: $h out of range (0:23)")
+            return ArgumentError("Hour: $h out of range (0:23)")
     else
-        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+        0 < h < 13 || return ArgumentError("Hour: $h out of range (1:12)")
     end
-    -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
-    -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
-    -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
-    return argerror()
+    -1 < mi < 60 || return ArgumentError("Minute: $mi out of range (0:59)")
+    -1 < s < 60 || return ArgumentError("Second: $s out of range (0:59)")
+    -1 < ms < 1000 || return ArgumentError("Millisecond: $ms out of range (0:999)")
+    return nothing
 end
 
 DateTime(dt::Base.Libc.TmStruct) = DateTime(1900 + dt.year, 1 + dt.month, dt.mday, dt.hour, dt.min, dt.sec)
@@ -268,9 +279,9 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 
 function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
-    0 < m < 13 || return argerror("Month: $m out of range (1:12)")
-    0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    return argerror()
+    0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
+    0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    return nothing
 end
 
 Date(dt::Base.Libc.TmStruct) = Date(1900 + dt.year, 1 + dt.month, dt.mday)
@@ -289,16 +300,16 @@ end
 
 function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::Int64, ns::Int64, ampm::AMPM=TWENTYFOURHOUR)
     if ampm == TWENTYFOURHOUR # 24-hour clock
-        -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+        -1 < h < 24 || return ArgumentError("Hour: $h out of range (0:23)")
     else
-        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+        0 < h < 13 || return ArgumentError("Hour: $h out of range (1:12)")
     end
-    -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
-    -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
-    -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
-    -1 < us < 1000 || return argerror("Microsecond: $us out of range (0:999)")
-    -1 < ns < 1000 || return argerror("Nanosecond: $ns out of range (0:999)")
-    return argerror()
+    -1 < mi < 60 || return ArgumentError("Minute: $mi out of range (0:59)")
+    -1 < s < 60 || return ArgumentError("Second: $s out of range (0:59)")
+    -1 < ms < 1000 || return ArgumentError("Millisecond: $ms out of range (0:999)")
+    -1 < us < 1000 || return ArgumentError("Microsecond: $us out of range (0:999)")
+    -1 < ns < 1000 || return ArgumentError("Nanosecond: $ns out of range (0:999)")
+    return nothing
 end
 
 Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
@@ -469,14 +480,14 @@ Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))
 
-Base.sleep(duration::Period) = sleep(toms(duration) / 1000)
+Base.sleep(duration::Period) = sleep(seconds(duration))
 
 function Base.Timer(delay::Period; interval::Period=Second(0))
-    Timer(toms(delay) / 1000, interval=toms(interval) / 1000)
+    Timer(seconds(delay), interval=seconds(interval))
 end
 
 function Base.timedwait(testcb, timeout::Period; pollint::Period=Millisecond(100))
-    timedwait(testcb, toms(timeout) / 1000, pollint=toms(pollint) / 1000)
+    timedwait(testcb, seconds(timeout), pollint=seconds(pollint))
 end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()

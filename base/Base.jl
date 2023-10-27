@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 1)
 function include(mod::Module, path::String)
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
     Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
@@ -35,14 +35,19 @@ getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(x, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+function setproperty!(x, f::Symbol, v)
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return setfield!(x, f, val)
+end
 
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
 function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
     @inline
-    val::Core.get_binding_type(x, f) = v
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
     return setglobal!(x, f, val, order)
 end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
@@ -51,14 +56,29 @@ getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
 
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+function setproperty!(x, f::Symbol, v, order::Symbol)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return setfield!(x, f, val, order)
+end
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
-    (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
-    (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
-    (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
+function swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapfield!(x, f, val, order)
+end
+function modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyfield!(x, f, op, v, order)
+end
+function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replacefield!(x, f, expected, val, success_order, fail_order)
+end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -87,7 +107,7 @@ if false
 end
 
 """
-    time_ns()
+    time_ns() -> UInt64
 
 Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 """
@@ -103,13 +123,33 @@ include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
+# define invoke(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to invoke
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
+    @inline
+    # prepend kwargs and f to the invoked from the user
+    T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    return invoke(Core.kwcall, T, kwargs, f, args...)
+end
+# invoke does not have its own call cache, but kwcall for invoke does
+setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
+
+# define applicable(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to applicable
+function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
+    @inline
+    return applicable(Core.kwcall, kwargs, args...)
+end
+function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
+    return Core._hasmethod(tt)
+end
+
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
-Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
-#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
-#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -123,9 +163,23 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+include("cmem.jl")
 include("refpointer.jl")
+
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(a isa A ? a : convert(A, a)), :(b isa B ? b : convert(B, b))))
+end
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
 
 # Lazy strings
 include("strings/lazy.jl")
@@ -147,6 +201,7 @@ include("idset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 
 include("namedtuple.jl")
 
@@ -164,15 +219,11 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
-# These used to be in build_h.jl and are retained for backwards compatibility
-const libblas_name = "libblastrampoline"
-const liblapack_name = "libblastrampoline"
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
+include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -263,25 +314,38 @@ include("missing.jl")
 # version
 include("version.jl")
 
-# system & environment
-include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time
-
-# Logging
-include("logging.jl")
-using .CoreLogging
-
-# Concurrency
+# Concurrency (part 1)
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+
+# system & environment
+include("sysinfo.jl")
+include("libc.jl")
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+# These used to be in build_h.jl and are retained for backwards compatibility.
+# NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
+const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
+const liblapack_name = libblas_name
+
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# ScopedValues
+include("scopedvalues.jl")
+using .ScopedValues
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
@@ -298,7 +362,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -307,6 +371,7 @@ include("math.jl")
 using .Math
 const (√)=sqrt
 const (∛)=cbrt
+const (∜)=fourthroot
 
 # now switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
@@ -396,21 +461,20 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
 include("util.jl")
-
+include("client.jl")
 include("asyncmap.jl")
 
 # deprecated functions
 include("deprecated.jl")
-
-# Some basic documentation
+#
+# Some additional basic documentation
 include("docs/basedocs.jl")
-
-include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -423,10 +487,19 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
@@ -439,7 +512,7 @@ in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 for match = _methods(+, (Int, Int), -1, get_world_counter())
     m = match.method
     delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match)))
+    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
 
     empty!(Set())
     push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
@@ -489,6 +562,32 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 end
 
 if is_primary_base_module
+
+# Profiling helper
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
+# Needs to be in Base because Profile is no longer loaded on boot
+const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
+function profile_printing_listener()
+    profile = nothing
+    try
+        while true
+            wait(PROFILE_PRINT_COND[])
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
+
+            invokelatest(profile.peek_report[])
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
+                println(stderr, "Saving heap snapshot...")
+                fname = invokelatest(profile.take_heap_snapshot)
+                println(stderr, "Heap snapshot saved to `$(fname)`")
+            end
+        end
+    catch ex
+        if !isa(ex, InterruptException)
+            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
+        end
+    end
+end
+
 function __init__()
     # Base library init
     reinit_stdio()
@@ -501,6 +600,21 @@ function __init__()
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
+    # Profiling helper
+    @static if !Sys.iswindows()
+        # triggering a profile via signals is not implemented on windows
+        cond = Base.AsyncCondition()
+        Base.uv_unref(cond.handle)
+        PROFILE_PRINT_COND[] = cond
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
+        errormonitor(Threads.@spawn(profile_printing_listener()))
+    end
+    _require_world_age[] = get_world_counter()
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+        JuliaSyntax.enable_in_core!()
+    end
     nothing
 end
 
@@ -509,5 +623,8 @@ end
 
 end
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))
 
 end # baremodule Base

@@ -118,7 +118,8 @@ struct Classification {
 void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
 {
     // Floating point types
-    if (dt == jl_float64_type || dt == jl_float32_type) {
+    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float16_type ||
+        dt == jl_bfloat16_type) {
         accum.addField(offset, Sse);
     }
     // Misc types
@@ -153,6 +154,10 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
             jl_value_t *ty = jl_field_type(dt, i);
             if (jl_field_isptr(dt, i))
                 ty = (jl_value_t*)jl_voidpointer_type;
+            else if (!jl_is_datatype(ty)) { // inline union
+                accum.addField(offset, Memory);
+                continue;
+            }
             classifyType(accum, (jl_datatype_t*)ty, offset + jl_field_offset(dt, i));
         }
     }
@@ -235,7 +240,9 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
                 types[0] = Type::getIntNTy(ctx, nbits);
             break;
         case Sse:
-            if (size <= 4)
+            if (size <= 2)
+                types[0] = Type::getHalfTy(ctx);
+            else if (size <= 4)
                 types[0] = Type::getFloatTy(ctx);
             else
                 types[0] = Type::getDoubleTy(ctx);

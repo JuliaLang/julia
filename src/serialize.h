@@ -63,8 +63,9 @@ extern "C" {
 #define TAG_RETURNNODE         55
 #define TAG_ARGUMENT           56
 #define TAG_RELOC_METHODROOT   57
+#define TAG_BINDING            58
 
-#define LAST_TAG 57
+#define LAST_TAG 58
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))
@@ -92,7 +93,7 @@ static inline uint64_t read_uint64(ios_t *s) JL_NOTSAFEPOINT
     return x;
 }
 
-static inline void write_int64(ios_t *s, int64_t i) JL_NOTSAFEPOINT
+static inline void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
 {
     ios_write(s, (char*)&i, 8);
 }
@@ -120,6 +121,19 @@ static inline uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
     ios_read(s, (char*)&x, 4);
     return x;
 }
+
+#ifdef _P64
+#define write_uint(s, i) write_uint64(s, i)
+#else
+#define write_uint(s, i) write_uint32(s, i)
+#endif
+
+#ifdef _P64
+#define read_uint(s) read_uint64(s)
+#else
+#define read_uint(s) read_uint32(s)
+#endif
+
 
 void *jl_lookup_ser_tag(jl_value_t *v);
 void *jl_lookup_common_symbol(jl_value_t *v);

@@ -32,7 +32,7 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-/* align pointer to full word if mis-aligned */
+/* align pointer to full word if misaligned */
 static inline void *align_ptr(void *p)
 {
     uintptr_t u = (uintptr_t)p;
@@ -307,6 +307,7 @@ static size_t gc_alloc_size(jl_value_t *val)
 
 int internal_obj_scan(jl_value_t *val)
 {
+    // FIXME: `jl_gc_internal_obj_base_ptr` is not allowed to be called from outside GC
     if (jl_gc_internal_obj_base_ptr(val) == val) {
         size_t size = gc_alloc_size(val);
         char *addr = (char *)val;
@@ -491,7 +492,7 @@ void task_scanner(jl_task_t *task, int root_task)
     jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
 
     // this is the live stack of a thread. Is it ours?
-    if (start_stack && task == (jl_task_t *)jl_get_current_task()) {
+    if (start_stack && task == (jl_task_t*)jl_get_current_task()) {
         if (!(lt_ptr(start_stack, &var_on_frame) && lt_ptr(&var_on_frame, end_stack))) {
             // error, current stack frame must be on the live stack.
             jl_error("stack frame not part of the current task");
@@ -611,8 +612,7 @@ int main()
     jl_gc_set_cb_root_scanner(abort_with_error, 1);
     jl_gc_set_cb_root_scanner(abort_with_error, 0);
     // Create module to store types in.
-    module = jl_new_module(jl_symbol("TestGCExt"));
-    module->parent = jl_main_module;
+    module = jl_new_module(jl_symbol("TestGCExt"), jl_main_module);
     jl_set_const(jl_main_module, jl_symbol("TestGCExt"), (jl_value_t *)module);
     // Define Julia types for our stack implementation.
     datatype_stack = jl_new_foreign_type(

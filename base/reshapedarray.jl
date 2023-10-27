@@ -205,6 +205,7 @@ function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
 end
 
 size(A::ReshapedArray) = A.dims
+length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
@@ -224,6 +225,19 @@ dataids(A::ReshapedArray) = dataids(A.parent)
 end
 offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
 offset_if_vec(i::Integer, axs::Tuple) = i
+
+@inline function isassigned(A::ReshapedArrayLF, index::Int)
+    @boundscheck checkbounds(Bool, A, index) || return false
+    @inbounds ret = isassigned(parent(A), index)
+    ret
+end
+@inline function isassigned(A::ReshapedArray{T,N}, indices::Vararg{Int, N}) where {T,N}
+    @boundscheck checkbounds(Bool, A, indices...) || return false
+    axp = axes(A.parent)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
+    I = ind2sub_rs(axp, A.mi, i)
+    @inbounds isassigned(A.parent, I...)
+end
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
@@ -279,7 +293,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))
+cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
 
 # Add a few handy specializations to further speed up views of reshaped ranges
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
@@ -290,18 +304,59 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange
     (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
+# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} = V
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+    parent = V.parent
+    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
+    return Ptr{S}(unsafe_convert(Ptr{T}, p) + (first_index(V)-1)*sizeof(T))
+end
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = size_to_strides(1, size(A)...) == strides(A)
-_checkcontiguous(::Type{Bool}, A::Array) = true
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
+# `strides(A::DenseArray)` calls `size_to_strides` by default.
+# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+_checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
 function strides(a::ReshapedArray)
-    # We can handle non-contiguous parent if it's a StridedVector
-    ndims(parent(a)) == 1 && return size_to_strides(only(strides(parent(a))), size(a)...)
-    _checkcontiguous(Bool, a) || throw(ArgumentError("Parent must be contiguous."))
-    size_to_strides(1, size(a)...)
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    apsz::Dims = size(a.parent)
+    apst::Dims = strides(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
+    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    reshaped == msz && return ()
+    throw(ArgumentError("Input is not strided."))
+end
+function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+    st = reshaped * mst
+    reshaped = reshaped * sz[1]
+    if length(sz) > 1 && reshaped == msz && sz[2] != 1
+        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
+        reshaped = 1
+    end
+    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    return (st, sts...)
+end
+
+merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
+merge_adjacent_dim(apsz::Dims{1}, apst::Dims{1}) = apsz[1], apst[1], 1
+function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
+    sz, st = apsz[n], apst[n]
+    while n < N
+        szₙ, stₙ = apsz[n+1], apst[n+1]
+        if sz == 1
+            sz, st = szₙ, stₙ
+        elseif stₙ == st * sz || szₙ == 1
+            sz *= szₙ
+        else
+            break
+        end
+        n += 1
+    end
+    return sz, st, n
 end
