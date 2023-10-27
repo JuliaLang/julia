@@ -850,21 +850,18 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_options.cpu_target = "native";
     jl_init_codegen();
 
+    jl_init_common_symbols();
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(0);
+        jl_global_roots_table = jl_alloc_memory_any(0);
     }
 
-    jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
-        jl_core_module->parent = jl_core_module;
-        jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -892,7 +889,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_array_t *init_order = jl_module_init_order;
         JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;
-        int i, l = jl_array_len(init_order);
+        int i, l = jl_array_nrows(init_order);
         for (i = 0; i < l; i++) {
             jl_value_t *mod = jl_array_ptr_ref(init_order, i);
             jl_module_run_initializer((jl_module_t*)mod);

@@ -120,7 +120,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                     aprimary = aprimary::UnionAll
                     # pushfirst!(vars, aprimary.var)
                     _growbeg!(vars, 1)
-                    arrayset(false, vars, aprimary.var, 1)
+                    vars[1] = aprimary.var
                     aprimary = aprimary.body
                 end
             end

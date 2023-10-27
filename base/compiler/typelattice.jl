@@ -323,7 +323,7 @@ end
 
 @nospecializeinfer function isalreadyconst(@nospecialize t)
     isa(t, Const) && return true
-    isa(t, DataType) && isdefined(t, :instance) && return true
+    issingletontype(t) && return true
     return isconstType(t)
 end
 

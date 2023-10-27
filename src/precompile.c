@@ -35,7 +35,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         //   uint64: length of src text
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
-        size_t len = jl_array_len(udeps);
+        size_t len = jl_array_nrows(udeps);
         static jl_value_t *replace_depot_func = NULL;
         if (!replace_depot_func)
             replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
@@ -104,9 +104,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
-    int i, l = jl_array_len(worklist);
+    int i, l = jl_array_nrows(worklist);
     for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_ptrarrayref(worklist, i);
+        jl_value_t *m = jl_array_ptr_ref(worklist, i);
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);

@@ -269,7 +269,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
-    CreateNativeMax.updateMax(jl_array_len(methods));
+    CreateNativeMax.updateMax(jl_array_nrows(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
@@ -317,7 +317,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
             continue;
         size_t i, l;
-        for (i = 0, l = jl_array_len(methods); i < l; i++) {
+        for (i = 0, l = jl_array_nrows(methods); i < l; i++) {
             // each item in this list is either a MethodInstance indicating something
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
             jl_value_t *item = jl_array_ptr_ref(methods, i);

@@ -846,7 +846,7 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
         JL_GC_PUSH2(&ans, &vs);
         vs = jl_find_free_typevars(ty);
         int i;
-        for (i = 0; i < jl_array_len(vs); i++) {
+        for (i = 0; i < jl_array_nrows(vs); i++) {
             ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
         }
         ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
@@ -2989,7 +2989,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
 
     if (vb->innervars != NULL) {
-        for (size_t i = 0; i < jl_array_len(vb->innervars); i++) {
+        for (size_t i = 0; i < jl_array_nrows(vb->innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
             // the `btemp->prev` walk is only giving a sort of post-order guarantee (since we are
             // iterating 2 trees at once), so once we set `wrap`, there might remain other branches

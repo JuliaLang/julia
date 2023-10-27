@@ -268,8 +268,8 @@ julia> ndims(A)
 3
 ```
 """
-ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::AbstractArray{T,N}) where {T,N} = N::Int
+ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
@@ -730,8 +730,6 @@ function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
 end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
-
-throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
 # check along a single dimension
 """
@@ -1451,6 +1449,8 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+
 """
     parent(A)
 
@@ -1556,7 +1556,8 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Array) = (UInt(pointer(A)),)
+dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 

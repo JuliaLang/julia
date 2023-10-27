@@ -15,7 +15,6 @@ STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
 STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
 STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
-STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
@@ -245,8 +244,8 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
             size_t fsz = 0, al = 0;
-            (void)jl_islayout_inline(ft, &fsz, &al);
-            fsz = jl_field_size(bt, i);
+            (void)jl_islayout_inline(ft, &fsz, &al); // compute al
+            fsz = jl_field_size(bt, i); // get LLT_ALIGN(fsz+1,al)
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
@@ -537,7 +536,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         }
         else {
             Value *size = emit_datatype_size(ctx, typ);
-            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nb));
+            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(size->getType(), nb));
             setName(ctx.emission_context, sizecheck, "sizecheck");
             error_unless(ctx,
                     sizecheck,
@@ -1207,15 +1206,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     // return emit_runtime_call(ctx, f, argv, nargs);
 
     switch (f) {
-    case arraylen: {
-        ++Emitted_arraylen;
-        assert(nargs == 1);
-        const jl_cgval_t &x = argv[0];
-        jl_value_t *typ = jl_unwrap_unionall(x.typ);
-        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
-        return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
-    }
     case pointerref:
         ++Emitted_pointerref;
         assert(nargs == 3);

@@ -1079,12 +1079,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, sptypes)
-                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-            elseif f === Core.arrayset && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 8 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 1 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === Core.memoryrefset! && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 5 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
