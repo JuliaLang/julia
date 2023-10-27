@@ -1323,7 +1323,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) \
     {   /* n.b. t must be a concrete isbits datatype of the right size */ \
         jl_value_t *v = jl_gc_permobj(LLT_ALIGN(nb, sizeof(void*)), t); \
-        if (tag) jl_set_typetagof(v, tag, GC_OLD_MARKED);               \
+        if (tag) jl_set_typetagof(v, tag, GC_BLACK);               \
         *(uint##nb##_t*)jl_data_ptr(v) = x;                             \
         return v;                                                       \
     }

@@ -95,7 +95,7 @@ void add_lostval_parent(jl_value_t *parent)
  */
 // this does not yet detect missing writes from marked to marked_noesc
 // the error is caught at the first long collection
-static arraylist_t bits_save[4];
+static arraylist_t bits_save[3];
 
 static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
@@ -185,7 +185,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         arraylist_new(&mq.reclaim_set, 32);
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
-        clear_mark(GC_CLEAN);
+        clear_mark(GC_WHITE);
         gc_mark_queue_all_roots(ptls, &mq);
         gc_mark_finlist(&mq, &to_finalize, 0);
         for (int i = 0; i < gc_n_threads;i++) {
@@ -201,15 +201,16 @@ static void gc_verify_track(jl_ptls_t ptls)
         jl_value_t *lostval_parent = NULL;
         for(int i = 0; i < lostval_parents.len; i++) {
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
-            int clean_len = bits_save[GC_CLEAN].len;
-            for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
-                void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
-                if (jl_valueof(p) == lostval_parent) {
-                    lostval = lostval_parent;
-                    lostval_parent = NULL;
-                    break;
-                }
-            }
+            int clean_len = bits_save[GC_WHITE].len;
+            // TODO(netto): ajdust this to work with the new mark bits
+            // for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
+            //     void *p = bits_save[j >= clean_len ? GC_OLD : GC_WHITE].items[j >= clean_len ? j - clean_len : j];
+            //     if (jl_valueof(p) == lostval_parent) {
+            //         lostval = lostval_parent;
+            //         lostval_parent = NULL;
+            //         break;
+            //     }
+            // }
             if (lostval_parent != NULL) break;
         }
         if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
@@ -246,7 +247,7 @@ void gc_verify(jl_ptls_t ptls)
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
-    clear_mark(GC_CLEAN);
+    clear_mark(GC_WHITE);
     gc_verifying = 1;
     gc_mark_queue_all_roots(ptls, &mq);
     gc_mark_finlist(&mq, &to_finalize, 0);
@@ -256,19 +257,20 @@ void gc_verify(jl_ptls_t ptls)
     }
     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
     gc_mark_loop_serial_(ptls, &mq);
-    int clean_len = bits_save[GC_CLEAN].len;
-    for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
-        jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
-        if (gc_marked(v->bits.gc)) {
-            jl_safe_printf("Error. Early free of %p type :", v);
-            jl_(jl_typeof(jl_valueof(v)));
-            jl_safe_printf("val : ");
-            jl_(jl_valueof(v));
-            jl_safe_printf("Let's try to backtrack the missing write barrier :\n");
-            lostval = jl_valueof(v);
-            break;
-        }
-    }
+    int clean_len = bits_save[GC_WHITE].len;
+    // TODO(netto): ajdust this to work with the new mark bits
+    // for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
+    //     jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_WHITE].items[i >= clean_len ? i - clean_len : i];
+    //     if (gc_marked(v->bits.gc)) {
+    //         jl_safe_printf("Error. Early free of %p type :", v);
+    //         jl_(jl_typeof(jl_valueof(v)));
+    //         jl_safe_printf("val : ");
+    //         jl_(jl_valueof(v));
+    //         jl_safe_printf("Let's try to backtrack the missing write barrier :\n");
+    //         lostval = jl_valueof(v);
+    //         break;
+    //     }
+    // }
     if (lostval == NULL) {
         gc_verifying = 0;
         restore();  // we did not miss anything
@@ -550,8 +552,8 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         pg->has_marked = 1;
         pg->has_young = 1;
         memset(tag, 0xff, osize);
-        // set mark to GC_MARKED (young and marked)
-        tag->bits.gc = GC_MARKED;
+        // set mark to GC_GREY (young and marked)
+        tag->bits.gc = GC_GREY;
     }
     jl_set_safe_restore(old_buf);
 }
@@ -881,7 +883,7 @@ void gc_time_big_start(void)
 void gc_time_count_big(int old_bits, int bits)
 {
     big_total++;
-    big_reset += bits == GC_CLEAN;
+    big_reset += bits == GC_WHITE;
     big_freed += !gc_marked(old_bits);
 }
 
@@ -1033,7 +1035,7 @@ static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
             }
             else {
                 nused++;
-                if (((jl_taggedvalue_t*)v)->bits.gc == GC_OLD_MARKED) {
+                if (((jl_taggedvalue_t*)v)->bits.gc == GC_BLACK) {
                     nold++;
                 }
             }
@@ -1171,7 +1173,7 @@ void gc_count_pool(void)
     for (int i = 0; i < 4; i++)
         jl_safe_printf("bits(%d): %"  PRId64 "\n", i, poolobj_sizes[i]);
     // empty_pages is inaccurate after the sweep since young objects are
-    // also GC_CLEAN
+    // also GC_WHITE
     jl_safe_printf("free pages: % "  PRId64 "\n", empty_pages);
     jl_safe_printf("************************\n");
 }

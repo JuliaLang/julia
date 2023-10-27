@@ -2599,7 +2599,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type = jl_new_uninitialized_datatype();
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
-    jl_set_typetagof(jl_emptysvec, jl_simplevector_tag, GC_OLD_MARKED);
+    jl_set_typetagof(jl_emptysvec, jl_simplevector_tag, GC_BLACK);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
@@ -2715,7 +2715,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
                                       jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_void_type = jl_nothing_type; // deprecated alias
-    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_nothing_type) | GC_OLD_MARKED;
+    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_nothing_type) | GC_BLACK;
     jl_nothing_type->instance = jl_nothing;
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"), core, jl_any_type, jl_emptysvec,
@@ -2730,7 +2730,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                            jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     XX(typeofbottom);
     jl_bottom_type = jl_gc_permobj(0, jl_typeofbottom_type);
-    jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
+    jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_BLACK);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, type_type, jl_emptysvec,

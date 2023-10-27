@@ -497,7 +497,7 @@ static jl_value_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, s
         for (i = 0; i < numel; i++) {
             data[i] = jl_decode_value(s);
         }
-        assert(jl_astaggedvalue(m)->bits.gc == GC_CLEAN); // gc is disabled
+        assert(jl_astaggedvalue(m)->bits.gc == GC_WHITE); // gc is disabled
     }
     else if (layout->first_ptr >= 0) {
         size_t i, numel = m->length;
@@ -518,7 +518,7 @@ static jl_value_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, s
             if (data != start)
                 ios_readall(s->s, start, data - start);
         }
-        assert(jl_astaggedvalue(m)->bits.gc == GC_CLEAN); // gc is disabled
+        assert(jl_astaggedvalue(m)->bits.gc == GC_WHITE); // gc is disabled
     }
     else {
         size_t extra = jl_genericmemory_isbitsunion(m) ? m->length : 0;

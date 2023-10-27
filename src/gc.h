@@ -105,7 +105,6 @@ typedef struct _jl_gc_chunk_t {
     void *elem_begin;           // used to scan pointers within objects when marking `ary8` or `ary16`
     void *elem_end;             // used to scan pointers within objects when marking `ary8` or `ary16`
     uint32_t step;              // step-size used when marking objarray
-    uintptr_t nptr;             // (`nptr` & 0x1) if array has young element and (`nptr` & 0x2) if array owner is old
 } jl_gc_chunk_t;
 
 #define GC_CHUNK_BATCH_SIZE (1 << 16)       // maximum number of references that can be processed
@@ -406,12 +405,7 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOIN
 
 STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
 {
-    return (bits & GC_MARKED) != 0;
-}
-
-STATIC_INLINE int gc_old(uintptr_t bits) JL_NOTSAFEPOINT
-{
-    return (bits & GC_OLD) != 0;
+    return (bits & GC_GREY) != 0;
 }
 
 STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT

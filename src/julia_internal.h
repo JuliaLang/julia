@@ -311,11 +311,10 @@ static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size
 
 // -- gc.c -- //
 
-#define GC_CLEAN  0 // freshly allocated
-#define GC_MARKED 1 // reachable and young
-#define GC_OLD    2 // if it is reachable it will be marked as old
-#define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
-#define GC_IN_IMAGE 4
+#define GC_WHITE        0
+#define GC_GREY         1
+#define GC_BLACK        3
+#define GC_IN_IMAGE     4
 
 // useful constants
 extern JL_DLLIMPORT jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
@@ -522,7 +521,7 @@ STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
     jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
                                                               sizeof(void*) % align);
     uintptr_t tag = (uintptr_t)ty;
-    o->header = tag | GC_OLD_MARKED;
+    o->header = tag | GC_BLACK;
     return jl_valueof(o);
 }
 jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x);
