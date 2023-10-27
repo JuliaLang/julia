@@ -107,7 +107,7 @@ function mkpidlock(at::String, proc::Process; kwopts...)
             close(lock)
         end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(closer)
+    Base.errormonitor(closer)
     return lock
 end
 
