@@ -25,9 +25,9 @@ function in(p::Pair, a::AbstractDict, valcmp=(==))
 end
 
 function in(p, a::AbstractDict)
-    error("""AbstractDict collections only contain Pairs;
+    throw(ArgumentError("""AbstractDict collections only contain Pairs;
              Either look for e.g. A=>B instead, or use the `keys` or `values`
-             function if you are looking for a key or value respectively.""")
+             function if you are looking for a key or value respectively."""))
 end
 
 function summary(io::IO, t::AbstractDict)

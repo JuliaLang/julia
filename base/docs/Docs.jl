@@ -410,7 +410,7 @@ function calldoc(__source__, __module__, str, def::Expr)
     end
 end
 callargs(ex::Expr) = isexpr(ex, :where) ? callargs(ex.args[1]) :
-    isexpr(ex, :call) ? ex.args[2:end] : error("Invalid expression to callargs: $ex")
+    isexpr(ex, :call) ? ex.args[2:end] : throw(ArgumentError("Invalid expression to callargs: $ex"))
 validcall(x) = isa(x, Symbol) || isexpr(x, (:(::), :..., :kw, :parameters))
 
 function moduledoc(__source__, __module__, meta, def, def′::Expr)

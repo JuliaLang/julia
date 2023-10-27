@@ -101,7 +101,7 @@ struct NullLogger <: AbstractLogger; end
 min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
-    (@nospecialize; error("Null logger handle_message() should not be called"))
+    (@nospecialize; throw(ArgumentError("Null logger handle_message() should not be called")))
 
 
 #-------------------------------------------------------------------------------

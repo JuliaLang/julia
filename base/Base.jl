@@ -30,7 +30,7 @@ macro noinline() Expr(:meta, :noinline) end
 # (and these don't need the extra convert code)
 getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
+setproperty!(x::Type, f::Symbol, v) = throw(ArgumentError("setfield! fields of Types should not be changed"))
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
@@ -51,7 +51,7 @@ function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
     return setglobal!(x, f, val, order)
 end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
+setproperty!(x::Type, f::Symbol, v, order::Symbol) = throw(ArgumentError("setfield! fields of Types should not be changed"))
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
 

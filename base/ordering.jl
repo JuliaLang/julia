@@ -132,7 +132,7 @@ _ord(lt::typeof(isless), by, order::ForwardOrdering)                  = _by(by, 
 _ord(lt::typeof(isless), by, order::ReverseOrdering{ForwardOrdering}) = _by(by, order)  # disambiguation
 _ord(lt,                 by, order::ForwardOrdering)                  = _by(by, Lt(lt))
 _ord(lt,                 by, order::ReverseOrdering{ForwardOrdering}) = reverse(_by(by, Lt(lt)))
-_ord(lt,                 by, order::Ordering) = error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
+_ord(lt,                 by, order::Ordering) = throw(ArgumentError("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)"))
 _by(by, order::Ordering) = By(by, order)
 _by(::typeof(identity), order::Ordering) = order
 

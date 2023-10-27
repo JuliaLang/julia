@@ -144,7 +144,7 @@ if is_primary_base_module
     Ref{T}() where {T} = RefValue{T}() # Ref{T}()
     Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 
-    Ref(x::Ref, i::Integer) = (i != 1 && error("Ref only has one element"); x)
+    Ref(x::Ref, i::Integer) = (i != 1 && throw(ArgumentError("Ref only has one element")); x)
     Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 
     # convert Arrays to pointer arrays for ccall

@@ -1041,11 +1041,11 @@ function to_tuple_type(@nospecialize(t))
                 p = unwrapva(p)
             end
             if !(isa(p, Type) || isa(p, TypeVar))
-                error("argument tuple type must contain only types")
+                throw(ArgumentError("argument tuple type must contain only types"))
             end
         end
     else
-        error("expected tuple type")
+        throw(ArgumentError("expected tuple type"))
     end
     t
 end
@@ -1162,7 +1162,7 @@ See also: [`which`](@ref) and `@which`.
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     world = get_world_counter()
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -1176,7 +1176,7 @@ methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
@@ -1270,7 +1270,7 @@ end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
 uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.source) :
-                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
+                             isdefined(m, :generator) ? throw(ArgumentError("Method is @generated; try `code_lowered` instead.")) :
                              error("Code for this Method is not available.")
 _uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
 _uncompressed_ir(m::Method, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
@@ -1283,7 +1283,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     # this make a better error message than the typeassert that follows
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     for match in _methods_by_ftype(tt, -1, world)::Vector
         instance = Core.Compiler.specialize_method(match)
         push!(results, instance)
@@ -1550,7 +1550,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
                             world::UInt=get_world_counter(),
                             interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+        throw(ArgumentError("code reflection cannot be used from generated functions"))
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
@@ -1577,7 +1577,7 @@ end
 
 function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
                                    debuginfo::Symbol=:default, _...)
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    ccall(:jl_is_in_pure_context, Bool, ()) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     m = oc.source
     if isa(m, Method)
         code = _uncompressed_ir(m, m.source)
@@ -1654,7 +1654,7 @@ function code_ircode_by_type(
     optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
 )
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+        throw(ArgumentError("code reflection cannot be used from generated functions"))
     tt = to_tuple_type(tt)
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     asts = []
@@ -1707,7 +1707,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world::UInt=get_world_counter(),
                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+        throw(ArgumentError("code reflection cannot be used from generated functions"))
     if isa(f, Core.OpaqueClosure)
         _, rt = only(code_typed_opaque_closure(f))
         return Any[rt]
@@ -1769,7 +1769,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world::UInt=get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+        throw(ArgumentError("code reflection cannot be used from generated functions"))
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
         argtypes = Any[Core.Const(f), types.parameters...]
@@ -1813,7 +1813,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world::UInt=get_world_counter(),
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
@@ -1845,7 +1845,7 @@ function _which(@nospecialize(tt::Type);
     method_table::Union{Nothing,Core.MethodTable,Core.Compiler.MethodTableView}=nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    world == typemax(UInt) && throw(ArgumentError("code reflection cannot be used from generated functions"))
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
     elseif method_table isa Core.MethodTable
@@ -1891,7 +1891,7 @@ Return the module in which the binding for the variable referenced by `symbol` i
 """
 function which(m::Module, s::Symbol)
     if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+        throw(ArgumentError("\"$s\" is not defined in module $m"))
     end
     return binding_module(m, s)
 end

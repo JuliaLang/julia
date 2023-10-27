@@ -180,11 +180,11 @@ macro with(exprs...)
         ex = only(exprs)
         exprs = ()
     else
-        error("@with expects at least one argument")
+        throw(ArgumentError("@with expects at least one argument"))
     end
     for expr in exprs
         if expr.head !== :call || first(expr.args) !== :(=>)
-            error("@with expects arguments of the form `A => 2` got $expr")
+            throw(ArgumentError("@with expects arguments of the form `A => 2` got $expr"))
         end
     end
     exprs = map(esc, exprs)

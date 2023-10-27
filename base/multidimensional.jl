@@ -164,7 +164,7 @@ module IteratorsMD
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
     # see #23719
     Base.iterate(::CartesianIndex) =
-        error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
+        throw(ArgumentError("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`"))
 
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}

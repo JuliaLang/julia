@@ -9,7 +9,7 @@ function is_valid_lattice_norec end
 A singleton type representing the lattice of Julia types, without any inference extensions.
 """
 struct JLTypeLattice <: AbstractLattice; end
-widenlattice(::JLTypeLattice) = error("Type lattice is the least-precise lattice available")
+widenlattice(::JLTypeLattice) = throw(ArgumentError("Type lattice is the least-precise lattice available"))
 is_valid_lattice_norec(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type)
 
 """

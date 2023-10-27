@@ -184,7 +184,7 @@ evaluate to `true`.
 """
 macro nany(N::Int, criterion::Expr)
     if criterion.head !== :->
-        error("Second argument must be an anonymous function expression yielding the criterion")
+        throw(ArgumentError("Second argument must be an anonymous function expression yielding the criterion"))
     end
     conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:||, conds...)

@@ -291,7 +291,7 @@ setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
 setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
-@noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
+@noinline _rs_setindex!_err() = throw(ArgumentError("indexed assignment fails for a reshaped range; consider calling collect"))
 
 cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
 

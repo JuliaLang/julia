@@ -1330,7 +1330,7 @@ error_if_canonical_getindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
 _getindex(::IndexStyle, A::AbstractArray, I...) =
-    error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
+    throw(ArgumentError("getindex for $(typeof(A)) with types $(typeof(I)) is not supported"))
 
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
@@ -1424,7 +1424,7 @@ error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
 _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
-    error("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported")
+throw(ArgumentError("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported"))
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
@@ -1606,13 +1606,13 @@ replace_in_print_matrix(A::AbstractVector,i::Integer,j::Integer,s::AbstractStrin
 eltypeof(x) = typeof(x)
 eltypeof(x::AbstractArray) = eltype(x)
 
-promote_eltypeof() = error()
+promote_eltypeof() = throw(ArgumentError("missing arguments"))
 promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
-promote_eltype() = error()
+promote_eltype() = throw(ArgumentError("missing arguments"))
 promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
@@ -3327,8 +3327,8 @@ julia> map(+, [1, 2, 3], [10, 20, 30, 400, 5000])
 """
 map(f, A) = collect(Generator(f,A)) # default to returning an Array for `map` on general iterators
 
-map(f, ::AbstractDict) = error("map is not defined on dictionaries")
-map(f, ::AbstractSet) = error("map is not defined on sets")
+map(f, ::AbstractDict) = throw(ArgumentError("map is not defined on dictionaries"))
+map(f, ::AbstractSet) = throw(ArgumentError("map is not defined on sets"))
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F

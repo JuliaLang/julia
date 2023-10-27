@@ -620,7 +620,7 @@ _pat_replacer(r::Regex) = RegexAndMatchData(r)
 
 _free_pat_replacer(r::RegexAndMatchData) = PCRE.free_match_data(r.match_data)
 
-replace_err(repl) = error("Bad replacement string: $repl")
+replace_err(repl) = throw(ArgumentError("Bad replacement string: $repl"))
 
 function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)

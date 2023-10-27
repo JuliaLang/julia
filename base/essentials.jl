@@ -448,12 +448,12 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
-typename(a) = error("typename does not apply to this type")
+typename(a) = throw(ArgumentError("typename does not apply to this type"))
 typename(a::DataType) = a.name
 function typename(a::Union)
     ta = typename(a.a)
     tb = typename(a.b)
-    ta === tb || error("typename does not apply to unions whose components have different typenames")
+    ta === tb || throw(ArgumentError("typename does not apply to unions whose components have different typenames"))
     return tb
 end
 typename(union::UnionAll) = typename(union.body)

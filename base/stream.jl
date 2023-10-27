@@ -779,7 +779,7 @@ show(io::IO, stream::Pipe) = print(io,
 function open_pipe!(p::PipeEndpoint, handle::OS_HANDLE)
     iolock_begin()
     if p.status != StatusInit
-        error("pipe is already in use or has been closed")
+        throw(ArgumentError("pipe is already in use or has been closed"))
     end
     err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), p.handle, handle)
     uv_error("pipe_open", err)
@@ -838,7 +838,7 @@ function start_reading(stream::LibuvStream)
     iolock_begin()
     if stream.status == StatusOpen
         if !isreadable(stream)
-            error("tried to read a stream that is not readable")
+            throw(ArgumentError("tried to read a stream that is not readable"))
         end
         # libuv may call the alloc callback immediately
         # for a TTY on Windows, so ensure the status is set first

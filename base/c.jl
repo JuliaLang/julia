@@ -526,7 +526,7 @@ function expand_ccallable(rt, def)
             sig = sig.args[1]
         end
         if rt === nothing
-            error("@ccallable requires a return type")
+            throw(ArgumentError("@ccallable requires a return type"))
         end
         if sig.head === :call
             f = sig.args[1]
@@ -548,7 +548,7 @@ function expand_ccallable(rt, def)
             end
         end
     end
-    error("expected method definition in @ccallable")
+    throw(ArgumentError("expected method definition in @ccallable"))
 end
 
 """

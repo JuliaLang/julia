@@ -33,7 +33,7 @@ deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,
                   stackdict::IdDict) = x
 deepcopy_internal(x::Tuple, stackdict::IdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
-deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not supported")
+deepcopy_internal(x::Module, stackdict::IdDict) = throw(ArgumentError("deepcopy of Modules not supported"))
 
 function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)

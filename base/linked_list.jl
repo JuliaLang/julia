@@ -28,7 +28,7 @@ function length(q::IntrusiveLinkedList)
 end
 
 function list_append!!(q::IntrusiveLinkedList{T}, q2::IntrusiveLinkedList{T}) where T
-    q === q2 && error("can't append list to itself")
+    q === q2 && throw(ArgumentError("can't append list to itself"))
     head2 = q2.head
     if head2 !== nothing
         tail2 = q2.tail::T
@@ -50,7 +50,7 @@ function list_append!!(q::IntrusiveLinkedList{T}, q2::IntrusiveLinkedList{T}) wh
 end
 
 function push!(q::IntrusiveLinkedList{T}, val::T) where T
-    val.queue === nothing || error("val already in a list")
+    val.queue === nothing || throw(ArgumentError("val already in a list"))
     val.queue = q
     tail = q.tail
     if tail === nothing
@@ -63,7 +63,7 @@ function push!(q::IntrusiveLinkedList{T}, val::T) where T
 end
 
 function pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T
-    val.queue === nothing || error("val already in a list")
+    val.queue === nothing || throw(ArgumentError("val already in a list"))
     val.queue = q
     head = q.head
     if head === nothing

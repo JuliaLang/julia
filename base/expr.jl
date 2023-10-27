@@ -926,10 +926,10 @@ is_function_def(@nospecialize(ex)) =
 function findmeta(ex::Expr)
     if is_function_def(ex)
         body = ex.args[2]::Expr
-        body.head === :block || error(body, " is not a block expression")
+        body.head === :block || throw(ArgumentError("$body is not a block expression"))
         return findmeta_block(ex.args)
     end
-    error(ex, " is not a function expression")
+    throw(ArgumentError("$ex is not a function expression"))
 end
 
 findmeta(ex::Array{Any,1}) = findmeta_block(ex)
@@ -1039,7 +1039,7 @@ macro generated(f)
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
     else
-        error("invalid syntax; @generated must be used with a function definition")
+        throw(ArgumentError("invalid syntax; @generated must be used with a function definition"))
     end
 end
 
@@ -1158,11 +1158,11 @@ function make_atomic(order, ex)
             end
         end
     end
-    error("could not parse @atomic expression $ex")
+    throw(ArgumentError("could not parse @atomic expression $ex"))
 end
 function make_atomic(order, a1, op, a2)
     @nospecialize
-    is_expr(a1, :., 2) || error("@atomic modify expression missing field access")
+    is_expr(a1, :., 2) || throw(ArgumentError("@atomic modify expression missing field access"))
     a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
     return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
 end
@@ -1204,9 +1204,9 @@ macro atomicswap(ex)
 end
 function make_atomicswap(order, ex)
     @nospecialize
-    is_expr(ex, :(=), 2) || error("@atomicswap expression missing assignment")
+    is_expr(ex, :(=), 2) || throw(ArgumentError("@atomicswap expression missing assignment"))
     l, val = ex.args[1], esc(ex.args[2])
-    is_expr(l, :., 2) || error("@atomicswap expression missing field access")
+    is_expr(l, :., 2) || throw(ArgumentError("@atomicswap expression missing field access"))
     ll, lr = esc(l.args[1]), esc(l.args[2])
     return :(swapproperty!($ll, $lr, $val, $order))
 end
@@ -1267,7 +1267,7 @@ macro atomicreplace(ex, old_new)
 end
 function make_atomicreplace(success_order, fail_order, ex, old_new)
     @nospecialize
-    is_expr(ex, :., 2) || error("@atomicreplace expression missing field access")
+    is_expr(ex, :., 2) || throw(ArgumentError("@atomicreplace expression missing field access"))
     ll, lr = esc(ex.args[1]), esc(ex.args[2])
     if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
         exp, rep = esc(old_new.args[2]), esc(old_new.args[3])

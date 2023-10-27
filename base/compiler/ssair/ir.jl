@@ -569,7 +569,7 @@ function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach
             posid = info.pos
             attach_after = info.attach_after
         else
-            error("Cannot attach before a pending node.")
+            throw(ArgumentError("Cannot attach before a pending node."))
         end
     end
     node = add_inst!(ir.new_nodes, posid, attach_after)

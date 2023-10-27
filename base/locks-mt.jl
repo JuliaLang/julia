@@ -63,7 +63,7 @@ end
 
 function unlock(l::SpinLock)
     if (@atomicswap :release l.owned = 0) == 0
-        error("unlock count must match lock count")
+        throw(ArgumentError("unlock count must match lock count"))
     end
     GC.enable_finalizers()
     ccall(:jl_cpu_wake, Cvoid, ())

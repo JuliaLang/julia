@@ -723,4 +723,4 @@ false
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
-in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")
+in(::AbstractString, ::AbstractString) = throw(ArgumentError("use occursin(needle, haystack) for string containment"))

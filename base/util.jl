@@ -565,7 +565,7 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    isexpr(expr, :struct) || error("Invalid usage of @kwdef")
+    isexpr(expr, :struct) || throw(ArgumentError("Invalid usage of @kwdef"))
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -599,7 +599,7 @@ macro kwdef(expr)
             def2 = Expr(:function, sig2, body2)
             kwdefs = Expr(:block, def1, def2)
         else
-            error("Invalid usage of @kwdef")
+            throw(ArgumentError("Invalid usage of @kwdef"))
         end
     else
         kwdefs = nothing

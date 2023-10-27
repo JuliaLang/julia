@@ -348,7 +348,7 @@ function _wait2(t::Task, waiter::Task)
 end
 
 function wait(t::Task)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+    t === current_task() && throw(ArgumentError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if istaskfailed(t)
         throw(TaskFailedException(t))
@@ -773,7 +773,7 @@ function workqueue_for(tid::Int)
 end
 
 function enq_work(t::Task)
-    (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ArgumentError("schedule: Task not runnable"))
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -892,7 +892,7 @@ A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ArgumentError("yield: Task not runnable"))
     t.result = x
     enq_work(current_task())
     set_next_task(t)

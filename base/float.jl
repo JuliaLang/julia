@@ -1166,7 +1166,7 @@ float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float(A::AbstractArray{T}) where T
     if !isconcretetype(T)
-        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
+        throw(ArgumentError("`float` not defined on abstractly-typed arrays; please convert to a more specific type"))
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
 end

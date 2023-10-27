@@ -113,9 +113,9 @@ function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
     elseif pool == :foreign
-        error("Threadpool size of `:foreign` is indeterminant")
+        throw(ArgumentError("Threadpool size of `:foreign` is indeterminant"))
     else
-        error("invalid threadpool specified")
+        throw(ArgumentError("invalid threadpool specified"))
     end
     return _nthreads_in_pool(tpid)
 end
@@ -132,7 +132,7 @@ function threadpooltids(pool::Symbol)
     elseif pool === :default
         return collect(ni+1:ni+_nthreads_in_pool(Int8(1)))
     else
-        error("invalid threadpool specified")
+        throw(ArgumentError("invalid threadpool specified"))
     end
 end
 
@@ -218,7 +218,7 @@ function _threadsfor(iter, lbody, schedule)
         if $(schedule === :dynamic || schedule === :default)
             threading_run(threadsfor_fun, false)
         elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
+            throw(ArgumentError("`@threads :static` cannot be used concurrently or nested"))
         else # :static
             threading_run(threadsfor_fun, true)
         end

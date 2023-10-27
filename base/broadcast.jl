@@ -172,7 +172,7 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
 
-    Broadcasted(style::Union{Nothing,BroadcastStyle}, f::Tuple, args::Tuple) = error() # disambiguation: tuple is not callable
+    Broadcasted(style::Union{Nothing,BroadcastStyle}, f::Tuple, args::Tuple) = throw(ArgumentError("invalid types")) # disambiguation: tuple is not callable
     function Broadcasted(style::Union{Nothing,BroadcastStyle}, f::F, args::Tuple, axes=nothing) where {F}
         # using Core.Typeof rather than F preserves inferrability when f is a type
         return new{typeof(style), typeof(axes), Core.Typeof(f), typeof(args)}(style, f, args, axes)
@@ -446,7 +446,7 @@ function result_style end
 
 result_style(s::BroadcastStyle) = s
 function result_style(s1::S, s2::S) where S<:BroadcastStyle
-    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+    s1 ≡ s2 ? s1 : throw(ArgumentError("inconsistent broadcast styles, custom rule needed"))
 end
 # Test both orders so users typically only have to declare one order
 result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyle(s2, s1))
@@ -466,11 +466,11 @@ result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
 result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle = result_style(s1, s2)
 
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
-    error("""
+    throw(ArgumentError("""
 conflicting broadcast rules defined
   Broadcast.BroadcastStyle(::$S, ::$T) = $U()
   Broadcast.BroadcastStyle(::$T, ::$S) = $V()
-One of these should be undefined (and thus return Broadcast.Unknown).""")
+One of these should be undefined (and thus return Broadcast.Unknown)."""))
 end
 
 # Indices utilities

@@ -173,7 +173,7 @@ internal counter and return immediately.
 """
 @inline function unlock(rl::ReentrantLock)
     rl.locked_by === current_task() ||
-        error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")
+        throw(ArgumentError(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread"))
     (@noinline function _unlock(rl::ReentrantLock)
         n = rl.reentrancy_cnt - 0x0000_0001
         rl.reentrancy_cnt = n
@@ -405,7 +405,7 @@ and resume execution.
 function release(s::Semaphore)
     lock(s.cond_wait)
     try
-        s.curr_cnt > 0 || error("release count must match acquire count")
+        s.curr_cnt > 0 || throw(ArgumentError("release count must match acquire count"))
         s.curr_cnt -= 1
         notify(s.cond_wait; all=false)
     finally

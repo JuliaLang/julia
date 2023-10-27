@@ -658,7 +658,7 @@ const main = MyApp.main
 """
 macro main(args...)
     if !isempty(args)
-        error("USAGE: `@main` is expected to be used as `(@main)` without macro arguments.")
+        throw(ArgumentError("USAGE: `@main` is expected to be used as `(@main)` without macro arguments."))
     end
     if isdefined(__module__, :main)
         if Base.binding_module(__module__, :main) !== __module__

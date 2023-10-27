@@ -38,7 +38,7 @@ WeakRef
 # Used by `Base.finalizer` to validate mutability of an object being finalized.
 function _check_mutable(@nospecialize(o)) @noinline
     if !ismutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
+        throw(ArgumentError("objects of type ", typeof(o), " cannot be finalized"))
     end
 end
 
@@ -230,7 +230,7 @@ julia> let
 macro preserve(args...)
     syms = args[1:end-1]
     for x in syms
-        isa(x, Symbol) || error("Preserved variable must be a symbol")
+        isa(x, Symbol) || throw(ArgumentError("Preserved variable must be a symbol"))
     end
     esc(Expr(:gc_preserve, args[end], syms...))
 end

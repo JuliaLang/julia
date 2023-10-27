@@ -1121,7 +1121,7 @@ complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
     if !isconcretetype(T)
-        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
+        throw(ArgumentError("`complex` not defined on abstractly-typed arrays; please convert to a more specific type"))
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end

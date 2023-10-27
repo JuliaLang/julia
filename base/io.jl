@@ -219,7 +219,7 @@ julia> read(io, String)
 ```
 """
 read(stream, t)
-read(stream, ::Type{Union{}}, slurp...; kwargs...) = error("cannot read a value of type Union{}")
+read(stream, ::Type{Union{}}, slurp...; kwargs...) = throw(ArgumentError("cannot read a value of type Union{}"))
 
 
 """
@@ -791,7 +791,7 @@ write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
     if !isbitstype(eltype(A))
-        error("`write` is not supported on non-isbits arrays")
+        throw(ArgumentError("`write` is not supported on non-isbits arrays"))
     end
     nb = 0
     r = Ref{eltype(A)}()
@@ -804,7 +804,7 @@ end
 
 function write(s::IO, A::StridedArray)
     if !isbitstype(eltype(A))
-        error("`write` is not supported on non-isbits arrays")
+        throw(ArgumentError("`write` is not supported on non-isbits arrays"))
     end
     _checkcontiguous(Bool, A) &&
         return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))

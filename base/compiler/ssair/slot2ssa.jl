@@ -212,7 +212,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return types(ir)[new_to_regular(x, length(ir.stmts))]
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber}) && throw(ArgumentError("unexpected val type"))
     return Const(x)
 end
 

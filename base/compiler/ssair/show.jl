@@ -984,7 +984,7 @@ function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
     elseif ft === Bool
         prefix = getfield(effects, name) ? '+' : '!'
     else
-        error("unsupported effectbits type given")
+        throw(ArgumentError("unsupported effectbits type given"))
     end
     return string(prefix, suffix)
 end
@@ -997,7 +997,7 @@ function effectbits_color(effects::Effects, name::Symbol)
     elseif ft === Bool
         color = getfield(effects, name) ? :green : :red
     else
-        error("unsupported effectbits type given")
+        throw(ArgumentError("unsupported effectbits type given"))
     end
     return color
 end
