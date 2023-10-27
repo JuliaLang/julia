@@ -101,8 +101,11 @@ end
 function mkpidlock(at::String, proc::Process; kwopts...)
     lock = mkpidlock(at, getpid(proc); kwopts...)
     closer = @async begin
-        wait(proc)
-        close(lock)
+        try
+            wait(proc)
+        finally
+            close(lock)
+        end
     end
     isdefined(Base, :errormonitor) && Base.errormonitor(closer)
     return lock
