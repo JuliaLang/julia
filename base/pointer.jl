@@ -63,7 +63,7 @@ unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8},
 cconvert(::Type{<:Ptr}, a::Array) = getfield(a, :ref)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = unsafe_convert(Ptr{T}, a.ref)
-unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
+unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = throw(NotImplementedError("conversion to pointer not defined for $(typeof(a))"))
 # TODO: add this deprecation to give a better error:
 # cconvert(::Type{<:Ptr}, a::AbstractArray) = error("conversion to pointer not defined for $(typeof(a))")
 # unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("missing call to cconvert for call to unsafe_convert for AbstractArray")
