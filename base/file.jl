@@ -580,6 +580,9 @@ function temp_cleanup_purge_all()
     nothing
 end
 
+# deprecated internal function used by some packages
+temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
+
 function __postinit__()
     Base.atexit(temp_cleanup_purge_all)
 end
