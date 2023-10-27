@@ -161,10 +161,17 @@ module IteratorsMD
 
     Base._ind2sub(t::Tuple, ind::CartesianIndex) = Tuple(ind)
 
-    # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
-    # see #23719
-    Base.iterate(::CartesianIndex) =
-        error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
+    Base.iterate((; I)::CartesianIndex) = iterate(I)
+    Base.iterate((; I)::CartesianIndex, st::Int) = iterate(I, st)
+    # probably not needed, but might make inference's job a little easier
+    Base.indexed_iterate((; I)::CartesianIndex, i::Int) = Base.indexed_iterate(I, i)
+    Base.indexed_iterate((; I)::CartesianIndex, i::Int, st::Int) = Base.indexed_iterate(I, i, st)
+
+    Base.rest((; I)::CartesianIndex, st...) = CartesianIndex(Base.rest(I, st...))
+    function Base.split_rest((; I)::CartesianIndex, n::Int, st...)
+        front, tail = Base.split_rest(I, n, st...)
+        return CartesianIndex(front), tail
+    end
 
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}

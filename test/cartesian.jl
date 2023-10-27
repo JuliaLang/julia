@@ -533,3 +533,33 @@ end
     inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
     @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
 end
+
+@testset "CartesianIndex iteration and destructuring" begin
+    I = CartesianIndex((1, 2, 3, 4))
+
+    a, b, c, d = I
+    @test a === 1
+    @test b === 2
+    @test c === 3
+    @test d === 4
+
+    a, b... = I
+    @test a === 1
+    @test b === CartesianIndex((2, 3, 4))
+
+    a..., b = I
+    @test a === CartesianIndex((1, 2, 3))
+    @test b === 4
+
+    a, b..., c = I
+    @test a === 1
+    @test b === CartesianIndex((2, 3))
+    @test c === 4
+
+    a..., = I
+    @test a === I
+
+    a, b... = CartesianIndex((1,))
+    @test a === 1
+    @test b === CartesianIndex(())
+end

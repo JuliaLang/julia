@@ -2062,7 +2062,7 @@ end
 
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
-    @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
+    @test iterate(CartesianIndex{3}(1,2,3))[1] == 1
     @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
     @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
