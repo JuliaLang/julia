@@ -25,7 +25,6 @@ IdDict{Any, String} with 3 entries:
 ```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
-    # NOTE make sure to sync the struct definition with `jl_id_dict_t` in julia.h
     ht::Memory{Any}
     count::Int
     ndel::Int
@@ -76,14 +75,22 @@ end
 
 function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
-    keyindex = ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
-    # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
+
+    ht = d.ht
+    t = @_gc_preserve_begin ht
+
+    ref = Ref{Ptr{Any}}(pointer_from_objref(ht))
+    # # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
+    keyindex = ccall(:jl_table_assign_bp, Cssize_t, (Ptr{Ptr{Any}}, Any, Any, Cint), ref, key, C_NULL, 0)
+    d.ht = unsafe_pointer_to_objref(ref[])
+
+    @_gc_preserve_end t
 
     return abs(keyindex), keyindex < 0
 end
 
 function _setindex!(d::IdDict{K, V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
-    d.ht[keyindex+1] = val
+    @inbounds d.ht[keyindex+1] = val
     d.count += inserted
 
     if d.ndel >= ((3*length(d.ht))>>2)
@@ -169,7 +176,7 @@ function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where 
         _setindex!(d, val, key, keyindex, inserted)
         return val::V
     else
-        return d.ht[keyindex+1]::V
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
@@ -193,7 +200,7 @@ function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V
         _setindex!(d, val, key, keyindex, inserted)
         return val::V
     else
-        return d.ht[keyindex+1]::V
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
