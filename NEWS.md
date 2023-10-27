@@ -50,6 +50,7 @@ New library functions
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `Sys.username()` can be used to return the current user's username ([#51897]).
 
 New library features
 --------------------
