@@ -68,7 +68,7 @@ end
 @eval isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, $(Expr(:boundscheck)))
 
 ## copy ##
-@eval function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
+function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_meta
     n == 0 && return dest
     @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
