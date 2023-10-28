@@ -1802,6 +1802,9 @@ If `track_content=true` recompilation is triggered when the content of `path` ch
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
+
+!!! compat "Julia 1.11"
+    Keyword argument `track_content` requires at least Julia 1.11.
 """
 function include_dependency(path::AbstractString; track_content::Bool=false)
     _include_dependency(Main, path, track_content=track_content)
