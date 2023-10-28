@@ -2615,6 +2615,10 @@ function replace_depot_path(path::AbstractString)
     return path
 end
 
+function restore_depot_path(path::AbstractString, depot::AbstractString)
+    replace(path, r"^@depot" => depot; count=1)
+end
+
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
 function resolve_depot(includes::Union{AbstractVector,AbstractSet})
@@ -2625,7 +2629,7 @@ function resolve_depot(includes::Union{AbstractVector,AbstractSet})
     end
     for depot in DEPOT_PATH
         if all(includes) do inc
-                isfile(replace(inc, r"^@depot" => depot; count=1))
+                isfile(restore_depot_path(inc, depot))
             end
             return depot
         end
@@ -2731,7 +2735,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         @debug "Missing @depot tag for include dependencies in cache file $cachefile."
     else
         for inc in includes
-            inc.filename = replace(inc.filename, r"^@depot" => depot; count=1)
+            inc.filename = restore_depot_path(inc.filename, depot)
         end
     end
     includes_srcfiles_only = includes[keepidx]
@@ -2794,7 +2798,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
         fn = if !startswith(depotfn, "@depot")
             depotfn
         else
-            basefn = replace(depotfn, r"^@depot" => "")
+            basefn = restore_depot_path(depotfn, "")
             idx = findfirst(includes) do inc
                 endswith(inc.filename, basefn)
             end
