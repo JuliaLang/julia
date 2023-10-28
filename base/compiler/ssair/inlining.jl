@@ -758,7 +758,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                         ti = ti.parameters[2]::DataType # checked by `is_valid_type_for_apply_rewrite`
                     end
                     for p in ti.parameters
-                        if isa(p, DataType) && isdefined(p, :instance)
+                        if issingletontype(p)
                             # replace singleton types with their equivalent Const object
                             p = Const(p.instance)
                         elseif isconstType(p)
@@ -1008,8 +1008,12 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     elseif isa(case, InvokeCase)
         is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
-        stmt.head = :invoke
-        pushfirst!(stmt.args, case.invoke)
+        if stmt.head === :invoke
+            stmt.args[1] = case.invoke
+        else
+            stmt.head = :invoke
+            pushfirst!(stmt.args, case.invoke)
+        end
         ir[SSAValue(idx)][:flag] |= flags_for_effects(case.effects)
     elseif case === nothing
         # Do, well, nothing
@@ -1643,13 +1647,11 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
     return nothing
 end
 
-function handle_invoke_expr!(todo::Vector{Pair{Int,Any}},
+function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
     mi = stmt.args[1]::MethodInstance
     case = resolve_todo(mi, sig.argtypes, info, flag, state)
-    if case !== nothing
-        push!(todo, idx=>(case::InliningTodo))
-    end
+    handle_single_case!(todo, ir, idx, stmt, case, false)
     return nothing
 end
 
@@ -1677,7 +1679,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
         # for external `AbstractInterpreter`s that may run the inlining pass multiple times
         if isexpr(stmt, :invoke)
-            handle_invoke_expr!(todo, idx, stmt, info, flag, sig, state)
+            handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
             continue
         end
 

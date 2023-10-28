@@ -458,13 +458,15 @@ function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if any(isa.((s, p), Union{AnnotatedString, AnnotatedChar, SubString{<:AnnotatedString}}))
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
+    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
 
 """
@@ -488,13 +490,15 @@ function rpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if any(isa.((s, p), Union{AnnotatedString, AnnotatedChar, SubString{<:AnnotatedString}}))
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
+    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
 
 """
@@ -571,6 +575,8 @@ end
 
 # Specialization for partition(s,n) to return a SubString
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+# SubStrings do not nest
+eltype(::Type{PartitionIterator{T}}) where {T<:SubString} = T
 
 function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
     state > ncodeunits(itr.c) && return nothing
@@ -591,6 +597,101 @@ eachsplit(str::T, splitter::AbstractChar; limit::Integer=0, keepempty=true) wher
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 eachsplit(str::AbstractString; limit::Integer=0, keepempty=false) =
     eachsplit(str, isspace; limit, keepempty)
+
+"""
+    eachrsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    eachrsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
+
+Return an iterator over `SubString`s of `str`, produced when splitting on
+the delimiter(s) `dlm`, and yielded in reverse order (from right to left).
+`dlm` can be any of the formats allowed by [`findprev`](@ref)'s first argument
+(i.e. a string, a single character or a function), or a collection of characters.
+
+If `dlm` is omitted, it defaults to [`isspace`](@ref), and `keepempty` default to `false`.
+
+The optional keyword arguments are:
+ - If `limit > 0`, the iterator will split at most `limit - 1` times before returning
+   the rest of the string unsplit. `limit < 1` implies no cap to splits (default).
+ - `keepempty`: whether empty fields should be returned when iterating
+   Default is `false` without a `dlm` argument, `true` with a `dlm` argument.
+
+Note that unlike [`split`](@ref), [`rsplit`](@ref) and [`eachsplit`](@ref), this
+function iterates the substrings right to left as they occur in the input.
+
+See also [`eachsplit`](@ref), [`rsplit`](@ref).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> a = "Ma.r.ch";
+
+julia> collect(eachrsplit(a, ".")) == ["ch", "r", "Ma"]
+true
+
+julia> collect(eachrsplit(a, "."; limit=2)) == ["ch", "Ma.r"]
+true
+```
+"""
+function eachrsplit end
+
+struct RSplitIterator{S <: AbstractString, F}
+    str::S
+    splitter::F
+    limit::Int
+    keepempty::Bool
+end
+
+eltype(::Type{<:RSplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:RSplitIterator{<:SubString{T}}}) where T = SubString{T}
+
+IteratorSize(::Type{<:RSplitIterator}) = SizeUnknown()
+
+eachrsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
+    RSplitIterator(str, splitter, limit, keepempty)
+
+eachrsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+          limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachrsplit(str, in(splitter); limit, keepempty)
+
+eachrsplit(str::T, splitter::AbstractChar; limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachrsplit(str, isequal(splitter); limit, keepempty)
+
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
+eachrsplit(str::AbstractString; limit::Integer=0, keepempty=false) =
+    eachrsplit(str, isspace; limit, keepempty)
+
+function Base.iterate(it::RSplitIterator, (to, remaining_splits)=(lastindex(it.str), it.limit-1))
+    to < 0 && return nothing
+    from = 1
+    next_to = -1
+    while !iszero(remaining_splits)
+        pos = findprev(it.splitter, it.str, to)
+        # If no matches: It returns the rest of the string, then the iterator stops.
+        if pos === nothing
+            from = 1
+            next_to = -1
+            break
+        else
+            from = nextind(it.str, last(pos))
+            # pos can be empty if we search for a zero-width delimiter, in which
+            # case pos is to:to-1.
+            # In this case, next_to must be to - 1, except if to is 0 or 1, in
+            # which case, we must stop iteration for some reason.
+            next_to = (isempty(pos) & (to < 2)) ? -1 : prevind(it.str, first(pos))
+
+            # If the element we emit is empty, discard it based on keepempty
+            if from > to && !(it.keepempty)
+                to = next_to
+                continue
+            end
+            break
+        end
+    end
+    from > to && !(it.keepempty) && return nothing
+    return (SubString(it.str, from, to), (next_to, remaining_splits-1))
+end
 
 """
     split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
@@ -660,37 +761,15 @@ julia> rsplit(a, "."; limit=2)
  "h"
 ```
 """
-function rsplit end
-
 function rsplit(str::T, splitter;
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function rsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function rsplit(str::T, splitter::AbstractChar;
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
+    reverse!(collect(eachrsplit(str, splitter; limit, keepempty)))
 end
 
-function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
-    n = lastindex(str)::Int
-    r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
-    j, k = first(r), last(r)
-    while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k)::Int,n))
-        n = prevind(str, j)::Int
-        r = something(findprev(splitter,str,n)::Union{Nothing,Int,UnitRange{Int}}, 0)
-        j, k = first(r), last(r)
-    end
-    (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
-    return strs
-end
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, isspace; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit, keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =

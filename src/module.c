@@ -41,16 +41,14 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
-    JL_GC_PUSH1(&m);
     if (jl_core_module && default_names) {
+        JL_GC_PUSH1(&m);
         jl_module_using(m, jl_core_module);
-    }
-    // export own name, so "using Foo" makes "Foo" itself visible
-    if (default_names) {
+        // export own name, so "using Foo" makes "Foo" itself visible
         jl_set_const(m, name, (jl_value_t*)m);
+        jl_module_public(m, name, 1);
+        JL_GC_POP();
     }
-    jl_module_public(m, name, 1);
-    JL_GC_POP();
     return m;
 }
 
@@ -810,7 +808,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
         if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
-                jl_gc_wb_binding(bp, val);
+                jl_gc_wb(bp, val);
                 return;
             }
         }
@@ -899,7 +897,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
     if (b->constp) {
         jl_value_t *old = NULL;
         if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
-            jl_gc_wb_binding(b, rhs);
+            jl_gc_wb(b, rhs);
             return;
         }
         if (jl_egal(rhs, old))
@@ -913,7 +911,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
                        jl_symbol_name(mod->name), jl_symbol_name(var));
     }
     jl_atomic_store_release(&b->value, rhs);
-    jl_gc_wb_binding(b, rhs);
+    jl_gc_wb(b, rhs);
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var)

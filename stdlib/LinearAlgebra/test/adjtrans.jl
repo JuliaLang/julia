@@ -476,6 +476,16 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "copyto! uses adjoint!/transpose!" begin
+    for T in (Float64, ComplexF64), f in (transpose, adjoint), sz in ((5,4), (5,))
+        S = rand(T, sz)
+        adjS = f(S)
+        A = similar(S')
+        copyto!(A, adjS)
+        @test A == adjS
+    end
+end
+
 @testset "aliasing with adjoint and transpose" begin
     A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
     B = copy(A)

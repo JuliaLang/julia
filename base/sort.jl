@@ -1299,7 +1299,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1367,7 +1367,7 @@ algorithms).
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
 resulting order is reversed if `rev=true` (this preserves forward stability:
-elements that compare equal are not reversed). The current implemention applies
+elements that compare equal are not reversed). The current implementation applies
 the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than
@@ -1587,6 +1587,8 @@ v[ix[k]] == partialsort(v, k)
 The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
 
+$(Base._DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2, 1];
@@ -1710,6 +1712,8 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
 `ix` is initialized to contain the values `LinearIndices(A)`.
+
+$(Base._DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.9"
     The method accepting `dims` requires at least Julia 1.9.

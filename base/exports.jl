@@ -593,6 +593,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -1071,83 +1072,89 @@ export
 
     @main
 
-# TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
-eval(Expr(:public,
+public
 # Modules
-    :Checked,
-    :Filesystem,
-    :Order,
-    :Sort,
+    Checked,
+    Filesystem,
+    Order,
+    Sort,
 
 # Types
-    :AbstractLock,
-    :AsyncCondition,
-    :CodeUnits,
-    :Event,
-    :Fix1,
-    :Fix2,
-    :Generator,
-    :ImmutableDict,
-    :OneTo,
-    :UUID,
+    AbstractLock,
+    AsyncCondition,
+    CodeUnits,
+    Event,
+    Fix1,
+    Fix2,
+    Generator,
+    ImmutableDict,
+    OneTo,
+    AnnotatedString,
+    AnnotatedChar,
+    UUID,
+
+# Annotated strings
+    annotatedstring,
+    annotate!,
+    annotations,
 
 # Semaphores
-    :Semaphore,
-    :acquire,
-    :release,
+    Semaphore,
+    acquire,
+    release,
 
 # collections
-    :IteratorEltype,
-    :IteratorSize,
-    :to_index,
-    :vect,
-    :isdone,
-    :front,
-    :rest,
-    :split_rest,
-    :tail,
-    :checked_length,
+    IteratorEltype,
+    IteratorSize,
+    to_index,
+    vect,
+    isdone,
+    front,
+    rest,
+    split_rest,
+    tail,
+    checked_length,
 
 # Loading
-    :DL_LOAD_PATH,
-    :load_path,
-    :active_project,
+    DL_LOAD_PATH,
+    load_path,
+    active_project,
 
 # Reflection and introspection
-    :isambiguous,
-    :isexpr,
-    :isidentifier,
-    :issingletontype,
-    :identify_package,
-    :locate_package,
-    :moduleroot,
-    :jit_total_bytes,
-    :summarysize,
-    :isexported,
-    :ispublic,
+    isambiguous,
+    isexpr,
+    isidentifier,
+    issingletontype,
+    identify_package,
+    locate_package,
+    moduleroot,
+    jit_total_bytes,
+    summarysize,
+    isexported,
+    ispublic,
 
 # Opperators
-    :operator_associativity,
-    :operator_precedence,
-    :isbinaryoperator,
-    :isoperator,
-    :isunaryoperator,
+    operator_associativity,
+    operator_precedence,
+    isbinaryoperator,
+    isoperator,
+    isunaryoperator,
 
 # C interface
-    :cconvert,
-    :unsafe_convert,
+    cconvert,
+    unsafe_convert,
 
 # Error handling
-    :exit_on_sigint,
-    :windowserror,
+    exit_on_sigint,
+    windowserror,
 
 # Macros
-    Symbol("@assume_effects"),
-    Symbol("@constprop"),
-    Symbol("@locals"),
-    Symbol("@propagate_inbounds"),
+    @assume_effects,
+    @constprop,
+    @locals,
+    @propagate_inbounds,
 
 # misc
-    :notnothing,
-    :runtests,
-    :text_colors))
+    notnothing,
+    runtests,
+    text_colors

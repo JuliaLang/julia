@@ -34,7 +34,6 @@
 
 using namespace llvm;
 
-#include "llvm-codegen-shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "processor.h"
@@ -436,7 +435,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
         jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
     // check that f is a guaranteed singleton type
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
-    if (!jl_is_datatype(ft) || ft->instance == NULL)
+    if (!jl_is_datatype(ft) || !jl_is_datatype_singleton(ft))
         jl_error("@ccallable: function object must be a singleton");
 
     // compute / validate return type
@@ -507,6 +506,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             // see if it is inferred, or try to infer it for ourself.
             // (but don't bother with typeinf on macros or toplevel thunks)
             src = jl_type_infer(mi, world, 0);
+            codeinst = nullptr;
         }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
@@ -515,7 +515,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     else if (src && jl_is_code_info(src)) {
         if (!codeinst) {
-            codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
+            codeinst = jl_get_codeinst_for_src(mi, src);
             if (src->inferred) {
                 jl_value_t *null = nullptr;
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
@@ -794,7 +794,7 @@ struct JITObjectInfo {
 class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
     std::mutex PluginMutex;
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
-    // Resources from distinct MaterializationResponsibilitys can get merged
+    // Resources from distinct `MaterializationResponsibility`s can get merged
     // after emission, so we can have multiple debug objects per resource key.
     std::map<ResourceKey, SmallVector<std::unique_ptr<JITObjectInfo>, 0>> RegisteredObjs;
 
@@ -860,8 +860,11 @@ public:
         PendingObjs.erase(&MR);
         return Error::success();
     }
-
+#if JL_LLVM_VERSION >= 160000
+    Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
+#else
     Error notifyRemovingResources(ResourceKey K) override
+#endif
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
         RegisteredObjs.erase(K);
@@ -869,7 +872,11 @@ public:
         return Error::success();
     }
 
+#if JL_LLVM_VERSION >= 160000
+    void notifyTransferringResources(JITDylib &JD, ResourceKey DstKey, ResourceKey SrcKey) override
+#else
     void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
+#endif
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
         auto SrcIt = RegisteredObjs.find(SrcKey);
@@ -928,11 +935,21 @@ public:
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
         return Error::success();
     }
-    Error notifyRemovingResources(orc::ResourceKey K) override {
+#if JL_LLVM_VERSION >= 160000
+    Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
+#else
+    Error notifyRemovingResources(orc::ResourceKey K) override
+#endif
+    {
         return Error::success();
     }
+#if JL_LLVM_VERSION >= 160000
+    void notifyTransferringResources(JITDylib &JD, orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
+#else
     void notifyTransferringResources(orc::ResourceKey DstKey,
                                      orc::ResourceKey SrcKey) override {}
+#endif
 
     void modifyPassConfig(orc::MaterializationResponsibility &,
                           jitlink::LinkGraph &,
@@ -949,7 +966,11 @@ public:
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
                 }
+#if JL_LLVM_VERSION >= 160000
+                if ((section.getMemProt() & orc::MemProt::Exec) == orc::MemProt::None) {
+#else
                 if ((section.getMemProt() & jitlink::MemProt::Exec) == jitlink::MemProt::None) {
+#endif
                     data_size += secsize;
                 } else {
                     code_size += secsize;
@@ -983,8 +1004,10 @@ public:
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
 #if JL_LLVM_VERSION < 150000
     return cantFail(jitlink::InProcessMemoryManager::Create());
-#else
+#elif JL_LLVM_VERSION < 160000
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
+#else
+    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
 #endif
 }
 
@@ -1031,6 +1054,13 @@ public:
                                      bool IsReadOnly) override {
         return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
     }
+#if JL_LLVM_VERSION >= 160000
+    virtual void reserveAllocationSpace(uintptr_t CodeSize, Align CodeAlign,
+                                        uintptr_t RODataSize, Align RODataAlign,
+                                        uintptr_t RWDataSize, Align RWDataAlign) override {
+        return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
+    }
+#else
     virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
                                         uintptr_t RODataSize,
                                         uint32_t RODataAlign,
@@ -1038,6 +1068,7 @@ public:
                                         uint32_t RWDataAlign) override {
         return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
     }
+#endif
     virtual bool needsToReserveAllocationSpace() override {
         return MemMgr->needsToReserveAllocationSpace();
     }
@@ -1168,6 +1199,8 @@ namespace {
 #else
             None;
 #endif
+        if (TheTriple.isAArch64())
+            codemodel = CodeModel::Small;
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
                 TheTriple.getTriple(), TheCPU, FeaturesStr,
@@ -1179,11 +1212,7 @@ namespace {
                 );
         assert(TM && "Failed to select target machine -"
                      " Is the LLVM backend for this CPU enabled?");
-        if (!TheTriple.isARM() && !TheTriple.isPPC64()) {
-            // FastISel seems to be buggy for ARM. Ref #13321
-            if (jl_options.opt_level < 2)
-                TM->setFastISel(true);
-        }
+        fixupTM(*TM);
         return std::unique_ptr<TargetMachine>(TM);
     }
 } // namespace
@@ -1209,7 +1238,9 @@ namespace {
             : JTMB(createJTMBFromTM(TM, optlevel)) {}
 
         std::unique_ptr<TargetMachine> operator()() JL_NOTSAFEPOINT {
-            return cantFail(JTMB.createTargetMachine());
+            auto TM = cantFail(JTMB.createTargetMachine());
+            fixupTM(*TM);
+            return TM;
         }
     };
 
@@ -1221,7 +1252,9 @@ namespace {
             : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
-            auto NPM = std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            auto TM = cantFail(JTMB.createTargetMachine());
+            fixupTM(*TM);
+            auto NPM = std::make_unique<NewPM>(std::move(TM), O);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
                 NPM->printTimers();
@@ -1324,6 +1357,7 @@ namespace {
                         }
                     }
                 }
+                ++ModulesOptimized;
                 switch (PoolIdx) {
                     case 0:
                         ++OptO0;
@@ -1607,6 +1641,16 @@ void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
+void fixupTM(TargetMachine &TM){
+    auto TheTriple = TM.getTargetTriple();
+    if (jl_options.opt_level < 2) {
+        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+            TM.setFastISel(true);
+        else    // FastISel seems to be buggy Ref #13321
+            TM.setFastISel(false);
+    }
+}
+
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
@@ -1628,6 +1672,12 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
+        if (!ctx->hasSetOpaquePointersValue())
+#ifndef JL_LLVM_OPAQUE_POINTERS
+            ctx->setOpaquePointers(false);
+#else
+            ctx->setOpaquePointers(true);
+#endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
@@ -1728,13 +1778,14 @@ JuliaOJIT::JuliaOJIT()
     ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
     orc::SymbolAliasMap jl_crt = {
-#if JULIA_FLOAT16_ABI == 1
+        // Float16 conversion routines
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
         { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } },
-#endif
+
+        // BFloat16 conversion routines
         { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),   JITSymbolFlags::Exported } },
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),   JITSymbolFlags::Exported } },
     };
@@ -1856,7 +1907,7 @@ Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
     auto Sym = ES.lookup(SearchOrder, Name);
     if (Sym)
         return *Sym;
@@ -1871,7 +1922,7 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 Expected<JITEvaluatedSymbol> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
     auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
     return Sym;
 }
@@ -1938,9 +1989,11 @@ void JuliaOJIT::enableJITDebuggingSupport()
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
+/*
     else if (TM->getTargetTriple().isOSBinFormatELF())
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper))));
+*/
 }
 #else
 void JuliaOJIT::enableJITDebuggingSupport()
@@ -2125,7 +2178,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
 {
-    return std::unique_ptr<TargetMachine>(getTarget()
+    auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
             getTargetTriple().str(),
             getTargetCPU(),
@@ -2134,6 +2187,8 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
             TM->getRelocationModel(),
             TM->getCodeModel(),
             TM->getOptLevel()));
+    fixupTM(*NewTM);
+    return NewTM;
 }
 
 const Triple& JuliaOJIT::getTargetTriple() const {

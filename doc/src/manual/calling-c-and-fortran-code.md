@@ -253,10 +253,14 @@ to the specified type. For example, the following call:
 will behave as if it were written like this:
 
 ```julia
-@ccall "libfoo".foo(
-    Base.unsafe_convert(Int32, Base.cconvert(Int32, x))::Int32,
-    Base.unsafe_convert(Float64, Base.cconvert(Float64, y))::Float64
+c_x = Base.cconvert(Int32, x)
+c_y = Base.cconvert(Float64, y)
+GC.@preserve c_x c_y begin
+    @ccall "libfoo".foo(
+        Base.unsafe_convert(Int32, c_x)::Int32,
+        Base.unsafe_convert(Float64, c_y)::Float64
     )::Cvoid
+end
 ```
 
 [`Base.cconvert`](@ref) normally just calls [`convert`](@ref), but can be defined to return an

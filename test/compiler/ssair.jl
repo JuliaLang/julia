@@ -38,7 +38,7 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), Int32(0))
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -424,7 +424,7 @@ let
         Expr(:enter, 11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
-        Expr(:leave, 1),
+        Expr(:leave, Core.SSAValue(1)),
         Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
         UpsilonNode(),
         UpsilonNode(SSAValue(2)),

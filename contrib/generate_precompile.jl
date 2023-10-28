@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Prevent this from putting anyting into the Main namespace
+# Prevent this from putting anything into the Main namespace
 @eval Module() begin
 
 if Threads.maxthreadid() != 1
@@ -308,6 +308,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
+            @show backtrace()
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end

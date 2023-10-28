@@ -1145,9 +1145,10 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = @static Int === Int64 ? (1:10) : (1:8)
-    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    good_dims = [1, 2, 3, 4, 10]
+    Ns = [1, 2, 3, 4, 10]
     for dim = good_dims, N = Ns
+        Int64(dim)^N > typemax(Int) && continue
         dims = ntuple(i->dim, N)
         @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
@@ -1157,14 +1158,14 @@ let # effect-freeness computation for array allocation
 
     # shouldn't eliminate erroneous dead allocations
     bad_dims = [-1, typemax(Int)]
-    for dim in bad_dims, N in 1:10
+    for dim in bad_dims, N in [1, 2, 3, 4, 10], T in Any[Int, Union{Missing,Nothing}, Nothing, Any]
         dims = ntuple(i->dim, N)
         @test @eval !fully_eliminated() do
-            Array{Int,$N}(undef, $(dims...))
+            Array{$T,$N}(undef, $(dims...))
             nothing
         end
-        @test_throws "invalid Array" @eval let
-            Array{Int,$N}(undef, $(dims...))
+        @test_throws "invalid " @eval let
+            Array{$T,$N}(undef, $(dims...))
             nothing
         end
     end

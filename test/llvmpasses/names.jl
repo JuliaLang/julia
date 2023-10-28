@@ -22,16 +22,6 @@ function f2(a, b, c, d, e...)
     return a + b + c + d + sum(e)
 end
 
-# COM: check basic parameter names + array allocation function name
-function f3(a, b, c, d)
-    return [a + b + c + d]
-end
-
-# COM: check basic parameter name + array allocation function name + array
-function f4(n)
-    return zeros(n)
-end
-
 mutable struct D
     i::Int64
 end
@@ -138,24 +128,6 @@ emit(f2, Float64, Float64, Float64, Float64, Float64, Float64)
 # CHECK-SAME: double %"e[2]::Float64"
 # CHECK-SAME: double %"e[3]::Float64"
 emit(f2, Float64, Float64, Float64, Float64, Float64, Float64, Float64)
-
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_f3
-# CHECK-SAME: double %"a::Float64"
-# CHECK-SAME: double %"b::Float64"
-# CHECK-SAME: double %"c::Float64"
-# CHECK-SAME: double %"d::Float64"
-# CHECK: call nonnull {} addrspace(10)* {{.*}} @jlplt_ijl_alloc_array_1d
-# CHECK-SAME: @"+Core.Array
-emit(f3, Float64, Float64, Float64, Float64)
-
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_f4
-# CHECK-SAME: %"n::Int64"
-# CHECK: call nonnull {} addrspace(10)* {{.*}} @jlplt_ijl_alloc_array_1d
-# CHECK-SAME: @"+Core.Array
-# CHECK: %.length_ptr
-# CHECK: %.length
-# CHECK: %.data
-emit(f4, Int64)
 
 # CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_f5
 # CHECK-SAME: %"a::A"

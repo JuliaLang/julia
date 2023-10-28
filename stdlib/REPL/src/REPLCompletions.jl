@@ -329,8 +329,19 @@ function complete_path(path::AbstractString, pos::Int;
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
-                if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                    push!(matches, file)
+                try
+                    if startswith(file, prefix) && isfile(joinpath(pathdir, file))
+                        push!(matches, file)
+                    end
+                catch e
+                    # `isfile()` can throw in rare cases such as when probing a
+                    # symlink that points to a file within a directory we do not
+                    # have read access to.
+                    if isa(e, Base.IOError)
+                        continue
+                    else
+                        rethrow()
+                    end
                 end
             end
         end
@@ -970,8 +981,12 @@ function complete_keyword_argument(partial, last_idx, context_module)
     end
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
-    append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
-    append!(suggestions, complete_keyval(last_word))
+
+    # Only add these if not in kwarg space. i.e. not in `foo(; `
+    if kwargs_flag == 0
+        append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
+        append!(suggestions, complete_keyval(last_word))
+    end
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -1038,6 +1053,22 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                 ex = Meta.parse(lookup_name, raise=false, depwarn=false)
             end
             isexpr(ex, :incomplete) && (ex = nothing)
+        elseif isexpr(ex, :call) && length(ex.args) > 1
+            isinfix = s[end] != ')'
+            # A complete call expression that does not finish with ')' is an infix call.
+            if !isinfix
+                # Handle infix call argument completion of the form bar + foo(qux).
+                frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
+                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == ex.args[end]
+            end
+            if isinfix
+                ex = ex.args[end]
+            end
+        elseif isexpr(ex, :macrocall) && length(ex.args) > 1
+            # allow symbol completions within potentially incomplete macrocalls
+            if s[end] ≠ '`' && s[end] ≠ ')'
+                ex = ex.args[end]
+            end
         end
     end
     append!(suggestions, complete_symbol(ex, name, ffunc, context_module))
