@@ -153,6 +153,7 @@ export
     triu,
     tril!,
     triu!,
+    lacpy!
 
 # Operators
     \,

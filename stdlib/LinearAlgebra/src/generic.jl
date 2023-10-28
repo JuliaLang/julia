@@ -1897,3 +1897,53 @@ end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    lacpy!(uplo, A, B) -> B
+
+Copies all or part of a matrix A to another matrix B.
+uplo specifies the part of the matrix A to be copied to B.
+Set `uplo = 'L'` for the lower triangular part, `uplo = 'U'`
+for the upper triangular part, any other character for all
+the matrix A.
+
+!!! compat "Julia 1.11"
+    `lacpy!` requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> A = [1 2 ; 3 4];
+
+julia> B = [0 0 ; 0 0];
+
+julia> lacpy!('L', A, B)
+2×2 Matrix{Int64}:
+ 1  2
+ 3  0
+```
+"""
+function lacpy!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+    m, n = size(A)
+    if uplo == 'U'
+        for j=1:n
+            for i=1:min(j,m)
+                B[i,j] = A[i,j]
+            end
+        end
+    elseif uplo == 'L'
+        for j=1:n
+            for i=j:m
+                B[i,j] = A[i,j]
+            end
+        end
+    else
+        for j=1:n
+            for i=1:m
+                B[i,j] = A[i,j]
+            end
+        end
+    end
+    return B
+end
+
+lacpy!(uplo::AbstractChar, A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = LAPACK.lacpy!(uplo, A, B)
