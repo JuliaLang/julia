@@ -37,7 +37,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
@@ -295,7 +295,6 @@ function retry(f;  delays=ExponentialBackOff(), check=nothing)
             try
                 return f(args...; kwargs...)
             catch e
-                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)

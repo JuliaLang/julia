@@ -64,6 +64,11 @@ function _foldl_impl(op::OP, init, itr) where {OP}
     return v
 end
 
+function _foldl_impl(op, init, itr::Union{Tuple,NamedTuple})
+    length(itr) <= 32 && return afoldl(op, init, itr...)
+    @invoke _foldl_impl(op, init, itr::Any)
+end
+
 struct _InitialValue end
 
 """
@@ -196,11 +201,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse(itr′))
+    return foldl_impl(op′, nt, _reverse_iter(itr′))
 end
 
-_reverse(itr) = Iterators.reverse(itr)
-_reverse(itr::Tuple) = reverse(itr)  #33235
+_reverse_iter(itr) = Iterators.reverse(itr)
+_reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
 
 struct FlipArgs{F}
     f::F
@@ -388,7 +393,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
-`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+`x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
 
 The default is `x` for most types. The main purpose is to ensure type stability, so
@@ -411,8 +416,8 @@ reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
-single element `x`. This value may also used to initialise the recursion, so that
-`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+single element `x`. This value may also be used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.
 
 The default is `reduce_first(op, f(x))`.
 """
@@ -1209,26 +1214,31 @@ false
 """
 any(f, itr) = _any(f, itr, :)
 
-function _any(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _any(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v && return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
-# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types.
+# Specialized versions of any(f, ::Tuple)
 # We fall back to the for loop implementation all elements have the same type or
 # if the tuple is too large.
-any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
-function any(f, itr::Tuple)            # case of tuple with mixed types
-    length(itr) > 32 && return _any(f, itr, :)
+function any(f, itr::Tuple)
+    if itr isa NTuple || length(itr) > 32
+        return _any(f, itr, :)
+    end
     _any_tuple(f, false, itr...)
 end
 
@@ -1277,27 +1287,30 @@ true
 """
 all(f, itr) = _all(f, itr, :)
 
-function _all(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-        elseif v
-            continue
-        else
-            return false
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _all(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v || return false
+            end
         end
+        return anymissing ? missing : true
     end
-    return anymissing ? missing : true
 end
 
-# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types. This is similar to any(f, ::Tuple) defined above.
-all(f, itr::NTuple) = _all(f, itr, :)
+# Specialized versions of all(f, ::Tuple),
+# This is similar to any(f, ::Tuple) defined above.
 function all(f, itr::Tuple)
-    length(itr) > 32 && return _all(f, itr, :)
+    if itr isa NTuple || length(itr) > 32
+        return _all(f, itr, :)
+    end
     _all_tuple(f, false, itr...)
 end
 
@@ -1348,15 +1361,7 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
-
-function _simple_count_helper(g, init::T) where {T}
-    n::T = init
-    for x in g
-        n += x::Bool
-    end
-    return n
-end
+_simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
 function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     n::T = init

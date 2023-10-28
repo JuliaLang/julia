@@ -18,7 +18,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 !!! note
     Due to its packed storage format, concurrent access to the elements of a `BitArray`
-    where at least one of them is a write is not thread safe.
+    where at least one of them is a write is not thread-safe.
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
@@ -462,7 +462,7 @@ copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integ
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
+    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -807,7 +807,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
 
@@ -1545,12 +1545,12 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
 
     @inbounds begin
         if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+            return (chunk_start-1) << 6 + (top_set_bit(Bc[chunk_start] & mask))
         end
 
         for i = (chunk_start-1):-1:1
             if Bc[i] != 0
-                return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
+                return (i-1) << 6 + (top_set_bit(Bc[i]))
             end
         end
     end
@@ -1791,9 +1791,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & (~_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[len_Ac]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac aliases destc
+    destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
@@ -1812,9 +1813,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[end], Bc[end]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac or Bc aliases destc
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
     dest
 end
 

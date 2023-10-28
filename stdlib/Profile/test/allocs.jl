@@ -121,3 +121,39 @@ end
     @test length(prof.allocs) >= 1
     @test length([a for a in prof.allocs if a.type == String]) >= 1
 end
+
+@testset "alloc profiler catches allocs from codegen" begin
+    @eval begin
+        struct MyType x::Int; y::Int end
+        Base.:(+)(n::Number, x::MyType) = n + x.x + x.y
+        foo(a, x) = a[1] + x
+        wrapper(a) = foo(a, MyType(0,1))
+    end
+    a = Any[1,2,3]
+    # warmup
+    wrapper(a)
+
+    @eval Allocs.@profile sample_rate=1 wrapper($a)
+
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test length(prof.allocs) >= 1
+    @test length([a for a in prof.allocs if a.type == MyType]) >= 1
+end
+
+@testset "alloc profiler catches allocs from buffer resize" begin
+    f(a) = for _ in 1:100; push!(a, 1); end
+    f(Int[])
+    resize!(Int[], 1)
+    a = Int[]
+    Allocs.clear()
+    Allocs.@profile sample_rate=1 f(a)
+    Allocs.@profile sample_rate=1 resize!(a, 1_000_000) # 4MB
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test 3 <= length(prof.allocs) <= 10
+    @test length([a for a in prof.allocs if a.type === Allocs.BufferType]) == 1
+    @test length([a for a in prof.allocs if a.type === Memory{Int}]) >= 2
+end

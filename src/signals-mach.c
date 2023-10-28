@@ -36,56 +36,93 @@ extern int _keymgr_set_lockmode_processwide_ptr(unsigned int key, unsigned int m
 extern void _dyld_atfork_prepare(void) __attribute__((weak_import));
 extern void _dyld_atfork_parent(void) __attribute__((weak_import));
 //extern void _dyld_fork_child(void) __attribute__((weak_import));
+extern void _dyld_dlopen_atfork_prepare(void) __attribute__((weak_import));
+extern void _dyld_dlopen_atfork_parent(void) __attribute__((weak_import));
+//extern void _dyld_dlopen_atfork_child(void) __attribute__((weak_import));
 
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
-extern uv_cond_t safepoint_cond;
+
+// see jl_safepoint_wait_thread_resume
+void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
+{
+    // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
+    for (size_t i = 0; i < suspended_threads.len; i++) {
+        uintptr_t item = (uintptr_t)suspended_threads.items[i];
+        int16_t tid = (int16_t)item;
+        int8_t gc_state = (int8_t)(item >> 8);
+        if (tid != tid2)
+            continue;
+        jl_atomic_store_release(&ptls2->gc_state, gc_state);
+        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        suspended_threads.items[i] = suspended_threads.items[--suspended_threads.len];
+        break;
+    }
+    // thread hadn't actually reached a jl_mach_gc_wait call where we suspended it
+}
+
 void jl_mach_gc_end(void)
 {
-    // Requires the safepoint lock to be held
+    // must be called with uv_mutex_lock(&safepoint_lock) held
+    size_t j = 0;
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        uv_mutex_lock(&ptls2->sleep_lock);
+        if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
+            jl_atomic_store_release(&ptls2->gc_state, gc_state);
+            thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        }
+        else {
+            // this is the check for jl_safepoint_wait_thread_resume
+            suspended_threads.items[j++] = (void*)item;
+        }
+        uv_mutex_unlock(&ptls2->sleep_lock);
     }
-    suspended_threads.len = 0;
+    suspended_threads.len = j;
 }
 
-// Suspend the thread and return `1` if the GC is running.
-// Otherwise return `0`
-static int jl_mach_gc_wait(jl_ptls_t ptls2,
-                           mach_port_t thread, int16_t tid)
+// implement jl_set_gc_and_wait from a different thread
+static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 {
+    // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
     uv_mutex_lock(&safepoint_lock);
-    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
-        // relaxed, since gets set to zero only while the safepoint_lock was held
-        // this means we can tell if GC is done before we got the message or
-        // the safepoint was enabled for SIGINT.
-        uv_mutex_unlock(&safepoint_lock);
-        return 0;
+    // Since this gets set to zero only while the safepoint_lock was held this
+    // means we can tell for sure if GC is done before we got the message or
+    // the safepoint was enabled for SIGINT instead.
+    int doing_gc = jl_atomic_load_relaxed(&jl_gc_running);
+    int do_suspend = doing_gc;
+    int relaxed_suspend_count = !doing_gc && jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+    if (relaxed_suspend_count) {
+        uv_mutex_lock(&ptls2->sleep_lock);
+        do_suspend = jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+        // only do_suspend while holding the sleep_lock, otherwise we might miss a resume
     }
-    // Otherwise, set the gc state of the thread, suspend and record it
-    // TODO: TSAN will complain that it never saw the faulting task do an
-    // atomic release (it was in the kernel). And our attempt here does
-    // nothing, since we are a different thread, and it is not transitive).
-    //
-    // This also means we are not making this thread available for GC work.
-    // Eventually, we should probably release this signal to the original
-    // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-    // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-    int8_t gc_state = ptls2->gc_state;
-    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-    arraylist_push(&suspended_threads, (void*)item);
-    thread_suspend(thread);
+    if (do_suspend) {
+        // Set the gc state of the thread, suspend and record it
+        //
+        // TODO: TSAN will complain that it never saw the faulting task do an
+        // atomic release (it was in the kernel). And our attempt here does
+        // nothing, since we are a different thread, and it is not transitive).
+        //
+        // This also means we are not making this thread available for GC work.
+        // Eventually, we should probably release this signal to the original
+        // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
+        // triggers a SIGSEGV and gets handled by the usual codepath for unix.
+        int8_t gc_state = ptls2->gc_state;
+        jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
+        uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+        arraylist_push(&suspended_threads, (void*)item);
+        thread_suspend(thread);
+    }
+    if (relaxed_suspend_count)
+        uv_mutex_unlock(&ptls2->sleep_lock);
     uv_mutex_unlock(&safepoint_lock);
-    return 1;
 }
 
 static mach_port_t segv_port = 0;
@@ -93,20 +130,18 @@ static mach_port_t segv_port = 0;
 #define STR(x) #x
 #define XSTR(x) STR(x)
 #define HANDLE_MACH_ERROR(msg, retval) \
-    if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); jl_exit(1); }
+    if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); abort(); }
 
 void *mach_segv_listener(void *arg)
 {
     (void)arg;
-    while (1) {
-        int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
-        jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
-        jl_exit(128 + SIGSEGV);
-    }
+    int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
+    mach_error("mach_msg_server" XSTR(: __FILE__:__LINE__:), ret);
+    abort();
 }
 
 
-static void allocate_mach_handler()
+static void allocate_mach_handler(void)
 {
     // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
     // and thus can deadlock when used without first initializing it.
@@ -168,8 +203,6 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-#define MIG_DESTROY_REQUEST -309
-
 static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
                              void (*fptr)(void))
 {
@@ -216,14 +249,13 @@ int is_write_fault(host_exception_state_t exc_state) {
 }
 #endif
 
-static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
+static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
 {
     unsigned int count = MACH_THREAD_STATE_COUNT;
     host_thread_state_t state;
     kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    if (!jl_get_safe_restore()) {
+    if (1) { // XXX: !jl_has_safe_restore(ptls2)
         assert(exception);
         ptls2->bt_size =
             rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
@@ -248,7 +280,19 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
-//mach_exc_server expects us to define this symbol locally
+// n.b. mach_exc_server expects us to define this symbol locally
+/* The documentation for catch_exception_raise says: A return value of
+ * KERN_SUCCESS indicates that the thread is to continue from the point of
+ * exception. A return value of MIG_NO_REPLY indicates that the exception was
+ * handled directly and the thread was restarted or terminated by the exception
+ * handler. A return value of MIG_DESTROY_REQUEST causes the kernel to try
+ * another exception handler (or terminate the thread). Any other value will
+ * cause mach_msg_server to remove the task and thread port references.
+ *
+ * However MIG_DESTROY_REQUEST does not exist, not does it appear the source
+ * code for mach_msg_server ever destroy those references (only the message
+ * itself).
+ */
 kern_return_t catch_mach_exception_raise(
     mach_port_t exception_port,
     mach_port_t thread,
@@ -269,33 +313,42 @@ kern_return_t catch_mach_exception_raise(
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL) {
+            // this thread is dead
+            continue;
+        }
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
         }
     }
-    if (!ptls2 || ptls2->current_task == NULL) {
+    if (!ptls2) {
         // We don't know about this thread, let the kernel try another handler
         // instead. This shouldn't actually happen since we only register the
         // handler for the threads we know about.
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
+    // XXX: jl_throw_in_thread or segv_handler will eventually check this, but
+    //      we would like to avoid some of this work if we could detect this earlier
+    // if (jl_has_safe_restore(ptls2)) {
+    //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
+    //     return KERN_SUCCESS;
+    // }
+    if (ptls2->gc_state == JL_GC_STATE_WAITING)
+        return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
-        jl_throw_in_thread(tid, thread, jl_diverror_exception);
+        jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
         return KERN_SUCCESS;
     }
-    assert(exception == EXC_BAD_ACCESS);
+    assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS
+    if (codeCnt < 2 || code[0] != KERN_PROTECTION_FAILURE) // SEGV_ACCERR or BUS_ADRERR or BUS_ADRALN
+        return KERN_FAILURE;
+    uint64_t fault_addr = code[1];
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-#ifdef _CPU_X86_64_
-    uint64_t fault_addr = exc_state.__faultvaddr;
-#else
-    uint64_t fault_addr = exc_state.__far;
-#endif
-    if (jl_addr_is_safepoint(fault_addr)) {
-        if (jl_mach_gc_wait(ptls2, thread, tid))
-            return KERN_SUCCESS;
+    if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
+        jl_mach_gc_wait(ptls2, thread, tid);
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
         if (ptls2->defer_signal) {
@@ -303,41 +356,22 @@ kern_return_t catch_mach_exception_raise(
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
+            jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
         }
         return KERN_SUCCESS;
     }
-    if (jl_get_safe_restore()) {
-        jl_throw_in_thread(tid, thread, jl_stackovf_exception);
-        return KERN_SUCCESS;
+    if (ptls2->current_task->eh == NULL)
+        return KERN_FAILURE;
+    jl_value_t *excpt;
+    if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
+        excpt = jl_stackovf_exception;
     }
-#ifdef SEGV_EXCEPTION
-    if (1) {
-#else
-    if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
-#endif
-        jl_value_t *excpt;
-        if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
-            excpt = jl_stackovf_exception;
-        }
-#ifdef SEGV_EXCEPTION
-        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0) {
-            // no page mapped at this address
-            excpt = jl_segv_exception;
-        }
-#endif
-        else {
-            if (!is_write_fault(exc_state))
-                return KERN_INVALID_ARGUMENT;
-            excpt = jl_readonlymemory_exception;
-        }
-        jl_throw_in_thread(tid, thread, excpt);
-
-        return KERN_SUCCESS;
-    }
-    else {
-        return MIG_DESTROY_REQUEST;
-    }
+    else if (is_write_fault(exc_state)) // false for alignment errors
+        excpt = jl_readonlymemory_exception;
+    else
+        return KERN_FAILURE;
+    jl_throw_in_thread(ptls2, thread, excpt);
+    return KERN_SUCCESS;
 }
 
 //mach_exc_server expects us to define this symbol locally
@@ -383,12 +417,12 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
+static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;
-    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL) // this thread is already dead
         return 0;
 
@@ -406,17 +440,18 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
     return 1;
 }
 
-static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
-    static host_thread_state_t state;
+    (void)timeout;
+    host_thread_state_t state;
     if (!jl_thread_suspend_and_get_state2(tid, &state)) {
-        *ctx = NULL;
-        return;
+        return 0;
     }
-    *ctx = (unw_context_t*)&state;
+    *ctx = *(unw_context_t*)&state;
+    return 1;
 }
 
-static void jl_thread_resume(int tid, int sig)
+void jl_thread_resume(int tid)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -445,7 +480,7 @@ static void jl_try_deliver_sigint(void)
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
         jl_clear_force_sigint();
-        jl_throw_in_thread(0, thread, jl_interrupt_exception);
+        jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
     }
     else {
         jl_wake_libuv();
@@ -455,57 +490,41 @@ static void jl_try_deliver_sigint(void)
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
-static void JL_NORETURN jl_exit_thread0_cb(int exitstate)
+static void JL_NORETURN jl_exit_thread0_cb(int signo)
 {
 CFI_NORETURN
-    jl_critical_error(exitstate - 128, NULL, jl_current_task);
-    jl_exit(exitstate);
+    jl_critical_error(signo, 0, NULL, jl_current_task);
+    jl_atexit_hook(128);
+    jl_raise(signo);
 }
 
-static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size)
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     host_thread_state_t state;
-    if (!jl_thread_suspend_and_get_state2(0, &state))
-        return;
-    unw_context_t *uc = (unw_context_t*)&state;
+    if (!jl_thread_suspend_and_get_state2(0, &state)) {
+        // thread 0 is gone? just do the signal ourself
+        jl_raise(signo);
+    }
 
     // This aborts `sleep` and other syscalls.
     kern_return_t ret = thread_abort(thread);
     HANDLE_MACH_ERROR("thread_abort", ret);
 
-    if (bt_data == NULL) {
-        // Must avoid extended backtrace frames here unless we're sure bt_data
-        // is properly rooted.
-        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, uc, NULL);
-    }
-    else {
-        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-    }
-
-    void (*exit_func)(int) = &_exit;
-    if (thread0_exit_count <= 1) {
-        exit_func = &jl_exit_thread0_cb;
-    }
-    else if (thread0_exit_count == 2) {
-        exit_func = &exit;
-    }
-    else {
-        exit_func = &_exit;
-    }
+    ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+    memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
 
 #ifdef _CPU_X86_64_
     // First integer argument. Not portable but good enough =)
-    state.__rdi = exitstate;
+    state.__rdi = signo;
 #elif defined(_CPU_AARCH64_)
-    state.__x[0] = exitstate;
+    state.__x[0] = signo;
 #else
 #error Fill in first integer argument here
 #endif
-    jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
+    jl_call_in_state(ptls2, &state, (void (*)(void))&jl_exit_thread0_cb);
     unsigned int count = MACH_THREAD_STATE_COUNT;
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
@@ -537,7 +556,7 @@ static kern_return_t profiler_segv_handler(
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
-        return KERN_INVALID_ARGUMENT;
+        return KERN_FAILURE;
 
     if (forceDwarf == 0)
         forceDwarf = 1;
@@ -585,7 +604,12 @@ static int jl_lock_profile_mach(int dlsymlock)
     // workaround for old keymgr bugs
     void *unused = NULL;
     int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
-    // workaround for new dlsym4 bugs (API and bugs introduced in macOS 12.1)
+    // workaround for new dlsym4 bugs in the workaround for dlsym bugs: _dyld_atfork_prepare
+    // acquires its locks in the wrong order, but fortunately we happen to able to guard it
+    // with this call to force it to prevent that TSAN violation from causing a deadlock
+    if (dlsymlock && _dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_prepare();
+    // workaround for new dlsym4 bugs (API and bugs introduced circa macOS 12.1)
     if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
         _dyld_atfork_prepare();
     return keymgr_locked;
@@ -593,15 +617,24 @@ static int jl_lock_profile_mach(int dlsymlock)
 
 static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
 {
-    if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL) \
-        _dyld_atfork_parent(); \
+    if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
+        _dyld_atfork_parent();
+    if (dlsymlock && _dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_parent();
     if (keymgr_locked)
         _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
     jl_unlock_profile();
 }
 
-#define jl_lock_profile()       int keymgr_locked = jl_lock_profile_mach(1)
-#define jl_unlock_profile()     jl_unlock_profile_mach(1, keymgr_locked)
+int jl_lock_stackwalk(void)
+{
+    return jl_lock_profile_mach(1);
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    jl_unlock_profile_mach(1, lockret);
+}
 
 void *mach_profile_listener(void *arg)
 {
@@ -632,15 +665,19 @@ void *mach_profile_listener(void *arg)
                 break;
             }
 
+            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+                _dyld_dlopen_atfork_prepare();
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_prepare(); // briefly acquire the dlsym lock
             host_thread_state_t state;
-            if (!jl_thread_suspend_and_get_state2(i, &state))
-                continue;
+            int valid_thread = jl_thread_suspend_and_get_state2(i, &state);
             unw_context_t *uc = (unw_context_t*)&state;
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_parent(); // quickly release the dlsym lock
-
+            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+                _dyld_dlopen_atfork_parent();
+            if (!valid_thread)
+                continue;
             if (running) {
 #ifdef LLVMLIBUNWIND
                 /*
@@ -694,7 +731,7 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
             // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
+            jl_thread_resume(i);
         }
         jl_unlock_profile_mach(0, keymgr_locked);
         if (running) {

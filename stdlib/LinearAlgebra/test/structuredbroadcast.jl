@@ -100,6 +100,8 @@ end
     @test_throws ArgumentError broadcast!(+, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
     @test_throws ArgumentError broadcast!(+, copy(◣), ◣, A) == LowerTriangular(broadcast(*, ◣, A))
     @test_throws ArgumentError broadcast!(+, copy(◥), ◥, A) == UpperTriangular(broadcast(*, ◥, A))
+    @test_throws ArgumentError broadcast!(*, copy(◥), ◣, 2)
+    @test_throws ArgumentError broadcast!(*, copy(Bu), Bl, 2)
 end
 
 @testset "map[!] over combinations of structured matrices" begin

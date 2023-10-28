@@ -420,6 +420,48 @@ end
     @test issubset(Set(Bool[]), rand(Bool, 100)) == true
     # neither has a fast in, right doesn't have a length
     @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
+
+    # range fast-path
+    for (truth, a, b) in (
+                   # Integers
+                   (true, 1:10, 11:20), # not overlapping
+                   (false, 1:10, 5:20), # partial overlap
+                   (false, 5:9, 1:10), # complete overlap
+                   # complete overlap, unequal steps
+                   (false, 3:6:60, 9:9:60),
+                   (true, 4:6:60, 9:9:60),
+                   (true, 0:6:12, 9:9:60),
+                   (false, 6:6:18, 9:9:60),
+                   (false, 12:6:18, 9:9:60),
+                   (false, 18:6:18, 9:9:60),
+                   (true, 1:2:3, 2:3:5),
+                   (true, 1:4:5, 2:1:4),
+                   (false, 4:12:124, 1:1:8),
+                   # potential overflow
+                   (false, 0x1:0x3:0x4, 0x4:0x3:0x4),
+                   (true, 0x3:0x3:0x6, 0x4:0x3:0x4),
+                   (false, typemax(Int8):Int8(3):typemax(Int8), typemin(Int8):Int8(3):typemax(Int8)),
+                   # Chars
+                   (true, 'a':'l', 'o':'p'), # not overlapping
+                   (false, 'a':'l', 'h':'p'), # partial overlap
+                   (false, 'a':'l', 'c':'e'), # complete overlap
+                   # Floats
+                   (true, 1.:10., 11.:20.), # not overlapping
+                   (false, 1.:10., 5.:20.), # partial overlap
+                   (false, 5.:9., 1.:10.), # complete overlap
+                   # Inputs that may hang
+                   (false, -6011687643038262928:3545293653953105048, -6446834672754204848:3271267329311042532),
+                   )
+        @test isdisjoint(a, b) == truth
+        @test isdisjoint(b, a) == truth
+        @test isdisjoint(a, reverse(b)) == truth
+        @test isdisjoint(reverse(a), b) == truth
+        @test isdisjoint(b, reverse(a)) == truth
+        @test isdisjoint(reverse(b), a) == truth
+    end
+    @test isdisjoint(10:9, 1:10) # empty range
+    @test !isdisjoint(1e-100:.1:1, 0:.1:1)
+    @test !isdisjoint(eps()/4:.1:.71, 0:.1:1)
 end
 
 @testset "unique" begin
@@ -734,8 +776,7 @@ end
     x = @inferred replace([1, 2], 2=>missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
-    @test_broken @inferred replace([1, missing], missing=>2)
-    x = replace([1, missing], missing=>2)
+    x = @inferred replace([1, missing], missing=>2)
     @test x == [1, 2] && x isa Vector{Int}
     x = @inferred replace([1, missing], missing=>2, count=1)
     @test x == [1, 2] && x isa Vector{Union{Int, Missing}}
@@ -769,6 +810,28 @@ end
     @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
     @test replace((1, missing), missing=>0) === (1, 0)
+
+    # test that MethodError is thrown for pairs
+    @test_throws MethodError replace(identity, 1=>2)
+    @test_throws MethodError replace(identity, 1=>2, 3=>4)
+    @test_throws MethodError replace!(identity, 1=>2)
+    @test_throws MethodError replace!(identity, 1=>2, 3=>4)
+
+    # test replace and friends for AbstractDicts
+    d1 = GenericDict(Dict(1=>2, 3=>4))
+    d2 = replace(d1, (1=>2) => (1=>"a"))
+    @test d2 == Dict(1=>"a", 3=>4)
+    @test d2 isa Dict{Int, Any}
+    @test d1 === replace!(d1, (1=>2) => (1=>-2))
+    @test d1 == Dict(1=>-2, 3=>4)
+
+    dd = Dict(1=>2, 3=>1, 5=>1, 7=>1)
+    for d1 in (dd, GenericDict(dd))
+        @test replace(d1, (1=>2) => (1=>"a"), count=0) == d1
+        d2 = replace(kv->(kv[2] == 1 ? kv[1]=>2 : kv), d1, count=2)
+        @test count(==(2), values(d2)) == 3
+        @test count(==(1), values(d2)) == 1
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

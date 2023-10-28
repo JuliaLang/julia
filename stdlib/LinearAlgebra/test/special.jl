@@ -191,7 +191,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
@@ -206,6 +206,17 @@ end
             end
         end
     end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for A in (Diagonal(diag),
+                Bidiagonal(diag, odiag, :U),
+                Bidiagonal(diag, odiag, :L),
+                Tridiagonal(odiag, diag, odiag),
+                SymTridiagonal(diag, odiag)), B in uniformscalingmats
+        @test (A + B)::typeof(A) == (B + A)::typeof(A)
+        @test (A - B)::typeof(A) == ((A + (-B))::typeof(A))
+        @test (B - A)::typeof(A) == ((B + (-A))::typeof(A))
+    end
 end
 
 
@@ -217,10 +228,10 @@ end
         b = rand(n,n)
         for pivot in (ColumnNorm(), NoPivot())
             qrb = qr(b, pivot)
-            @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-            @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-            @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-            @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+            @test atri * qrb.Q ≈ matri * qrb.Q
+            @test atri * qrb.Q' ≈ matri * qrb.Q'
+            @test qrb.Q * atri ≈ qrb.Q * matri
+            @test qrb.Q' * atri ≈ qrb.Q' * matri
         end
     end
 end
@@ -248,9 +259,10 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    abstractq = qr(tridiagmat).Q
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
-        MA = Matrix(specialmata); MB = Matrix(specialmatb)
+        MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
         @test vcat(specialmata, specialmatb) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
@@ -280,7 +292,7 @@ end
 @testset "concatenations of annotated types" begin
     N = 4
     # The tested annotation types
-    testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    testfull = Base.get_bool_env("JULIA_TESTFULL", false)
     utriannotations = (UpperTriangular, UnitUpperTriangular)
     ltriannotations = (LowerTriangular, UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)
