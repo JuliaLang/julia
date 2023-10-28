@@ -19,6 +19,46 @@ end
 
 if !test_relocated_depot
 
+    @testset "insert @depot tag in path" begin
+
+        test_harness() do
+            mktempdir() do dir
+                pushfirst!(DEPOT_PATH, dir)
+                path = dir*dir
+                @test Base.replace_depot_path(path) == "@depot"*dir
+            end
+        end
+
+        test_harness() do
+            mktempdir() do dir
+                pushfirst!(DEPOT_PATH, dir)
+                path = joinpath(dir, "foo")
+                if isdirpath(DEPOT_PATH[1])
+                    DEPOT_PATH[1] = dirname(DEPOT_PATH[1]) # strip trailing pathsep
+                end
+                @test startswith(Base.replace_depot_path(path), "@depot/")
+                DEPOT_PATH[1] = joinpath(DEPOT_PATH[1], "") # append a pathsep
+                @test startswith(Base.replace_depot_path(path), "@depot/")
+                popfirst!(DEPOT_PATH)
+                @test !startswith(Base.replace_depot_path(path), "@depot/")
+            end
+        end
+
+    end
+
+    @testset "restore path from @depot tag" begin
+
+        path = "@depot/foo/bar"
+        @test Base.restore_depot_path(path, "/tmp") == "/tmp/foo/bar"
+
+        path = "blabla/foo/bar"
+        @test Base.restore_depot_path(path, "/tmp") == "blabla/foo/bar"
+
+        path = "@depot/foo/bar\n@depot/mypkg/src/file.jl"
+        @test Base.restore_depot_path(path, "/tmp") == "/tmp/foo/bar\n@depot/mypkg/src/file.jl"
+
+    end
+
     @testset "precompile RelocationTestPkg1" begin
         pkgname = "RelocationTestPkg1"
         test_harness() do
