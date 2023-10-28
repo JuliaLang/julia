@@ -460,7 +460,7 @@ let err_str,
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
-    @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
+    @test repr("text/plain", Core.getfield) == "getfield (built-in function)"
 
     err_str = @except_stackframe String() ErrorException
     @test err_str == "String() at $sn:$(method_defs_lineno + 0)"

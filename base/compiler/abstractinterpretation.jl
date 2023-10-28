@@ -1419,7 +1419,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         return AbstractIterationResult(Any[Vararg{Any}], nothing)
     elseif tti0 === Any
         return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
-    elseif tti0 <: Array
+    elseif tti0 <: Array || tti0 <: GenericMemory
         if eltype(tti0) === Union{}
             return AbstractIterationResult(Any[], nothing)
         end
@@ -1686,7 +1686,7 @@ end
         thentype = Bottom
     elseif rt === Const(true)
         elsetype = Bottom
-    elseif elsetype isa Type && isdefined(typeof(c.val), :instance) # can only widen a if it is a singleton
+    elseif elsetype isa Type && issingletontype(typeof(c.val)) # can only widen a if it is a singleton
         elsetype = typesubtract(elsetype, typeof(c.val), max_union_splitting)
     end
     return ConditionalTypes(thentype, elsetype)

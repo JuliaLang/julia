@@ -2600,8 +2600,15 @@ end
 
 function replace_depot_path(path::AbstractString)
     for depot in DEPOT_PATH
+        # Skip depots that don't exist
+        if !isdirpath(depot)
+            continue
+        end
+
+        # Strip extraneous pathseps through normalization.
+        depot = dirname(depot)
         if startswith(path, depot)
-            path = replace(path, depot => "@depot")
+            path = replace(path, depot => "@depot"; count=1)
             break
         end
     end
@@ -2619,7 +2626,7 @@ function resolve_depot(includes)
     end
     for depot in DEPOT_PATH
         if all(includes) do inc
-                isfile(replace(inc, r"^@depot" => depot))
+                isfile(replace(inc, r"^@depot" => depot; count=1))
             end
             return depot
         end
@@ -2725,7 +2732,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         @debug "Missing @depot tag for include dependencies in cache file $cachefile."
     else
         for inc in includes
-            inc.filename = replace(inc.filename, r"^@depot" => depot)
+            inc.filename = replace(inc.filename, r"^@depot" => depot; count=1)
         end
     end
     includes_srcfiles_only = includes[keepidx]

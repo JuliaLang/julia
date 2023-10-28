@@ -716,7 +716,8 @@ macro assume_effects(args...)
     end
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub) =
         (false, false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
+    for i in 1:idx
+        org_setting = args[i]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val

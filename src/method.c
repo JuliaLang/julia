@@ -94,7 +94,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             // ignore these
         }
         else {
-            size_t i = 0, nargs = jl_array_len(e->args);
+            size_t i = 0, nargs = jl_array_nrows(e->args);
             if (e->head == jl_opaque_closure_method_sym) {
                 if (nargs != 5) {
                     jl_error("opaque_closure_method: invalid syntax");
@@ -266,7 +266,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
 JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects)
 {
-    size_t i, l = jl_array_len(stmts);
+    size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
         jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals, binding_effects, 0));
@@ -286,18 +286,17 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
     jl_value_t *codelocs = jl_exprarg(ir, 3);
     li->linetable = jl_exprarg(ir, 4);
-    size_t nlocs = jl_array_len(codelocs);
+    size_t nlocs = jl_array_nrows(codelocs);
     li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs);
     size_t j;
     for (j = 0; j < nlocs; j++) {
-        jl_arrayset((jl_array_t*)li->codelocs, jl_box_int32(jl_unbox_long(jl_arrayref((jl_array_t*)codelocs, j))),
-                    j);
+        jl_array_uint32_set((jl_array_t*)li->codelocs, j, jl_unbox_long(jl_array_ptr_ref((jl_array_t*)codelocs, j)));
     }
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
     li->code = body;
     jl_gc_wb(li, li->code);
-    size_t n = jl_array_len(body);
+    size_t n = jl_array_nrows(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
     li->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, n);
     jl_gc_wb(li, li->ssaflags);
@@ -409,7 +408,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     free(inline_flags);
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
-    size_t nslots = jl_array_len(vis);
+    size_t nslots = jl_array_nrows(vis);
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
@@ -507,7 +506,7 @@ void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
 {
     // func may contain jl_symbol (function name), jl_method_t, or jl_method_instance_t
     jl_array_t *li = (jl_array_t*)ci->linetable;
-    size_t i, n = jl_array_len(li);
+    size_t i, n = jl_array_nrows(li);
     jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
     JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
@@ -618,7 +617,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
 
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
-        for (int i = 0; i < jl_array_len(func->code); ++i) {
+        for (int i = 0; i < jl_array_nrows(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
                 if (jl_options.incremental && jl_generating_output())
@@ -700,7 +699,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     JL_GC_PUSH3(&copy, &sparam_vars, &src);
     assert(jl_typetagis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
-    size_t i, n = jl_array_len(stmts);
+    size_t i, n = jl_array_nrows(stmts);
     copy = jl_alloc_vec_any(n);
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
@@ -1110,7 +1109,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_all_methods = jl_alloc_vec_any(0);
 #endif
     if (jl_all_methods != NULL) {
-        while (jl_array_len(jl_all_methods) < m->primary_world)
+        while (jl_array_nrows(jl_all_methods) < m->primary_world)
             jl_array_ptr_1d_push(jl_all_methods, NULL);
         jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
     }
@@ -1170,10 +1169,10 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
     if (!root_blocks)
         return 0;
     assert(jl_is_array(root_blocks));
-    size_t nx2 = jl_array_len(root_blocks);
+    size_t nx2 = jl_array_nrows(root_blocks);
     if (nx2 == 0)
         return 0;
-    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    uint64_t *blocks = jl_array_data(root_blocks, uint64_t);
     return blocks[nx2-2];
 }
 
@@ -1182,8 +1181,8 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 {
     assert(jl_is_array(root_blocks));
     jl_array_grow_end(root_blocks, 2);
-    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
-    int nx2 = jl_array_len(root_blocks);
+    uint64_t *blocks = jl_array_data(root_blocks, uint64_t);
+    int nx2 = jl_array_nrows(root_blocks);
     blocks[nx2-2] = modid;
     blocks[nx2-1] = len;
 }
@@ -1213,7 +1212,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);
     if (current_root_id(m->root_blocks) != modid)
-        add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+        add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
     jl_array_ptr_1d_push(m->roots, root);
     JL_GC_POP();
 }
@@ -1225,7 +1224,7 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     assert(jl_is_method(m));
     assert(jl_is_array(roots));
     prepare_method_for_roots(m, modid);
-    add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
     jl_array_ptr_1d_append(m->roots, roots);
     JL_GC_POP();
 }
@@ -1239,7 +1238,7 @@ int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i)
         rr->index = i;
         return i < m->nroots_sysimg;
     }
-    rle_index_to_reference(rr, i, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    rle_index_to_reference(rr, i, jl_array_data(m->root_blocks, uint64_t), jl_array_nrows(m->root_blocks), 0);
     if (rr->key)
         return 1;
     return i < m->nroots_sysimg;
@@ -1254,7 +1253,7 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
         return jl_array_ptr_ref(m->roots, index);
     }
     rle_reference rr = {key, index};
-    size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    size_t i = rle_reference_to_index(&rr, jl_array_data(m->root_blocks, uint64_t), jl_array_nrows(m->root_blocks), 0);
     return jl_array_ptr_ref(m->roots, i);
 }
 
@@ -1263,11 +1262,11 @@ int nroots_with_key(jl_method_t *m, uint64_t key)
 {
     size_t nroots = 0;
     if (m->roots)
-        nroots = jl_array_len(m->roots);
+        nroots = jl_array_nrows(m->roots);
     if (!m->root_blocks)
         return key == 0 ? nroots : 0;
-    uint64_t *rletable = (uint64_t*)jl_array_data(m->root_blocks);
-    size_t j, nblocks2 = jl_array_len(m->root_blocks);
+    uint64_t *rletable = jl_array_data(m->root_blocks, uint64_t);
+    size_t j, nblocks2 = jl_array_nrows(m->root_blocks);
     int nwithkey = 0;
     for (j = 0; j < nblocks2; j+=2) {
         if (rletable[j] == key)

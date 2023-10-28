@@ -2420,6 +2420,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -3372,5 +3408,7 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

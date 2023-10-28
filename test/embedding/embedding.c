@@ -86,17 +86,17 @@ int main()
         // (aka, is gc-rooted until) the program reaches the corresponding JL_GC_POP()
         JL_GC_PUSH1(&x);
 
-        double* xData = jl_array_data(x);
+        double* xData = jl_array_data(x, double);
 
         size_t i;
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             xData[i] = i;
 
         jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             printf("%e ", xData[i]);
         printf("]\n");
         fflush(stdout);

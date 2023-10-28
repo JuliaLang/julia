@@ -268,8 +268,8 @@ julia> ndims(A)
 3
 ```
 """
-ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::AbstractArray{T,N}) where {T,N} = N::Int
+ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
@@ -731,8 +731,6 @@ end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
-throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
-
 # check along a single dimension
 """
     checkindex(Bool, inds::AbstractUnitRange, index)
@@ -904,6 +902,8 @@ elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 
 See also [`copyto!`](@ref).
 
@@ -1391,6 +1391,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = zeros(2,2);
@@ -1446,6 +1448,8 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
 end
+
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
 
 """
     parent(A)
@@ -1552,7 +1556,8 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Array) = (UInt(pointer(A)),)
+dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 
@@ -3364,6 +3369,8 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 

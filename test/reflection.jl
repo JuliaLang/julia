@@ -614,11 +614,16 @@ end
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
-@test_throws ErrorException sizeof(AbstractArray)
+@test sizeof(MemoryRef{Int}) == 2 * sizeof(Int)
+@test sizeof(GenericMemoryRef{:atomic,Int,Core.CPU}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,0}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,1}) == 3 * sizeof(Int)
+@test sizeof(Array{Int,2}) == 4 * sizeof(Int)
+@test sizeof(Array{Int,20}) == 22 * sizeof(Int)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
 @test_throws ErrorException sizeof(String)
-@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Memory{false,Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
 @test_throws ErrorException sizeof(Union{})
@@ -923,7 +928,7 @@ end
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
 @test nameof(Core.Intrinsics.mul_int) === :mul_int
-@test nameof(Core.Intrinsics.arraylen) === :arraylen
+@test nameof(Core.Intrinsics.cglobal) === :cglobal
 
 module TestMod33403
 f(x) = 1
@@ -1039,7 +1044,7 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
-    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]

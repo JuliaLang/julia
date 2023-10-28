@@ -89,7 +89,7 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
     sz = count_self ? sizeof(dt) : 0
     sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     dtfd = DataTypeFieldDesc(dt)
-    for i = 1:nfields(x)
+    for i = 1:Int(datatype_nfields(dt))
         isdefined(x, i) || continue
         f = getfield(x, i)
         if !dtfd[i].isptr && datatype_pointerfree(typeof(f))

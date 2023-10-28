@@ -533,3 +533,35 @@ end
     inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
     @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
 end
+
+@testset "@ncallkw" begin
+    f(x...; a, b = 1, c = 2, d = 3) = +(x..., a, b, c, d)
+    x_1, x_2 = (-1, -2)
+    kw = (a = 0, c = 0, d = 0)
+    @test x_1 + x_2 + 1 + 4 == Base.Cartesian.@ncallkw 2 f kw 4 x
+    b = 0
+    kw = (c = 0, d = 0)
+    @test x_1 + x_2 + 4 == Base.Cartesian.@ncallkw 2 f (; a = 0, b, kw...) 4 x
+end
+
+@testset "if with and without else branch" begin
+    t1 = Base.Cartesian.@ntuple 3 i -> i == 1 ? 1 : 0
+    t2 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        end
+        m
+    end
+    @test t1 == t2
+    t3 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        elseif i == 2
+            m = 2
+        end
+        m
+    end
+    @test t3 == (1, 2, 0)
+end

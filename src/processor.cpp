@@ -993,7 +993,7 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     }
 
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
-    uint8_t *out = (uint8_t*)jl_array_data(arr);
+    uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
 }

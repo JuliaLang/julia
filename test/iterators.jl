@@ -11,6 +11,10 @@ using Dates: Date, Day
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+# issue #45085
+@test_throws ArgumentError Iterators.reverse(zip("abc", "abcd"))
+@test_throws ArgumentError Iterators.reverse(zip("abc", Iterators.cycle("ab")))
+
 let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]

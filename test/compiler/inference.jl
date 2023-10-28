@@ -366,7 +366,7 @@ barTuple2() = fooTuple{tuple(:y)}()
 # issue #6050
 @test Core.Compiler.getfield_tfunc(Core.Compiler.fallback_lattice,
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+          Core.Compiler.Const(:vals)) == Memory{Tuple{UnitRange{Int64},UnitRange{Int64}}}
 
 # assert robustness of `getfield_tfunc`
 struct GetfieldRobustness
@@ -1190,8 +1190,6 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
-    @test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
-    @test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
     @test isdefined_tfunc(Module, Int) === Union{}
     @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
     @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
@@ -1331,30 +1329,33 @@ test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
-test_const_return(@eval(()->Core.sizeof($(Array{Int,0}(undef)))), Tuple{}, sizeof(Int))
-test_const_return(@eval(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * 2 * 2)
+test_const_return(@eval(()->Core.sizeof($(Array{Int,0}(undef)))), Tuple{}, 2 * sizeof(Int))
+test_const_return(@eval(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * sizeof(Int))
+# TODO: do we want to implement these?
+# test_const_return(@eval(()->sizeof($(Array{Int,0}(undef)))), Tuple{}, sizeof(Int))
+# test_const_return(@eval(()->sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * 2 * 2)
+# test_const_return(@eval(()->Core.sizeof($(Memory{Int}(undef, 0)))), Tuple{}, 0)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
     return Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]), Core.sizeof, 2)
+@test find_call(only(code_typed(sizeof_typeref, (Ref{DataType},)))[1], Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
-    return Core.sizeof($constvec)
+    return sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_call(first(code_typed(sizeof_constvec, ())[1]), Core.sizeof, 2)
 push!(constvec, 10)
-@test @inferred(sizeof_constvec()) == sizeof(Int) * 4
+@test sizeof_constvec() == sizeof(Int) * 4
 
 test_const_return(x->isdefined(x, :re), Tuple{ComplexF64}, true)
 
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
-@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
+@test find_call(only(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}}))[1], isdefined, 3)
 
 let isa_tfunc(@nospecialize xs...) =
         Core.Compiler.isa_tfunc(Core.Compiler.fallback_lattice, xs...)
@@ -1532,7 +1533,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(Type{Ptr})
     @test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
     @test !sizeof_nothrow(Const(Tuple))
-    @test !sizeof_nothrow(Type{Vector{Int}})
+    @test sizeof_nothrow(Type{Vector{Int}})
     @test !sizeof_nothrow(Type{Union{Int, String}})
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
@@ -1578,36 +1579,43 @@ end
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
-# arrayref / arrayset / arraysize
-import Core.Compiler: Const
-let arrayref_tfunc(@nospecialize xs...) = Core.Compiler.arrayref_tfunc(Core.Compiler.fallback_lattice, xs...)
-    arrayset_tfunc(@nospecialize xs...) = Core.Compiler.arrayset_tfunc(Core.Compiler.fallback_lattice, xs...)
-    arraysize_tfunc(@nospecialize xs...) = Core.Compiler.arraysize_tfunc(Core.Compiler.fallback_lattice, xs...)
-    @test arrayref_tfunc(Const(true), Vector{Int}, Int) === Int
-    @test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) === Integer
-    @test arrayref_tfunc(Const(true), Vector, Int) === Any
-    @test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
-    @test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
-    @test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
-    @test arrayref_tfunc(Const(true), String, Int) === Union{}
-    @test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
-    @test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
-    @test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
-    let ua = Vector{<:Integer}
-        @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
+# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc
+let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryrefget_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefget_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryrefset!_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefset!_tfunc(Core.Compiler.fallback_lattice, xs...)
+    @test memoryref_tfunc(Memory{Int}) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Integer}) == MemoryRef{Integer}
+    @test memoryref_tfunc(MemoryRef{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
+    @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int) == Union{}
+    @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Any) == GenericMemoryRef
+    @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, Bool) === Int
+    @test memoryrefget_tfunc(MemoryRef{Int}, Any, Any) === Int
+    @test memoryrefget_tfunc(MemoryRef{<:Integer}, Symbol, Bool) === Integer
+    @test memoryrefget_tfunc(GenericMemoryRef, Symbol, Bool) === Any
+    @test memoryrefget_tfunc(GenericMemoryRef{:not_atomic}, Symbol, Bool) === Any
+    @test memoryrefget_tfunc(Vector{Int}, Symbol, Bool) === Union{}
+    @test memoryrefget_tfunc(String, Symbol, Bool) === Union{}
+    @test memoryrefget_tfunc(MemoryRef{Int}, String, Bool) === Union{}
+    @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
+    @test memoryrefget_tfunc(Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
+    let ua = MemoryRef{<:Integer}
+        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
     end
-    @test arrayset_tfunc(Const(true), Vector, Int, Int) === Vector
-    @test arrayset_tfunc(Const(true), Any, Int, Int) === Any
-    @test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
-    @test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
-    @test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
-    @test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
-    @test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
-    @test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
-    @test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
-    @test arraysize_tfunc(Vector, Int) === Int
-    @test arraysize_tfunc(Vector, Float64) === Union{}
-    @test arraysize_tfunc(String, Int) === Union{}
+    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === GenericMemoryRef
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === GenericMemoryRef{:not_atomic}
+    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Any
+    @test memoryrefset!_tfunc(MemoryRef{String}, Int, Symbol, Bool) === Union{}
+    @test memoryrefset!_tfunc(String, Char, Symbol, Bool) === Union{}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === MemoryRef{Int}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === MemoryRef{Int}
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
+    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
+    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
 end
 
 let tuple_tfunc(@nospecialize xs...) =
@@ -1667,7 +1675,7 @@ end
 
 # approximate static parameters due to unions
 let T1 = Array{Float64}, T2 = Array{_1,2} where _1
-    inference_test_copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+    inference_test_copy(a::T) where {T<:Array} = ccall(:array_copy_like, Ref{T}, (Any,), a)
     rt = Base.return_types(inference_test_copy, (Union{T1,T2},))[1]
     @test rt >: T1 && rt >: T2
 
@@ -5363,3 +5371,11 @@ function phic_type3()
 end
 @test Base.return_types(phic_type3) |> only === Union{Int, Float64}
 @test phic_type3() === 2
+
+# Test that `exit` returns `Union{}` (issue #51856)
+function test_exit_bottom(s)
+    n = tryparse(Int, s)
+    isnothing(n) && exit()
+    n
+end
+@test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int

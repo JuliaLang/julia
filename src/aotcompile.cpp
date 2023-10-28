@@ -246,7 +246,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         else {
             *src_out = jl_type_infer(mi, world, 0);
             if (*src_out) {
-                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                codeinst = jl_get_codeinst_for_src(mi, *src_out);
                 if ((*src_out)->inferred) {
                     jl_value_t *null = nullptr;
                     jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
@@ -269,7 +269,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
-    CreateNativeMax.updateMax(jl_array_len(methods));
+    CreateNativeMax.updateMax(jl_array_nrows(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
@@ -317,7 +317,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
             continue;
         size_t i, l;
-        for (i = 0, l = jl_array_len(methods); i < l; i++) {
+        for (i = 0, l = jl_array_nrows(methods); i < l; i++) {
             // each item in this list is either a MethodInstance indicating something
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
             jl_value_t *item = jl_array_ptr_ref(methods, i);
@@ -1895,7 +1895,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                         elty = p->getType()->getNonOpaquePointerElementType();
                     }
                     // For pretty printing, when LLVM inlines the global initializer into its loads
-                    auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, m.getModuleUnlocked());
+                    auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, global.second->getParent());
                     global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));
                     global.second->setConstant(true);
                     global.second->setLinkage(GlobalValue::PrivateLinkage);
