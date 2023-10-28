@@ -619,6 +619,7 @@ static Type *get_pjlvalue(LLVMContext &C) { return JuliaType::get_pjlvalue_ty(C)
 
 static FunctionType *get_func_sig(LLVMContext &C) { return JuliaType::get_jlfunc_ty(C); }
 static FunctionType *get_func2_sig(LLVMContext &C) { return JuliaType::get_jlfunc2_ty(C); }
+static FunctionType *get_func3_sig(LLVMContext &C) { return JuliaType::get_jlfunc3_ty(C); }
 
 static FunctionType *get_donotdelete_sig(LLVMContext &C) {
     return FunctionType::get(getVoidTy(C), true);
@@ -1225,6 +1226,12 @@ static const auto box_ssavalue_func = new JuliaFunction<TypeFnContextAndSizeT>{
     },
     get_attrs_basic,
 };
+static const auto jlgetbuiltinfptr_func = new JuliaFunction<>{
+    XSTR(jl_get_builtin_fptr),
+    [](LLVMContext &C) { return FunctionType::get(get_func_sig(C)->getPointerTo(),
+            {JuliaType::get_prjlvalue_ty(C)}, false); },
+    nullptr,
+};
 
 
 // placeholder functions
@@ -1277,7 +1284,6 @@ static const auto gc_loaded_func = new JuliaFunction<>{
                   Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) }); },
 };
 
-
 // julia.call represents a call with julia calling convention, it is used as
 //
 //   ptr julia.call(ptr %fptr, ptr %f, ptr %arg1, ptr %arg2, ...)
@@ -1314,7 +1320,23 @@ static const auto julia_call2 = new JuliaFunction<>{
     get_attrs_basic,
 };
 
+// julia.call3 is like julia.call, except that %fptr is derived rather than tracked
+static const auto julia_call3 = new JuliaFunction<>{
+    "julia.call3",
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
+        return FunctionType::get(T_prjlvalue,
+            {get_func3_sig(C)->getPointerTo(),
+             T}, // %f
+            true); }, // %args
+    get_attrs_basic,
+};
+
+
 static const auto jltuple_func = new JuliaFunction<>{XSTR(jl_f_tuple), get_func_sig, get_func_attrs};
+static const auto jlintrinsic_func = new JuliaFunction<>{XSTR(jl_f_intrinsic_call), get_func3_sig, get_func_attrs};
+
 static const auto &builtin_func_map() {
     static std::map<jl_fptr_args_t, JuliaFunction<>*> builtins = {
           { jl_f_is_addr,                 new JuliaFunction<>{XSTR(jl_f_is), get_func_sig, get_func_attrs} },
@@ -4659,22 +4681,40 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             return jl_cgval_t(); // anything past here is unreachable
     }
 
-    if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
-        if (f.constant == jl_builtin_ifelse && nargs == 4)
-            return emit_ifelse(ctx, argv[1], argv[2], argv[3], rt);
-        jl_cgval_t result;
-        bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
-        if (handled) {
-            return result;
-        }
+    if (jl_subtype(f.typ, (jl_value_t*)jl_builtin_type)) {
+        if (f.constant) {
+            if (f.constant == jl_builtin_ifelse && nargs == 4)
+                return emit_ifelse(ctx, argv[1], argv[2], argv[3], rt);
+            jl_cgval_t result;
+            bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
+            if (handled)
+                return result;
 
-        // special case for known builtin not handled by emit_builtin_call
-        auto it = builtin_func_map().find(jl_get_builtin_fptr(f.constant));
-        if (it != builtin_func_map().end()) {
-            Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), &argv[1], nargs - 1, julia_call);
-            setName(ctx.emission_context, ret, it->second->name + "_ret");
-            return mark_julia_type(ctx, ret, true, rt);
+            // special case for some known builtin not handled by emit_builtin_call
+            auto it = builtin_func_map().find(jl_get_builtin_fptr((jl_datatype_t*)jl_typeof(f.constant)));
+            if (it != builtin_func_map().end()) {
+                Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), &argv[1], nargs - 1, julia_call);
+                setName(ctx.emission_context, ret, it->second->name + "_ret");
+                return mark_julia_type(ctx, ret, true, rt);
+            }
         }
+        FunctionCallee fptr;
+        Value *F;
+        JuliaFunction<> *cc;
+        if (f.typ == (jl_value_t*)jl_intrinsic_type) {
+            fptr = prepare_call(jlintrinsic_func);
+            F = f.ispointer() ? data_pointer(ctx, f) : value_to_pointer(ctx, f).V;
+            F = decay_derived(ctx, maybe_bitcast(ctx, F, ctx.types().T_pjlvalue));
+            cc = julia_call3;
+        }
+        else {
+            fptr = FunctionCallee(get_func_sig(ctx.builder.getContext()), ctx.builder.CreateCall(prepare_call(jlgetbuiltinfptr_func), {emit_typeof(ctx, f)}));
+            F = boxed(ctx, f);
+            cc = julia_call;
+        }
+        Value *ret = emit_jlcall(ctx, fptr, F, &argv[1], nargs - 1, cc);
+        setName(ctx.emission_context, ret, "Builtin_ret");
+        return mark_julia_type(ctx, ret, true, rt);
     }
 
     // handle calling an OpaqueClosure
@@ -9195,6 +9235,8 @@ static void init_jit_functions(void)
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())
         add_named_global(it.second, it.first);
+    add_named_global(jlintrinsic_func, &jl_f_intrinsic_call);
+    add_named_global(jlgetbuiltinfptr_func, &jl_get_builtin_fptr);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jltopeval_func, &jl_toplevel_eval);

@@ -1022,6 +1022,7 @@ isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetyp
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         params::OptimizationParams, error_path::Bool = false)
+    #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -1067,8 +1068,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     return cost
                 end
             end
-            # unknown/unhandled intrinsic
-            return params.inline_nonleaf_penalty
+            # unknown/unhandled intrinsic: hopefully the caller gets a slightly better answer after the inlining
+            return UNKNOWN_CALL_COST
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1092,7 +1093,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if fidx === nothing
                 # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
-                return 20
+                return UNKNOWN_CALL_COST
             end
             return T_FFUNC_COST[fidx]
         end
@@ -1114,10 +1115,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : 20
+        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
-            cost = 20
+            cost = UNKNOWN_CALL_COST
         else
             cost = 0
         end

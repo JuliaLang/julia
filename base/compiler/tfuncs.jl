@@ -1862,6 +1862,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     try
         appl = apply_type(headtype, tparams...)
     catch ex
+        ex isa InterruptException && rethrow()
         # type instantiation might fail if one of the type parameters doesn't
         # match, which could happen only if a type estimate is too coarse
         # and might guess a concrete value while the actual type for it is Bottom
@@ -2528,8 +2529,17 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
             try
+                # unroll a few cases which have specialized codegen
+                if length(argvals) == 1
+                    return Const(f(argvals[1]))
+                elseif length(argvals) == 2
+                    return Const(f(argvals[1], argvals[2]))
+                elseif length(argvals) == 3
+                    return Const(f(argvals[1], argvals[2], argvals[3]))
+                end
                 return Const(f(argvals...))
-            catch
+            catch ex # expected ErrorException, TypeError, ConcurrencyViolationError, DivideError etc.
+                ex isa InterruptException && rethrow()
                 return Bottom
             end
         end
