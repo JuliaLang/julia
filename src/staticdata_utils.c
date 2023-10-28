@@ -867,6 +867,9 @@ static void jl_delete_methods(jl_array_t *list)
         assert((jl_value_t*)mt != jl_nothing);
         jl_method_table_disable_incremental(mt, meth);
     }
+    // Increment the world after all the deletions to avoid spurious
+    // method overwritten warnings.
+    jl_atomic_fetch_add(&jl_world_counter, 1);
 }
 
 static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
