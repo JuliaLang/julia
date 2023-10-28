@@ -82,7 +82,7 @@ function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
     ref = Ref{Ptr{Any}}(pointer_from_objref(ht))
     # # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
     keyindex = ccall(:jl_table_assign_bp, Cssize_t, (Ptr{Ptr{Any}}, Any, Any, Cint), ref, key, C_NULL, 0)
-    d.ht = unsafe_pointer_to_objref(ref[])
+    d.ht = unsafe_pointer_to_objref(ref[])::Memory{Any}
 
     @_gc_preserve_end t
 
