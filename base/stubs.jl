@@ -24,7 +24,7 @@ module Random
 end
 
 for name in names(Random, imported=true)
-    func = getglobal(mod, name)
+    func = getglobal(Random, name)
     if func isa Function
         @eval Base.Docs.getdoc(::typeof($func)) = (Random.delay_initialize(); nothing)
     end
@@ -111,7 +111,7 @@ module LinearAlgebra
 end
 
 for name in names(LinearAlgebra, imported=true)
-    func = getglobal(mod, name)
+    func = getglobal(LinearAlgebra, name)
     if func isa Function
         @eval Base.Docs.getdoc(::typeof($func)) = (LinearAlgebra.delay_initialize(); nothing)
     end
