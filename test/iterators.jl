@@ -1009,3 +1009,17 @@ end
 @testset "collect partition substring" begin
     @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
 end
+
+@testset "IterableStringPairs" begin
+    for s in ["", "a", "abcde", "γ", "∋γa"]
+        for T in (String, SubString, GenericString)
+            sT = T(s)
+            p = pairs(sT)
+            @test collect(p) == [k=>v for (k,v) in zip(keys(sT), sT)]
+            rv = Iterators.reverse(p)
+            @test collect(rv) == reverse([k=>v for (k,v) in zip(keys(sT), sT)])
+            rrv = Iterators.reverse(rv)
+            @test collect(rrv) == collect(p)
+        end
+    end
+end

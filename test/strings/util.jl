@@ -724,14 +724,3 @@ end
     @test endswith(A, split(B, ' ')[end])
     @test endswith(A, 'g')
 end
-
-@testset "pairs" begin
-    for s in ["", "a", "abcde", "γ", "∋γa"]
-        for T in (String, SubString, GenericString)
-            sT = T(s)
-            @test collect(pairs(sT)) == [k=>v for (k,v) in zip(keys(sT), sT)]
-            rv = Iterators.reverse(pairs(sT))
-            @test collect(rv) == reverse([k=>v for (k,v) in zip(keys(sT), sT)])
-        end
-    end
-end

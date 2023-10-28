@@ -412,7 +412,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return iterate_continued(s, i, u)
+    return @noinline iterate_continued(s, i, u)
 end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
