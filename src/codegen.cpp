@@ -339,6 +339,7 @@ struct jl_typecache_t {
         };
         T_jlarray = StructType::get(context, ArrayRef<Type*>(vaelts));
         T_pjlarray = PointerType::get(T_jlarray, 0);
+    }
 };
 
 struct jl_tbaacache_t {
@@ -610,6 +611,7 @@ AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKin
     for (size_t i = 0; i < extra.size(); i++)
         attrs[attrkinds.size() + i] = extra.begin()[i];
     return AttributeSet::get(C, ArrayRef<Attribute>(attrs));
+}
 
 static Type *get_pjlvalue(LLVMContext &C) { return JuliaType::get_pjlvalue_ty(C); }
 
