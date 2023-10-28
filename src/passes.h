@@ -57,11 +57,6 @@ struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
     static bool isRequired() { return true; }
 };
 
-struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
 struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
@@ -99,6 +94,11 @@ struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
 
 // Loop Passes
 struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
+    PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
+};
+
+struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
     PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
 };
