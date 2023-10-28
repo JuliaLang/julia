@@ -62,7 +62,6 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "serialize.h"
 #include "julia_assert.h"
-#include "llvm-codegen-shared.h"
 #include "processor.h"
 
 #define DEBUG_TYPE "julia_aotcompile"
@@ -1004,7 +1003,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             SourceTM.getRelocationModel(),
             SourceTM.getCodeModel(),
             SourceTM.getOptLevel()));
-
+    fixupTM(*TM);
     if (unopt) {
         timers.unopt.startTimer();
         raw_svector_ostream OS(out.unopt);
@@ -1032,6 +1031,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getRelocationModel(),
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
+        fixupTM(*PMTM);
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
         optimizer.run(M);
         assert(!verifyLLVMIR(M));
@@ -1527,6 +1527,7 @@ void jl_dump_native_impl(void *native_code,
             CMModel,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
+    fixupTM(*SourceTM);
     auto DL = jl_create_datalayout(*SourceTM);
     std::string StackProtectorGuard;
     unsigned OverrideStackAlignment;

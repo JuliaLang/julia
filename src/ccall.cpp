@@ -153,7 +153,7 @@ static Value *runtime_sym_lookup(
             dlsym_lookup);
 
     assert(f->getParent() != NULL);
-    f->getBasicBlockList().push_back(dlsym_lookup);
+    dlsym_lookup->insertInto(f);
     irbuilder.SetInsertPoint(dlsym_lookup);
     Instruction *llvmf;
     Value *nameval = stringConstPtr(emission_context, irbuilder, f_name);
@@ -180,7 +180,7 @@ static Value *runtime_sym_lookup(
     store->setAtomic(AtomicOrdering::Release);
     irbuilder.CreateBr(ccall_bb);
 
-    f->getBasicBlockList().push_back(ccall_bb);
+    ccall_bb->insertInto(f);
     irbuilder.SetInsertPoint(ccall_bb);
     PHINode *p = irbuilder.CreatePHI(T_pvoidfunc, 2);
     p->addIncoming(llvmf_orig, enter_bb);
@@ -440,21 +440,21 @@ static Value *llvm_type_rewrite(
     Value *from;
     Value *to;
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    unsigned align = std::max(DL.getPrefTypeAlignment(target_type), DL.getPrefTypeAlignment(from_type));
+    Align align = std::max(DL.getPrefTypeAlign(target_type), DL.getPrefTypeAlign(from_type));
     if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
         to = emit_static_alloca(ctx, target_type);
         setName(ctx.emission_context, to, "type_rewrite_buffer");
-        cast<AllocaInst>(to)->setAlignment(Align(align));
+        cast<AllocaInst>(to)->setAlignment(align);
         from = emit_bitcast(ctx, to, from_type->getPointerTo());
     }
     else {
         from = emit_static_alloca(ctx, from_type);
         setName(ctx.emission_context, from, "type_rewrite_buffer");
-        cast<AllocaInst>(from)->setAlignment(Align(align));
+        cast<AllocaInst>(from)->setAlignment(align);
         to = emit_bitcast(ctx, from, target_type->getPointerTo());
     }
-    ctx.builder.CreateAlignedStore(v, from, Align(align));
-    auto pun = ctx.builder.CreateAlignedLoad(target_type, to, Align(align));
+    ctx.builder.CreateAlignedStore(v, from, align);
+    auto pun = ctx.builder.CreateAlignedLoad(target_type, to, align);
     setName(ctx.emission_context, pun, "type_rewrite");
     return pun;
 }
@@ -473,7 +473,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
                 ctx.spvals_ptr,
                 ConstantInt::get(ctx.types().T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
     };
-    auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
+    auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), ArrayRef<Value*>(args));
     addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
     return call;
 }
@@ -483,9 +483,10 @@ static const std::string make_errmsg(const char *fname, int n, const char *err)
     std::string _msg;
     raw_string_ostream msg(_msg);
     msg << fname;
-    if (n > 0)
-        msg << " argument " << n;
-    else
+    if (n > 0) {
+        msg << " argument ";
+        msg << n;
+    } else
         msg << " return";
     msg << err;
     return msg.str();
@@ -1055,7 +1056,7 @@ public:
     FunctionType *functype(LLVMContext &ctxt) const {
         assert(err_msg.empty());
         if (nreqargs > 0)
-            return FunctionType::get(sret ? getVoidTy(ctxt) : prt, makeArrayRef(fargt_sig).slice(0, nreqargs), true);
+            return FunctionType::get(sret ? getVoidTy(ctxt) : prt, ArrayRef<Type*>(fargt_sig).slice(0, nreqargs), true);
         else
             return FunctionType::get(sret ? getVoidTy(ctxt) : prt, fargt_sig, false);
     }
@@ -1674,7 +1675,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 true);
         setName(ctx.emission_context, signal_page_load, "signal_page_load");
         ctx.builder.CreateBr(contBB);
-        ctx.f->getBasicBlockList().push_back(contBB);
+        contBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(contBB);
         return ghostValue(ctx, jl_nothing_type);
     }
@@ -1857,7 +1858,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                         decay_derived(ctx, data_pointer(ctx, val)),
                         T_pint8_derived)
             };
-            Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), makeArrayRef(args));
+            Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), ArrayRef<Value*>(args));
             setName(ctx.emission_context, ret, "object_id");
             JL_GC_POP();
             return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);

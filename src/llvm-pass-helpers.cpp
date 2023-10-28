@@ -218,7 +218,11 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return intrinsic;
         });
 
@@ -234,7 +238,11 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 SAFEPOINT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return intrinsic;
         });
 }
@@ -291,7 +299,11 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return func;
         });
 
