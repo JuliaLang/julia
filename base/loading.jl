@@ -2600,13 +2600,13 @@ end
 
 function replace_depot_path(path::AbstractString)
     for depot in DEPOT_PATH
-        # Skip depots that don't exist
-        if !isdirpath(depot)
-            continue
-        end
+        !isdir(depot) && continue
 
         # Strip extraneous pathseps through normalization.
-        depot = dirname(depot)
+        if isdirpath(depot)
+            depot = dirname(depot)
+        end
+
         if startswith(path, depot)
             path = replace(path, depot => "@depot"; count=1)
             break
