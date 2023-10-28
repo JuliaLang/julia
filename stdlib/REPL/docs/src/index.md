@@ -7,8 +7,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
