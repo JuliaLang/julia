@@ -1918,8 +1918,8 @@ julia> B = [0 0 ; 0 0];
 
 julia> lacpy!('L', A, B)
 2×2 Matrix{Int64}:
- 1  2
- 3  0
+ 1  0
+ 3  4
 ```
 """
 function lacpy!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
