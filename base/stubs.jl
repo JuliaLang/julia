@@ -76,7 +76,7 @@ module LinearAlgebra
     cot(A::AbstractMatrix{T}) where T = Base.invoke_in_world(delay_initialize(), cot, A)
     coth(A::AbstractMatrix{T}) where T = Base.invoke_in_world(delay_initialize(), coth, A)
     csc(A::AbstractMatrix{T}) where T = Base.invoke_in_world(delay_initialize(), csc, A)
-    csch(A::AbstractMatrix{T}) = Base.invoke_in_world(delay_initialize(), csch, A)
+    csch(A::AbstractMatrix{T}) where T = Base.invoke_in_world(delay_initialize(), csch, A)
 
 
     exp(A::AbstractMatrix) = Base.invoke_in_world(delay_initialize(), exp, A)
