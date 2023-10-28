@@ -2047,7 +2047,7 @@ end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
-write_prompt(terminal, s::PrefixSearchState,) = write_prompt(terminal, s.histprompt.parent_prompt)
+write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal
