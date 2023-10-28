@@ -364,7 +364,9 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test issubset(union(l,r))(r)
             @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l)(l) == isempty(l)
             @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
@@ -381,6 +383,15 @@ end
             @test ⊋(S([1,2]), S([1]))
             @test !⊋(S([1]), S([1]))
             @test ⊉(S([1]), S([2]))
+
+            @test ⊆(S([1,2]))(S([1]))
+            @test ⊊(S([1,2]))(S([1]))
+            @test !⊊(S([1]))(S([1]))
+            @test ⊈(S([2]))(S([1]))
+            @test ⊇(S([1]))(S([1,2]))
+            @test ⊋(S([1]))(S([1,2]))
+            @test !⊋(S([1]))(S([1]))
+            @test ⊉(S([2]))(S([1]))
         end
         let s1 = S([1,2,3,4])
             @test s1 !== symdiff(s1) == s1
@@ -859,6 +870,8 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        @test !issetequal(B)(A)
+        @test !issetequal(A)(B)
         for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
