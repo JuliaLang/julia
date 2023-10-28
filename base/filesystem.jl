@@ -258,8 +258,8 @@ function seek(f::File, n::Integer)
     return f
 end
 
-function seekend(f::File)
-    ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_END)
+function seekend(f::File, n::Integer=0)
+    ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_END)
     ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
 end

@@ -154,14 +154,17 @@ julia> read(io, Char)
 seekstart(s::IO) = seek(s,0)
 
 """
-    seekend(s)
+    seekend(s, n=0)
 
-Seek a stream to its end.
+Seek a stream to `n` bytes relative to its end.
 """
 function seekend(s::IOStream)
     err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
     systemerror("seekend", err)
     return s
+end
+function seekend(s::IOStream, n::Integer)
+    return skip(seekend(s), n)
 end
 
 """

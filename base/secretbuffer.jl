@@ -158,6 +158,7 @@ end
 
 seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)
 seekend(io::SecretBuffer) = seek(io, io.size+1)
+seekend(io::SecretBuffer, n::Integer) = skip(seekend(io), n)
 skip(io::SecretBuffer, n::Integer) = seek(io, position(io) + n)
 
 bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
