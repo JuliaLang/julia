@@ -23,6 +23,8 @@ for (T, c) in (
         (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
+        (Core.Memory, [:length, :ptr]),
+        (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -38,6 +40,8 @@ for (T, c) in (
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache]),
         (DataType, [:types, :layout]),
+        (Core.Memory, []),
+        (Core.GenericMemoryRef, []),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -2594,7 +2598,7 @@ struct D14919 <: Function; end
 for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typeof(+), Type}), :(Union{typeof(+), typeof(-)}), :(Base.Callable))
     @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
 end
-for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFunction)))
+for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
 end
 
@@ -4334,6 +4338,7 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
+using Base: _growbeg!, _deletebeg!, _growend!, _deleteend!
 struct ValueWrapper
     vpadding::NTuple{2,VecElement{UInt}}
     value
@@ -4342,43 +4347,44 @@ end
 Base.convert(::Type{ValueWrapper}, x) = ValueWrapper(x)
 for T in (Any, ValueWrapper)
     let ary = Vector{T}(undef, 10)
-        check_undef_and_fill(ary, rng) = for i in rng
-            @test !isassigned(ary, i)
+        check_undef_and_fill(ary, rng) = all(i -> begin
+            isassigned(ary, i) && return false
             ary[i] = (Float64(i), i) # some non-cached content
-            @test isassigned(ary, i)
-        end
+            isassigned(ary, i) || return false
+            return true
+        end, rng)
         # Check if the memory is initially zerod and fill it with value
         # to check if these values are not reused later.
-        check_undef_and_fill(ary, 1:10)
+        @test check_undef_and_fill(ary, 1:10)
         # Check if the memory grown at the end are zerod
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-        check_undef_and_fill(ary, 11:20)
+        _growend!(ary, 10)
+        @test check_undef_and_fill(ary, 11:20)
         # Make sure the content of the memory deleted at the end are not reused
-        ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
-        check_undef_and_fill(ary, 16:20)
+        _deleteend!(ary, 5)
+        _growend!(ary, 5)
+        @test check_undef_and_fill(ary, 16:20)
 
         # Now check grow/del_end
         ary = Vector{T}(undef, 1010)
-        check_undef_and_fill(ary, 1:1010)
+        @test check_undef_and_fill(ary, 1:1010)
         # This del_beg should move the buffer
-        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
-        check_undef_and_fill(ary, 1:1000)
+        _deletebeg!(ary, 1000)
+        _growbeg!(ary, 1000)
+        @test check_undef_and_fill(ary, 1:1000)
         ary = Vector{T}(undef, 1010)
-        check_undef_and_fill(ary, 1:1010)
+        @test check_undef_and_fill(ary, 1:1010)
         # This del_beg should not move the buffer
-        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-        check_undef_and_fill(ary, 1:10)
+        _deletebeg!(ary, 10)
+        _growbeg!(ary, 10)
+        @test check_undef_and_fill(ary, 1:10)
 
         ary = Vector{T}(undef, 1010)
-        check_undef_and_fill(ary, 1:1010)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-        check_undef_and_fill(ary, 1011:1020)
-        ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-        check_undef_and_fill(ary, 1:10)
+        @test check_undef_and_fill(ary, 1:1010)
+        _growend!(ary, 10)
+        @test check_undef_and_fill(ary, 1011:1020)
+        _deleteend!(ary, 10)
+        _growbeg!(ary, 10)
+        @test check_undef_and_fill(ary, 1:10)
 
         # Make sure newly malloc'd buffers are filled with 0
         # test this for a few different sizes since we need to make sure
@@ -4391,33 +4397,51 @@ for T in (Any, ValueWrapper)
             GC.gc()
             GC.gc()
             GC.gc()
-            ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-            ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
-            ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
-            ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-            check_undef_and_fill(ary, 1:(2n + 4))
+            _growbeg!(ary, 4)
+            _deletebeg!(ary, 4)
+            _growend!(ary, n)
+            _growbeg!(ary, 4)
+            @test check_undef_and_fill(ary, 1:(2n + 4))
         end
 
         ary = Vector{T}(undef, 100)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
+        _growend!(ary, 10000)
         ary[:] = 1:length(ary)
-        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
+        _deletebeg!(ary, 10000)
         # grow on the back until a buffer reallocation happens
         cur_ptr = pointer(ary)
         while cur_ptr == pointer(ary)
             len = length(ary)
-            ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-            for i in (len + 1):(len + 10)
-                @test !isassigned(ary, i)
-            end
+            _growend!(ary, 10)
+            result = @test all(i -> !isassigned(ary, i), (len + 1):(len + 10))
+            result isa Test.Pass || break
         end
 
-        ary = Vector{T}(undef, 100)
-        ary[:] = 1:length(ary)
-        ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
-        for i in 51:60
-            @test !isassigned(ary, i)
-        end
+        # growat when copy into start of same buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        pushfirst!(ary, 0)
+        Base._growat!(ary, 3, 5)
+        @test all(i -> !isassigned(ary, i), 3:7)
+        @test all(i -> isassigned(ary, i), 8:length(ary))
+        @test all(i -> isassigned(ary, i), 1:2)
+
+        # growat when copy into end of same buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        push!(ary, 11)
+        Base._growat!(ary, 6, 10)
+        @test all(i -> !isassigned(ary, i), 6:15)
+        @test all(i -> isassigned(ary, i), 16:length(ary))
+        @test all(i -> isassigned(ary, i), 1:5)
+
+        # growat when copy to new buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        Base._growat!(ary, 6, 10)
+        @test all(i -> !isassigned(ary, i), 6:15)
+        @test all(i -> isassigned(ary, i), 16:length(ary))
+        @test all(i -> isassigned(ary, i), 1:5)
     end
 end
 
@@ -4503,8 +4527,13 @@ end
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
-    function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(undef, 1), fill(1, n)...), 2, 1)
+    @noinline function arrayset_unknown_dim(::Type{T}, n) where T
+        a = Vector{T}(undef, 1)
+        fill!(a, 0)
+        a = reshape(a, fill(1, n)...)::Array{T}
+        @test a[1] === 0
+        Core.memoryrefset!(a.ref, 2, :not_atomic, true)
+        @test a[1] === 2
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4512,46 +4541,6 @@ let
     arrayset_unknown_dim(Int, 1)
     arrayset_unknown_dim(Int, 2)
     arrayset_unknown_dim(Int, 3)
-end
-
-module TestSharedArrayResize
-using Test
-# Attempting to change the shape of a shared array should unshare it and
-# not modify the original data
-function test_shared_array_resize(::Type{T}) where T
-    len = 100
-    a = Vector{T}(undef, len)
-    function test_unshare(f)
-        a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
-        a[:] = 1:length(a)
-        # The operation should fail on the owner shared array
-        # and has no side effect.
-        @test_throws ErrorException f(a)
-        @test a == [1:len;]
-        @test a′ == [1:len;]
-        @test pointer(a) == pointer(a′)
-        # The operation should pass on the non-owner shared array
-        # and should unshare the arrays with no effect on the original one.
-        f(a′)
-        @test a == [1:len;]
-        @test pointer(a) != pointer(a′)
-    end
-
-    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->deleteat!(a, 10))
-    test_unshare(a->deleteat!(a, 90))
-    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->insert!(a, 10, 10))
-    test_unshare(a->insert!(a, 90, 90))
-end
-test_shared_array_resize(Int)
-test_shared_array_resize(Any)
 end
 
 # Copy of `#undef`
@@ -5188,9 +5177,9 @@ let x = 1
     @noinline g18444(a) = (x += 1; a[])
     f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
     f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
-    @test_throws ErrorException("invoke: argument type error") f18444_1(Ref{Any}(1.0))
+    @test_throws "TypeError: in invoke: argument type error, expected" f18444_1(Ref{Any}(1.0))
     @test x == 2
-    @test_throws ErrorException("invoke: argument type error") f18444_2(Ref{Any}(1.0))
+    @test_throws "TypeError: in invoke: argument type error, expected" f18444_2(Ref{Any}(1.0))
     @test x == 3
     @test f18444_1(Ref{Any}(1)) === sin(1)
     @test x == 4
@@ -6026,10 +6015,10 @@ const unboxedunions = [Union{Int8, Nothing},
 @test Base.isbitsunion(unboxedunions[2])
 @test Base.isbitsunion(unboxedunions[3])
 
-@test Base.bitsunionsize(unboxedunions[1]) == 1
-@test Base.bitsunionsize(unboxedunions[2]) == 2
-@test Base.bitsunionsize(unboxedunions[3]) == 16
-@test Base.bitsunionsize(unboxedunions[4]) == 8
+@test Base.aligned_sizeof(unboxedunions[1]) == 1
+@test Base.aligned_sizeof(unboxedunions[2]) == 2
+@test Base.aligned_sizeof(unboxedunions[3]) == 16
+@test Base.aligned_sizeof(unboxedunions[4]) == 8
 
 @test sizeof(unboxedunions[1]) == 1
 @test sizeof(unboxedunions[2]) == 2
@@ -6337,7 +6326,7 @@ for U in unboxedunions
             resize!(A, len)
             @test length(A) === len
             @test A[1] === initvalue2(F2)
-            @test typeof(A[end]) === F
+            @test typeof(A[end]) === F2
 
             # deleteat!
             F = Base.uniontypes(U)[2]
@@ -6425,304 +6414,291 @@ for U in unboxedunions
     end
 end
 
-@testset "jl_array_grow_at_end" begin
+@testset "array _growatend!" begin
 
 # start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
 A = Vector{Union{Missing, UInt8}}(undef, 2)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
 
-# grow_at_end 2
 resize!(A, 5)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === missing
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x03
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+# The rest of the values are unspecified
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+@test isequal(A, [0x01, missing, 0x03, missing, 0x05])
 
 # grow_at_end 1
 Base._growat!(A, 4, 1)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x03
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+#A[4] is unspecified
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
 
-Base.arrayset(true, A, missing, 1)
-Base.arrayset(true, A, 0x02, 2)
-Base.arrayset(true, A, missing, 3)
-Base.arrayset(true, A, 0x04, 4)
-Base.arrayset(true, A, missing, 5)
-Base.arrayset(true, A, 0x06, 6)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x02
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x04
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x06
+setindex!(A, missing, 1)
+setindex!(A, 0x02, 2)
+setindex!(A, missing, 3)
+setindex!(A, 0x04, 4)
+setindex!(A, missing, 5)
+setindex!(A, 0x06, 6)
+@test isequal(A, [missing, 0x2, missing, 0x4, missing, 0x6])
 
 # grow_at_end 5
 Base._growat!(A, 4, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x02
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x04
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x06
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+#A[4] is unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
 
 # grow_at_end 6
 resize!(A, 8)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x02
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x04
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x06
-@test Base.arrayref(true, A, 8) === missing
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+# A[4] still unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
+# A[8] is unspecified but test that it exists
+@test getindex(A, 8) isa Any
 
 # grow_at_end 4
 resize!(A, 1048576)
 resize!(A, 1048577)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x02
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x04
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x06
-@test Base.arrayref(true, A, 8) === missing
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+# A[4] is stil still unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
+@test getindex(A, 8) === missing
+# 9:1048577 are unspecified
 foreach(9:1048577) do i
-    @test Base.arrayref(true, A, i) === missing
-end
-foreach(9:1048577) do i
-    Base.arrayset(true, A, i % UInt8, i)
-    @test Base.arrayref(true, A, i) === i % UInt8
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
 end
 
 # grow_at_end 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
 foreach(1:1048577) do i
-    @test Base.arrayref(true, A, i) === missing
-    Base.arrayset(true, A, i % UInt8, i)
-    @test Base.arrayref(true, A, i) === i % UInt8
+    @test getindex(A, i) === missing
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
 end
 Base._growat!(A, 1048576, 1)
 @test length(A) == 1048578
 foreach(1:1048575) do i
-    @test Base.arrayref(true, A, i) === i % UInt8
+    @test getindex(A, i) === i % UInt8
     @test A[i] === i % UInt8
 end
-@test Base.arrayref(true, A, 1048576) === missing
-@test Base.arrayref(true, A, 1048577) === 1048576 % UInt8
-@test Base.arrayref(true, A, 1048578) === 1048577 % UInt8
+@test getindex(A, 1048576) === missing
+@test getindex(A, 1048577) === 1048576 % UInt8
+@test getindex(A, 1048578) === 1048577 % UInt8
 
 end # @testset
 
-@testset "jl_array_grow_at_beg" begin
+@testset "array _growatbeg!" begin
 
 # grow_at_beg 4
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._growat!(A, 1, 1)
 
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x01
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x03
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x01
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
 Base._growat!(A, 1, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x01
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x03
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x01
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x03
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
 
 # grow_at_beg 1
 Base._growat!(A, 2, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x01
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x03
-@test Base.arrayref(true, A, 7) === missing
-@test Base.arrayref(true, A, 8) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x01
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x03
+@test getindex(A, 7) === missing
+@test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
 Base._growat!(A, 1, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x01
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x03
-@test Base.arrayref(true, A, 8) === missing
-@test Base.arrayref(true, A, 9) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x01
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x03
+@test getindex(A, 8) === missing
+@test getindex(A, 9) === 0x05
 
 # grow_at_beg 8
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._growat!(A, 2, 1)
 Base._growat!(A, 2, 1)
 
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x03
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x03
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
 
 # grow_at_beg 5
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._growat!(A, 4, 1)
 Base._growat!(A, 4, 1)
 
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x03
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === missing
-@test Base.arrayref(true, A, 7) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
 
 # grow_at_beg 6
 Base._growat!(A, 2, 3)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x03
-@test Base.arrayref(true, A, 7) === missing
-@test Base.arrayref(true, A, 8) === missing
-@test Base.arrayref(true, A, 9) === missing
-@test Base.arrayref(true, A, 10) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x03
+@test getindex(A, 7) === missing
+@test getindex(A, 8) === missing
+@test getindex(A, 9) === missing
+@test getindex(A, 10) === 0x05
 
 # grow_at_beg 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._growat!(A, 2, 1)
 
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x03
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
 
 foreach(7:length(A)) do i
-    @test Base.arrayref(true, A, i) === missing
-    Base.arrayset(true, A, i % UInt8, i)
-    @test Base.arrayref(true, A, i) === i % UInt8
+    @test getindex(A, i) === missing
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
 end
 
 end # @testset
 
-@testset "jl_array_del_at_beg" begin
+@testset "array _deleteatbeg!" begin
 
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._deleteat!(A, 2, 1)
 
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === 0x03
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x05
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === 0x03
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x05
 
 Base._deleteat!(A, 1, 1)
-@test Base.arrayref(true, A, 1) === 0x03
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x05
+@test getindex(A, 1) === 0x03
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x05
 
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._growat!(A, 1, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x01
-@test Base.arrayref(true, A, 3) === missing
-@test Base.arrayref(true, A, 4) === 0x03
-@test Base.arrayref(true, A, 5) === missing
-@test Base.arrayref(true, A, 6) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x01
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
 Base._deleteat!(A, 2, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x03
-@test Base.arrayref(true, A, 4) === missing
-@test Base.arrayref(true, A, 5) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x05
 Base._deleteat!(A, 1, 2)
-@test Base.arrayref(true, A, 1) === 0x03
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x05
+@test getindex(A, 1) === 0x03
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x05
 Base._deleteat!(A, 1, 1)
-@test Base.arrayref(true, A, 1) === missing
-@test Base.arrayref(true, A, 2) === 0x05
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
 
 end # @testset
 
-@testset "jl_array_del_at_end" begin
+@testset "array _deleteatend!" begin
 
 A = Vector{Union{Missing, UInt8}}(undef, 5)
-Base.arrayset(true, A, 0x01, 1)
-Base.arrayset(true, A, missing, 2)
-Base.arrayset(true, A, 0x03, 3)
-Base.arrayset(true, A, missing, 4)
-Base.arrayset(true, A, 0x05, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
 Base._deleteat!(A, 5, 1)
 
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === 0x03
-@test Base.arrayref(true, A, 4) === missing
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
 
 Base._deleteat!(A, 3, 1)
-@test Base.arrayref(true, A, 1) === 0x01
-@test Base.arrayref(true, A, 2) === missing
-@test Base.arrayref(true, A, 3) === missing
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
 
 end # @testset
 
@@ -6744,23 +6720,23 @@ end
 
 # jl_array_shrink
 let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
-    Base.arrayset(true, A, 0x01, 1)
-    Base.arrayset(true, A, missing, 2)
-    Base.arrayset(true, A, 0x03, 3)
-    Base.arrayset(true, A, missing, 4)
-    Base.arrayset(true, A, 0x05, 5)
+    setindex!(A, 0x01, 1)
+    setindex!(A, missing, 2)
+    setindex!(A, 0x03, 3)
+    setindex!(A, missing, 4)
+    setindex!(A, 0x05, 5)
     deleteat!(A, 6:1048577)
-    @test Base.arrayref(true, A, 1) === 0x01
-    @test Base.arrayref(true, A, 2) === missing
-    @test Base.arrayref(true, A, 3) === 0x03
-    @test Base.arrayref(true, A, 4) === missing
-    @test Base.arrayref(true, A, 5) === 0x05
+    @test getindex(A, 1) === 0x01
+    @test getindex(A, 2) === missing
+    @test getindex(A, 3) === 0x03
+    @test getindex(A, 4) === missing
+    @test getindex(A, 5) === 0x05
     sizehint!(A, 5)
-    @test Base.arrayref(true, A, 1) === 0x01
-    @test Base.arrayref(true, A, 2) === missing
-    @test Base.arrayref(true, A, 3) === 0x03
-    @test Base.arrayref(true, A, 4) === missing
-    @test Base.arrayref(true, A, 5) === 0x05
+    @test getindex(A, 1) === 0x01
+    @test getindex(A, 2) === missing
+    @test getindex(A, 3) === 0x03
+    @test getindex(A, 4) === missing
+    @test getindex(A, 5) === 0x05
 end
 
 # copyto!/vcat w/ internal padding
@@ -6778,14 +6754,14 @@ primitive type TypeWith24Bits 24 end
 TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
 let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
     a = [x, x]
-    Core.arrayset(true, a, y, 2)
+    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
     @test a == [x, y]
     a[2] = z
     @test a == [x, z]
     @test pointer(a, 2) - pointer(a, 1) == 4
 
     b = [(x, x), (x, x)]
-    Core.arrayset(true, b, (x, y), 2)
+    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
     @test b == [(x, x), (x, y)]
     b[2] = (y, z)
     @test b == [(x, x), (y, z)]
@@ -7504,16 +7480,11 @@ function f34482()
     Base.not_int("ABC")
     1
 end
-function g34482()
-    Core.Intrinsics.arraylen(1)
-    1
-end
 function h34482()
     Core.Intrinsics.bitcast(1, 1)
     1
 end
 @test_throws ErrorException f34482()
-@test_throws TypeError g34482()
 @test_throws TypeError h34482()
 
 struct NFANode34126

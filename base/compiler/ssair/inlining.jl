@@ -758,7 +758,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                         ti = ti.parameters[2]::DataType # checked by `is_valid_type_for_apply_rewrite`
                     end
                     for p in ti.parameters
-                        if isa(p, DataType) && isdefined(p, :instance)
+                        if issingletontype(p)
                             # replace singleton types with their equivalent Const object
                             p = Const(p.instance)
                         elseif isconstType(p)

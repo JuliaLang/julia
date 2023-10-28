@@ -312,7 +312,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
-            for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
+            for (j = 0; j < jl_array_nrows(DL_LOAD_PATH); j++) {
                 char *dl_path = jl_string_data(jl_array_ptr_data(DL_LOAD_PATH)[j]);
                 size_t len = strlen(dl_path);
                 if (len == 0)

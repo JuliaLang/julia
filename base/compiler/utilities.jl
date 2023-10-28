@@ -66,8 +66,6 @@ end
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
-sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
-
 function is_self_quoting(@nospecialize(x))
     return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
         isa(x,Char) || x === nothing || isa(x,Function)
@@ -91,7 +89,7 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
     sz = count_self ? sizeof(dt) : 0
     sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     dtfd = DataTypeFieldDesc(dt)
-    for i = 1:nfields(x)
+    for i = 1:Int(datatype_nfields(dt))
         isdefined(x, i) || continue
         f = getfield(x, i)
         if !dtfd[i].isptr && datatype_pointerfree(typeof(f))

@@ -1119,17 +1119,21 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, file
-        path = tempdir()
-        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+    mktempdir() do path
+        unreadable = joinpath(path, "replcompletion-unreadable")
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        hidden_file = joinpath(unreadable, "hidden")
+        touch(hidden_file)
+
+        # Create symlink to a file that is in an unreadable directory
+        chmod(hidden_file, 0o755)
+        chmod(unreadable, 0o000)
+        symlink(hidden_file, joinpath(path, "replcompletions-link"))
 
         try
-            file = joinpath(path, "tmp-executable")
-            touch(file)
-            chmod(file, 0o755)
-            mkdir(unreadable)
-            chmod(unreadable, 0o000)
-
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
@@ -1137,10 +1141,13 @@ let s, c, r
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
+
+                c,r = test_scomplete("replcompletions-link")
+                @test isempty(c)
             end
         finally
-            rm(file)
-            rm(unreadable)
+            # If we don't fix the permissions here, our cleanup fails.
+            chmod(unreadable, 0o700)
         end
     end
 
@@ -2083,6 +2090,18 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    ("foo'CompletionFoo.test!1", "test!12"))
     c, r = test_complete(s)
     @test only(c) == compl
+end
+
+# allows symbol completion within incomplete :macrocall
+# https://github.com/JuliaLang/julia/issues/51827
+macro issue51827(args...)
+    length(args) ≥ 2 || error("@issue51827: incomplete arguments")
+    return args
+end
+let s = "@issue51827 Base.ac"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "acquire" in c
 end
 
 let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)

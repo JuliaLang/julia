@@ -218,28 +218,28 @@ function typeinf(interp::NativeInterpreter, frame::InferenceState)
 end
 typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceResult)
-    # If we didn't transform the src for caching, we may have to transform
-    # it anyway for users like typeinf_ext. Do that here.
-    opt = caller.src
-    if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-        if opt.ir !== nothing
-            if caller.must_be_codeinf
-                caller.src = ir_to_codeinf!(opt)
-            elseif is_inlineable(opt.src)
-                # TODO: If the CFG is too big, inlining becomes more expensive and if we're going to
-                # use this IR over and over, it's worth simplifying it. Round trips through
-                # CodeInstance do this implicitly, since they recompute the CFG, so try to
-                # match that behavior here.
-                # ir = cfg_simplify!(opt.ir)
-                caller.src = opt.ir
-            else
-                # Not cached and not inlineable - drop the ir
-                caller.src = nothing
-            end
-        end
+function finish!(interp::AbstractInterpreter, caller::InferenceState)
+    result = caller.result
+    valid_worlds = result.valid_worlds
+    if last(valid_worlds) >= get_world_counter()
+        # if we aren't cached, we don't need this edge
+        # but our caller might, so let's just make it anyways
+        store_backedges(result, caller.stmt_edges[1])
     end
-    return caller.src
+    opt = result.src
+    if opt isa OptimizationState && result.must_be_codeinf
+        result.src = opt = ir_to_codeinf!(opt)
+    end
+    if opt isa CodeInfo
+        opt.min_world = first(valid_worlds)
+        opt.max_world = last(valid_worlds)
+        caller.src = opt
+    else
+        # In this case caller.src is invalid for clients (such as typeinf_ext) to use
+        # but that is what !must_be_codeinf permits
+        # This is hopefully unreachable when must_be_codeinf is true
+    end
+    return
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
@@ -266,17 +266,12 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         end
     end
     for caller in frames
-        (; result ) = caller
-        valid_worlds = result.valid_worlds
-        if last(valid_worlds) >= get_world_counter()
-            # if we aren't cached, we don't need this edge
-            # but our caller might, so let's just make it anyways
-            store_backedges(result, caller.stmt_edges[1])
-        end
+        finish!(caller.interp, caller)
         if caller.cached
-            cache_result!(caller.interp, result)
+            cache_result!(caller.interp, caller.result)
         end
-        finish!(caller.interp, result)
+        # n.b. We do not drop result.src here, even though that wastes memory while it is still in the local cache
+        # since the user might have requested call-site inlining of it.
     end
     empty!(frames)
     return true
@@ -367,13 +362,7 @@ end
 function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
-    if inferred_result isa OptimizationState{typeof(interp)}
-        # TODO respect must_be_codeinf setting here?
-        result.src = inferred_result = ir_to_codeinf!(inferred_result)
-    end
     if inferred_result isa CodeInfo
-        inferred_result.min_world = first(valid_worlds)
-        inferred_result.max_world = last(valid_worlds)
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
     end
     # The global cache can only handle objects that codegen understands
