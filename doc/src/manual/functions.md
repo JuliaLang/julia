@@ -102,6 +102,9 @@ As a common convention in Julia (not a syntactic requirement), such a function w
 [typically be named `f!(x, y)`](@ref man-punctuation) rather than `f(x, y)`, as a visual reminder at
 the call site that at least one of the arguments (often the first one) is being mutated.
 
+!!! warning "Shared memory between arguments"
+    The behavior of a mutating function can be unexpected when a mutated argument shares memory with another argument, a situation known as aliasing (e.g. when one is a view of the other).
+    Unless the function docstring explicitly indicates that aliasing produces the expected result, it is the responsibility of the caller to ensure proper behavior on such inputs.
 
 ## Argument-type declarations
 

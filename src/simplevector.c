@@ -79,7 +79,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
     size_t n = jl_svec_len(a);
     jl_svec_t *c = jl_alloc_svec_uninit(n);
-    memmove_refs((void**)jl_svec_data(c), (void**)jl_svec_data(a), n);
+    memmove_refs((_Atomic(void*)*)jl_svec_data(c), (_Atomic(void*)*)jl_svec_data(a), n);
     return c;
 }
 

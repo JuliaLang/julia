@@ -1108,23 +1108,23 @@ end
 @testset "sizeof" begin
     let arrUInt8 = zeros(UInt8, 10)
         @test sizeof(arrUInt8) == 10
-        @test Core.sizeof(arrUInt8) == 10
+        @test Core.sizeof(arrUInt8) == 3 * sizeof(Int)
     end
 
     let arrUInt32 = zeros(UInt32, 10)
         @test sizeof(arrUInt32) == 40
-        @test Core.sizeof(arrUInt32) == 40
+        @test Core.sizeof(arrUInt32) == 3 * sizeof(Int)
     end
 
     let arrFloat64 = zeros(Float64, 10, 10)
         @test sizeof(arrFloat64) == 800
-        @test Core.sizeof(arrFloat64) == 800
+        @test Core.sizeof(arrFloat64) == 4 * sizeof(Int)
     end
 
     # Test union arrays (Issue #23321)
     let arrUnion = Union{Int64, Cvoid}[rand(Bool) ? k : nothing for k = 1:10]
         @test sizeof(arrUnion) == 80
-        @test Core.sizeof(arrUnion) == 80
+        @test Core.sizeof(arrUnion) == 3 * sizeof(Int)
     end
 
     # Test non-power of 2 types (Issue #35884)
@@ -1138,7 +1138,7 @@ end
     let arrayOfUInt48 = [a, b, c]
         f35884(x) = sizeof(x)
         @test f35884(arrayOfUInt48) == 24
-        @test Core.sizeof(arrayOfUInt48) == 24
+        @test Core.sizeof(arrayOfUInt48) == 3 * sizeof(Int)
     end
 end
 
@@ -1164,7 +1164,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1759,47 +1759,50 @@ module IRUtils
     include("compiler/irutils.jl")
 end
 
-@testset "strides for ReshapedArray" begin
-    function check_strides(A::AbstractArray)
-        # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-        dims = ntuple(identity, ndims(A))
-        map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
-        # Test strides via value check.
-        for i in eachindex(IndexLinear(), A)
-            A[i] === Base.unsafe_load(pointer(A, i)) || return false
-        end
-        return true
+function check_pointer_strides(A::AbstractArray)
+    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+    dims = ntuple(identity, ndims(A))
+    map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
+    # Test pointer via value check.
+    first(A) === Base.unsafe_load(pointer(A)) || return false
+    # Test strides via value check.
+    for i in eachindex(IndexLinear(), A)
+        A[i] === Base.unsafe_load(pointer(A, i)) || return false
     end
+    return true
+end
+
+@testset "strides for ReshapedArray" begin
     # Type-based contiguous Check
     a = vec(reinterpret(reshape, Int16, reshape(view(reinterpret(Int32, randn(10)), 2:11), 5, :)))
     f(a) = only(strides(a));
     @test IRUtils.fully_eliminated(f, Base.typesof(a)) && f(a) == 1
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
-    @test check_strides(vec(a))
+    @test check_pointer_strides(vec(a))
     b = view(parent(a), 1:9, 1:10)
     @test_throws "Input is not strided." strides(vec(b))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
-        @test check_strides(reshape(a, 3, 4, 5))
-        @test check_strides(reshape(a, 5, 6, 2))
+        @test check_pointer_strides(reshape(a, 3, 4, 5))
+        @test check_pointer_strides(reshape(a, 5, 6, 2))
         b = view(parent(a), 60n:-n:1)
-        @test check_strides(reshape(b, 3, 4, 5))
-        @test check_strides(reshape(b, 5, 6, 2))
+        @test check_pointer_strides(reshape(b, 3, 4, 5))
+        @test check_pointer_strides(reshape(b, 5, 6, 2))
     end
     # StridedVector like parent
     a = randn(10, 10, 10)
     b = view(a, 1:10, 1:1, 5:5)
-    @test check_strides(reshape(b, 2, 5))
+    @test check_pointer_strides(reshape(b, 2, 5))
     # Other StridedArray parent
     a = view(randn(10,10), 1:9, 1:10)
-    @test check_strides(reshape(a,3,3,2,5))
-    @test check_strides(reshape(a,3,3,5,2))
-    @test check_strides(reshape(a,9,5,2))
-    @test check_strides(reshape(a,3,3,10))
-    @test check_strides(reshape(a,1,3,1,3,1,5,1,2))
-    @test check_strides(reshape(a,3,3,5,1,1,2,1,1))
+    @test check_pointer_strides(reshape(a,3,3,2,5))
+    @test check_pointer_strides(reshape(a,3,3,5,2))
+    @test check_pointer_strides(reshape(a,9,5,2))
+    @test check_pointer_strides(reshape(a,3,3,10))
+    @test check_pointer_strides(reshape(a,1,3,1,3,1,5,1,2))
+    @test check_pointer_strides(reshape(a,3,3,5,1,1,2,1,1))
     @test_throws "Input is not strided." strides(reshape(a,3,6,5))
     @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
     @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
@@ -1812,7 +1815,14 @@ end
     @test @inferred(strides(a)) == (1, 1, 1)
     # Dense parent (but not StridedArray)
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_strides(reshape(A, 3, 2, 3))
+    @test check_pointer_strides(reshape(A, 3, 2, 3))
+end
+
+@testset "pointer for SubArray with none-dense parent." begin
+    a = view(Matrix(reshape(0x01:0xc8, 20, :)), 1:2:20, :)
+    b = reshape(a, 20, :)
+    @test check_pointer_strides(view(b, 2:11, 1:5))
+    @test check_pointer_strides(view(b, reshape(2:11, 2, :), 1:5))
 end
 
 @testset "stride for 0 dims array #44087" begin

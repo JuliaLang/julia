@@ -291,7 +291,7 @@ end
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
@@ -408,7 +408,7 @@ end
     isempty(names) && return (;)
     types = diff_types(a, names)
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(a, n)

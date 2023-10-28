@@ -30,6 +30,8 @@
     @test str != Base.AnnotatedString("some string", [(1:1, :thing => 0x01), (6:6, :other => 0x02), (11:11, :all => 0x03)])
     @test str != Base.AnnotatedString("some string", [(1:4, :thing => 0x11), (1:11, :all => 0x13), (6:11, :other => 0x12)])
     @test str != Base.AnnotatedString("some thingg", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (6:11, :other => 0x02)])
+    @test Base.AnnotatedString([Base.AnnotatedChar('a', [:a => 1]), Base.AnnotatedChar('b', [:b => 2])]) ==
+        Base.AnnotatedString("ab", [(1:1, :a => 1), (2:2, :b => 2)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [:aaa => 0x04]),
         "a string", Base.AnnotatedString("a string"),

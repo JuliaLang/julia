@@ -436,7 +436,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
         jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
     // check that f is a guaranteed singleton type
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
-    if (!jl_is_datatype(ft) || ft->instance == NULL)
+    if (!jl_is_datatype(ft) || !jl_is_datatype_singleton(ft))
         jl_error("@ccallable: function object must be a singleton");
 
     // compute / validate return type
@@ -507,6 +507,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             // see if it is inferred, or try to infer it for ourself.
             // (but don't bother with typeinf on macros or toplevel thunks)
             src = jl_type_infer(mi, world, 0);
+            codeinst = nullptr;
         }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
@@ -515,7 +516,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     else if (src && jl_is_code_info(src)) {
         if (!codeinst) {
-            codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
+            codeinst = jl_get_codeinst_for_src(mi, src);
             if (src->inferred) {
                 jl_value_t *null = nullptr;
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
@@ -1629,6 +1630,12 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
+        if (!ctx->hasSetOpaquePointersValue())
+#ifndef JL_LLVM_OPAQUE_POINTERS
+            ctx->setOpaquePointers(false);
+#else
+            ctx->setOpaquePointers(true);
+#endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
@@ -1940,9 +1947,11 @@ void JuliaOJIT::enableJITDebuggingSupport()
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
+/*
     else if (TM->getTargetTriple().isOSBinFormatELF())
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper))));
+*/
 }
 #else
 void JuliaOJIT::enableJITDebuggingSupport()

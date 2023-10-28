@@ -25,9 +25,9 @@ JuliaPassContext::JuliaPassContext()
 
         pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
-        pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
+        pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        call_func(nullptr), call2_func(nullptr), module(nullptr)
+        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
 {
 }
 
@@ -48,11 +48,13 @@ void JuliaPassContext::initFunctions(Module &M)
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
+    gc_loaded_func = M.getFunction("julia.gc_loaded");
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
+    call3_func = M.getFunction("julia.call3");
 }
 
 void JuliaPassContext::initAll(Module &M)
