@@ -238,7 +238,7 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
     }
 
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(L.getHeader()->getParent(), &errs()));
+    assert(!verifyFunction(*L.getHeader()->getParent(), &errs()));
 #endif
     return true;
 }
