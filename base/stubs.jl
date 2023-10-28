@@ -23,8 +23,12 @@ module Random
     end
 end
 
-Base.Docs.getdoc(::typeof(Base.rand)) = (Random.delay_initialize(); nothing)
-Base.Docs.getdoc(::typeof(Base.randn)) = (Random.delay_initialize(); nothing)
+for name in names(Random, imported=true)
+    func = getglobal(mod, name)
+    if func isa Function
+        @eval Base.Docs.getdoc(::typeof($func)) = (Random.delay_initialize(); nothing)
+    end
+end
 
 module LinearAlgebra
     let LinearAlgebra_PkgID = Base.PkgId(Base.UUID(0x37e2e46d_f89d_539d_b4ee_838fcccc9c8e), "LinearAlgebra")
@@ -106,21 +110,32 @@ module LinearAlgebra
 
 end
 
-Base.Docs.getdoc(::typeof(Base.adjoint)) = (LinearAlgebra.delay_initialize(); nothing)
+for name in names(LinearAlgebra, imported=true)
+    func = getglobal(mod, name)
+    if func isa Function
+        @eval Base.Docs.getdoc(::typeof($func)) = (LinearAlgebra.delay_initialize(); nothing)
+    end
+end
 
 function delete_stubs(mod)
+    function delete(m)
+        ccall(:jl_push_newly_deleted, Cvoid, (Any,), m)
+        ccall(:jl_method_table_disable_incremental, Cvoid, (Any, Any), Base.get_methodtable(m), m)
+    end
+
     for name in names(mod, imported=true)
         if name == :delay_initialize
             continue
         end
         obj = getglobal(mod, name)
         if obj isa Function
-            ms = Base.methods(obj, mod)
-            for m in ms
-                ccall(:jl_push_newly_deleted, Cvoid, (Any,), m)
-                ccall(:jl_method_table_disable_incremental, Cvoid, (Any, Any), Base.get_methodtable(m), m)
+            for m in Base.methods(obj, mod)
+                delete(m)
             end
         end
+    end
+    for m in Base.methods(Core.kwcall, mod)
+        delete(m)
     end
 end
 
