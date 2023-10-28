@@ -2617,8 +2617,7 @@ end
 
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
-# Return nothing when no depot matched.
-function resolve_depot(includes)
+function resolve_depot(includes::Union{AbstractVector,AbstractSet})
     if any(includes) do inc
             !startswith(inc, "@depot")
         end
