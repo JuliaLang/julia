@@ -91,7 +91,7 @@ end
                                       (6:11, :other => 0x02)])
     str1 = Base.AnnotatedString("test", [(1:4, :label => 5)])
     str2 = Base.AnnotatedString("case", [(2:3, :label => "oomph")])
-    @test join([str1, str1], Base.AnnotatedString(" ")) ==
+    @test join([str1, str1], ' ') ==
         Base.AnnotatedString("test test",
                      [(1:4, :label => 5),
                       (6:9, :label => 5)])
