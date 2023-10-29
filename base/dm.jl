@@ -85,13 +85,15 @@ end
 # runtime of recursive calls is negligible for large inputs and using PartialQuickSort
 # allows this algorithm to be non-allocating.
 function my_partialsort!(v::AbstractArray, target)
-    # length(v) < 300 && return partialsort!(v, target)
     k = round(Int, length(v)^(1/3))
-    sample = view(v, 1:k^2)
-    sample_target = (target .- firstindex(v)) ./ length(v) .* length(sample)
+    sample_target = (target .- firstindex(v)) ./ length(v) .* k^2
     offset = .5k^1.15 # TODO for further optimization: tune this
     lo_i = floor(Int, first(sample_target) - offset)
     hi_i = ceil(Int, last(sample_target) + offset)
+    expected_len = (min(k^2, hi_i) - max(1, lo_i) + 1) * length(v) / k^2
+    length(v) <= 2k^2+130 + 2expected_len && return partialsort!(v, target)
+
+    sample = view(v, 1:k^2)
     for attempt in 1:4
         seed = hash(attempt)
         for i in firstindex(v):firstindex(v)+k^2-1
@@ -100,6 +102,7 @@ function my_partialsort!(v::AbstractArray, target)
         end
         number_below, lastindex_middle = if lo_i <= firstindex(sample) && lastindex(sample) <= hi_i
             # error("too small")
+            @assert false
             0, lastindex(v)
         elseif lo_i <= firstindex(sample)
             sort!(sample, alg=PartialQuickSort(hi_i))
