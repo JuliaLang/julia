@@ -1441,7 +1441,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n) -> s
+    sizehint!(s, n; shrink = true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
@@ -1462,10 +1462,13 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
+
+4. `shrink` controls if the collection can be shrunk.
 """
 function sizehint! end
 
 function sizehint!(a::Vector, sz::Integer)
+    # TODO - controll shrinkage
     len = length(a)
     ref = a.ref
     mem = ref.mem
@@ -1494,7 +1497,7 @@ function sizehint!(a::Vector, sz::Integer)
 end
 
 # Fall-back implementation for non-shrinkable collections
-_sizehint!(a, sz; shrink) = sizehint!(a, sz)
+sizehint!(a, sz; shrink) = sizehint!(a, sz)
 
 """
     pop!(collection) -> item
