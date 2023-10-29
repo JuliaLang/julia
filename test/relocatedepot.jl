@@ -84,7 +84,6 @@ if !test_relocated_depot
             @test Base.isprecompiled(pkg) == false
             touch(joinpath(@__DIR__, pkgname, "src", "foo.txt"))
             Base.require(pkg) # precompile
-            @info "SERS OIDA"
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
         end
     end
