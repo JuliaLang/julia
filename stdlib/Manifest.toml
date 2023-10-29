@@ -140,7 +140,7 @@ uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
 version = "4.2.1+0"
 
 [[deps.Markdown]]
-deps = ["Base64"]
+deps = ["Base64", "JuliaSyntaxHighlighting", "StyledStrings"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
