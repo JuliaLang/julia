@@ -1467,8 +1467,7 @@ For types that support `sizehint!`,
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer)
-    # TODO - controll shrinkage
+function sizehint!(a::Vector, sz::Integer; shrink = true)
     len = length(a)
     ref = a.ref
     mem = ref.mem
@@ -1477,7 +1476,7 @@ function sizehint!(a::Vector, sz::Integer)
     sz = max(Int(sz), offset + len - 1)
     if sz <= memlen
         # if we don't save at least 1/8th memlen then its not worth it to shrink
-        if memlen - sz <= div(memlen, 8)
+        if !shrink || memlen - sz <= div(memlen, 8)
             return a
         end
         newmem = array_new_memory(mem, sz)
