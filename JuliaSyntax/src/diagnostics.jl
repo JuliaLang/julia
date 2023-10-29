@@ -44,13 +44,26 @@ Base.range(d::Diagnostic) = first_byte(d):last_byte(d)
 
 # Make relative path into a file URL
 function _file_url(filename)
-    @static if Sys.iswindows()
-        # TODO: Test this with windows terminal
-        path = replace(abspath(filename), '\\'=>'/')
-    else
-        path = abspath(filename)
+    try
+        @static if Sys.iswindows()
+            # TODO: Test this with windows terminal
+            path = replace(abspath(filename), '\\'=>'/')
+        else
+            path = abspath(filename)
+        end
+        return "file://$(path)"
+    catch exc
+        # abspath may fail if working directory doesn't exist
+        # TODO: It seems rather non-ideal to have the behavior here depend on
+        # the state of the local filesystem. And yet links in diagnostics seem
+        # useful.
+        #
+        # Ideally it'd be up to the caller to provide some notion of the
+        # "absolute location" of the source code resource when SourceFile is
+        # constructed. This is often not related to the local filesystem - it
+        # could be in memory, a fragment embedded in another file, etc etc.
+        return nothing
     end
-    "file://$(path)"
 end
 
 function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
@@ -64,8 +77,11 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     file_href = nothing
     if !isnothing(filename)
         locstr = "$filename:$linecol"
-        if !startswith(filename, "REPL[")
-            file_href = _file_url(filename)*"#$linecol"
+        if !startswith(filename, "REPL[") && get(io, :color, false)
+            url = _file_url(filename)
+            if !isnothing(url)
+                file_href = url*"#$linecol"
+            end
         end
     else
         locstr = "line $linecol"

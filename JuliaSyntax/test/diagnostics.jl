@@ -218,4 +218,25 @@ end
         # Error @ line 1:8
         a -- b -- c
         #      └┘ ── invalid operator"""
+
+    stream = JuliaSyntax.ParseStream("a -- b")
+    JuliaSyntax.parse!(stream)
+    fname = "test.jl"
+    sf = SourceFile(stream, filename=fname)
+    url = JuliaSyntax._file_url(fname)
+    @test sprint(JuliaSyntax.show_diagnostics, stream.diagnostics, sf,
+                 context=:color=>true) == """
+        \e[90m# Error @ \e[0;0m\e]8;;$url#1:3\e\\\e[90mtest.jl:1:3\e[0;0m\e]8;;\e\\
+        a \e[48;2;120;70;70m--\e[0;0m b
+        \e[90m# └┘ ── \e[0;0m\e[91minvalid operator\e[0;0m"""
+
+    if Sys.isunix()
+        mktempdir() do tempdirname
+            cd(tempdirname) do
+                rm(tempdirname)
+                # Test _file_url doesn't fail with nonexistant directories
+                @test isnothing(JuliaSyntax._file_url(joinpath("__nonexistant__", "test.jl")))
+            end
+        end
+    end
 end
