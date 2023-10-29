@@ -2317,12 +2317,8 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         Core.Compiler.track_newly_inferred.x = false
     end
 
-    # restore the globals we set before running precompilation workload in case they were altered
+    # restore to initial state to make precompilation result relocatable
     append!(empty!(Base.DEPOT_PATH), depot_path)
-    append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
-    append!(empty!(Base.LOAD_PATH), load_path)
-    ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
-    set_active_project(nothing)
 
 end
 
