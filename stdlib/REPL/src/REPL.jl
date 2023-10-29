@@ -160,6 +160,8 @@ const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
 
+const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+
 mutable struct REPLBackend
     "channel for AST"
     repl_channel::Channel{Any}
@@ -249,7 +251,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
-        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+        isempty(install_packages_hooks) && Base.require_stdlib(Pkg_pkgid)
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
@@ -780,7 +782,7 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = nothing
         hist.last_buffer = IOBuffer()
     else
-        if haskey(hist.mode_mapping, hist.modes[idx])
+        if haskey(hist.mode_mapping, hist.modes[idx]) || (hist.modes[idx] == :pkg && !isnothing(Base.require_stdlib(Pkg_pkgid)))
             LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
                 LineEdit.replace_line(s, hist.history[idx])
             end
@@ -1193,8 +1195,7 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
                 pkg_mode = nothing
                 if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                     for mode in repl.interface.modes
