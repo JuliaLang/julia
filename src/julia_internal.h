@@ -575,17 +575,6 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
-
-STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
-{
-    // if parent is marked and buf is not
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc & 1)) {
-        jl_task_t *ct = jl_current_task;
-        gc_setmark_buf(ct->ptls, bufptr, 3, minsz);
-    }
-}
-
 void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
