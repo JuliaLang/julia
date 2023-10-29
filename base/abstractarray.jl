@@ -2195,7 +2195,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
         rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
         a += rows[i]
     end
-    T[rs...;]
+    T[rs...;]::Matrix{T}
 end
 
 ## N-dimensional concatenation ##
