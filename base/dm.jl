@@ -55,12 +55,12 @@ function kernel!(v::AbstractVector, lo_x, hi_x)
         x = v[j]
         a = lo_x !== nothing && x < lo_x
         b = hi_x === nothing || x < hi_x
-        number_below += Int(a)
+        number_below += a
         # if a != b # This branch is almost never taken, so making it branchless is bad.
         #     v[i], v[j] = v[j], v[i]
         #     i += 1
         # end
-        c = Int(a != b) # JK, this is faster.
+        c = a != b # JK, this is faster.
         k = i * c + j
         @inbounds v[j], v[k] = v[k], v[j]
         i += c - 1
