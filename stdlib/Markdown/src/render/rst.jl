@@ -26,7 +26,7 @@ function rst(io::IO, code::Code)
     elseif code.language != "rst"
         println(io, ".. code-block:: julia\n")
     end
-    for l in lines(code.code)
+    for l in eachsplit(code.code, '\n')
         println(io, "    ", l)
     end
 end
@@ -90,7 +90,7 @@ end
 
 function rst(io::IO, l::LaTeX)
     println(io, ".. math::\n")
-    for line in lines(l.formula)
+    for line in eachsplit(l.formula, '\n')
         println(io, "    ", line)
     end
 end
