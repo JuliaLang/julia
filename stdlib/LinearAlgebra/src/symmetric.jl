@@ -574,9 +574,13 @@ function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     end
 end
 
-det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
-det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
-det(A::Symmetric) = det(_factorize(A; check=false))
+for f in (:logabsdet, :logdet, :det)
+    @eval begin
+        $f(A::RealHermSymComplexHerm) = real($f(_factorize(A; check=false)))
+        $f(A::Symmetric{<:Real}) = $f(_factorize(A; check=false))
+        $f(A::Symmetric) = $f(_factorize(A; check=false))
+    end
+end
 
 \(A::HermOrSym, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
