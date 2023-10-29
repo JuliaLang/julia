@@ -890,7 +890,7 @@ void jl_safepoint_init(void);
 // before calling this function. If the calling thread is to run the GC,
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
-int jl_safepoint_start_gc(void);
+int jl_safepoint_start_gc(int ismutator);
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
 // the `mprotect` may not be removed if there's pending SIGINT) and wake

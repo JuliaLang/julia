@@ -261,7 +261,7 @@ void gc_verify(jl_ptls_t ptls)
     // TODO(netto): ajdust this to work with the new mark bits
     // for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
     //     jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_WHITE].items[i >= clean_len ? i - clean_len : i];
-    //     if (gc_marked(v->bits.gc)) {
+    //     if (gc_black(v->bits.gc)) {
     //         jl_safe_printf("Error. Early free of %p type :", v);
     //         jl_(jl_typeof(jl_valueof(v)));
     //         jl_safe_printf("val : ");
@@ -545,7 +545,7 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         char *p = *stack_p;
         size_t osize;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
-        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc))
+        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_black(tag->bits.gc))
             continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
@@ -884,7 +884,7 @@ void gc_time_count_big(int old_bits, int bits)
 {
     big_total++;
     big_reset += bits == GC_WHITE;
-    big_freed += !gc_marked(old_bits);
+    big_freed += !gc_black(old_bits);
 }
 
 void gc_time_big_end(void)
@@ -909,7 +909,7 @@ void gc_time_mallocd_memory_start(void)
 void gc_time_count_mallocd_memory(int bits)
 {
     mallocd_memory_total++;
-    mallocd_memory_freed += !gc_marked(bits);
+    mallocd_memory_freed += !gc_black(bits);
 }
 
 void gc_time_mallocd_memory_end(void)
@@ -1030,7 +1030,7 @@ static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
         char *lim = (char*)halfpages - 1;
         int i = 0;
         while (v <= lim) {
-            if (!gc_marked(((jl_taggedvalue_t*)v)->bits.gc)) {
+            if (!gc_black(((jl_taggedvalue_t*)v)->bits.gc)) {
                 nfree++;
             }
             else {
@@ -1093,7 +1093,7 @@ void gc_stats_big_obj(void)
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         bigval_t *v = ptls2->heap.big_objects;
         while (v != NULL) {
-            if (gc_marked(v->bits.gc)) {
+            if (gc_black(v->bits.gc)) {
                 nused++;
                 nbytes += v->sz & ~3;
             }
@@ -1101,7 +1101,7 @@ void gc_stats_big_obj(void)
         }
         v = big_objects_marked;
         while (v != NULL) {
-            if (gc_marked(v->bits.gc)) {
+            if (gc_black(v->bits.gc)) {
                 nused_old++;
                 nbytes_old += v->sz & ~3;
             }
@@ -1110,7 +1110,7 @@ void gc_stats_big_obj(void)
 
         mallocarray_t *ma = ptls2->heap.mallocarrays;
         while (ma != NULL) {
-            if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
+            if (gc_black(jl_astaggedvalue(ma->a)->bits.gc)) {
                 nused++;
                 nbytes += jl_genericmemory_nbytes((jl_genericmemory_t*)ma->a);
             }
@@ -1140,7 +1140,7 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
     int has_live = 0;
     while ((char*)v <= lim) {
         int bits = v->bits.gc;
-        if (gc_marked(bits))
+        if (gc_black(bits))
             has_live = 1;
         poolobj_sizes[bits] += osize;
         v = (jl_taggedvalue_t*)((char*)v + osize);

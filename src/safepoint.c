@@ -124,11 +124,14 @@ void jl_safepoint_init(void)
     jl_safepoint_pages = addr;
 }
 
-int jl_safepoint_start_gc(void)
+int jl_safepoint_start_gc(int ismutator)
 {
     // The thread should have set this already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
-    jl_safepoint_wait_thread_resume(); // make sure we are permitted to run GC now (we might be required to stop instead)
+    // GC threads don't have tasks...
+    if (ismutator) {
+        jl_safepoint_wait_thread_resume(); // make sure we are permitted to run GC now (we might be required to stop instead)
+    }
     uv_mutex_lock(&safepoint_lock);
     // In case multiple threads enter the GC at the same time, only allow
     // one of them to actually run the collection. We can't just let the

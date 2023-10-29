@@ -403,9 +403,14 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOIN
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
-STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
+STATIC_INLINE int gc_at_least_grey(uintptr_t bits) JL_NOTSAFEPOINT
 {
     return (bits & GC_GREY) != 0;
+}
+
+STATIC_INLINE int gc_black(uintptr_t bits) JL_NOTSAFEPOINT
+{
+    return (bits & GC_BLACK) != 0;
 }
 
 STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT
@@ -450,6 +455,8 @@ extern _Atomic(int) gc_n_threads_sweeping;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
+void gc_queue_roots(jl_ptls_t ptls);
+void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);

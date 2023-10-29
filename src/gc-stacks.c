@@ -232,7 +232,7 @@ void sweep_stack_pools(void)
         while (1) {
             jl_task_t *t = (jl_task_t*)lst[n];
             assert(jl_is_task(t));
-            if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+            if (gc_black(jl_astaggedvalue(t)->bits.gc)) {
                 if (t->stkbuf == NULL)
                     ndel++; // jl_release_task_stack called
                 else
