@@ -131,8 +131,11 @@ function my_partialsort!(v::AbstractArray, target)
     v[target]
 end
 
+
+# TESTING
+
 using Random
-function report(x, target)
+function report_error(x, target)
     println("x = ", x)
     println("target = ", target)
     # println("my_partialsort(x, target) = ", my_partialsort(x, target))
@@ -150,16 +153,106 @@ function test()
         for i in (n < 200 ? (1:n) : rand(1:n, 7))
             rand!(x)
             st = sort(x)
-            st[i] == my_partialsort!(copy(x), i) || report(x, i)
+            st[i] == my_partialsort!(copy(x), i) || report_error(x, i)
             if n < 70
                 for j in i:n
-                    st[i:j] == my_partialsort!(copy(x), i:j) || report(x, i:j)
+                    st[i:j] == my_partialsort!(copy(x), i:j) || report_error(x, i:j)
                 end
             else
                 j = rand(1:n)
                 i, j = extrema((i, j))
-                st[i:j] == my_partialsort!(copy(x), i:j) || report(x, i:j)
+                st[i:j] == my_partialsort!(copy(x), i:j) || report_error(x, i:j)
             end
         end
+    end
+end
+
+
+# TUNING
+
+const DATA = []
+function compare(n, t)
+    a = 0
+    b = 0
+    for _ in 1:100
+        x = rand(Int, n)
+        ta = my_elapsed(partialsort!, x, t)
+        tb = my_elapsed(my_partialsort!, x, t)*1.10 # assume I over-optimized for my system by 10%
+        #println((ta, tb))
+        a += ta^3
+        b += tb^3
+    end
+    res = (b/a)^(1/3)
+    push!(DATA, (n, t, res))
+    res
+end
+function my_elapsed(f!::T, x, t, tt=(length(x)+10), evals=max(1, 10^4÷tt), samples=max(1, 3*10^5÷evals÷tt)) where T
+    mn = Inf
+    for _ in 1:samples
+        elapse = @elapsed for _ in 1:evals
+            f!(copy(x), t)
+        end
+        mn = min(mn, elapse)
+    end
+    mn
+end
+using Printf
+function report(n, t; newline=true, filter=false)
+    res = compare(n, t)
+    my = choose(n, t)
+    str = (@sprintf "%8.5f" res) * (my ? " m" : "  ")
+    if .95 < res < 1.05
+        filter || print(str)
+    elseif (res < 1) == my
+        filter || printstyled(str, color=:green)
+    else
+        filter && print(n, " ", t, " ")
+        printstyled(str, color=abs(res-1) > .1 ? :red : :yellow)
+        filter && println()
+    end
+    newline && !filter && println()
+end
+
+
+function choose(n, target)
+    v = 1:n
+    k = round(Int, length(v)^(1/3))
+    sample_target = (target .- firstindex(v)) ./ length(v) .* k^2
+    offset = .5k^1.15 # TODO for further optimization: tune this
+    lo_i = max(1, floor(Int, first(sample_target) - offset))
+    hi_i = min(k^2, ceil(Int, last(sample_target) + offset))
+    expected_len = (hi_i - lo_i + 1) * length(v) / k^2
+    # length(v) > #=2k^2+82=#200 + 2expected_len
+    length(v) > 2k^2+130 + 2expected_len
+end
+
+function report_precomputed()
+    bad = 0
+    very_bad = 0
+    for (n, t, res) in DATA
+        my = choose(n, t)
+        str = (@sprintf "%8.5f" res) * (my ? " m" : "  ")
+        if .95 < res < 1.05
+        elseif (res < 1) == my
+        else
+            red = abs(res-1) > .1
+            printstyled(n, " ", length(t), " ", t, " ", str, "\n", color=red ? :red : :yellow)
+            bad += 1
+            very_bad += red
+        end
+    end
+    println((bad, very_bad))
+end
+
+function gather_data()
+    while true
+        n = round(Int, exp(rand()*log(100_000)))
+        len = round(Int, rand()^3*n)
+        i = rand(1:n-len+1)
+        j = i+len-1
+        k = rand(1:n)
+        #print(n, " ", rpad(i:j, 8));
+        report(n, i:j, filter=true); report(n, k, filter=true)
+        print(".")
     end
 end
