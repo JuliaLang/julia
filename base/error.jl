@@ -197,9 +197,9 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the prefered syntax for
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the preferred syntax for
 writing assertions, which are conditions that are assumed to be true, but that the user
-might want to check as and aid to debugging if they fail.
+might decide to check anyways, as an aid to debugging if they fail.
 The optional message `text` is displayed upon assertion failure.
 
 !!! warning
