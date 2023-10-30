@@ -155,14 +155,16 @@ struct Fail <: Result
     context::Union{Nothing, String}
     source::LineNumberNode
     message_only::Bool
-    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool)
+    backtrace::Union{Nothing, String}
+    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool, backtrace=nothing)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
             context,
             source,
-            message_only)
+            message_only,
+            backtrace)
     end
 end
 
@@ -184,6 +186,11 @@ function Base.show(io::IO, t::Fail)
         else
             print(io, "\n    Expected: ", data)
             print(io, "\n      Thrown: ", value)
+            print(io, "\n")
+            if t.backtrace !== nothing
+                # Capture error message and indent to match
+                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+            end
         end
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
@@ -768,7 +775,7 @@ macro test_throws(extype, ex)
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e, nothing, $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
     return :(do_test_throws($result, $orig_ex, $(esc(extype))))
@@ -825,7 +832,22 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if success
             testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only)
+            if result.backtrace !== nothing
+                bt = scrub_exc_stack(result.backtrace, nothing, extract_file(result.source))
+                bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
+            else
+                bt_str = nothing
+            end
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
         end
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
@@ -1351,11 +1373,11 @@ function _check_testset(testsettype, testsetname)
 end
 
 """
-    @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
-    @testset let v = (...) ... end
+    @testset [CustomTestSet] [options...] ["description"] begin test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v"] for v in itr test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v, \$w"] for v in itrv, w in itrw test_ex end
+    @testset [CustomTestSet] [options...] ["description"] test_func()
+    @testset let v = v, w = w; test_ex; end
 
 # With begin/end or function call
 
@@ -1380,7 +1402,7 @@ accepts three boolean options:
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
-    `@testset foo()` requires at least Julia 1.8.
+    `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
@@ -1436,6 +1458,9 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
 
+!!! compat "Julia 1.10"
+    Multiple `let` assignments are supported since Julia 1.10.
+
 ## Examples
 ```jldoctest
 julia> @testset let logi = log(im)
@@ -1445,6 +1470,17 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
+ERROR: There was an error during testing
+
+julia> @testset let logi = log(im), op = !iszero
+           @test imag(logi) == π/2
+           @test op(real(logi))
+       end
+Test Failed at none:3
+  Expression: op(real(logi))
+     Context: logi = 0.0 + 1.5707963267948966im
+              op = !iszero
 
 ERROR: There was an error during testing
 ```
@@ -1477,7 +1513,7 @@ trigger_test_failure_break(@nospecialize(err)) =
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, tests, source)
+function testset_context(args, ex, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
@@ -1485,22 +1521,38 @@ function testset_context(args, tests, source)
         error("@testset with a `let` argument cannot be customized")
     end
 
-    assgn = tests.args[1]
-    if !isa(assgn, Expr) || assgn.head !== :(=)
-        error("`@testset let` must have exactly one assignment")
-    end
-    assignee = assgn.args[1]
+    let_ex = ex.args[1]
 
-    tests.args[2] = quote
-        $push_testset($(ContextTestSet)($(QuoteNode(assignee)), $assignee; $options...))
+    if Meta.isexpr(let_ex, :(=))
+        contexts = Any[let_ex.args[1]]
+    elseif Meta.isexpr(let_ex, :block)
+        contexts = Any[]
+        for assign_ex in let_ex.args
+            if Meta.isexpr(assign_ex, :(=))
+                push!(contexts, assign_ex.args[1])
+            else
+                error("Malformed `let` expression is given")
+            end
+        end
+    else
+        error("Malformed `let` expression is given")
+    end
+    reverse!(contexts)
+
+    test_ex = ex.args[2]
+
+    ex.args[2] = quote
+        $(map(contexts) do context
+            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
+        end...)
         try
-            $(tests.args[2])
+            $(test_ex)
         finally
-            $pop_testset()
+            $(map(_->:($pop_testset()), contexts)...)
         end
     end
 
-    return esc(tests)
+    return esc(ex)
 end
 
 """
@@ -1537,12 +1589,11 @@ function testset_beginend_call(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
         try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(Random.GLOBAL_SEED)
+            # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+            copy!(Random.default_rng(), tls_seed_orig)
             let
                 $(esc(tests))
             end
@@ -1557,8 +1608,8 @@ function testset_beginend_call(args, tests, source)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
             pop_testset()
             ret = finish(ts)
         end
@@ -1623,10 +1674,7 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(RNG, tmprng)
-
+            copy!(default_rng(), tls_seed_orig)
         end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
             $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
@@ -1652,11 +1700,9 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local finish_errored = false
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
-        Random.seed!(Random.GLOBAL_SEED)
-        local tmprng = copy(RNG)
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
+        copy!(Random.default_rng(), tls_seed_orig)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1667,8 +1713,8 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
         end
         arr
     end
@@ -2078,6 +2124,8 @@ for G in (GenericSet, GenericDict)
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+Base.pop!(s::GenericDict, k) = pop!(s.s, k)
+Base.setindex!(s::GenericDict, v, k) = setindex!(s.s, v, k)
 
 """
 The `GenericArray` can be used to test generic array APIs that program to

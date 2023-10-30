@@ -524,7 +524,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    eigen!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
@@ -619,7 +619,7 @@ julia> eigvals(A,B)
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    return eigvals!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 
 """

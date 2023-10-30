@@ -65,21 +65,6 @@ Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 """
-    adj_or_trans(::AbstractArray) -> adjoint|transpose|identity
-    adj_or_trans(::Type{<:AbstractArray}) -> adjoint|transpose|identity
-
-Return [`adjoint`](@ref) from an `Adjoint` type or object and
-[`transpose`](@ref) from a `Transpose` type or object. Otherwise,
-return [`identity`](@ref). Note that `Adjoint` and `Transpose` have
-to be the outer-most wrapper object for a non-`identity` function to be
-returned.
-"""
-adj_or_trans(::T) where {T<:AbstractArray} = adj_or_trans(T)
-adj_or_trans(::Type{<:AbstractArray}) = identity
-adj_or_trans(::Type{<:Adjoint}) = adjoint
-adj_or_trans(::Type{<:Transpose}) = transpose
-
-"""
     inplace_adj_or_trans(::AbstractArray) -> adjoint!|transpose!|copyto!
     inplace_adj_or_trans(::Type{<:AbstractArray}) -> adjoint!|transpose!|copyto!
 
@@ -94,8 +79,14 @@ inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
 inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
 inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 
+# unwraps Adjoint, Transpose, Symmetric, Hermitian
 _unwrap(A::Adjoint)   = parent(A)
 _unwrap(A::Transpose) = parent(A)
+
+# unwraps Adjoint and Transpose only
+_unwrap_at(A) = A
+_unwrap_at(A::Adjoint)   = parent(A)
+_unwrap_at(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -353,8 +344,8 @@ Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stri
 Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
 
-Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
-Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 
 Base.elsize(::Type{<:Adjoint{<:Real, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
 Base.elsize(::Type{<:Transpose{<:Any, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
@@ -505,3 +496,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::AdjOrTrans,i::Integer,j::Integer,s::AbstractString)
+    Base.replace_in_print_matrix(parent(A), j, i, s)
+end

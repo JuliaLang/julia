@@ -59,17 +59,33 @@ function _nthreads_in_pool(tpid::Int8)
 end
 
 function _tpid_to_sym(tpid::Int8)
-    return tpid == 0 ? :interactive : :default
+    if tpid == 0
+        return :interactive
+    elseif tpid == 1
+        return :default
+    elseif tpid == -1
+        return :foreign
+    else
+        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+    end
 end
 
 function _sym_to_tpid(tp::Symbol)
-    return tp === :interactive ? Int8(0) : Int8(1)
+    if tp === :interactive
+        return Int8(0)
+    elseif tp === :default
+        return Int8(1)
+    elseif tp == :foreign
+        return Int8(-1)
+    else
+        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+    end
 end
 
 """
     Threads.threadpool(tid = threadid()) -> Symbol
 
-Returns the specified thread's threadpool; either `:default` or `:interactive`.
+Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -96,6 +112,8 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
+    elseif pool == :foreign
+        error("Threadpool size of `:foreign` is indeterminant")
     else
         error("invalid threadpool specified")
     end
@@ -122,6 +140,7 @@ end
     Threads.ngcthreads() -> Int
 
 Returns the number of GC threads currently configured.
+This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
@@ -133,7 +152,13 @@ function threading_run(fun, static)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        if static
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        else
+            # TODO: this should be the current pool (except interactive) if there
+            # are ever more than two pools.
+            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+        end
         tasks[i] = t
         schedule(t)
     end
@@ -141,7 +166,7 @@ function threading_run(fun, static)
         Base._wait(tasks[i])
     end
     ccall(:jl_exit_threaded_region, Cvoid, ())
-    failed_tasks = filter(istaskfailed, tasks)
+    failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
@@ -233,8 +258,8 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
-- The value of [`threadid()`](@ref Threads.threadid) may change even within a single
-  iteration. See [`Task Migration`](@ref man-task-migration)
+- Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
+  may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
 
 ## Schedulers
 
@@ -338,10 +363,10 @@ end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
     tpid = _sym_to_tpid(tp)
-    if _nthreads_in_pool(tpid) == 0
+    if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
     nothing
 end
 
@@ -386,20 +411,18 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    tp = :default
+    tp = QuoteNode(:default)
     na = length(args)
     if na == 2
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-        elseif ttype isa Symbol
-            # TODO: allow unquoted symbols
-            ttype = nothing
-        end
-        if ttype === :interactive || ttype === :default
-            tp = ttype
+            if ttype !== :interactive && ttype !== :default
+                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            end
+            tp = QuoteNode(ttype)
         else
-            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            tp = ttype
         end
     elseif na == 1
         ex = args[1]
@@ -415,7 +438,7 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(QuoteNode(tp)))
+            _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

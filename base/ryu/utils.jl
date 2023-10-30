@@ -134,7 +134,7 @@ end
 
 Compute `p = a*b` where `b = bLo + bHi<<64`, returning the result as `pLo, pHi` where `p = pLo + pHi<<128`.
 """
-function umul256(a, bHi, bLo)
+function umul256(a::UInt128, bHi::UInt64, bLo::UInt64)
     aLo = a % UInt64
     aHi = (a >> 64) % UInt64
 
@@ -164,7 +164,7 @@ end
 
 Compute `pHi = (a*b)>>128` where `b = bLo + bHi<<64`.
 """
-umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
+umul256_hi(a::UInt128, bHi::UInt64, bLo::UInt64) = umul256(a, bHi, bLo)[2]
 
 """
     Ryu.mulshiftmod1e9(m, mula, mulb, mulc, j)::UInt32
@@ -183,7 +183,7 @@ function mulshiftmod1e9(m, mula, mulb, mulc, j)
     return (v % UInt32) - UInt32(1000000000) * shifted
 end
 
-function append_sign(x, plus, space, buf, pos)
+function append_sign(x, plus::Bool, space::Bool, buf, pos::Int)
     if signbit(x) && !isnan(x)  # suppress minus sign for signaling NaNs
         buf[pos] = UInt8('-')
         pos += 1
@@ -197,101 +197,14 @@ function append_sign(x, plus, space, buf, pos)
     return pos
 end
 
-function append_n_digits(olength, digits, buf, pos)
-    i = 0
-    while digits >= 10000
-        c = digits % 10000
-        digits = div(digits, 10000)
-        c0 = (c % 100) << 1
-        c1 = div(c, 100) << 1
-        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c0 + 1, 2)
-        unsafe_copyto!(buf, pos + olength - i - 4, DIGIT_TABLE, c1 + 1, 2)
-        i += 4
-    end
-    if digits >= 100
-        c = (digits % 100) << 1
-        digits = div(digits, 100)
-        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
-        i += 2
-    end
-    if digits >= 10
-        c = digits << 1
-        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
-        i += 2
-    else
-        buf[pos] = UInt8('0') + digits
-        i += 1
-    end
-    return pos + i
-end
 
-function append_d_digits(olength, digits, buf, pos, decchar)
-    i = 0
-    while digits >= 10000
-        c = digits % 10000
-        digits = div(digits, 10000)
-        c0 = (c % 100) << 1
-        c1 = div(c, 100) << 1
-        unsafe_copyto!(buf, pos + olength + 1 - i - 2, DIGIT_TABLE, c0 + 1, 2)
-        unsafe_copyto!(buf, pos + olength + 1 - i - 4, DIGIT_TABLE, c1 + 1, 2)
-        i += 4
-    end
-    if digits >= 100
-        c = (digits % 100) << 1
-        digits = div(digits, 100)
-        unsafe_copyto!(buf, pos + olength + 1 - i - 2, DIGIT_TABLE, c + 1, 2)
-        i += 2
-    end
-    if digits >= 10
-        c = digits << 1
-        buf[pos] = DIGIT_TABLE[c + 1]
-        buf[pos + 1] = decchar
-        buf[pos + 2] = DIGIT_TABLE[c + 2]
-        i += 3
-    else
-        buf[pos] = UInt8('0') + digits
-        buf[pos + 1] = decchar
-        i += 2
-    end
-    return pos + i
-end
+import Base: append_c_digits_fast as append_c_digits, append_nine_digits
 
-function append_c_digits(count, digits, buf, pos)
-    i = 0
-    while i < count - 1
-        c = (digits % 100) << 1
-        digits = div(digits, 100)
-        unsafe_copyto!(buf, pos + count - i - 2, DIGIT_TABLE, c + 1, 2)
-        i += 2
-    end
-    if i < count
-        buf[pos + count - i - 1] = UInt8('0') + (digits % 10)
-        i += 1
-    end
-    return pos + i
-end
-
-function append_nine_digits(digits, buf, pos)
-    if digits == 0
-        for _ = 1:9
-            buf[pos] = UInt8('0')
-            pos += 1
-        end
-        return pos
-    end
-    i = 0
-    while i < 5
-        c = digits % 10000
-        digits = div(digits, 10000)
-        c0 = (c % 100) << 1
-        c1 = div(c, 100) << 1
-        unsafe_copyto!(buf, pos + 7 - i, DIGIT_TABLE, c0 + 1, 2)
-        unsafe_copyto!(buf, pos + 5 - i, DIGIT_TABLE, c1 + 1, 2)
-        i += 4
-    end
-    buf[pos] = UInt8('0') + digits
-    i += 1
-    return pos + i
+function append_d_digits(olength::Int, digits::Unsigned, buf, pos::Int, decchar)
+    newpos = append_c_digits(olength, digits, buf, pos + 1)
+    @inbounds buf[pos] = buf[pos + 1]
+    @inbounds buf[pos + 1] = decchar
+    return newpos # == pos + olength + 1
 end
 
 const BIG_MASK = (big(1) << 64) - 1
@@ -390,18 +303,7 @@ for T in (Float64, Float32, Float16)
     @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
 end
 
-const DIGIT_TABLE = UInt8[
-  '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
-  '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
-  '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
-  '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
-  '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
-  '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
-  '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
-  '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
-  '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
-  '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9'
-]
+const DIGIT_TABLE16 = Base._dec_d100
 
 const POW10_OFFSET = UInt16[
   0, 2, 5, 8, 12, 16, 21, 26, 32, 39,

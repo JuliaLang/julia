@@ -170,23 +170,21 @@ end
 
 
 # Allow us to easily serialize Platform objects
-function Base.repr(p::Platform; context=nothing)
-    str = string(
-        "Platform(",
-        repr(arch(p)),
-        ", ",
-        repr(os(p)),
-        "; ",
-        join(("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", "),
-        ")",
-    )
+function Base.show(io::IO, p::Platform)
+    print(io, "Platform(")
+    show(io, arch(p))
+    print(io, ", ")
+    show(io, os(p))
+    print(io, "; ")
+    join(io, ("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", ")
+    print(io, ")")
 end
 
 # Make showing the platform a bit more palatable
-function Base.show(io::IO, p::Platform)
+function Base.show(io::IO, ::MIME"text/plain", p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
-    other_tags = sort(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
     if !isempty(other_tags)
         str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
     end
@@ -494,7 +492,7 @@ julia> wordsize(Platform("x86_64", "macos"))
 wordsize(p::AbstractPlatform) = (arch(p) ∈ ("i686", "armv6l", "armv7l")) ? 32 : 64
 
 """
-    triplet(p::AbstractPlatform; exclude_tags::Vector{String})
+    triplet(p::AbstractPlatform)
 
 Get the target triplet for the given `Platform` object as a `String`.
 
@@ -835,7 +833,7 @@ Inspects the current Julia process to determine the libgfortran version this Jul
 linked against (if any).
 """
 function detect_libgfortran_version()
-    libgfortran_paths = filter(x -> occursin("libgfortran", x), Libdl.dllist())
+    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
     if isempty(libgfortran_paths)
         # One day, I hope to not be linking against libgfortran in base Julia
         return nothing
@@ -865,7 +863,7 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # This can happen if we were built by clang, so we don't link against
         # libstdc++ at all.
@@ -897,7 +895,7 @@ between Julia and LLVM; they must match.
 """
 function detect_cxxstring_abi()
     # First, if we're not linked against libstdc++, then early-exit because this doesn't matter.
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # We were probably built by `clang`; we don't link against `libstdc++`` at all.
         return nothing
@@ -1080,7 +1078,7 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     # We prefer these better matches, and secondarily reverse-sort by triplet so
     # as to generally choose the latest release (e.g. a `libgfortran5` tarball
     # over a `libgfortran3` tarball).
-    ps = sort(ps, lt = (a, b) -> begin
+    sort!(ps, lt = (a, b) -> begin
         loss_a = match_loss(a, platform)
         loss_b = match_loss(b, platform)
         if loss_a != loss_b

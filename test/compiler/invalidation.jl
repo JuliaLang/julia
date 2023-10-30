@@ -138,7 +138,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`
@@ -173,15 +173,14 @@ end
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)
-
-    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, x); nothing)
-    pr48932_caller_unuse(x) = (pr48932_callee_inferrable(Base.inferencebarrier(x)); nothing)
+    pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
+    pr48932_caller_unuse(x) = (pr48932_callee_inferable(Base.inferencebarrier(x)); nothing)
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
-    let rt = only(Base.return_types(pr48932_callee_inferrable, (Any,)))
-        @test rt === Nothing
-        effects = Base.infer_effects(pr48932_callee_inferrable, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+    let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
+        @test rt === Int
+        effects = Base.infer_effects(pr48932_callee_inferable, (Any,))
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:
@@ -191,10 +190,10 @@ begin take!(GLOBAL_BUFFER)
             @inline pr48932_caller_unuse(x)
         end |> only
         @test rt === Nothing
-        @test any(iscall((src, pr48932_callee_inferrable)), src.code)
+        @test any(iscall((src, pr48932_callee_inferable)), src.code)
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferrable
+        mi.def.name === :pr48932_callee_inferable
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
         mi.def.name === :pr48932_caller_unuse
@@ -202,11 +201,11 @@ begin take!(GLOBAL_BUFFER)
     @test isnothing(pr48932_caller_unuse(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 
-    # test that we didn't add the backedge from `pr48932_callee_inferrable` to `pr48932_caller_unuse`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inferrable` but not that of `pr48932_caller_unuse`
-    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, "foo"); x)
+    # test that we didn't add the backedge from `pr48932_callee_inferable` to `pr48932_caller_unuse`:
+    # this redefinition below should invalidate the cache of `pr48932_callee_inferable` but not that of `pr48932_caller_unuse`
+    pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, "foo"); x)
     @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferrable
+        mi.def.name === :pr48932_callee_inferable
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
         mi.def.name === :pr48932_caller_unuse
@@ -225,7 +224,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee_inlined, (Any,))
-        @test Core.Compiler.Effects(effects; noinbounds=false) == Core.Compiler.Effects()
+        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
     # run inference on `pr48932_caller_inlined` and `pr48932_callee_inlined`

@@ -147,8 +147,10 @@ end
         s
     end
 
-    (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
-    @test !any(x -> x isa Expr && x.head === :invoke, src.code)
+    (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    @test !any(src.code) do x
+        x isa Expr && x.head === :invoke && x.args[2] !== Core.GlobalRef(Base, :throw_boundserror)
+    end
 end
 
 # check that ismutabletype(type) can be fully eliminated
@@ -311,7 +313,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
+    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -777,8 +779,8 @@ end
 let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
         g42840(xs, 2)
     end |> only |> first
-    # `(xs::Vector{Int})[a::Const(2)]` => `Base.arrayref(true, xs, 2)`
-    @test count(iscall((src, Base.arrayref)), src.code) == 1
+    # `(xs::Vector{Int})[a::Const(2)]`
+    @test count(iscall((src, Base.memoryrefget)), src.code) == 1
     @test count(isinvoke(:g42840), src.code) == 1
 end
 
@@ -1130,7 +1132,7 @@ function f44200()
     x44200
 end
 let src = code_typed1(f44200)
-    @test_broken count(x -> isa(x, Core.PiNode), src.code) == 0
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
 
 # Test that peeling off one case from (::Any) doesn't introduce
@@ -1562,20 +1564,22 @@ end
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
-        let src = code_typed1((Vector{Any}, Any)) do xs, x
-                $f(xs, x)
+        for T in [Int, Any]
+            let src = code_typed1((Vector{T}, T)) do xs, x
+                    $f(xs, x)
+                end
+                @test count(iscall((src, $f)), src.code) == 0
             end
-            @test count(iscall((src, $f)), src.code) == 0
-            @test count(src.code) do @nospecialize x
-                isa(x, Core.GotoNode) ||
-                isa(x, Core.GotoIfNot) ||
-                iscall((src, getfield))(x)
-            end == 0 # no loop should be involved for the common single arg case
-        end
-        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
-                $f(xs, x, y)
+            let effects = Base.infer_effects((Vector{T}, T)) do xs, x
+                    $f(xs, x)
+                end
+                @test Core.Compiler.Core.Compiler.is_terminates(effects)
             end
-            @test count(iscall((src, $f)), src.code) == 0
+            let src = code_typed1((Vector{T}, T, T)) do xs, x, y
+                    $f(xs, x, y)
+                end
+                @test count(iscall((src, $f)), src.code) == 0
+            end
         end
         let xs = Any[]
             $f(xs, :x, "y", 'z')
@@ -1710,7 +1714,7 @@ let getfield_tfunc(@nospecialize xs...) =
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
-# TODO: Remove compute sparams for vararg_retrival
+# TODO: Remove compute sparams for vararg_retrieval
 fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN_inline(args...) = fvarargN_inline(args)
 let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
@@ -1770,15 +1774,15 @@ let interp = Core.Compiler.NativeInterpreter()
     ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
         @noinline a*b
     end |> only
-    i = findfirst(isinvoke(:*), ir.stmts.inst)
+    i = findfirst(isinvoke(:*), ir.stmts.stmt)
     @test i !== nothing
 
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test count(isinvoke(:*), ir.stmts.inst) == 0
-    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+    @test count(isinvoke(:*), ir.stmts.stmt) == 0
+    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) == 1
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -2060,4 +2064,39 @@ let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes())
         isinvoke(:no_compile_sig_invokes, x) &&
         (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
     end == 1
+end
+
+# https://github.com/JuliaLang/julia/issues/50612
+f50612(x) = UInt32(x)
+@test all(!isinvoke(:UInt32),get_code(f50612,Tuple{Char}))
+
+# move inlineable constant values into statement position during `compact!`-ion
+# so that we don't inline DCE-eligibile calls
+Base.@assume_effects :nothrow function erase_before_inlining(x, y)
+    z = sin(y)
+    if x
+        return "julia"
+    end
+    return z
+end
+@test fully_eliminated((Float64,); retval=5) do y
+    length(erase_before_inlining(true, y))
+end
+@test fully_eliminated((Float64,); retval=(5,5)) do y
+    z = erase_before_inlining(true, y)
+    return length(z), length(z)
+end
+
+# continue const-prop' when concrete-eval result is too big
+const THE_BIG_TUPLE_2 = ntuple(identity, 1024)
+return_the_big_tuple2(a) = (a, THE_BIG_TUPLE_2)
+let src = code_typed1() do
+        return return_the_big_tuple2(42)[2]
+    end
+    @test count(isinvoke(:return_the_big_tuple2), src.code) == 0
+end
+let src = code_typed1() do
+        return iterate(("1", '2'), 1)
+    end
+    @test count(isinvoke(:iterate), src.code) == 0
 end

@@ -340,6 +340,23 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
     memcpy(ptr, &val, 2);
 }
 
+STATIC_INLINE void *calloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = calloc(sz == 0 ? 1 : sz, 1);
+    if (p == NULL) {
+        perror("(julia) calloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
+
 STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
     int last_errno = errno;
 #ifdef _OS_WINDOWS_

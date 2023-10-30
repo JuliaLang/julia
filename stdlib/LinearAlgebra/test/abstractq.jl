@@ -20,8 +20,8 @@ n = 5
     Base.size(Q::MyQ) = size(Q.Q)
     LinearAlgebra.lmul!(Q::MyQ, B::AbstractVecOrMat) = lmul!(Q.Q, B)
     LinearAlgebra.lmul!(adjQ::AdjointQ{<:Any,<:MyQ}, B::AbstractVecOrMat) = lmul!(parent(adjQ).Q', B)
-    LinearAlgebra.rmul!(A::AbstractMatrix, Q::MyQ) = rmul!(A, Q.Q)
-    LinearAlgebra.rmul!(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:MyQ}) = rmul!(A, parent(adjQ).Q')
+    LinearAlgebra.rmul!(A::AbstractVecOrMat, Q::MyQ) = rmul!(A, Q.Q)
+    LinearAlgebra.rmul!(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:MyQ}) = rmul!(A, parent(adjQ).Q')
     Base.convert(::Type{AbstractQ{T}}, Q::MyQ) where {T} = MyQ{T}(Q.Q)
     LinearAlgebra.det(Q::MyQ) = det(Q.Q)
 
@@ -84,6 +84,17 @@ n = 5
         @test Q * x ≈ Q.Q * x
         @test Q' * x ≈ Q.Q' * x
     end
+    A = rand(Float64, 5, 3)
+    F = qr(A)
+    Q = MyQ(F.Q)
+    Prect = Matrix(F.Q)
+    Psquare = collect(F.Q)
+    @test Q == Prect
+    @test Q == Psquare
+    @test Q == F.Q*I
+    @test Q ≈ Prect
+    @test Q ≈ Psquare
+    @test Q ≈ F.Q*I
 end
 
 end # module

@@ -140,14 +140,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_LOAD_PATH" => "",
                     "JULIA_DEPOT_PATH" => ";:",
                     "HOME" => homedir()))
-        @test v == ("false\nREPL: InteractiveUtilstrue\n", true)
+        # @which is undefined
+        @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
                     "JULIA_LOAD_PATH" => ";;;:::",
                     "JULIA_DEPOT_PATH" => ";;;:::",
                     "HOME" => homedir()))
-        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
+        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
         @test v == ("REPL: 3\n", true)
     end
     @testset let v = readchomperrors(`$exename -i -e '
@@ -159,7 +160,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # make sure this is a non-fatal error and the REPL still loads
         @test v[1]
         @test isempty(v[2])
-        @test startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
+        # Can't load REPL if it's outside the sysimg if we break the load path.
+        # Need to rewrite this test nicer
+        # ┌ Warning: REPL provider not available: using basic fallback
+        # └ @ Base client.jl:459
+        @test_broken startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
@@ -226,16 +231,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # --quiet, --banner
-    let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
-        @test success(`$exename                 -e $(t(0, -1))`)
-        @test success(`$exename -q              -e $(t(1,  0))`)
-        @test success(`$exename --quiet         -e $(t(1,  0))`)
-        @test success(`$exename --banner=no     -e $(t(0,  0))`)
-        @test success(`$exename --banner=yes    -e $(t(0,  1))`)
-        @test success(`$exename -q --banner=no  -e $(t(1,  0))`)
-        @test success(`$exename -q --banner=yes -e $(t(1,  1))`)
-        @test success(`$exename --banner=no  -q -e $(t(1,  0))`)
-        @test success(`$exename --banner=yes -q -e $(t(1,  1))`)
+    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
+        @test read(`$exename                   -e $p`, String) == "(0, -1)"
+        @test read(`$exename -q                -e $p`, String) == "(1, 0)"
+        @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=no       -e $p`, String) == "(0, 0)"
+        @test read(`$exename --banner=yes      -e $p`, String) == "(0, 1)"
+        @test read(`$exename --banner=short    -e $p`, String) == "(0, 2)"
+        @test read(`$exename -q --banner=no    -e $p`, String) == "(1, 0)"
+        @test read(`$exename -q --banner=yes   -e $p`, String) == "(1, 1)"
+        @test read(`$exename -q --banner=short -e $p`, String) == "(1, 2)"
+        @test read(`$exename --banner=no  -q   -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=yes -q   -e $p`, String) == "(1, 1)"
+        @test read(`$exename --banner=short -q -e $p`, String) == "(1, 2)"
     end
 
     # --home
@@ -362,10 +370,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => nt) do
             @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
         end
+        withenv("JULIA_NUM_GC_THREADS" => nt) do
+            @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+        end
     end
 
     withenv("JULIA_NUM_GC_THREADS" => 2) do
         @test read(`$exename -e $code`, String) == "2"
+    end
+
+    withenv("JULIA_NUM_GC_THREADS" => "2,1") do
+        @test read(`$exename -e $code`, String) == "3"
     end
 
     # --machine-file
@@ -498,9 +513,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
         if Sys.WORD_SIZE == 64
-            @test popfirst!(got) == "       48     []"
-        else
             @test popfirst!(got) == "       32     []"
+        else
+            @test popfirst!(got) == "       16     []"
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
@@ -519,29 +534,34 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g0`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test !occursin("llvm.dbg.cu", code)
-        @test !occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g1`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g2`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test occursin("\"Int64\"", code)
+    # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
+    if !Sys.iswindows()
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
+            let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test !occursin("llvm.dbg.cu", code)
+                @test !occursin("int.jl", code)
+                @test !occursin("name: \"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test !occursin("name: \"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test occursin("name: \"Int64\"", code)
+            end
+        end
     end
 
     # --check-bounds
@@ -924,7 +944,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     close(in)
     close(err.in)
     txt = readline(err)
-    @test startswith(txt, "ERROR: syntax: incomplete")
+    @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
 # Issue #29855
@@ -959,6 +979,28 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
-#heap-size-hint
-@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "524288000"
+#heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
+@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
+end
+
+## `Main.main` entrypoint
+
+# Basic usage
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println("hello")'`) == "hello"
+
+# Test ARGS with -e
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println(ARGS)' a b`) == repr(["a", "b"])
+
+# Test import from module
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; using .Hello'`) == "hello"
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
+
+# test --bug-report=rr
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
+    mktempdir() do temp_trace_dir
+        @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                                      "_RR_TRACE_DIR" => temp_trace_dir);
+                               #=stdout, stderr=#))
+    end
 end

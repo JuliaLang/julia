@@ -60,7 +60,7 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --co
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
-@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
 ## Unit tests for safe file operations ##
@@ -1182,4 +1182,95 @@ end
 
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
+end
+
+@testset "checking srcpath modules" begin
+    p = Base.PkgId("Dummy")
+    fpath, _ = mktemp()
+    @testset "valid" begin
+        write(fpath, """
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        baremodule Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        using Foo
+        \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\" Foo \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        \"\"\" module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        @doc let x = 1
+            x
+        end module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        # using foo
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+    end
+    @testset "invalid" begin
+        write(fpath, """
+        # module Foo
+        using Bar
+        # end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        module Foo
+        end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        x = 1
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
 end

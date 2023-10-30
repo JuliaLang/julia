@@ -102,7 +102,7 @@ Random.seed!(1)
         @test_throws BoundsError ubd[1, n + 1] = 1
         @test ((cubd[2, 2] = 10) == 10; cubd[2, 2] == 10)
         # bidiagonal size
-        @test_throws ArgumentError size(ubd, 0)
+        @test_throws BoundsError size(ubd, 0)
         @test size(ubd, 1) == size(ubd, 2) == n
         @test size(ubd, 3) == 1
         # bidiagonal similar
@@ -118,6 +118,21 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+    end
+
+    @testset "isstored" begin
+        ubd = Bidiagonal(dv, ev, :U)
+        lbd = Bidiagonal(dv, ev, :L)
+        # bidiagonal isstored / upper & lower
+        @test_throws BoundsError Base.isstored(ubd, n + 1, 1)
+        @test_throws BoundsError Base.isstored(ubd, 1, n + 1)
+        @test Base.isstored(ubd, 2, 2)
+        # bidiagonal isstored / upper
+        @test Base.isstored(ubd, 2, 3)
+        @test !Base.isstored(ubd, 3, 2)
+        # bidiagonal isstored / lower
+        @test Base.isstored(lbd, 3, 2)
+        @test !Base.isstored(lbd, 2, 3)
     end
 
     @testset "show" begin
@@ -796,6 +811,14 @@ end
         if j < i-1 || j > i
             @test iszero(BL[i,j])
         end
+    end
+
+    M = ones(2,2)
+    for n in 0:1
+        dv = fill(M, n)
+        ev = fill(M, 0)
+        B = Bidiagonal(dv, ev, :U)
+        @test B == Matrix{eltype(B)}(B)
     end
 end
 

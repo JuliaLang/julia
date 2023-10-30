@@ -460,7 +460,7 @@ let err_str,
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
-    @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
+    @test repr("text/plain", Core.getfield) == "getfield (built-in function)"
 
     err_str = @except_stackframe String() ErrorException
     @test err_str == "String() at $sn:$(method_defs_lineno + 0)"
@@ -549,6 +549,25 @@ foo_9965(x::Int) = 2x
     @test occursin("got unsupported keyword argument \"w\"", String(take!(io)))
 end
 
+@testset "MethodError with long types (#50803)" begin
+    a = view(reinterpret(reshape, UInt8, PermutedDimsArray(rand(5, 7), (2, 1))), 2:3, 2:4, 1:4) # a mildly-complex type
+    function f50803 end
+    ex50803 = try
+        f50803(a, a, a, a, a, a)
+    catch e
+        e
+    end::MethodError
+    tlf = Ref(false)
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 120), :stacktrace_types_limited=>tlf))
+    @test tlf[]
+    @test occursin("::SubArray{…}", str)
+    tlf[] = false
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 10000), :stacktrace_types_limited=>tlf))
+    @test !tlf[]
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 120)))
+    @test !occursin("::SubArray{…}", str)
+end
+
 # Issue #20556
 import REPL
 module EnclosingModule
@@ -578,7 +597,7 @@ let
     end
 end
 
-@testset "show for manually thrown MethodError" begin
+@testset "show for MethodError with world age issue" begin
     global f21006
 
     f21006() = nothing
@@ -618,6 +637,32 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+end
+
+# Issue #50200
+using Base.Experimental: @opaque
+@testset "show for MethodError with world age issue (kwarg)" begin
+    test_no_error(f) = @test f() === nothing
+    function test_worldage_error(f)
+        ex = try; f(); error("Should not have been reached") catch ex; ex; end
+        @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
+        @test !occursin("!Matched::", sprint(Base.showerror, ex))
+    end
+
+    global callback50200
+
+    # First the no-kwargs version
+    callback50200 = (args...)->nothing
+    f = @opaque ()->callback50200()
+    test_no_error(f)
+    callback50200 = (args...)->nothing
+    test_worldage_error(f)
+
+    callback50200 = (args...; kwargs...)->nothing
+    f = @opaque ()->callback50200(;a=1)
+    test_no_error(f)
+    callback50200 = (args...; kwargs...)->nothing
+    test_worldage_error(f)
 end
 
 # Custom hints
@@ -675,11 +720,12 @@ backtrace()
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
+    length(output) >= 8 || println(output) # for better errors when this fails
     @test lstrip(output[3])[1:3] == "[1]"
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    @test occursin("the last 2 lines are repeated 5000 more times", output[7])
+    @test occursin("the above 2 lines are repeated 5000 more times", output[7])
     @test lstrip(output[8])[1:7] == "[10003]"
 end
 
@@ -814,7 +860,7 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
                 catch_backtrace()
             end
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
+            @test occursin(r"the above 2 lines are repeated \d+ more times", bt_str)
         end
     end
 end

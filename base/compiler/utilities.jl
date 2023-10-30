@@ -66,8 +66,6 @@ end
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
-sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
-
 function is_self_quoting(@nospecialize(x))
     return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
         isa(x,Char) || x === nothing || isa(x,Function)
@@ -91,7 +89,7 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
     sz = count_self ? sizeof(dt) : 0
     sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     dtfd = DataTypeFieldDesc(dt)
-    for i = 1:nfields(x)
+    for i = 1:Int(datatype_nfields(dt))
         isdefined(x, i) || continue
         f = getfield(x, i)
         if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
@@ -164,7 +162,7 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return method.sig
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
         mt, atype, sparams, method, #=int return_if_compileable=#0)
@@ -390,6 +388,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
+            isdefined(e, :val) || continue
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
@@ -489,8 +488,7 @@ end
 # using a function to ensure we can infer this
 @inline function slot_id(s)
     isa(s, SlotNumber) && return s.id
-    isa(s, Argument) && return s.n
-    return (s::TypedSlot).id
+    return (s::Argument).n
 end
 
 ###########
@@ -501,7 +499,7 @@ is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
-    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
         m = moduleroot(m)

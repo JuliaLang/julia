@@ -133,12 +133,6 @@ function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     end
 end
 
-# Like NamedTuple{names, T} as a constructor, but omits the additional
-# `convert` call, when the types are known to match the fields
-@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
-    $(Expr(:splatnew, :T, :args))
-end
-
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
@@ -160,6 +154,12 @@ NamedTuple(itr) = (; itr...)
 NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
 
 end # if Base
+
+# Like NamedTuple{names, T} as a constructor, but omits the additional
+# `convert` call, when the types are known to match the fields
+@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
+    $(Expr(:splatnew, :T, :args))
+end
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
@@ -183,16 +183,15 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
-function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
-    if !@isdefined T
-        # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
-        # _tuple_error(NT, nt)
-        T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
-        NT1 = NamedTuple{names, T1}
-    else
-        T1 = T
-        NT1 = NT
-    end
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+end
+
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # _tuple_error(NT, nt)
+    T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+    NT1 = NamedTuple{names, T1}
     return NT1(T1(nt))::NT1::NT
 end
 
@@ -286,18 +285,23 @@ end
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
-        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+@assume_effects :foldable function merge_fallback(a::NamedTuple, b::NamedTuple,
+                                                  an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
     end
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
+
+# This is `Experimental.@max_methods 4 function merge end`, which is not
+# defined at this point in bootstrap.
+typeof(function merge end).name.max_methods = UInt8(4)
 
 """
     merge(a::NamedTuple, bs::NamedTuple...)
@@ -404,7 +408,7 @@ end
     isempty(names) && return (;)
     types = diff_types(a, names)
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(a, n)

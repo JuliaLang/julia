@@ -18,7 +18,8 @@ export
     PollingFileWatcher,
     FDWatcher,
     # pidfile:
-    mkpidlock
+    mkpidlock,
+    trymkpidlock
 
 import Base: @handle_as, wait, close, eventloop, notify_error, IOError,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
@@ -462,6 +463,11 @@ function __init__()
     global uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
     global uv_jl_fseventscb_file = @cfunction(uv_fseventscb_file, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
     global uv_jl_fseventscb_folder = @cfunction(uv_fseventscb_folder, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
+
+    Base.mkpidlock_hook = mkpidlock
+    Base.trymkpidlock_hook = trymkpidlock
+    Base.parse_pidfile_hook = Pidfile.parse_pidfile
+
     nothing
 end
 
@@ -885,6 +891,6 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 end
 
 include("pidfile.jl")
-import .Pidfile: mkpidlock
+import .Pidfile: mkpidlock, trymkpidlock
 
 end

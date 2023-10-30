@@ -12,9 +12,7 @@ using Dates
 end
 
 @testset "TimeType arithmetic" begin
-    a = Date(2023, 5, 1)
-    b = DateTime(2023, 5, 2)
-    @test b - a == Day(1)
+    @test_throws MethodError DateTime(2023, 5, 2) - Date(2023, 5, 1)
 end
 
 @testset "Wrapping arithmetic for Months" begin
@@ -262,6 +260,24 @@ end
         @test dt + Dates.Millisecond(1) == Dates.DateTime(1972, 6, 30, 23, 59, 59, 1)
         @test dt - Dates.Millisecond(1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
         @test dt + Dates.Millisecond(-1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
+    end
+    @testset "DateTime-Microsecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Microsecond(1) == dt
+        @test dt + Dates.Microsecond(501) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Microsecond(1) == dt
+        @test dt - Dates.Microsecond(501) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+    end
+    @testset "DateTime-Nanosecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Nanosecond(1) == dt
+        @test dt + Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Nanosecond(1) == dt
+        @test dt - Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
     end
 end
 @testset "Date arithmetic" begin

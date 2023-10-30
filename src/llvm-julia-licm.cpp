@@ -13,7 +13,6 @@
 #include <llvm/Analysis/ScalarEvolution.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Dominators.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
@@ -123,17 +122,6 @@ static bool makeLoopInvariant(Loop *L, Value *V, bool &Changed, Instruction *Ins
   return true; // All non-instructions are loop-invariant.
 }
 
-struct JuliaLICMPassLegacy : public LoopPass {
-    static char ID;
-    JuliaLICMPassLegacy() : LoopPass(ID) {};
-
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
-
-    protected:
-        void getAnalysisUsage(AnalysisUsage &AU) const override {
-            getLoopAnalysisUsage(AU);
-        }
-};
 struct JuliaLICM : public JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
@@ -176,7 +164,7 @@ struct JuliaLICM : public JuliaPassContext {
         // Lazy initialization of exit blocks insertion points.
         bool exit_pts_init = false;
         SmallVector<Instruction*, 8> _exit_pts;
-        auto get_exit_pts = [&] () -> ArrayRef<Instruction*> {
+        auto get_exit_pts = [&] () -> MutableArrayRef<Instruction*> {
             if (!exit_pts_init) {
                 exit_pts_init = true;
                 SmallVector<BasicBlock*, 8> exit_bbs;
@@ -242,6 +230,7 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     ++SunkPreserveEnd;
                     moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE, MemorySSA::Beginning);
+                    exit_pts[0] = call;
                     LLVM_DEBUG(dbgs() << "Sunk gc_preserve_end: " << *call << "\n");
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
@@ -250,6 +239,7 @@ struct JuliaLICM : public JuliaPassContext {
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
+                        exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
                         REMARK([&](){
@@ -345,48 +335,27 @@ struct JuliaLICM : public JuliaPassContext {
                     auto align = Align(DL.getPointerSize(0));
                     auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
                     if (MSSAU.getMemorySSA()) {
-                        auto alloc_mdef = MSSAU.getMemorySSA()->getMemoryAccess(call);
-                        assert(isa<MemoryDef>(alloc_mdef) && "Expected alloc to be associated with a memory def!");
-                        auto clear_mdef = MSSAU.createMemoryAccessAfter(clear_obj, nullptr, alloc_mdef);
-                        assert(isa<MemoryDef>(clear_mdef) && "Expected memset to be associated with a memory def!");
-                        (void) clear_mdef;
+                        auto clear_mdef = MSSAU.createMemoryAccessInBB(clear_obj, nullptr, clear_obj->getParent(), MemorySSA::BeforeTerminator);
+                        MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
                 }
             }
         }
         if (changed && SE) {
+#if JL_LLVM_VERSION >= 160000
+            SE->forgetLoopDispositions();
+#else
             SE->forgetLoopDispositions(L);
+#endif
         }
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyFunction(*L->getHeader()->getParent(), &errs()));
+        assert(!verifyLLVMIR(*L));
 #endif
         return changed;
     }
 };
 
-bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
-    OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
-    auto GetDT = [this]() -> DominatorTree & {
-        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    };
-    auto GetLI = [this]() -> LoopInfo & {
-        return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-    };
-    auto GetMSSA = []() {
-        return nullptr;
-    };
-    auto GetSE = []() {
-        return nullptr;
-    };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
-    return juliaLICM.runOnLoop(L, ORE);
-}
-
-char JuliaLICMPassLegacy::ID = 0;
-static RegisterPass<JuliaLICMPassLegacy>
-        Y("JuliaLICM", "LICM for julia specific intrinsics.",
-          false, false);
 } //namespace
 
 PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
@@ -417,15 +386,4 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
         return preserved;
     }
     return PreservedAnalyses::all();
-}
-
-Pass *createJuliaLICMPass()
-{
-    return new JuliaLICMPassLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createJuliaLICMPass());
 }

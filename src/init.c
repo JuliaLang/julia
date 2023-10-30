@@ -382,6 +382,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 }
 
 void post_boot_hooks(void);
+void post_image_load_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -619,7 +620,8 @@ static const char *absformat(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{   // this function resolves the paths in jl_options to absolute file locations as needed
+{
+    // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
     // it may fail, print an error, and exit(1) if any of these paths are longer than JL_PATH_MAX
     //
@@ -840,27 +842,26 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    if (jl_options.image_file)
+    if (rel == JL_IMAGE_IN_MEMORY)
+        jl_set_sysimg_so(jl_exe_handle);
+    else if (jl_options.image_file)
         jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_init_codegen();
 
+    jl_init_common_symbols();
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(0);
+        jl_global_roots_table = jl_alloc_memory_any(0);
     }
 
-    jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
-        jl_core_module->parent = jl_core_module;
-        jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -872,7 +873,13 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_markthreads = 0;
+        jl_n_sweepthreads = 0;
         jl_n_gcthreads = 0;
+        jl_n_threads_per_pool[0] = 1;
+        jl_n_threads_per_pool[1] = 0;
+    } else {
+        post_image_load_hooks();
     }
     jl_start_threads();
 
@@ -882,7 +889,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_array_t *init_order = jl_module_init_order;
         JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;
-        int i, l = jl_array_len(init_order);
+        int i, l = jl_array_nrows(init_order);
         for (i = 0; i < l; i++) {
             jl_value_t *mod = jl_array_ptr_ref(init_order, i);
             jl_module_run_initializer((jl_module_t*)mod);

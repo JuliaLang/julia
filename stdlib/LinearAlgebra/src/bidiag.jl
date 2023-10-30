@@ -143,6 +143,19 @@ end
     end
 end
 
+@inline function Base.isstored(A::Bidiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds Base.isstored(A.ev, i)
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds Base.isstored(A.ev, j)
+    else
+        return false
+    end
+end
+
 @inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -183,8 +196,9 @@ end
 #Converting from Bidiagonal to dense Matrix
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
     n == 0 && return B
+    n > 1 && fill!(B, zero(T))
     @inbounds for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -200,7 +214,7 @@ Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
-promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
+promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
 function Tridiagonal{T}(A::Bidiagonal) where T
@@ -214,7 +228,8 @@ promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
 promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+AbstractMatrix{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A)
+AbstractMatrix{T}(A::Bidiagonal{T}) where {T} = copy(A)
 
 convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 
@@ -257,16 +272,7 @@ function show(io::IO, M::Bidiagonal)
     print_matrix(io, (M.ev)')
 end
 
-size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-function size(M::Bidiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.dv)
-    else
-        return 1
-    end
-end
+size(M::Bidiagonal) = (n = length(M.dv); (n, n))
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -754,7 +760,7 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
 end
 ldiv!(A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
 ldiv!(c::AbstractVecOrMat, A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
-    (t = adj_or_trans(A); _rdiv!(t(c), t(b), t(A)); return c)
+    (t = wrapperop(A); _rdiv!(t(c), t(b), t(A)); return c)
 
 ### Generic promotion methods and fallbacks
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
@@ -832,7 +838,7 @@ end
 rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(A, A, B)
 rdiv!(A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) =
-    (t = adj_or_trans(B); ldiv!(t(C), t(B), t(A)); return C)
+    (t = wrapperop(B); ldiv!(t(C), t(B), t(A)); return C)
 
 /(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
 

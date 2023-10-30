@@ -832,7 +832,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, int keep)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -850,9 +850,9 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
             avail = 0;
         }
         else {
-            size_t ntowrite = pd - (from->buf+from->bpos) + 1;
+            size_t ntowrite = pd - (from->buf+from->bpos) + (keep != 0);
             written = ios_write(to, from->buf+from->bpos, ntowrite);
-            from->bpos += ntowrite;
+            from->bpos += ntowrite + (keep == 0);
             total += written;
             return total;
         }
@@ -1217,7 +1217,7 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
+    ios_copyuntil(&dest, s, '\n', 1);
     size_t n;
     return ios_take_buffer(&dest, &n);
 }

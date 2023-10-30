@@ -59,6 +59,9 @@ using InteractiveUtils: code_llvm
     @test last(10:0.2:3) === 9.8
     @test step(10:0.2:3) === 0.2
     @test isempty(10:0.2:3)
+
+    unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
+    @test_throws unitrangeerrstr UnitRange('a', 'b')
 end
 
 using Dates, Random
@@ -1283,6 +1286,8 @@ end
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
+
+    @test sprint(show, LinRange{Float32}(1.5, 2.5, 10)) == "LinRange{Float32}(1.5, 2.5, 10)"
 end
 
 @testset "Issue 11049, and related" begin
@@ -1799,6 +1804,7 @@ Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 # required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
+Base.Int(x::Displacement) = x.val
 
 # Unsigned complement, for testing checked_length
 struct UPosition <: Unsigned
@@ -2487,3 +2493,47 @@ function check_ranges(rx, ry)
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
 # TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "checkbounds overflow (#26623)" begin
+    # the reported issue:
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
+
+    # a case that using mul_with_overflow & add_with_overflow might get wrong:
+    @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
+end
+
+@testset "collect with specialized vcat" begin
+    struct OneToThree <: AbstractUnitRange{Int} end
+    Base.size(r::OneToThree) = (3,)
+    Base.first(r::OneToThree) = 1
+    Base.length(r::OneToThree) = 3
+    Base.last(r::OneToThree) = 3
+    function Base.getindex(r::OneToThree, i::Int)
+        checkbounds(r, i)
+        i
+    end
+    Base.vcat(r::OneToThree) = r
+    r = OneToThree()
+    a = Array(r)
+    @test a isa Vector{Int}
+    @test a == r
+    @test collect(r) isa Vector{Int}
+    @test collect(r) == r
+end
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+
+end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
+end

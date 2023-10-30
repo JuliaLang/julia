@@ -516,33 +516,53 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return false
 end
 
-function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
-    lb = 70
-    A = StringVector(lb)
-    nread = 0
-    nout = 0
-    data = io.data
-    for i = io.ptr : io.size
-        @inbounds b = data[i]
-        nread += 1
-        if keep || b != delim
-            nout += 1
-            if nout > lb
-                lb = nout*2
-                resize!(A, lb)
-            end
-            @inbounds A[nout] = b
-        end
-        if b == delim
-            break
-        end
+function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+    data = view(io.data, io.ptr:io.size)
+    # note: findfirst + copyto! is much faster than a single loop
+    #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
+    nout = nread = something(findfirst(==(delim), data), length(data))
+    if !keep && nout > 0 && data[nout] == delim
+        nout -= 1
     end
+    write(out, view(io.data, io.ptr:io.ptr+nout-1))
     io.ptr += nread
-    if lb != nout
-        resize!(A, nout)
-    end
-    A
+    return out
 end
+
+function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+    copyuntil(out, s, 0x0a, keep=true)
+    line = out.data
+    i = out.size
+    if keep || i == 0 || line[i] != 0x0a
+        return out
+    elseif i < 2 || line[i-1] != 0x0d
+        i -= 1
+    else
+        i -= 2
+    end
+    out.size = i
+    if !out.append
+        out.ptr = i+1
+    end
+    return out
+end
+
+function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+    data = view(io.data, io.ptr:io.size)
+    # note: findfirst + copyto! is much faster than a single loop
+    #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
+    nout = nread = something(findfirst(==(0x0a), data), length(data))
+    if !keep && nout > 0 && data[nout] == 0x0a
+        nout -= 1
+        nout > 0 && data[nout] == 0x0d && (nout -= 1)
+    end
+    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    io.ptr += nread
+    return out
+end
+copyline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)

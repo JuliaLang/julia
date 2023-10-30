@@ -1214,17 +1214,22 @@ false
 """
 any(f, itr) = _any(f, itr, :)
 
-function _any(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _any(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v && return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 # Specialized versions of any(f, ::Tuple)
@@ -1282,20 +1287,22 @@ true
 """
 all(f, itr) = _all(f, itr, :)
 
-function _all(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-        elseif v
-            continue
-        else
-            return false
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _all(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v || return false
+            end
         end
+        return anymissing ? missing : true
     end
-    return anymissing ? missing : true
 end
 
 # Specialized versions of all(f, ::Tuple),

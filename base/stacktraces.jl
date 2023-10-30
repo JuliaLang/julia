@@ -20,9 +20,10 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, Module, Core.CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
 
 - `file::Symbol`
 
@@ -205,7 +206,6 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
             elseif miroots !== nothing
                 linfo = lookup_inline_frame_info(func, file, miroots)
             end
-            linfo = linfo === nothing ? parentmodule(res[i + 1]) : linfo # e.g. `macro expansion`
         end
         res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end

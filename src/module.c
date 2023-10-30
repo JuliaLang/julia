@@ -41,16 +41,14 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
-    JL_GC_PUSH1(&m);
     if (jl_core_module && default_names) {
+        JL_GC_PUSH1(&m);
         jl_module_using(m, jl_core_module);
-    }
-    // export own name, so "using Foo" makes "Foo" itself visible
-    if (default_names) {
+        // export own name, so "using Foo" makes "Foo" itself visible
         jl_set_const(m, name, (jl_value_t*)m);
+        jl_module_public(m, name, 1);
+        JL_GC_POP();
     }
-    jl_module_export(m, name);
-    JL_GC_POP();
     return m;
 }
 
@@ -180,6 +178,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
+    b->publicp = 0;
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
@@ -190,16 +189,44 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     return b;
 }
 
+extern jl_mutex_t jl_modules_mutex;
+
+static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
+{
+    if (jl_current_task->ptls->in_pure_callback)
+        jl_errorf("new globals cannot be created in a generated function");
+    if (jl_options.incremental && jl_generating_output()) {
+        JL_LOCK(&jl_modules_mutex);
+        int open = ptrhash_has(&jl_current_modules, (void*)m);
+        if (!open && jl_module_init_order != NULL) {
+            size_t i, l = jl_array_len(jl_module_init_order);
+            for (i = 0; i < l; i++) {
+                if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                    open = 1;
+                    break;
+                }
+            }
+        }
+        JL_UNLOCK(&jl_modules_mutex);
+        if (!open) {
+            jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
+                      "because the side effects will not be permanent.",
+                      jl_symbol_name(m->name), jl_symbol_name(var));
+        }
+    }
+}
+
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
 
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-
-    if (b) {
-        jl_binding_t *b2 = NULL;
-        if (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b) {
+    jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
+    if (b2 != b) {
+        if (b2 == NULL)
+            check_safe_newbinding(m, var);
+        if (b2 != NULL || (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b)) {
             jl_module_t *from = jl_binding_dbgmodule(b, m, var);
             if (from == m)
                 jl_errorf("cannot assign a value to imported variable %s.%s",
@@ -209,7 +236,6 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
                           jl_symbol_name(from->name), jl_symbol_name(var), jl_symbol_name(m->name));
         }
     }
-
     return b;
 }
 
@@ -223,29 +249,31 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 }
 
 // get binding for adding a method
-// like jl_get_binding_wr, but has different error paths
+// like jl_get_binding_wr, but has different error paths and messages
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-
-    jl_binding_t *b2 = NULL;
-    if (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b) {
-        jl_value_t *f = jl_atomic_load_relaxed(&b2->value);
-        jl_module_t *from = jl_binding_dbgmodule(b, m, var);
-        if (f == NULL) {
-            // we must have implicitly imported this with using, so call jl_binding_dbgmodule to try to get the name of the module we got this from
-            jl_errorf("invalid method definition in %s: exported function %s.%s does not exist",
-                      jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
+    jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
+    if (b2 != b) {
+        if (b2 == NULL)
+            check_safe_newbinding(m, var);
+        if (b2 != NULL || (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b)) {
+            jl_value_t *f = jl_atomic_load_relaxed(&b2->value);
+            jl_module_t *from = jl_binding_dbgmodule(b, m, var);
+            if (f == NULL) {
+                // we must have implicitly imported this with using, so call jl_binding_dbgmodule to try to get the name of the module we got this from
+                jl_errorf("invalid method definition in %s: exported function %s.%s does not exist",
+                          jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
+            }
+            // TODO: we might want to require explicitly importing types to add constructors
+            //       or we might want to drop this error entirely
+            if (!b->imported && !(b2->constp && jl_is_type(f) && strcmp(jl_symbol_name(var), "=>") != 0)) {
+                jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
+                          jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
+            }
+            return b2;
         }
-        // TODO: we might want to require explicitly importing types to add constructors
-        //       or we might want to drop this error entirely
-        if (!b->imported && (!b2->constp || !jl_is_type(f))) {
-            jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
-                      jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
-        }
-        return b2;
     }
-
     return b;
 }
 
@@ -641,10 +669,11 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 }
 
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
-    b->exportp = 1;
+    b->publicp = 1;
+    b->exportp = exported;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -663,6 +692,12 @@ JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
     return b && b->exportp;
+}
+
+JL_DLLEXPORT int jl_module_public_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    return b && b->publicp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
@@ -761,7 +796,10 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     // this function is mostly only used during initialization, so the data races here are not too important to us
-    jl_binding_t *bp = jl_get_binding_wr(m, var);
+    jl_binding_t *bp = jl_get_module_binding(m, var, 1);
+    jl_binding_t *b2 = NULL;
+    if (!jl_atomic_cmpswap(&bp->owner, &b2, bp) && b2 != bp)
+        jl_errorf("invalid redefinition of constant %s", jl_symbol_name(var));
     if (jl_atomic_load_relaxed(&bp->value) == NULL) {
         jl_value_t *old_ty = NULL;
         jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
@@ -770,7 +808,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
         if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
-                jl_gc_wb_binding(bp, val);
+                jl_gc_wb(bp, val);
                 return;
             }
         }
@@ -859,7 +897,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
     if (b->constp) {
         jl_value_t *old = NULL;
         if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
-            jl_gc_wb_binding(b, rhs);
+            jl_gc_wb(b, rhs);
             return;
         }
         if (jl_egal(rhs, old))
@@ -873,7 +911,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
                        jl_symbol_name(mod->name), jl_symbol_name(var));
     }
     jl_atomic_store_release(&b->value, rhs);
-    jl_gc_wb_binding(b, rhs);
+    jl_gc_wb(b, rhs);
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var)
@@ -913,7 +951,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
-        if ((b->exportp ||
+        if ((b->publicp ||
              (imported && b->imported) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
             (all || (!b->deprecated && !hidden))) {

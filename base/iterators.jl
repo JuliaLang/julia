@@ -387,6 +387,22 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
+
+# For a collection of iterators `is`, returns a tuple (b, n), where
+# `b` is true when every component of `is` has a statically-known finite
+# length and all such lengths are equal. Otherwise, `b` is false.
+# `n` is an implementation detail, and will be the `length` of the first
+# iterator if it is statically-known and finite. Otherwise, `n` is `nothing`.
+function _zip_lengths_finite_equal(is)
+    i = is[1]
+    if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
+        return (false, nothing)
+    else
+        b, n = _zip_lengths_finite_equal(tail(is))
+        return (b && (n === nothing || n == length(i)), length(i))
+    end
+end
+_zip_lengths_finite_equal(is::Tuple{}) = (true, nothing)
 size(z::Zip) = _promote_tuple_shape(Base.map(size, z.is)...)
 axes(z::Zip) = _promote_tuple_shape(Base.map(axes, z.is)...)
 _promote_tuple_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
@@ -468,8 +484,13 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+function reverse(z::Zip)
+    if !first(_zip_lengths_finite_equal(z.is))
+        throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
+    end
+    Zip(Base.map(reverse, z.is))
+end
 
 # filter
 
@@ -490,6 +511,15 @@ and use ``Θ(1)`` additional space, and `flt` will not be called by an
 invocation of `filter`. Calls to `flt` will be made when iterating over the
 returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
+
+!!! warning
+    Subsequent *lazy* transformations on the iterator returned from `filter`, such
+    as those performed by `Iterators.reverse` or `cycle`, will also delay calls to `flt`
+    until collecting or iterating over the returned iterable object. If the filter
+    predicate is nondeterministic or its return values depend on the order of iteration
+    over the elements of `itr`, composition with lazy transformations may result in
+    surprising behavior. If this is undesirable, either ensure that `flt` is a pure
+    function or collect intermediate `filter` iterators before further transformations.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 
@@ -705,7 +735,7 @@ struct Take{I}
     xs::I
     n::Int
     function Take(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Take length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -764,7 +794,7 @@ struct Drop{I}
     xs::I
     n::Int
     function Drop(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Drop length must be non-negative"))
         return new{I}(xs, n)
     end
 end

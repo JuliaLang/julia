@@ -1090,4 +1090,22 @@ end
     end
 end
 
+#Thread safety of threacall
+function threadcall_threads()
+    Threads.@threads for i = 1:8
+        ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 3)
+        @test unsafe_load(ptr) == 3
+        ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 4, 2)
+        @test unsafe_load(ptr, 1) == 3
+        @test unsafe_load(ptr, 2) == 4
+        @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+    end
+end
+@testset "threadcall + threads" begin
+    threadcall_threads() #Shouldn't crash!
+end
 end # main testset

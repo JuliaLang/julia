@@ -234,7 +234,7 @@ end
             @test size(A, 3) == 1
             @test size(A, 1) == n
             @test size(A) == (n, n)
-            @test_throws ArgumentError size(A, 0)
+            @test_throws BoundsError size(A, 0)
         end
         @testset "getindex" begin
             @test_throws BoundsError A[n + 1, 1]
@@ -434,17 +434,23 @@ end
             end
         else # mat_type is Tridiagonal
             @testset "tridiagonal linear algebra" begin
-                for (BB, vv) in ((copy(B), copy(v)), (view(B, 1:n, 1), view(v, 1:n)))
+                for vv in (copy(v), view(copy(v), 1:n))
                     @test A*vv ≈ fA*vv
                     invFv = fA\vv
                     @test A\vv ≈ invFv
-                    # @test Base.solve(T,v) ≈ invFv
-                    # @test Base.solve(T, B) ≈ F\B
                     Tlu = factorize(A)
                     x = Tlu\vv
                     @test x ≈ invFv
                 end
+                elty != Int && @test A \ v ≈ ldiv!(copy(A), copy(v))
             end
+            F = lu(A)
+            L1, U1, p1 = F
+            G = lu!(F, 2A)
+            L2, U2, p2 = F
+            @test L1 ≈ L2
+            @test 2U1 ≈ U2
+            @test p1 == p2
         end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
@@ -458,7 +464,7 @@ end
     end
 end
 
-@testset "SymTridiagonal block matrix" begin
+@testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
@@ -472,6 +478,27 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
+    @test @inferred A[1,1] == M
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == M
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(M, n)
+    @test @inferred diag(A, -1) == fill(M, n-1)
+    @test_throws MethodError diag(A, -2)
+    @test_throws MethodError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
+
+    for n in 0:2
+        dv, ev = fill(M, n), fill(M, max(n-1,0))
+        A = SymTridiagonal(dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+
+        A = Tridiagonal(ev, dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+    end
 end
 
 @testset "Issue 12068" begin

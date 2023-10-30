@@ -35,6 +35,13 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+function showerror(io::IO, ex::Meta.ParseError)
+    if isnothing(ex.detail)
+        print(io, "ParseError(", repr(ex.msg), ")")
+    else
+        showerror(io, ex.detail)
+    end
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -166,8 +173,10 @@ end
 
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
-    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
-    print(io, ex.val, ')')
+    T = first(ex.args)
+    nameof(T) === ex.func || print(io, T, ", ")
+    join(io, ex.args[2:end], ", ")
+    print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -243,7 +252,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int])
+        ex = MethodError(f, ex.args[3:end::Int], ex.world)
     end
     name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -261,20 +270,24 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
-        print(io, "(")
+        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
+        print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::", typ)
-            i == length(arg_types_param) || print(io, ", ")
+            print(iob, "::", typ)
+            i == length(arg_types_param) || print(iob, ", ")
         end
         if !isempty(kwargs)
-            print(io, "; ")
+            print(iob, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "::", typeof(v))
-                i == length(kwargs)::Int || print(io, ", ")
+                print(iob, k, "::", typeof(v))
+                i == length(kwargs)::Int || print(iob, ", ")
             end
         end
-        print(io, ")")
+        print(iob, ")")
+        str = String(take!(unwrapcontext(iob)[1]))
+        str = type_limited_string_from_context(io, str)
+        print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
     if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
@@ -490,7 +503,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)::Bool
+                        if k == 1 && Base.isvarargtype(sigtype)
+                            # There wasn't actually a mismatch - the method match failed for
+                            # some other reason, e.g. world age. Just print the sigstr.
+                            print(iob, sigstr...)
+                        elseif get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -664,7 +681,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
             printstyled(io,
-                "--- the last ", cycle_length, " lines are repeated ",
+                "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
             if i < length(displayed_stackframes)
                 println(io)
@@ -705,9 +722,6 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
-    file = fixup_stdlib_path(file)
-    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -747,6 +761,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     end
 
     # filepath
+    file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
     print(io, " ")
@@ -761,9 +776,6 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
-    # this will be set to true if types in the stacktrace are truncated
-    limitflag = Ref(false)
-    io = IOContext(io, :stacktrace_types_limited => limitflag)
 
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
@@ -788,9 +800,6 @@ function show_backtrace(io::IO, t::Vector)
         try invokelatest(update_stackframes_callback[], filtered) catch end
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
         show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
-    end
-    if limitflag[]
-        print(io, "\nSome type information was truncated. Use `show(err)` to see complete types.")
     end
     nothing
 end

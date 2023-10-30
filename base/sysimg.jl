@@ -31,52 +31,26 @@ let
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
+        :FileWatching, # used by loading.jl -- implicit assumption that init runs
+        :Libdl, # Transitive through LinAlg
+        :Artifacts, # Transitive through LinAlg
+        :SHA, # transitive through Random
+        :Sockets, # used by stream.jl
+
+        # Transitive through LingAlg
+        # OpenBLAS_jll
+        # libblastrampoline_jll
 
         # 1-depth packages
-        :LinearAlgebra,
-        :Markdown,
-        :Printf,
-        :Random,
-        :Tar,
-
-        # 2-depth packages
-        :Dates,
-        :Future,
-        :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
-
-        # 3-depth packages
-        :REPL,
-        :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
-
-        # 6-depth packages
-        :Pkg,
+        :LinearAlgebra, # Commits type-piracy and GEMM
+        :Random, # Can't be removed due to rand being exported by Base
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
+    push!(empty!(LOAD_PATH), "@stdlib")
     m = Module()
     GC.@preserve m begin
         print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
@@ -89,8 +63,9 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            dep[3] == 0.0 && continue
-            push!(Base._included_files, dep[1:2])
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
         Base._track_dependencies[] = false

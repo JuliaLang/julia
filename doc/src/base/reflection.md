@@ -4,9 +4,9 @@ Julia provides a variety of runtime reflection capabilities.
 
 ## Module bindings
 
-The exported names for a `Module` are available using [`names(m::Module)`](@ref), which will return
-an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, all = true)`
-returns symbols for all bindings in `m`, regardless of export status.
+The public names for a `Module` are available using [`names(m::Module)`](@ref), which will return
+an array of [`Symbol`](@ref) elements representing the public bindings. `names(m::Module, all = true)`
+returns symbols for all bindings in `m`, regardless of public status.
 
 ## DataType fields
 
@@ -52,8 +52,9 @@ the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> subtypes(AbstractFloat)
-4-element Vector{Any}:
+5-element Vector{Any}:
  BigFloat
+ Core.BFloat16
  Float16
  Float32
  Float64

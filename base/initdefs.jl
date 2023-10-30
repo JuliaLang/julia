@@ -25,7 +25,7 @@ Stop the program with an exit code. The default exit code is zero, indicating th
 program completed successfully. In an interactive session, `exit()` can be called with
 the keyboard shortcut `^D`.
 """
-exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
+exit(n) = ccall(:jl_exit, Union{}, (Int32,), n)
 exit() = exit(0)
 
 const roottask = current_task()
@@ -247,11 +247,24 @@ end
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
     if startswith(env, '@')
-        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
-        # if you put a `@` in LOAD_PATH manually, it's expanded late
+        # `@.` in JULIA_LOAD_PATH is expanded early (at startup time)
+        # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
+        if startswith(env, "@scriptdir")
+            if @isdefined(PROGRAM_FILE)
+                dir = dirname(PROGRAM_FILE)
+            else
+                cmds = unsafe_load_commands(opts.commands)
+                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                    # Usage error. The user did not pass a script.
+                    return nothing
+                end
+                dir = dirname(ARGS[1])
+            end
+            return abspath(replace(env, "@scriptdir" => dir))
+        end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -336,6 +349,10 @@ end
 
 Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
 packages.
+
+!!! note
+    `load_path` may return a reference to a cached value so it is not safe to modify the
+    returned vector.
 """
 function load_path()
     cache = LOADING_CACHE[]
