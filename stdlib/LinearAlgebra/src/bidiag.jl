@@ -647,7 +647,11 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAdd
     C
 end
 
-function _mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, _add::MulAddMul = MulAddMul())
+_mul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add::MulAddMul = MulAddMul()) =
+    _dibimul!(C, A, B, _add)
+_mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul = MulAddMul()) =
+    _dibimul!(C, A, B, _add)
+function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
