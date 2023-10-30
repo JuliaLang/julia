@@ -9,6 +9,7 @@ function saxpy(Z, X, Y, a)
     Tapir.foreach(eachindex(Z, Y, X)) do I
         @inbounds Z[I] = a*X[I] + Y[I]
     end
+    # FIXME: This should not be needed, bug in SyncInst detection.
     TapirOffloading.sync()
     Z
 end

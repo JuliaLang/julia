@@ -19,17 +19,24 @@ module TapirOffloadingCUDA
     end
 
     TapirOffloading.runtime(::CUDABackend) = OffloadingRuntime
-    function TapirOffloading.compiler_config(::CUDABackend)
-        cuda = CUDA.active_state()
-        return CUDA.compiler_config(cuda.device)::CUDA.CUDACompilerConfig
+
+    function link_kernel(image, name)
+        cu_mod = CuModule(image)
+        return CuFunction(cu_mod, name)
     end
 
-    const ROOTED_FUNCTIONS = Vector{CuFunction}()
-    function TapirOffloading.link_kernel(::CUDABackend, image, name)
-        cu_mod = CuModule(image)
-        cu_func = CuFunction(cu_mod, name)
-        push!(ROOTED_FUNCTIONS, cu_func)
-        return Base.unsafe_convert(Ptr{Cvoid}, cu_func.handle)
+    const _compiler_caches = Dict{CuContext, Dict{Any, CuFunction}}()
+    function TapirOffloading.lookup_or_compile(backend::CUDABackend, mod, nbytes, name)
+        cuda = CUDA.active_state()
+        cfg = CUDA.compiler_config(cuda.device)
+
+        key = (mod, name, cfg)
+        cache = CUDA.compiler_cache(cuda.context)
+        cuF = get!(cache, key) do
+            image, name = TapirOffloading.codegen(backend, mod, nbytes, name, cfg)
+            return link_kernel(image, name)
+        end::CuFunction
+        Base.unsafe_convert(Ptr{Cvoid}, cuF.handle)
     end
 
     function TapirOffloading.launch(::CUDABackend, func, args, args_sz, N)

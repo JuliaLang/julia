@@ -11,9 +11,8 @@ function register(name, backend)
     BACKENDS[name] = backend
 end
 
+function lookup_or_compile end
 function runtime end
-function compiler_config end
-function link_kernel end
 function launch end
 function sync end
 function pin end
@@ -30,7 +29,6 @@ using GPUCompiler
 
 function initialize()
     if !GPUCompiler.__llvm_initialized[]
-        @info "Initializing LLVM" libLLVMExtra = LLVM.API.libLLVMExtra
         LLVM.InitializeAllTargets()
         LLVM.InitializeAllTargetInfos()
         LLVM.InitializeAllAsmPrinters()
@@ -73,15 +71,21 @@ function build_runtime(backend, config)
     return mod
 end
 
-const Key = Tuple{Ptr{Int8}, Ptr{Int8}}
-# TODO: memoize on device
-# See CUDA.jl -- src/compiler/compilation.jl
+function codegen(backend, mod, nbytes, name, cfg)
+    name = Base.unsafe_string(name)
+    mod = unsafe_wrap(Vector{Int8}, mod, nbytes)
+    return ThreadSafeContext() do ts_ctx
+        LLVM.context!(LLVM.context(ts_ctx)) do
+            mod = parse(LLVM.Module, mod)
+            codegen(backend, mod, name, cfg)
+        end
+    end
+end
 
 function placeholder() end
 
-function codegen(backend, ir::LLVM.Module, entry_fn)
+function codegen(backend, ir::LLVM.Module, entry_fn, cfg)
     initialize()
-    cfg = compiler_config(backend)
 
     @info "Compiling for" target=cfg.target
 
@@ -124,8 +128,6 @@ function codegen(backend, ir::LLVM.Module, entry_fn)
     GPUCompiler.check_ir(job, ir)
     verify(ir)
 
-    @info "Backend" ir
-
     # 2. Emission
     asm, asm_meta = GPUCompiler.emit_asm(job, ir; strip=true, validate=true, format=LLVM.API.LLVMAssemblyFile)
     return asm, entry_fn
@@ -140,16 +142,7 @@ import Base: @ccallable
 
 @ccallable function __chi_lookup_or_compile(mod::Ptr{Int8}, nbytes::Csize_t, name::Ptr{Int8})::Ptr{Cvoid}
     backend = current_backend()
-    name = Base.unsafe_string(name)
-    mod = unsafe_wrap(Vector{Int8}, mod, nbytes)
-    @info "Lookup or Compile called" name nbytes
-    image, name = ThreadSafeContext() do ts_ctx
-        LLVM.context!(LLVM.context(ts_ctx)) do
-            mod = parse(LLVM.Module, mod)
-            codegen(backend, mod, name)
-        end
-    end
-    return link_kernel(backend, image, name)::Ptr{Cvoid}
+    lookup_or_compile(backend, mod, nbytes, name)::Ptr{Cvoid}
 end
 
 @ccallable function __chi_launch(func::Ptr{Int8}, args::Ptr{Int8}, args_sz::Csize_t, N::Csize_t)::Cvoid
