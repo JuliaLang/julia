@@ -1474,7 +1474,9 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-Uses `Base.copymutable` to support immutable collections and iterables.
+By default, `sort` copies its input with [`Base.copymutable`](@ref) before sorting, but some types have
+specialized versions of `sort` such as `NTuples` (`sort(::NTuple)` returns an `NTuple`) and
+`Dict` (`sort(::Dict)` produces a new sorted dictionary data structure)
 
 !!! compat "Julia 1.10"
     `sort` of arbitrary iterables requires at least Julia 1.10.
