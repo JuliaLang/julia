@@ -1181,7 +1181,7 @@ function const_prop_call(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
         end
-        frame = InferenceState(inf_result, #=cache=#:local, interp)
+        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
         if frame === nothing
             add_remark!(interp, sv, "[constprop] Could not retrieve the source")
             return nothing # this is probably a bad generated function (unsound), but just ignore it

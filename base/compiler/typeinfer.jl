@@ -5,10 +5,10 @@ const track_newly_inferred = RefValue{Bool}(false)
 const newly_inferred = CodeInstance[]
 
 # build (and start inferring) the inference frame for the top-level MethodInstance
-function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
-    frame = InferenceState(result, cache, interp)
+function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache_mode::Symbol)
+    frame = InferenceState(result, cache_mode, interp)
     frame === nothing && return false
-    cache === :global && lock_mi_inference(interp, result.linfo)
+    cache_mode === :global && lock_mi_inference(interp, result.linfo)
     return typeinf(interp, frame)
 end
 
@@ -239,7 +239,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         # but that is what !must_be_codeinf permits
         # This is hopefully unreachable when must_be_codeinf is true
     end
-    return
+    return nothing
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
@@ -267,11 +267,14 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         finish!(caller.interp, caller)
-        if caller.cached
+        if caller.cache_mode === :global
             cache_result!(caller.interp, caller.result)
         end
-        # n.b. We do not drop result.src here, even though that wastes memory while it is still in the local cache
-        # since the user might have requested call-site inlining of it.
+        # Drop result.src here since otherwise it can waste memory.
+        # N.B. If the `cache_mode === :local`, the inliner may request to use it later.
+        if caller.cache_mode !== :local
+            caller.result.src = nothing
+        end
     end
     empty!(frames)
     return true
@@ -381,23 +384,23 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     end
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
-    linfo = result.linfo
-    already_inferred = already_inferred_quick_test(interp, linfo)
-    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), linfo)
+    mi = result.linfo
+    already_inferred = already_inferred_quick_test(interp, mi)
+    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), mi)
         already_inferred = true
     end
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        code_cache(interp)[linfo] = ci = CodeInstance(interp, result, valid_worlds)
+        code_cache(interp)[mi] = ci = CodeInstance(interp, result, valid_worlds)
         if track_newly_inferred[]
-            m = linfo.def
+            m = mi.def
             if isa(m, Method) && m.module != Core
                 ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
             end
         end
     end
-    unlock_mi_inference(interp, linfo)
+    unlock_mi_inference(interp, mi)
     nothing
 end
 
@@ -543,7 +546,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.cached = false
+        me.cache_mode = :no
         set_inlineable!(me.src, false)
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
@@ -555,7 +558,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         type_annotate!(interp, me)
-        doopt = (me.cached || me.parent !== nothing)
+        doopt = (me.cache_mode !== :no || me.parent !== nothing)
         # Disable the optimizer if we've already determined that there's nothing for
         # it to do.
         if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
@@ -563,8 +566,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
-        else
-            me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
     end
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
@@ -814,7 +815,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again and keep it around in the local cache
             # since the inliner will request to use it later
-            cache = :local
+            cache_mode = :local
         else
             rt = cached_return_type(code)
             effects = ipo_effects(code)
@@ -822,7 +823,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             return EdgeCallResult(rt, mi, effects)
         end
     else
-        cache = :global # cache edge targets by default
+        cache_mode = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
@@ -839,7 +840,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi, typeinf_lattice(interp))
-        frame = InferenceState(result, cache, interp) # always use the cache for edge targets
+        frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
         if frame === nothing
             add_remark!(interp, caller, "Failed to retrieve source")
             # can't get the source for this, so we know nothing
@@ -970,7 +971,8 @@ typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype),
 function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     result = InferenceResult(mi, typeinf_lattice(interp))
-    frame = InferenceState(result, run_optimizer ? :global : :no, interp)
+    cache_mode = run_optimizer ? :global : :no
+    frame = InferenceState(result, cache_mode, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
@@ -1010,7 +1012,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))
-    frame = InferenceState(result, #=cache=#:global, interp)
+    frame = InferenceState(result, #=cache_mode=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
@@ -1043,18 +1045,18 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()`
 typeinf_ext_toplevel(mi::MethodInstance, world::UInt) = typeinf_ext_toplevel(NativeInterpreter(world), mi)
-function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance)
-    if isa(linfo.def, Method)
+function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance)
+    if isa(mi.def, Method)
         # method lambda - infer this specialization via the method cache
-        src = typeinf_ext(interp, linfo)
+        src = typeinf_ext(interp, mi)
     else
-        src = linfo.uninferred::CodeInfo
+        src = mi.uninferred::CodeInfo
         if !src.inferred
             # toplevel lambda - infer directly
             start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
             if !src.inferred
-                result = InferenceResult(linfo, typeinf_lattice(interp))
-                frame = InferenceState(result, src, #=cache=#:global, interp)
+                result = InferenceResult(mi, typeinf_lattice(interp))
+                frame = InferenceState(result, src, #=cache_mode=#:global, interp)
                 typeinf(interp, frame)
                 @assert is_inferred(frame) # TODO: deal with this better
                 src = frame.src
