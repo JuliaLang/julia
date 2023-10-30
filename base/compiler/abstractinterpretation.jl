@@ -142,7 +142,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    if const_results !== nothing && seen == napplicable
+    if const_results !== nothing
         @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
     end
