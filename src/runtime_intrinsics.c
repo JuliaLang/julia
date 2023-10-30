@@ -1012,7 +1012,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 
 // conversion operator
 
-typedef void (*intrinsic_cvt_t)(unsigned, void*, unsigned, void*);
+typedef void (*intrinsic_cvt_t)(jl_datatype_t*, void*, jl_datatype_t*, void*);
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*);
 #define cvt_iintrinsic(LLVMOP, name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
@@ -1029,12 +1029,9 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
     void *pa = jl_data_ptr(a);
-    unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
     void *pr = alloca(osize);
-    unsigned isize_bits = isize * host_char_bit;
-    unsigned osize_bits = osize * host_char_bit;
-    op(isize_bits, pa, osize_bits, pr);
+    op((jl_datatype_t*)aty, pa, (jl_datatype_t*)ty, pr);
     return jl_new_bits(ty, pr);
 }
 
