@@ -1201,6 +1201,9 @@ this is equivalent to `copy(a)`, but for other array types it may
 differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
 
+To change the behavior of `copymutable` on a custom collection is typically
+sufficient to define `similar` for that collection.
+
 # Examples
 ```jldoctest
 julia> tup = (1, 2, 3)
