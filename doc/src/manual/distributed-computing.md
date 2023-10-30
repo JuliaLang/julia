@@ -542,46 +542,73 @@ on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote pr
 A simple example of this is the following `DictChannel` which uses a dictionary as its
 remote store:
 
-```
-import Base: put!, wait, isready, take!, fetch
-
-mutable struct DictChannel{T} <: AbstractChannel{T}
+```jldoctest
+julia> struct DictChannel{T} <: AbstractChannel{T}
     d::Dict
-    cond_take::Condition    # waiting for data to become available
+    cond_take::Threads.Condition    # waiting for data to become available
 
     function DictChannel{T}() where T
-        return new(Dict(), Condition())
+        return new(Dict(), Threads.Condition())
     end
     DictChannel() = DictChannel{Any}()
 end
 
-function put!(D::DictChannel, k, v)
-    D.d[k] = v
-    notify(D.cond_take)
-    D
+julia> begin
+function Base.put!(D::DictChannel, k, v)
+    @lock D.cond_take begin
+        D.d[k] = v
+        notify(D.cond_take)
+    end
+    return D
 end
 
-function take!(D::DictChannel, k)
-    v=fetch(D,k)
-    delete!(D.d, k)
-    v
-end
-
-push!
-
-isready(D::DictChannel) = length(D.d) > 1
-isready(D::DictChannel, k) = haskey(D.d,k)
-
-function fetch(D::DictChannel, k)
-    wait(D,k)
-    D.d[k]
-end
-
-function wait(D::DictChannel, k)
-    while !isready(D, k)
-        wait(D.cond_take)
+function Base.take!(D::DictChannel, k)
+    @lock D.cond_take begin
+        v = fetch(D, k)
+        delete!(D.d, k)
+        return v
     end
 end
+
+Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+
+function Base.fetch(D::DictChannel, k)
+    @lock D.cond_take begin
+        wait(D, k)
+        return D.d[k]
+    end
+end
+
+function Base.wait(D::DictChannel, k)
+    @lock D.cond_take begin
+        while !isready(D, k)
+            wait(D.cond_take)
+        end
+    end
+end
+end;
+
+julia> d = DictChannel();
+
+julia> isready(d)
+false
+
+julia> put!(d, :k, :v);
+
+julia> isready(d, :k)
+true
+
+julia> fetch!(d, :k)
+:v
+
+julia> wait(d, :k)
+
+julia> take!(d, :k)
+:v
+
+julia> isready(d, :k)
+false
 ```
 
 
