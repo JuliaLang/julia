@@ -76,6 +76,10 @@ struct SemiConcreteResult <: ConstResult
     effects::Effects
 end
 
+struct InferredResult <: ConstResult
+    inferred_src::CodeInfo
+end
+
 """
     info::ConstCallInfo <: CallInfo
 

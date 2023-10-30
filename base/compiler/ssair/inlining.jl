@@ -864,8 +864,9 @@ end
 
 # the general resolver for usual and const-prop'ed calls
 function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceResult},
-        argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
-        state::InliningState; invokesig::Union{Nothing,Vector{Any}}=nothing)
+    argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
+    invokesig::Union{Nothing,Vector{Any}}=nothing,
+    inferred_result::Union{Nothing,InferredResult}=nothing)
     et = InliningEdgeTracker(state, invokesig)
 
     if isa(result, InferenceResult)
@@ -900,6 +901,9 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
+    if src isa String && inferred_result !== nothing
+        src = inferred_result.inferred_src
+    end
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
@@ -944,7 +948,8 @@ end
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing)
+    allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing,
+    inferred_result::Union{Nothing,InferredResult}=nothing)
     method = match.method
     spec_types = match.spec_types
 
@@ -973,7 +978,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     # Get the specialization for this method signature
     # (later we will decide what to do with it)
     mi = specialize_method(match)
-    return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
+    return resolve_todo(mi, match, argtypes, info, flag, state; invokesig, inferred_result)
 end
 
 function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
@@ -1203,7 +1208,8 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
                     return nothing
                 end
             end
-            item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
+            inferred_result = result isa InferredResult ? result : nothing
+            item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig, inferred_result)
         end
     end
     handle_single_case!(todo, ir, idx, stmt, item, true)
@@ -1343,8 +1349,8 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     if isa(result, ConstPropResult)
         return handle_const_prop_result!(cases, result, argtypes, info, flag, state; allow_abstract, allow_typevars)
     else
-        @assert result === nothing
-        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars)
+        @assert result === nothing || result isa InferredResult
+        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars, inferred_result = result)
     end
 end
 
@@ -1475,14 +1481,14 @@ end
 function handle_match!(cases::Vector{InliningCase},
     match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
     state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool)
+    allow_abstract::Bool, allow_typevars::Bool, inferred_result::Union{Nothing,InferredResult})
     spec_types = match.spec_types
     allow_abstract || isdispatchtuple(spec_types) || return false
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
     !allow_typevars && any(case::InliningCase->case.sig === spec_types, cases) && return true
-    item = analyze_method!(match, argtypes, info, flag, state; allow_typevars)
+    item = analyze_method!(match, argtypes, info, flag, state; allow_typevars, inferred_result)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
     return true
@@ -1587,7 +1593,8 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         if isa(result, SemiConcreteResult)
             item = semiconcrete_result_item(result, info, flag, state)
         else
-            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+            @assert result === nothing || result isa InferredResult
+            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false, inferred_result=result)
         end
     end
     handle_single_case!(todo, ir, idx, stmt, item)

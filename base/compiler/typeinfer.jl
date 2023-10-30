@@ -800,10 +800,12 @@ struct EdgeCallResult
     rt #::Type
     edge::Union{Nothing,MethodInstance}
     effects::Effects
+    inferred_src::Union{Nothing,CodeInfo}
     function EdgeCallResult(@nospecialize(rt),
                             edge::Union{Nothing,MethodInstance},
-                            effects::Effects)
-        return new(rt, edge, effects)
+                            effects::Effects,
+                            inferred_src::Union{Nothing,CodeInfo} = nothing)
+        return new(rt, edge, effects, inferred_src)
     end
 end
 
@@ -861,7 +863,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
         effects = isinferred ? frame.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
-        return EdgeCallResult(frame.bestguess, edge, effects)
+        inferred_src = isinferred && is_inlineable(frame.src) ? frame.src : nothing
+        return EdgeCallResult(frame.bestguess, edge, effects, inferred_src)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
