@@ -59,7 +59,27 @@ name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\a
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
-If you try to redefine a built-in constant or function already in use, Julia will give
+Julia will even let you shadow exported exported constants and functions with local ones
+(although this is not recommended to avoid potential confusions):
+
+```jldoctest
+julia> pi = 3
+3
+
+julia> pi
+3
+
+julia> sqrt = 4
+4
+
+julia> length() = 5
+length (generic function with 1 method)
+
+julia> Base.length
+length (generic function with 79 methods)
+```
+
+However, if you try to redefine a built-in constant or function already in use, Julia will give
 you an error:
 
 ```jldoctest
