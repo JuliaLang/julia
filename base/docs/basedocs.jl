@@ -2857,7 +2857,7 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A `Union` type is an `abstract type` which includes all instances of any of its argument types.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
 This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
 
 Like other abstract types, it cannot be instantiated, even if all of its arguments are non
