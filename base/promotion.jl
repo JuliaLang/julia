@@ -507,10 +507,10 @@ options. As such, when used in publicly registered packages, **it is the package
 responsibility to ensure that the API guarantees provided by the package do not depend on
 the exact type `R` obtained from `promote_op`.**
 
-Additionally, the result may depend upon return overly exact types, such as `DataType`,
-`Type`, or `Union{...}`, while the desired inputs or outputs may be different from those.
-The internal `promote_typejoin_union` function may be helpful to improve the result in some
-of these cases.
+Additionally, the result may return overly exact types, such as `DataType`, `Type`, or
+`Union{...}`, while the desired inputs or outputs may be different from those. The internal
+`promote_typejoin_union` function may be helpful to improve the result in some of these
+cases.
 
 # Extended help
 
