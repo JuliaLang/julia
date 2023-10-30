@@ -599,7 +599,7 @@ julia> put!(d, :k, :v);
 julia> isready(d, :k)
 true
 
-julia> fetch!(d, :k)
+julia> fetch(d, :k)
 :v
 
 julia> wait(d, :k)
