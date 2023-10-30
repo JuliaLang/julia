@@ -2871,16 +2871,16 @@ Union{Int64, AbstractString}
 julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
-julia> "Hello!" isa IntOrString # String's are also included
+julia> "Hello!" isa IntOrString # String is also included
 true
 
-julia> 1.0 isa IntOrString # Float64 no, because is neither Int nor AbstractString
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
 false
 ```
 
 # Extended Help
 
-Unlike most other parametric types, unions are covariant in their parameters. That is For example,
+Unlike most other parametric types, unions are covariant in their parameters. For example,
 `Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
 
 The empty union [`Union{}`](@ref) is the bottom type of Julia.
