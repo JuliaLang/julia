@@ -59,7 +59,7 @@ name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\a
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
-Julia will even let you shadow exported exported constants and functions with local ones
+Julia will even let you shadow existing exported constants and functions with local ones
 (although this is not recommended to avoid potential confusions):
 
 ```jldoctest
