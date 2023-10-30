@@ -6,6 +6,8 @@ using Random
 import REPL.LineEdit
 using Markdown
 
+@test isassigned(Base.REPL_MODULE_REF)
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
 import .Main.FakePTYs: with_fake_pty
@@ -15,7 +17,6 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
-
 
 function kill_timer(delay)
     # Give ourselves a generous timer here, just to prevent
@@ -35,6 +36,33 @@ function kill_timer(delay)
     return Timer(kill_test, delay)
 end
 
+## Debugging toys. Usage:
+##   stdout_read = tee_repr_stdout(stdout_read)
+##   ccall(:jl_breakpoint, Cvoid, (Any,), stdout_read)
+#function tee(f, in::IO)
+#    copy = Base.BufferStream()
+#    t = @async try
+#        while !eof(in)
+#            l = readavailable(in)
+#            f(l)
+#            write(copy, l)
+#        end
+#    catch ex
+#        if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+#            rethrow() # ignore EIO on `in` stream
+#        end
+#    finally
+#        # TODO: could we call closewrite to propagate an error, instead of always doing a clean close here?
+#        closewrite(copy)
+#    end
+#    Base.errormonitor(t)
+#    return copy
+#end
+#tee(out::IO, in::IO) = tee(l -> write(out, l), in)
+#tee_repr_stdout(io) = tee(io) do x
+#    print(repr(String(copy(x))) * "\n")
+#end
+
 # REPL tests
 function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
@@ -47,7 +75,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
@@ -65,7 +93,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+Base.exit_on_sigint(false)
 
 # make sure `run_interface` can normally handle `eof`
 # without any special handling by the user
@@ -90,7 +118,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -99,16 +127,28 @@ fake_repl() do stdin_write, stdout_read, repl
     end
 
     global inc = false
-    global b = Condition()
-    global c = Condition()
+    global b = Base.Event(true)
+    global c = Base.Event(true)
     let cmd = "\"Hello REPL\""
         write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
-    inc = true
-    notify(b)
-    wait(c)
+    let t = @async begin
+            inc = true
+            notify(b)
+            wait(c)
+        end
+        while (d = readline(stdout_read)) != ""
+            # first line [optional]: until 80th char of input
+            # second line: until end of input
+            # third line: "Hello REPL"
+            # last line: blank
+            # last+1 line: next prompt
+        end
+        wait(t)
+    end
 
     # Latex completions
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "\x32\\alpha\t")
     readuntil(stdout_read, "α")
     # Bracketed paste in search mode
@@ -131,42 +171,48 @@ fake_repl() do stdin_write, stdout_read, repl
             homedir_pwd = cd(pwd, homedir())
 
             # Test `cd`'ing to an absolute path
-            write(stdin_write, ";")
+            t = @async write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "cd $(escape_string(tmpdir))\n")
+            wait(t)
+            t = @async write(stdin_write, "cd $(escape_string(tmpdir))\n")
             readuntil(stdout_read, "cd $(escape_string(tmpdir))")
-            readuntil(stdout_read, tmpdir_pwd)
-            readuntil(stdout_read, "\n")
-            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, tmpdir_pwd * "\n\n")
+            wait(t)
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `cd` to move to the home directory
-            write(stdin_write, ";")
+            t = @async write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "cd\n")
-            readuntil(stdout_read, homedir_pwd)
-            readuntil(stdout_read, "\n")
-            readuntil(stdout_read, "\n")
+            wait(t)
+            t = @async write(stdin_write, "cd\n")
+            readuntil(stdout_read, homedir_pwd * "\n\n")
+            wait(t)
             @test samefile(".", homedir_pwd)
+            t1 = @async write(stdin_write, "\b")
 
             # Test using `-` to jump backward to tmpdir
-            write(stdin_write, ";")
+            t = @async write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "cd -\n")
-            readuntil(stdout_read, tmpdir_pwd)
-            readuntil(stdout_read, "\n")
-            readuntil(stdout_read, "\n")
+            wait(t1)
+            wait(t)
+            t = @async write(stdin_write, "cd -\n")
+            readuntil(stdout_read, tmpdir_pwd * "\n\n")
+            wait(t)
             @test samefile(".", tmpdir)
+            t1 = @async write(stdin_write, "\b")
 
             # Test using `~` (Base.expanduser) in `cd` commands
             if !Sys.iswindows()
-                write(stdin_write, ";")
+                t = @async write(stdin_write, ";")
                 readuntil(stdout_read, "shell> ")
-                write(stdin_write, "cd ~\n")
-                readuntil(stdout_read, homedir_pwd)
-                readuntil(stdout_read, "\n")
-                readuntil(stdout_read, "\n")
+                wait(t1)
+                wait(t)
+                t = @async write(stdin_write, "cd ~\n")
+                readuntil(stdout_read, homedir_pwd * "\n\n")
+                wait(t)
                 @test samefile(".", homedir_pwd)
+                write(stdin_write, "\b")
             end
         finally
             cd(origpwd)
@@ -187,38 +233,43 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #20771
     let s
-        write(stdin_write, ";")
+        t = @async write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
-        write(stdin_write, "'\n") # invalid input
+        wait(t)
+        t = @async write(stdin_write, "'\n") # invalid input
         s = readuntil(stdout_read, "\n")
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
-              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        write(stdin_write, "\b")
+        wait(t)
     end
 
     # issue #27293
     if Sys.isunix()
         let s, old_stdout = stdout
-            write(stdin_write, ";")
+            t = @async write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "echo ~")
-            s = readuntil(stdout_read, "~")
+            wait(t)
 
             proc_stdout_read, proc_stdout = redirect_stdout()
             get_stdout = @async read(proc_stdout_read, String)
             try
-                write(stdin_write, "\n")
+                t = @async write(stdin_write, "echo ~\n")
+                readuntil(stdout_read, "~")
                 readuntil(stdout_read, "\n")
-                s = readuntil(stdout_read, "\n")
+                s = readuntil(stdout_read, "\n") # the child has exited
+                wait(t)
             finally
                 redirect_stdout(old_stdout)
             end
-            @test s == "\e[0m" # the child has exited
+            @test s == "\e[0m"
             close(proc_stdout)
             # check for the correct, expanded response
             @test occursin(expanduser("~"), fetch(get_stdout))
+            write(stdin_write, "\b")
         end
     end
 
@@ -243,33 +294,39 @@ fake_repl() do stdin_write, stdout_read, repl
     # issue #10120
     # ensure that command quoting works correctly
     let s, old_stdout = stdout
-        write(stdin_write, ";")
+        t = @async write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
-        Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\" """)
+        wait(t)
+        t = @async begin
+            Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
+            write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        end
         readuntil(stdout_read, ")\"")
+        wait(t)
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
         try
-            write(stdin_write, '\n')
-            s = readuntil(stdout_read, "\n", keep=true)
-            if s == "\n"
+            t = @async write(stdin_write, '\n')
+            s = readuntil(stdout_read, "\n")
+            if s == ""
                 # if shell width is precisely the text width,
                 # we may print some extra characters to fix the cursor state
-                s = readuntil(stdout_read, "\n", keep=true)
+                s = readuntil(stdout_read, "\n")
                 @test occursin("shell> ", s)
-                s = readuntil(stdout_read, "\n", keep=true)
-                @test s == "\r\r\n"
+                s = readuntil(stdout_read, "\n")
+                @test s == "\r\r"
             else
                 @test occursin("shell> ", s)
             end
-            s = readuntil(stdout_read, "\n", keep=true)
-            @test s == "\e[0m\n" # the child has exited
+            s = readuntil(stdout_read, "\n")
+            @test s == "\e[0m" # the child printed nothing
+            wait(t)
         finally
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
         @test fetch(get_stdout) == "HI\n"
+        write(stdin_write, "\b")
     end
 
     # Issue #7001
@@ -331,6 +388,13 @@ fake_repl() do stdin_write, stdout_read, repl
     s2 = readuntil(stdout_read, "|||", keep=true)
     @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
                                             # have a spurious C before ||| (the one here is not spurious!)
+
+    # "pass through" for ^x^x
+    write(stdin_write, "\x030x4321\n") # \x03 == ^c
+    readuntil(stdout_read, "0x4321")
+    write(stdin_write, "\e[A\x18\x18||\x18\x18||||") # uparrow, ^x^x||^x^x||||
+    s3 = readuntil(stdout_read, "||||", keep=true)
+    @test endswith(s3, "||0x4321\r\e[15C||||")
 
     # Delete line (^U) and close REPL (^D)
     write(stdin_write, "\x15\x04")
@@ -428,6 +492,8 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # gets displayed by intercepting the display
         repl.specialdisplay = REPL.REPLDisplay(repl)
 
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
+
         repl.interface = REPL.setup_interface(repl)
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
@@ -438,14 +504,19 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
-
-        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
         REPL.history_reset_state(hp)
 
         histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
+        repl.mistate = s
         LineEdit.edit_insert(s, "wip")
 
         # LineEdit functions related to history
@@ -666,13 +737,21 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl)
     end
 
-    global c = Condition()
-    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
+    global c = Base.Event(true)
+    function sendrepl2(cmd)
+        t = @async readuntil(stdout_read, "\"done\"\n\n")
+        write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
+        wait(c)
+        fetch(t)
+    end
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
-    wait(c)
     @test Main.A == 2
+
+    # Test removal of prefix in single statement paste
+    sendrepl2("\e[200~In [12]: A = 2.2\e[201~\n")
+    @test Main.A == 2.2
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
@@ -684,7 +763,6 @@ fake_repl() do stdin_write, stdout_read, repl
 
                     julia> A = 3\e[201~
              """)
-    wait(c)
     @test Main.A == 3
     @test Base.invokelatest(Main.foo, 4)
     @test Base.invokelatest(Main.T17599, 3).a == 3
@@ -697,26 +775,49 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> A = 4
             4\e[201~
              """)
-    wait(c)
     @test Main.A == 4
     @test Base.invokelatest(Main.goo, 4) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
-    wait(c)
     @test Main.A == 1
 
     # Test that indentation corresponding to the prompt is removed
-    sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
-    wait(c)
-    readuntil(stdout_read, "begin")
-    @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+    s = sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
+    s2 = split(rsplit(s, "begin", limit=2)[end], "end", limit=2)[1]
+    @test s2 == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7C"
+
     # for incomplete input (`end` below is added after the end of bracket paste)
-    sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n\e[201~end""")
-    wait(c)
-    readuntil(stdout_read, "begin")
-    readuntil(stdout_read, "begin")
-    @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+    s = sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n\e[201~end""")
+    s2 = split(rsplit(s, "begin", limit=2)[end], "end", limit=2)[1]
+    @test s2 == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7C"
+
+    # Test switching repl modes
+    redirect_stdout(devnull) do # to suppress "foo" echoes
+    sendrepl2("""\e[200~
+            julia> A = 1
+            1
+
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
+
+            help?> Int
+            Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
+
+            julia> B = 2
+            2\e[201~
+             """)
+    @test Main.A == 1
+    @test Main.B == 2
+    end # redirect_stdout
 
     # Close repl
     write(stdin_write, '\x04')
@@ -751,65 +852,65 @@ fake_repl() do stdin_write, stdout_read, repl
 
     repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel, search_prompt]))
 
-    write(stdin_write,"a\n")
+    write(stdin_write, "a\n")
     @test wait(c) == "a"
     # Up arrow enter should recall history even at the start
-    write(stdin_write,"\e[A\n")
+    write(stdin_write, "\e[A\n")
     @test wait(c) == "a"
     # And again
-    write(stdin_write,"\e[A\n")
+    write(stdin_write, "\e[A\n")
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+Base.exit_on_sigint(true)
 
-let exename = Base.julia_cmd()
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # Test REPL in dumb mode
-    with_fake_pty() do pty_slave, pty_master
+    with_fake_pty() do pts, ptm
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
-        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
-        output = readuntil(pty_master, "julia> ", keep=true)
+        p = run(detach(setenv(`$exename -q`, nENV)), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
+        output = readuntil(ptm, "julia> ", keep=true)
         if ccall(:jl_running_on_valgrind, Cint,()) == 0
             # If --trace-children=yes is passed to valgrind, we will get a
             # valgrind banner here, not just the prompt.
             @test output == "julia> "
         end
-        write(pty_master, "1\nexit()\n")
+        write(ptm, "1\nexit()\n")
 
-        output = readuntil(pty_master, ' ', keep=true)
+        output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
-	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+            # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
         end
-        @test bytesavailable(pty_master) == 0
+        @test bytesavailable(ptm) == 0
         @test if Sys.iswindows() || Sys.isbsd()
-                eof(pty_master)
+                eof(ptm)
             else
                 # Some platforms (such as linux) report EIO instead of EOF
                 # possibly consume child-exited notification
                 # for example, see discussion in https://bugs.python.org/issue5380
                 try
-                    eof(pty_master) && !Sys.islinux()
+                    eof(ptm) && !Sys.islinux()
                 catch ex
                     (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
-                    @test_throws ex eof(pty_master) # make sure the error is sticky
-                    pty_master.readerror = nothing
-                    eof(pty_master)
+                    @test_throws ex eof(ptm) # make sure the error is sticky
+                    ptm.readerror = nothing
+                    eof(ptm)
                 end
             end
-        @test read(pty_master, String) == ""
+        @test read(ptm, String) == ""
         wait(p)
     end
 
     # Test stream mode
-    p = open(`$exename --startup-file=no -q`, "r+")
+    p = open(`$exename -q`, "r+")
     write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
 end # let exename
@@ -819,7 +920,7 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -827,13 +928,13 @@ end
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
-    Base.display_error(io,
-        try
+    Base.display_error(io, Base.ExceptionStack(Any[(exception =
+        (try
             [][trues(6000)]
             @assert false
         catch e
             e
-        end, [])
+        end), backtrace = [])]))
     @test length(String(take!(io))) < 1500
 end
 
@@ -855,16 +956,29 @@ end
 let ends_with_semicolon = REPL.ends_with_semicolon
     @test !ends_with_semicolon("")
     @test ends_with_semicolon(";")
-    @test !ends_with_semicolon("a")
+    @test !ends_with_semicolon("ä")
+    @test !ends_with_semicolon("ä # äsdf ;")
+    @test ends_with_semicolon("""a * "#ä" ;""")
+    @test ends_with_semicolon("a; #=#=# =# =#\n")
     @test ends_with_semicolon("1;")
     @test ends_with_semicolon("1;\n")
     @test ends_with_semicolon("1;\r")
     @test ends_with_semicolon("1;\r\n   \t\f")
-    @test ends_with_semicolon("1;#text\n")
-    @test ends_with_semicolon("a; #=#=# =# =#\n")
+    @test ends_with_semicolon("1;#äsdf\n")
+    @test ends_with_semicolon("""1;\n#äsdf\n""")
+    @test !ends_with_semicolon("\"\\\";\"#\"")
+    @test ends_with_semicolon("\"\\\\\";#\"")
     @test !ends_with_semicolon("begin\na;\nb;\nend")
     @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
+    @test ends_with_semicolon("f()= 1; # é ; 2")
+    @test ends_with_semicolon("f()= 1; # é")
+    @test !ends_with_semicolon("f()= 1; \"é\"")
+    @test !ends_with_semicolon("""("f()= 1; # é")""")
+    @test !ends_with_semicolon(""" "f()= 1; # é" """)
+    @test ends_with_semicolon("f()= 1;")
+    # the next result does not matter because this is not legal syntax
+    @test_nowarn ends_with_semicolon("1; #=# 2")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
@@ -879,6 +993,13 @@ let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffe
     @test term[:foo] == get(term, :foo, nothing) == true
     @test get(term, :bar, nothing) === nothing
     @test_throws KeyError term[:bar]
+end
+
+# Ensure even the dumb REPL elides content
+let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("zeros(1000)\n"),IOBuffer(),IOBuffer())
+    r = REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test contains(String(take!(term.out_stream)), "⋮")
 end
 
 
@@ -999,21 +1120,52 @@ fake_repl() do stdin_write, stdout_read, repl
     end
 
     @eval Main module TestShowTypeREPL; export TypeA; struct TypeA end; end
-    write(stdin_write, "TestShowTypeREPL.TypeA\n")
-    @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
-    readline(stdout_read)
-    readline(stdout_read)
+    t = @async write(stdin_write, "TestShowTypeREPL.TypeA\n")
+    s = readuntil(stdout_read, "\n\n")
+    s2 = rsplit(s, "\n", limit=2)[end]
+    @test s2 == "\e[0mMain.TestShowTypeREPL.TypeA"
+    wait(t)
     @eval Main using .TestShowTypeREPL
-    write(stdin_write, "TypeA\n")
-    @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
-    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
+    t = @async write(stdin_write, "TypeA\n")
+    s = readuntil(stdout_read, "\n\n")
+    s2 = rsplit(s, "\n", limit=2)[end]
+    @test s2 == "\e[0mTypeA"
+    wait(t)
 
     # Close REPL ^D
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
 
-help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+# test activate_module
+fake_repl() do stdin_write, stdout_read, repl
+    repl.history_file = false
+    repl.interface = REPL.setup_interface(repl)
+    repl.mistate = LineEdit.init_state(repl.t, repl.interface)
+
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    write(stdin_write, " ( 123 , Base.Fix1 , ) \n")
+    s = readuntil(stdout_read, "\n\n")
+    @test endswith(s, "(123, Base.Fix1)")
+
+    repl.mistate.active_module = Base # simulate activate_module(Base)
+    write(stdin_write, " ( 456 , Base.Fix2 , ) \n")
+    s = readuntil(stdout_read, "\n\n")
+    # ".Base" prefix not shown here
+    @test endswith(s, "(456, Fix2)")
+
+    # Close REPL ^D
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1038,13 +1190,33 @@ for (line, expr) in Pair[
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type"]
+for line in ["′", "type"]
     @test occursin("No documentation found.",
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
 
+# PR 35154
 @test occursin("|=", sprint(show, help_result("|=")))
 @test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
+
+# Issue 39427
+@test occursin("does not exist.", sprint(show, help_result(":=")))
+global some_undef_global
+@test occursin("exists,", sprint(show, help_result("some_undef_global", @__MODULE__)))
+
+# Issue #40563
+@test occursin("does not exist", sprint(show, help_result("..")))
+# test that helpmode is sensitive to contextual module
+@test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Base.Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Fix2", Base)))
+
 
 # Issue #25930
 
@@ -1078,6 +1250,7 @@ let emptyH1 = Markdown.parse("# "),
 end
 
 module BriefExtended
+public f, f_plain
 """
     f()
 
@@ -1088,26 +1261,50 @@ Short docs
 Long docs
 """
 f() = nothing
+@doc text"""
+    f_plain()
+
+Plain text docs
+"""
+f_plain() = nothing
+@doc html"""
+<h1><code>f_html()</code></h1>
+<p>HTML docs.</p>
+"""
+f_html() = nothing
 end # module BriefExtended
+
 buf = IOBuffer()
 md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
 @test length(md.content) == 2 && isa(md.content[2], REPL.Message)
 buf = IOBuffer()
 md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
 @test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
+buf = IOBuffer()
+txt = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_plain"))
+@test !isempty(sprint(show, txt))
+buf = IOBuffer()
+html = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_html"))
+@test !isempty(sprint(show, html))
 
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
     end
-    write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
+    t = @async write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
-    write(stdin_write, "ans\n")
+    s = readuntil(stdout_read, "\n\n")
+    @test endswith(s, "\e[0m:(Base.Math.float(_1))")
+    wait(t)
+
+    readuntil(stdout_read, "julia> ", keep=true)
+    t = @async write(stdin_write, "ans\n")
     readline(stdout_read)
-    readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    s = readuntil(stdout_read, "\n\n")
+    @test endswith(s, "\e[0m:(Base.Math.float(_1))")
+    wait(t)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1117,13 +1314,22 @@ fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
     end
-    write(stdin_write, "struct Errs end\n")
+    t = @async write(stdin_write, "struct Errs end\n")
+    readuntil(stdout_read, "\e[0m")
     readline(stdout_read)
+    wait(t)
+    readuntil(stdout_read, "julia> ", keep=true)
+    t = @async write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
     readline(stdout_read)
-    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readuntil(stdout_read, "\e[0m")
     readline(stdout_read)
+    wait(t)
+    readuntil(stdout_read, "julia> ", keep=true)
+    t = @async write(stdin_write, "Errs()\n")
     readline(stdout_read)
-    write(stdin_write, "Errs()\n")
+    readuntil(stdout_read, "\n\n")
+    wait(t)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     wait(repltask)
     @test istaskdone(repltask)
@@ -1136,7 +1342,22 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "?;\n")
     readline(stdout_read)
-    @test endswith(readline(stdout_read),";")
+    s = readline(stdout_read)
+    @test endswith(s, "search: ;")
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+# issue #35771
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "global x\n")
+    readline(stdout_read)
+    @test !occursin("ERROR", readline(stdout_read))
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1154,7 +1375,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # necessary to read at least some part of the buffer,
     # for the "region_active" to have time to be updated
 
-    @test LineEdit.state(repl.mistate).region_active == :off
+    @test LineEdit.state(repl.mistate).region_active === :off
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
@@ -1163,15 +1384,15 @@ end
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
 @testset "AST Transformation" begin
     backend = REPL.REPLBackend()
-    @async REPL.start_repl_backend(backend)
+    errormonitor(@async REPL.start_repl_backend(backend))
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1183,12 +1404,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)
@@ -1198,3 +1419,320 @@ frontend_task = @async begin
 end
 REPL.start_repl_backend(backend)
 Base.wait(frontend_task)
+
+macro throw_with_linenumbernode(err)
+    Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
+end
+
+@testset "Install missing packages via hooks" begin
+    @testset "Parse AST for packages" begin
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        @test mods == [:Foo]
+    end
+end
+
+# err should reprint error if deeper than top-level
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    # initialize `err` to `nothing`
+    t = @async (readline(stdout_read); readuntil(stdout_read, "\e[0m\n"))
+    write(stdin_write, "setglobal!(Base.MainInclude, :err, nothing)\n")
+    wait(t)
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate top-level error
+    write(stdin_write, "foobar\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that top-level error did not change `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate deeper error
+    write(stdin_write, "foo() = foobar\n")
+    readuntil(stdout_read, "\n\e[0m", keep=true)
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, "foo()\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that deeper error did set `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
+    @test readline(stdout_read) == "UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "Stacktrace:"
+    readuntil(stdout_read, "\n\n", keep=true)
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+fakehistory_2 = """
+# time: 2014-06-29 20:44:29 EDT
+# mode: shell
+\txyz = 2
+# time: 2014-06-29 20:44:29 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-29 21:44:29 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\tabc = 3
+# time: 2014-06-30 17:32:59 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 99:99:99 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-30 99:99:99 EDT
+# mode: extended
+\tuser imported custom mode
+"""
+
+# Test various history related issues
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
+    fake_repl() do stdin_write, stdout_read, repl
+        # In the future if we want we can add a test that the right object
+        # gets displayed by intercepting the display
+        repl.specialdisplay = REPL.REPLDisplay(repl)
+
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
+
+        repl.interface = REPL.setup_interface(repl)
+        repl_mode = repl.interface.modes[1]
+        shell_mode = repl.interface.modes[2]
+        help_mode = repl.interface.modes[3]
+        histp = repl.interface.modes[4]
+        prefix_mode = repl.interface.modes[5]
+
+        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
+                                                       :shell => shell_mode,
+                                                       :help  => help_mode))
+        hist_path = tempname()
+        write(hist_path, fakehistory_2)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
+        REPL.history_reset_state(hp)
+
+        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+
+        s = LineEdit.init_state(repl.t, prefix_mode)
+        prefix_prev() = REPL.history_prev_prefix(s, hp, "x")
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 1"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+    end
+end
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    repl.interface = REPL.setup_interface(repl)
+    s = LineEdit.init_state(repl.t, repl.interface)
+    LineEdit.edit_insert(s, "1234αβ")
+    input_f = function(filename, line, column)
+        write(filename, "1234αβ56γ\n")
+    end
+    LineEdit.edit_input(s, input_f)
+    @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+end
+
+# Non standard output_prefix, tested via `numbered_prompt!`
+fake_repl() do stdin_write, stdout_read, repl
+    repl.interface = REPL.setup_interface(repl)
+
+    backend = REPL.REPLBackend()
+    repltask = @async begin
+        REPL.run_repl(repl; backend)
+    end
+
+    REPL.numbered_prompt!(repl, backend)
+
+    global c = Base.Event(true)
+    function sendrepl2(cmd, txt)
+        t = @async write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
+        r = readuntil(stdout_read, txt, keep=true)
+        readuntil(stdout_read, "\"done\"\n\n", keep=true)
+        wait(c)
+        wait(t)
+        return r
+    end
+
+    s = sendrepl2("\"z\" * \"z\"\n", "\"zz\"")
+    @test contains(s, "In [1]")
+    @test endswith(s, "Out[1]: \"zz\"")
+
+    s = sendrepl2("\"y\" * \"y\"\n", "\"yy\"")
+    @test endswith(s, "Out[3]: \"yy\"")
+
+    s = sendrepl2("Out[1] * Out[3]\n", "\"zzyy\"")
+    @test endswith(s, "Out[5]: \"zzyy\"")
+
+    # test a top-level expression
+    s = sendrepl2("import REPL\n", "In [8]")
+    @test !contains(s, "ERROR")
+    @test !contains(s, "[6]")
+    @test !contains(s, "Out[7]:")
+    @test contains(s, "In [7]: ")
+    @test contains(s, "import REPL")
+    s = sendrepl2("REPL\n", "In [10]")
+    @test contains(s, "Out[9]: REPL")
+
+    # Test for https://github.com/JuliaLang/julia/issues/46451
+    s = sendrepl2("x_47878 = range(-1; stop = 1)\n", "-1:1")
+    @test contains(s, "Out[11]: -1:1")
+
+    # Test for https://github.com/JuliaLang/julia/issues/49041
+    s = sendrepl2("using Test; @test true", "In [14]")
+    @test !contains(s, "ERROR")
+    @test contains(s, "Test Passed")
+
+    # Test for https://github.com/JuliaLang/julia/issues/49319
+    s = sendrepl2("# comment", "In [16]")
+    @test !contains(s, "ERROR")
+
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+fake_repl() do stdin_write, stdout_read, repl
+    backend = REPL.REPLBackend()
+    repltask = @async REPL.run_repl(repl; backend)
+    write(stdin_write,
+          "a = UInt8(81):UInt8(160); b = view(a, 1:64); c = reshape(b, (8, 8)); d = reinterpret(reshape, Float64, c); sqrteach(a) = [sqrt(x) for x in a]; sqrteach(d)\n\"ZZZZZ\"\n")
+    txt = readuntil(stdout_read, "ZZZZZ")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
+end
+
+# Hints for tab completes
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    s2 = readuntil(stdout_read, "vailable") # partial hint
+
+    write(stdin_write, "x") # "readax" doesn't tab complete so no hint
+    # we can't use readuntil given this doesn't print, so just wait for the hint state to be reset
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\b") # only tab complete while typing forward
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "v")
+    s3 = readuntil(stdout_read, "ailable") # partial hint
+
+    write(stdin_write, "\t")
+    s4 = readuntil(stdout_read, "readavailable") # full completion is reprinted
+
+    write(stdin_write, "\x15")
+    write(stdin_write, "x") # single chars shouldn't hint e.g. `x` shouldn't hint at `xor`
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+end
+## hints disabled
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false)) do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+    @test !occursin("vailable", String(readavailable(stdout_read)))
+end
+
+# banner
+let io = IOBuffer()
+    @test REPL.banner(io) === nothing
+    seek(io, 0)
+    @test countlines(io) == 9
+    take!(io)
+    @test REPL.banner(io; short=true) === nothing
+    seek(io, 0)
+    @test countlines(io) == 2
+end

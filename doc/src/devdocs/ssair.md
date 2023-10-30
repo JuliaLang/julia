@@ -1,21 +1,67 @@
 # Julia SSA-form IR
 
+Julia uses a static single assignment intermediate representation ([SSA IR](https://en.wikipedia.org/wiki/Static_single-assignment_form)) to perform optimization.
+This IR is different from LLVM IR, and unique to Julia.
+It allows for Julia specific optimizations.
+
+1. Basic blocks (regions with no control flow) are explicitly annotated.
+2. if/else and loops are turned into `goto` statements.
+3. lines with multiple operations are split into multiple lines by introducing variables.
+
+For example the following Julia code:
+```julia
+function foo(x)
+    y = sin(x)
+    if x > 5.0
+        y = y + cos(x)
+    end
+    return exp(2) + y
+end
+```
+when called with a `Float64` argument is translated into:
+
+```julia
+using InteractiveUtils
+@code_typed foo(1.0)
+```
+
+```llvm
+CodeInfo(
+1 ─ %1 = invoke Main.sin(x::Float64)::Float64
+│   %2 = Base.lt_float(x, 5.0)::Bool
+└──      goto #3 if not %2
+2 ─ %4 = invoke Main.cos(x::Float64)::Float64
+└── %5 = Base.add_float(%1, %4)::Float64
+3 ┄ %6 = φ (#2 => %5, #1 => %1)::Float64
+│   %7 = Base.add_float(7.38905609893065, %6)::Float64
+└──      return %7
+) => Float64
+```
+
+In this example, we can see all of these changes.
+1. The first basic block is everything in
+```llvm
+1 ─ %1 = invoke Main.sin(x::Float64)::Float64
+│   %2 = Base.lt_float(x, 5.0)::Bool
+└──      goto #3 if not %2
+```
+2. The `if` statement is translated into `goto #3 if not %2` which goes to the 3rd basic block if `x>5` isn't met and otherwise goes to the second basic block.
+3. `%2` is an SSA value introduced to represent `x > 5`.
+
 ## Background
 
 Beginning in Julia 0.7, parts of the compiler use a new [SSA-form](https://en.wikipedia.org/wiki/Static_single_assignment_form)
-intermediate representation. Historically, the compiler used to directly generate LLVM IR, from a lowered form of the Julia
+intermediate representation (IR). Historically, the compiler would directly generate LLVM IR from a lowered form of the Julia
 AST. This form had most syntactic abstractions removed, but still looked a lot like an abstract syntax tree.
 Over time, in order to facilitate optimizations, SSA values were introduced to this IR and the IR was
-linearized (i.e. a form where function arguments may only be SSA values or constants). However, non-SSA values
+linearized (i.e. turned into a form where function arguments could only be SSA values or constants). However, non-SSA values
 (slots) remained in the IR due to the lack of Phi nodes in the IR (necessary for back-edges and re-merging of
-conditional control flow), negating much of the usefulfulness of the SSA form representation to perform
+conditional control flow). This negated much of the usefulness of SSA form representation when performing
 middle end optimizations. Some heroic effort was put into making these optimizations work without a complete SSA
 form representation, but the lack of such a representation ultimately proved prohibitive.
+## Categories of IR nodes
 
-## New IR nodes
-
-With the new IR representation, the compiler learned to handle four new IR nodes, Phi nodes, Pi
-nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for exception handling).
+The SSA IR representation has four categories of IR nodes: Phi, Pi, PhiC, and Upsilon nodes (the latter two are only used for exception handling).
 
 ### Phi nodes and Pi nodes
 
@@ -23,7 +69,7 @@ Phi nodes are part of generic SSA abstraction (see the link above if you're not 
 the concept). In the Julia IR, these nodes are represented as:
 ```
 struct PhiNode
-    edges::Vector{Int}
+    edges::Vector{Int32}
     values::Vector{Any}
 end
 ```
@@ -74,7 +120,7 @@ that is generally done for most optimizations that care about these conditions a
 
 Exception handling complicates the SSA story moderately, because exception handling
 introduces additional control flow edges into the IR across which values must be tracked.
-One approach to do so, which is followed by LLVM is to make calls which may throw exceptions
+One approach to do so, which is followed by LLVM, is to make calls which may throw exceptions
 into basic block terminators and add an explicit control flow edge to the catch handler:
 
 ```
@@ -87,16 +133,16 @@ catch:
 # Exceptions go here
 ```
 
-However, this is problematic in a language like julia where at the start of the optimization
+However, this is problematic in a language like Julia, where at the start of the optimization
 pipeline, we do not know which calls throw. We would have to conservatively assume that every
-call (which in julia is every statement) throws. This would have several negative effects.
-On the one hand, it would essentially recuce the scope of every basic block to a single call,
+call (which in Julia is every statement) throws. This would have several negative effects.
+On the one hand, it would essentially reduce the scope of every basic block to a single call,
 defeating the purpose of having operations be performed at the basic block level. On the other
 hand, every catch basic block would have `n*m` phi node arguments (`n`, the number of statements
-in the critical region, `m` the number of live values through the catch block). To work around
-this, we use a combination of `Upsilon` and `PhiC` (the C standing for `catch`,
-written `φᶜ` in the IR pretty printer, because
-unicode subscript c is not available) nodes. There are several ways to think of these nodes, but
+in the critical region, `m` the number of live values through the catch block).
+
+To work around this, we use a combination of `Upsilon` and `PhiC` nodes (the C standing for `catch`,
+written `φᶜ` in the IR pretty printer, because unicode subscript c is not available). There are several ways to think of these nodes, but
 perhaps the easiest is to think of each `PhiC` as a load from a unique store-many, read-once slot,
 with `Upsilon` being the corresponding store operation. The `PhiC` has an operand list of all the
 upsilon nodes that store to its implicit slot. The `Upsilon` nodes however, do not record which `PhiC`
@@ -143,8 +189,8 @@ The corresponding IR (with irrelevant types stripped) is:
 └──       $(Expr(:unreachable))::Union{}
 4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
 │   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
-│   %15 = φᶜ (%5)::Core.Compiler.Const(1, false)
-└──       $(Expr(:leave, 1))
+│   %15 = φᶜ (%5)::Core.Const(1)
+└──       $(Expr(:leave, Core.SSAValue(2)))
 5 ─       $(Expr(:pop_exception, :(%2)))::Any
 │         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any
 │   %19 = Core.tuple(%15, %14)
@@ -174,7 +220,7 @@ Instead, we do the following:
 
 - We keep a separate buffer of nodes to insert (including the position to insert them at, the type of the
   corresponding value and the node itself). These nodes are numbered by their occurrence in the insertion
-  buffer, allowing their values to be immediately used elesewhere in the IR (i.e. if there are 12 statements in
+  buffer, allowing their values to be immediately used elsewhere in the IR (i.e. if there are 12 statements in
   the original statement list, the first new statement will be accessible as `SSAValue(13)`).
 - RAUW style operations are performed by setting the corresponding statement index to the replacement
   value.

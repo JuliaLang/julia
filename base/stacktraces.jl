@@ -20,9 +20,10 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, Module, Core.CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
 
 - `file::Symbol`
 
@@ -52,8 +53,9 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{MethodInstance, CodeInfo, Nothing}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
+    linfo::Union{MethodInstance, Method, Module, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -95,6 +97,86 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
+get_inlinetable(::Any) = nothing
+function get_inlinetable(mi::MethodInstance)
+    isdefined(mi, :def) && mi.def isa Method && isdefined(mi, :cache) && isdefined(mi.cache, :inferred) &&
+        mi.cache.inferred !== nothing || return nothing
+    linetable = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), mi.def, mi.cache, mi.cache.inferred).linetable
+    return filter!(x -> x.inlined_at > 0, linetable)
+end
+
+get_method_instance_roots(::Any) = nothing
+function get_method_instance_roots(mi::Union{Method, MethodInstance})
+    m = mi isa MethodInstance ? mi.def : mi
+    m isa Method && isdefined(m, :roots) || return nothing
+    return filter(x -> x isa MethodInstance, m.roots)
+end
+
+function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inlinetable::Vector{Core.LineInfoNode})
+    #REPL frames and some base files lack this prefix while others have it; should fix?
+    filestripped = Symbol(lstrip(string(file), ('.', '\\', '/')))
+    linfo = nothing
+    #=
+    Some matching entries contain the MethodInstance directly.
+    Other matching entries contain only a Method or Symbol (function name); such entries
+    are located after the entry with the MethodInstance, so backtracking is required.
+    If backtracking fails, the Method or Module is stored for return, but we continue
+    the search in case a MethodInstance is found later.
+    TODO: If a backtrack has failed, do we need to backtrack again later if another Method
+    or Symbol match is found? Or can a limit on the subsequent backtracks be placed?
+    =#
+    for (i, line) in enumerate(inlinetable)
+        Base.IRShow.method_name(line) === func && line.file ∈ (file, filestripped) && line.line == linenum || continue
+        if line.method isa MethodInstance
+            linfo = line.method
+            break
+        elseif line.method isa Method || line.method isa Symbol
+            linfo = line.method isa Method ? line.method : line.module
+            # backtrack to find the matching MethodInstance, if possible
+            for j in (i - 1):-1:1
+                nextline = inlinetable[j]
+                nextline.inlined_at == line.inlined_at && Base.IRShow.method_name(line) === Base.IRShow.method_name(nextline) && line.file === nextline.file || break
+                if nextline.method isa MethodInstance
+                    linfo = nextline.method
+                    break
+                end
+            end
+        end
+    end
+    return linfo
+end
+
+function lookup_inline_frame_info(func::Symbol, file::Symbol, miroots::Vector{Any})
+    # REPL frames and some base files lack this prefix while others have it; should fix?
+    filestripped = Symbol(lstrip(string(file), ('.', '\\', '/')))
+    matches = filter(miroots) do x
+        x.def isa Method || return false
+        m = x.def::Method
+        return m.name == func && m.file ∈ (file, filestripped)
+    end
+    if length(matches) > 1
+        # ambiguous, check if method is same and return that instead
+        all_matched = true
+        for m in matches
+            all_matched = m.def.line == matches[1].def.line &&
+                m.def.module == matches[1].def.module
+            all_matched || break
+        end
+        if all_matched
+            return matches[1].def
+        end
+        # all else fails, return module if they match, or give up
+        all_matched = true
+        for m in matches
+            all_matched = m.def.module == matches[1].def.module
+            all_matched || break
+        end
+        return all_matched ? matches[1].def.module : nothing
+    elseif length(matches) == 1
+        return matches[1]
+    end
+    return nothing
+end
 
 """
     lookup(pointer::Ptr{Cvoid}) -> Vector{StackFrame}
@@ -103,49 +185,63 @@ Given a pointer to an execution context (usually generated by a call to `backtra
 up stack frame context information. Returns an array of frame information for all functions
 inlined at that point, innermost function first.
 """
-function lookup(pointer::Ptr{Cvoid})
-    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)
+Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
+    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
+    parent_linfo = infos[end][4]
+    inlinetable = get_inlinetable(parent_linfo)
+    miroots = inlinetable === nothing ? get_method_instance_roots(parent_linfo) : nothing # fallback if linetable missing
     res = Vector{StackFrame}(undef, length(infos))
-    for i in 1:length(infos)
-        info = infos[i]
+    for i in reverse(1:length(infos))
+        info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
-        res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], pointer)
+        func = info[1]::Symbol
+        file = info[2]::Symbol
+        linenum = info[3]::Int
+        linfo = info[4]
+        if i < length(infos)
+            if inlinetable !== nothing
+                linfo = lookup_inline_frame_info(func, file, linenum, inlinetable)
+            elseif miroots !== nothing
+                linfo = lookup_inline_frame_info(func, file, miroots)
+            end
+        end
+        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
     return res
 end
 
 const top_level_scope_sym = Symbol("top-level scope")
 
-function lookup(ip::Base.InterpreterIP)
-    if ip.code isa MethodInstance && ip.code.def isa Method
-        codeinfo = ip.code.uninferred
-        func = ip.code.def.name
-        file = ip.code.def.file
-        line = ip.code.def.line
-    elseif ip.code === nothing
+function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
+    code = ip.code
+    if code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    end
+    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
+    # prepare approximate code info
+    if code isa MethodInstance && (meth = code.def; meth isa Method)
+        func = meth.name
+        file = meth.file
+        line = meth.line
     else
-        @assert ip.code isa CodeInfo
-        codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
-        line = 0
+        line = Int32(0)
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
-        return [StackFrame(func, file, line, ip.code, false, false, 0)]
+        return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
+    lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]::Core.LineInfoNode
     scopes = StackFrame[]
     while true
-        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, false, false, 0))
-        if lineinfo.inlined_at == 0
-            break
-        end
-        lineinfo = codeinfo.linetable[lineinfo.inlined_at]
+        inlined = lineinfo.inlined_at != 0
+        push!(scopes, StackFrame(Base.IRShow.method_name(lineinfo)::Symbol, lineinfo.file, lineinfo.line, inlined ? nothing : code, false, inlined, 0))
+        inlined || break
+        lineinfo = codeinfo.linetable[lineinfo.inlined_at]::Core.LineInfoNode
     end
     return scopes
 end
@@ -153,11 +249,11 @@ end
 """
     stacktrace([trace::Vector{Ptr{Cvoid}},] [c_funcs::Bool=false]) -> StackTrace
 
-Returns a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
+Return a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
-function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
+Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Core.Compiler.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
     for ip in trace
         for frame in lookup(ip)
@@ -170,7 +266,7 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
     return stack
 end
 
-function stacktrace(c_funcs::Bool=false)
+Base.@constprop :none function stacktrace(c_funcs::Bool=false)
     stack = stacktrace(backtrace(), c_funcs)
     # Remove frame for this function (and any functions called by this function).
     remove_frames!(stack, :stacktrace)
@@ -200,7 +296,7 @@ end
 """
     remove_frames!(stack::StackTrace, m::Module)
 
-Returns the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
+Return the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
 """
 function remove_frames!(stack::StackTrace, m::Module)
     filter!(f -> !from(f, m), stack)
@@ -210,57 +306,71 @@ end
 is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
-    if frame.linfo === nothing
+    linfo = frame.linfo
+    if linfo === nothing
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            color = get(io, :color, false) && get(io, :backtrace, false) ?
-                        Base.stackframe_function_color() :
-                        :nothing
-            printstyled(io, Base.demangle_function_name(string(frame.func)), color=color)
+            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
-    elseif frame.linfo isa MethodInstance
-        def = frame.linfo.def
-        if isa(def, Method)
-            sig = frame.linfo.specTypes
-            if def.nkw > 0
-                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
-                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)
-                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = Base.method_argnames(def)[2:(def.nkw+1)]
-                for i = 1:length(kwnames)
-                    str = string(kwnames[i])
-                    if endswith(str, "...")
-                        kwnames[i] = Symbol(str[1:end-3])
-                    end
-                end
-                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types))
-            else
-                Base.show_tuple_as_call(io, def.name, sig, true)
-            end
-        else
-            Base.show(io, frame.linfo)
-        end
-    elseif frame.linfo isa CodeInfo
+    elseif linfo isa CodeInfo
         print(io, "top-level scope")
+    elseif linfo isa Module
+        Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+    elseif linfo isa MethodInstance
+        def = linfo.def
+        if def isa Module
+            Base.show_mi(io, linfo, #=from_stackframe=#true)
+        else
+            show_spec_sig(io, def, linfo.specTypes)
+        end
+    else
+        m = linfo::Method
+        show_spec_sig(io, m, m.sig)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false)
+function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
+    if get(io, :limit, :false)::Bool
+        if !haskey(io, :displaysize)
+            io = IOContext(io, :displaysize => displaysize(io))
+        end
+    end
+    argnames = Base.method_argnames(m)
+    argnames = replace(argnames, :var"#unused#" => :var"")
+    if m.nkw > 0
+        # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...; kw_args)
+        kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+m.nkw) ]
+        uw = Base.unwrap_unionall(sig)::DataType
+        pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(m.nkw+2):end]...}, sig)
+        kwnames = argnames[2:(m.nkw+1)]
+        for i = 1:length(kwnames)
+            str = string(kwnames[i])::String
+            if endswith(str, "...")
+                kwnames[i] = Symbol(str[1:end-3])
+            end
+        end
+        Base.show_tuple_as_call(io, m.name, pos_sig;
+                                demangle=true,
+                                kwargs=zip(kwnames, kwarg_types),
+                                argnames=argnames[m.nkw+2:end])
+    else
+        Base.show_tuple_as_call(io, m.name, sig; demangle=true, argnames)
+    end
+end
+
+function show(io::IO, frame::StackFrame)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
-        file_info = full_path ? string(frame.file) : basename(string(frame.file))
+        file_info = basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
-            print(io, file_info, ":")
-            if frame.line >= 0
-                print(io, frame.line)
-            else
-                print(io, "?")
-            end
+        print(io, file_info, ":")
+        if frame.line >= 0
+            print(io, frame.line)
+        else
+            print(io, "?")
         end
     end
     if frame.inlined
@@ -268,22 +378,33 @@ function show(io::IO, frame::StackFrame; full_path::Bool=false)
     end
 end
 
+function Base.parentmodule(frame::StackFrame)
+    linfo = frame.linfo
+    if linfo isa MethodInstance
+        def = linfo.def
+        if def isa Module
+            return def
+        else
+            return (def::Method).module
+        end
+    elseif linfo isa Method
+        return linfo.module
+    elseif linfo isa Module
+        return linfo
+    else
+        # The module is not always available (common reasons include
+        # frames arising from the interpreter)
+        nothing
+    end
+end
+
 """
     from(frame::StackFrame, filter_mod::Module) -> Bool
 
-Returns whether the `frame` is from the provided `Module`
+Return whether the `frame` is from the provided `Module`
 """
 function from(frame::StackFrame, m::Module)
-    finfo = frame.linfo
-    result = false
-
-    if finfo isa MethodInstance
-        frame_m = finfo.def
-        isa(frame_m, Method) && (frame_m = frame_m.module)
-        result = nameof(frame_m) === nameof(m)
-    end
-
-    return result
+    return parentmodule(frame) === m
 end
 
 end

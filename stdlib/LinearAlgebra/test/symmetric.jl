@@ -2,22 +2,28 @@
 
 module TestSymmetric
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
-Random.seed!(101)
+Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
+@testset "Two-dimensional Euler formula for Hermitian" begin
+    @test cis(Hermitian([π 0; 0 π])) ≈ -I
+end
+
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
+    @test cis(A2) ≈ cis(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
+    @test cis(A3) ≈ cis(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
@@ -54,6 +60,13 @@ end
                 @test Hermitian(Hermitian(aherm, :U), :U) === Hermitian(aherm, :U)
                 @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
                 @test_throws ArgumentError Hermitian(Hermitian(aherm, :U), :L)
+
+                @test_throws ArgumentError Symmetric(asym, :R)
+                @test_throws ArgumentError Hermitian(asym, :R)
+
+                @test_throws MethodError Symmetric{eltya,typeof(asym)}(asym, :L)
+                @test_throws MethodError Hermitian{eltya,typeof(aherm)}(aherm, :L)
+
                 # mixed cases with Hermitian/Symmetric
                 if eltya <: Real
                     @test Symmetric(Hermitian(aherm, :U))     === Symmetric(aherm, :U)
@@ -62,6 +75,19 @@ end
                     @test Hermitian(Symmetric(asym, :U), :U) === Hermitian(asym, :U)
                     @test_throws ArgumentError Symmetric(Hermitian(aherm, :U), :L)
                     @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
+                end
+            end
+            @testset "diag" begin
+                D = Diagonal(x)
+                DM = Matrix(D)
+                B = diagm(-1 => x, 1 => x)
+                for uplo in (:U, :L)
+                    @test diag(Symmetric(D, uplo))::Vector == x
+                    @test diag(Hermitian(D, uplo))::Vector == real(x)
+                    @test isdiag(Symmetric(DM, uplo))
+                    @test isdiag(Hermitian(DM, uplo))
+                    @test !isdiag(Symmetric(B, uplo))
+                    @test !isdiag(Hermitian(B, uplo))
                 end
             end
             @testset "similar" begin
@@ -237,6 +263,14 @@ end
                         end
                     end
                 end
+                if eltya <: AbstractFloat
+                @testset "inv should error with NaNs/Infs" begin
+                    h = Hermitian(fill(eltya(NaN), 2, 2))
+                    @test_throws ArgumentError inv(h)
+                    s = Symmetric(fill(eltya(NaN), 2, 2))
+                    @test_throws ArgumentError inv(s)
+                end
+                end
             end
 
             # Revisit when implemented in julia
@@ -257,6 +291,7 @@ end
                         @test abs.(eigen(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         @test abs.(eigen(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
+                        @test eigvals(Symmetric(asym), sortby= x -> -x) ≈ eigvals(eigen(Symmetric(asym), sortby = x -> -x))
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                         # eigen doesn't support Symmetric{Complex}
                         @test Matrix(eigen(asym)) ≈ asym
@@ -270,6 +305,7 @@ end
                     @test abs.(eigen(Hermitian(aherm), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     @test abs.(eigen(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
+                    @test eigvals(Hermitian(aherm), sortby= x -> -x) ≈ eigvals(eigen(Hermitian(aherm), sortby = x -> -x))
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                     @test Matrix(eigen(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
@@ -335,6 +371,9 @@ end
                 C = zeros(eltya,n,n)
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
+                # rectangular multiplication
+                @test [a; a] * Hermitian(aherm) ≈ [a; a] * aherm
+                @test Hermitian(aherm) * [a a] ≈ aherm * [a a]
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Hermitian(aherm))
@@ -343,6 +382,9 @@ end
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
+                # rectangular multiplication
+                @test Symmetric(asym) * [a a] ≈ asym * [a a]
+                @test [a; a] * Symmetric(asym) ≈ [a; a] * asym
                 @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
@@ -363,6 +405,10 @@ end
                 @test Hermitian(aherm)\b ≈ aherm\b
                 @test Symmetric(asym)\x  ≈ asym\x
                 @test Symmetric(asym)\b  ≈ asym\b
+                @test Hermitian(Diagonal(aherm))\x ≈ Diagonal(aherm)\x
+                @test Hermitian(Matrix(Diagonal(aherm)))\b ≈ Diagonal(aherm)\b
+                @test Symmetric(Diagonal(asym))\x  ≈ Diagonal(asym)\x
+                @test Symmetric(Matrix(Diagonal(asym)))\b  ≈ Diagonal(asym)\b
             end
         end
         @testset "generalized dot product" begin
@@ -370,6 +416,8 @@ end
                 @test dot(x, Hermitian(aherm, uplo), y) ≈ dot(x, Hermitian(aherm, uplo)*y) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), y)
                 @test dot(x, Hermitian(aherm, uplo), x) ≈ dot(x, Hermitian(aherm, uplo)*x) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), x)
             end
+            @test dot(x, Hermitian(Diagonal(a)), y) ≈ dot(x, Hermitian(Diagonal(a))*y) ≈ dot(x, Matrix(Hermitian(Diagonal(a))), y)
+            @test dot(x, Hermitian(Diagonal(a)), x) ≈ dot(x, Hermitian(Diagonal(a))*x) ≈ dot(x, Matrix(Hermitian(Diagonal(a))), x)
             if eltya <: Real
                 for uplo in (:U, :L)
                     @test dot(x, Symmetric(aherm, uplo), y) ≈ dot(x, Symmetric(aherm, uplo)*y) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), y)
@@ -526,19 +574,25 @@ end
     end
 end
 
-@testset "similar should preserve underlying storage type and uplo flag" begin
-    m, n = 4, 3
-    sparsemat = sprand(m, m, 0.5)
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    immutablemat = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
     for SymType in (Symmetric, Hermitian)
-        symsparsemat = SymType(sparsemat)
-        @test isa(similar(symsparsemat), typeof(symsparsemat))
-        @test similar(symsparsemat).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
-        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+        S = Float64
+        symmat = SymType(immutablemat)
+        @test convert(AbstractArray{S}, symmat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, symmat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(symmat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(symmat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, symmat) == symmat
+        @test convert(AbstractMatrix{S}, symmat) == symmat
     end
 end
+
 
 @testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
     A = rand(Float32, 3, 3)
@@ -551,13 +605,13 @@ end
         # Hermitian
         A = Hermitian(fill(1.0+0im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
         @test_throws ArgumentError fill!(A, 2+im)
 
         # Symmetric
         A = Symmetric(fill(1.0+im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
     end
 end
 
@@ -661,6 +715,173 @@ end
     @test LinearAlgebra.symmetric_type(Int) == Int
     @test LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
+end
+
+@testset "sqrt(nearly semidefinite)" begin
+    let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959579317056e-17; -8.326672684688674e-16 1.0000000000000004 2.9280733590254494e-16 -2.9993900031619594e-16; 9.43689570931383e-16 -1.339206523454095e-15 1.0000000000000007 -8.550505126287743e-16; -6.245004513516506e-16 -2.0122792321330962e-16 1.183061278035052e-16 1.0000000000000002],
+        B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0],
+        C = Symmetric(A*B*A'), # semidefinite up to roundoff
+        Csqrt = sqrt(C)
+        @test Csqrt isa Symmetric{Float64}
+        @test Csqrt*Csqrt ≈ C rtol=1e-14
+    end
+    let D = Symmetric(Matrix(Diagonal([1 0; 0 -1e-14])))
+        @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
+        @test sqrt(D, rtol=1e-13) ≈ [1 0; 0 0] rtol=1e-14
+        @test sqrt(D, rtol=1e-13)^2 ≈ D rtol=1e-13
+    end
+end
+
+@testset "Multiplications symmetric/hermitian for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let A = transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
+    end
+    let A = adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
+    end
+    let Ahrs = transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = transpose(Symmetric(rand(S, 3, 3))),
+        Ahcs = transpose(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahrs * Acs ≈ Ahrs * Matrix(Acs)
+        @test Acs * Acs ≈ Matrix(Acs) * Matrix(Acs)
+        @test Acs * Ahrs ≈ Matrix(Acs) * Ahrs
+        @test Ahrs * Ahcs ≈ Matrix(Ahrs) * Ahcs
+        @test Ahcs * Ahrs ≈ Ahcs * Matrix(Ahrs)
+    end
+    let Ahrs = adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = adjoint(Symmetric(rand(S, 3, 3))),
+        Ahcs = adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahcs * Ahcs ≈ Matrix(Ahcs) * Matrix(Ahcs)
+        @test Ahrs * Ahcs ≈ Ahrs * Matrix(Ahcs)
+        @test Acs * Ahcs ≈ Acs * Matrix(Ahcs)
+        @test Ahcs * Ahrs ≈ Matrix(Ahcs) * Ahrs
+        @test Ahcs * Acs ≈ Matrix(Ahcs) * Acs
+    end
+end
+
+@testset "Addition/subtraction with SymTridiagonal" begin
+    TR = SymTridiagonal(randn(Float64,5), randn(Float64,4))
+    TC = SymTridiagonal(randn(ComplexF64,5), randn(ComplexF64,4))
+    SR = Symmetric(randn(Float64,5,5))
+    SC = Symmetric(randn(ComplexF64,5,5))
+    HR = Hermitian(randn(Float64,5,5))
+    HC = Hermitian(randn(ComplexF64,5,5))
+    for op = (+,-)
+        for T = (TR, TC), S = (SR, SC)
+            @test op(T, S) == op(Array(T), S)
+            @test op(S, T) == op(S, Array(T))
+            @test op(T, S) isa Symmetric
+            @test op(S, T) isa Symmetric
+        end
+        for H = (HR, HC)
+            for T = (TR, TC)
+                @test op(T, H) == op(Array(T), H)
+                @test op(H, T) == op(H, Array(T))
+            end
+            @test op(TR, H) isa Hermitian
+            @test op(H, TR) isa Hermitian
+        end
+    end
+end
+
+@testset "hermitian part" begin
+    for T in [Float32, Complex{Float32}, Int32, Rational{Int32},
+              Complex{Int32}, Complex{Rational{Int32}}]
+        f, f!, t = hermitianpart, hermitianpart!, T <: Real ? transpose : adjoint
+        X = T[1 2 3; 4 5 6; 7 8 9]
+        T <: Complex && (X .+= im .* X)
+        Xc = copy(X)
+        Y = (X + t(X)) / 2
+        U = f(X)
+        L = f(X, :L)
+        @test U isa Hermitian
+        @test L isa Hermitian
+        @test U.uplo == 'U'
+        @test L.uplo == 'L'
+        @test U == L == Y
+        if T <: AbstractFloat || real(T) <: AbstractFloat
+            HU = f!(X)
+            @test HU == Y
+            @test triu(X) == triu(Y)
+            HL = f!(Xc, :L)
+            @test HL == Y
+            @test tril(Xc) == tril(Y)
+        end
+    end
+    @test_throws DimensionMismatch hermitianpart(ones(1,2))
+    for T in (Float64, ComplexF64), uplo in (:U, :L)
+        A = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
+        Aherm = hermitianpart(A, uplo)
+        @test Aherm == Aherm.data == (A + A')/2
+        @test Aherm isa Hermitian
+        @test Aherm.uplo == LinearAlgebra.char_uplo(uplo)
+    end
+end
+
+@testset "Structured display" begin
+    @testset "Diagonal" begin
+        d = 10:13
+        D = Diagonal(d)
+        for uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+
+        d = (10:13) .+ 2im
+        D = Diagonal(d)
+        DR = Diagonal(complex.(real.(d)))
+        for uplo in (:L, :U)
+            H = Hermitian(D, uplo)
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, DR)
+
+            S = Symmetric(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+    end
+    @testset "Bidiagonal" begin
+        dv, ev = 1:4, 1:3
+        ST = SymTridiagonal(dv, ev)
+        D = Diagonal(dv)
+        for B_uplo in (:L, :U)
+            B = Bidiagonal(dv, ev, B_uplo)
+            for Sym_uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+                SB = SymHerm(B, Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? ST : D)
+                @test sprint(Base.print_matrix, SB) == teststr
+                SB = SymHerm(Transpose(B), Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? D : ST)
+                @test sprint(Base.print_matrix, SB) == teststr
+            end
+        end
+    end
+    @testset "Tridiagonal" begin
+        superd, d, subd = 3:5, 10:13, 1:3
+        for uplo in (:U, :L), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+        end
+
+        superd, d, subd = collect((3:5)*im), collect(Complex{Int}, 10:13), collect((1:3)*im)
+        for uplo in (:U, :L)
+            S = Symmetric(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+
+            H = Hermitian(Tridiagonal(subd, d, superd), uplo)
+            T = Tridiagonal(uplo == :L ? subd : conj(superd), d, uplo == :U ? superd : conj(subd))
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, T)
+        end
+    end
 end
 
 end # module TestSymmetric

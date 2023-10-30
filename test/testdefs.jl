@@ -18,32 +18,96 @@ function runtests(name, path, isolate=true; seed=nothing)
         let id = myid()
             wait(@spawnat 1 print_testworker_started(name, id))
         end
-        ex = quote
-            @timed @testset $"$name" begin
-                # Random.seed!(nothing) will fail
-                $seed != nothing && Random.seed!($seed)
-                include($"$path.jl")
+        res_and_time_data = @timed @testset "$name" begin
+            # Random.seed!(nothing) will fail
+            seed != nothing && Random.seed!(seed)
+
+            original_depot_path = copy(Base.DEPOT_PATH)
+            original_load_path = copy(Base.LOAD_PATH)
+            original_env = copy(ENV)
+            original_project = Base.active_project()
+
+            Base.include(m, "$path.jl")
+
+            if Base.DEPOT_PATH != original_depot_path
+                msg = "The `$(name)` test set mutated Base.DEPOT_PATH and did not restore the original values"
+                @error(
+                    msg,
+                    original_depot_path,
+                    Base.DEPOT_PATH,
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
+            end
+            if Base.LOAD_PATH != original_load_path
+                msg = "The `$(name)` test set mutated Base.LOAD_PATH and did not restore the original values"
+                @error(
+                    msg,
+                    original_load_path,
+                    Base.LOAD_PATH,
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
+            end
+            if copy(ENV) != original_env
+                throw_error_str = get(ENV, "JULIA_TEST_CHECK_MUTATED_ENV", "true")
+                throw_error_b = parse(Bool, throw_error_str)
+                if throw_error_b
+                    msg = "The `$(name)` test set mutated ENV and did not restore the original values"
+                    @error(
+                        msg,
+                        testset_name = name,
+                        testset_path = path,
+                    )
+                    error(msg)
+                end
+            end
+            if Base.active_project() != original_project
+                msg = "The `$(name)` test set changed the active project and did not restore the original value"
+                @error(
+                    msg,
+                    original_project,
+                    Base.active_project(),
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
             end
         end
-        res_and_time_data = Core.eval(m, ex)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
-        passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])
-        if res_and_time_data[1].anynonpass == false
-            res_and_time_data = (
-                                 (passes+c_passes,broken+c_broken),
-                                 res_and_time_data[2],
-                                 res_and_time_data[3],
-                                 res_and_time_data[4],
-                                 res_and_time_data[5])
-        end
-        vcat(collect(res_and_time_data), rss)
-    finally
+        ts = res_and_time_data[1]
+        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
+        # simplify our stored data to just contain the counts
+        res_and_time_data = (TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
+                             res_and_time_data[2],
+                             res_and_time_data[3],
+                             res_and_time_data[4],
+                             res_and_time_data[5],
+                             rss)
+        return res_and_time_data
+    catch ex
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting
+        ex isa TestSetException || rethrow()
+        return Any[ex]
     end
 end
 
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
+
+# Support for Revise
+function revise_trackall()
+    Revise.track(Core.Compiler)
+    Revise.track(Base)
+    for (id, mod) in Base.loaded_modules
+        if id.name in STDLIBS
+            Revise.track(mod)
+        end
+    end
+    Revise.revise()
+end
 
 nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".

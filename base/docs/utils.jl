@@ -18,6 +18,13 @@ You can also use a stream for large amounts of data:
     HTML() do io
       println(io, "<div>foo</div>")
     end
+
+!!! warning
+    `HTML` is currently exported to maintain
+    backwards compatibility, but this export
+    is deprecated. It is recommended to use
+    this type as `Docs.HTML` or to explicitly
+    import it from `Docs`.
 """
 mutable struct HTML{T}
     content::T
@@ -38,6 +45,12 @@ show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
     @html_str -> Docs.HTML
 
 Create an `HTML` object from a literal string.
+
+# Examples
+```jldoctest
+julia> html"Julia"
+HTML{String}("Julia")
+```
 """
 macro html_str(s)
     :(HTML($s))
@@ -63,6 +76,13 @@ You can also use a stream for large amounts of data:
     Text() do io
       println(io, "foo")
     end
+
+!!! warning
+    `Text` is currently exported to maintain
+    backwards compatibility, but this export
+    is deprecated. It is recommended to use
+    this type as `Docs.Text` or to explicitly
+    import it from `Docs`.
 """
 mutable struct Text{T}
     content::T
@@ -79,6 +99,12 @@ hash(t::T, h::UInt) where {T<:Union{HTML,Text}} = hash(T, hash(t.content, h))
     @text_str -> Docs.Text
 
 Create a `Text` object from a literal string.
+
+# Examples
+```jldoctest
+julia> text"Julia"
+Julia
+```
 """
 macro text_str(s)
     :(Text($s))

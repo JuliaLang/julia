@@ -10,7 +10,7 @@
 ## randn
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
@@ -20,24 +20,44 @@ The `Base` module currently provides an implementation for the types
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
 
+See also [`randn!`](@ref) to act in-place.
+
 # Examples
 ```jldoctest
-julia> using Random
-
-julia> rng = MersenneTwister(1234);
+julia> using Random; rng = Xoshiro(123);
 
 julia> randn(rng, ComplexF64)
-0.6133070881429037 - 0.6376291670853887im
+-0.45660053706486897 - 1.0346749725929225im
 
 julia> randn(rng, ComplexF32, (2, 3))
-2×3 Array{Complex{Float32},2}:
- -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
-  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
+2×3 Matrix{ComplexF32}:
+ -1.14806-0.153912im   0.056538+1.0954im      0.419454-0.543347im
+  0.34807+0.693657im  -0.948661+0.291442im  -0.0538589-0.463085im
 ```
 """
 @inline function randn(rng::AbstractRNG=default_rng())
+    #=
+    When defining
+    `@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))`
+    the function call to `_randn` is currently not inlined, resulting in slightly worse
+    performance for scalar random normal numbers than repeating the code of `_randn`
+    inside the following function.
+    =#
     @inbounds begin
         r = rand(rng, UInt52())
+
+        # the following code is identical to the one in `_randn(rng::AbstractRNG, r::UInt64)`
+        rabs = Int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
+    end
+end
+
+@inline function _randn(rng::AbstractRNG, r::UInt64)
+    @inbounds begin
+        r &= 0x000fffffffffffff
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
@@ -50,8 +70,8 @@ end
 @noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
-            xx = -ziggurat_nor_inv_r*log(rand(rng))
-            yy = -log(rand(rng))
+            xx = -ziggurat_nor_inv_r*log1p(-rand(rng))
+            yy = -log1p(-rand(rng))
             yy+yy > xx*xx &&
                 return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
         end
@@ -70,10 +90,19 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
     Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 
+### fallback randn for float types defining rand:
+function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
+    # Marsaglia polar variant of Box–Muller transform:
+    while true
+        x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
+        0 < (s = x^2 + y^2) < 1 && return x * sqrt(-2log(s)/s)
+    end
+end
+
 ## randexp
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the
 exponential distribution with scale 1.
@@ -83,21 +112,23 @@ The `Base` module currently provides an implementation for the types
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> rng = Xoshiro(123);
 
 julia> randexp(rng, Float32)
-2.4835055f0
+1.1757717f0
 
 julia> randexp(rng, 3, 3)
-3×3 Array{Float64,2}:
- 1.5167    1.30652   0.344435
- 0.604436  2.78029   0.418516
- 0.695867  0.693292  0.643644
+3×3 Matrix{Float64}:
+ 1.37766  0.456653  0.236418
+ 3.40007  0.229917  0.0684921
+ 0.48096  0.577481  0.71835
 ```
 """
-function randexp(rng::AbstractRNG=default_rng())
+randexp(rng::AbstractRNG=default_rng()) = _randexp(rng, rand(rng, UInt52Raw()))
+
+function _randexp(rng::AbstractRNG, ri::UInt64)
     @inbounds begin
-        ri = rand(rng, UInt52())
+        ri &= 0x000fffffffffffff
         idx = ri & 0xFF
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
@@ -107,7 +138,7 @@ end
 
 @noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
-        return ziggurat_exp_r - log(rand(rng))
+        return ziggurat_exp_r - log1p(-rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
         return x # return from the triangular area
     else
@@ -115,53 +146,53 @@ end
     end
 end
 
+### fallback randexp for float types defining rand:
+randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
+    -log1p(-rand(rng, T))
 
 ## arrays & other scalar methods
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randn!(rng, zeros(5))
-5-element Array{Float64,1}:
-  0.8673472019512456
- -0.9017438158568171
- -0.4944787535042339
- -0.9029142938652416
-  0.8644013132535154
+julia> randn!(Xoshiro(123), zeros(5))
+5-element Vector{Float64}:
+ -0.6457306721039767
+ -1.4632513788889214
+ -1.6236037455860806
+ -0.21766510678354617
+  0.4922456865251828
 ```
 """
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution
 (with scale 1).
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randexp!(rng, zeros(5))
-5-element Array{Float64,1}:
- 2.4835053723904896
- 1.516703605376473
- 0.6044364871025417
- 0.6958665886385867
- 1.3065196315496677
+julia> randexp!(Xoshiro(123), zeros(5))
+5-element Vector{Float64}:
+ 1.1757716836348473
+ 1.758884569451514
+ 1.0083623637301151
+ 0.3510644315565272
+ 0.6348266443720407
 ```
 """
 function randexp! end
 
 for randfun in [:randn, :randexp]
     randfun! = Symbol(randfun, :!)
+    _randfun = Symbol(:_, randfun)
     @eval begin
         # scalars
         $randfun(rng::AbstractRNG, T::BitFloatType) = convert(T, $randfun(rng))
@@ -171,6 +202,37 @@ for randfun in [:randn, :randexp]
         function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
             for i in eachindex(A)
                 @inbounds A[i] = $randfun(rng, T)
+            end
+            A
+        end
+
+        # optimization for MersenneTwister, which randomizes natively Array{Float64}
+        function $randfun!(rng::MersenneTwister, A::Array{Float64})
+            if length(A) < 13
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                rand!(rng, A, CloseOpen12())
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]))
+                end
+            end
+            A
+        end
+
+        # optimization for Xoshiro, which randomizes natively Array{UInt64}
+        function $randfun!(rng::Union{Xoshiro, TaskLocalRNG}, A::Array{Float64})
+            if length(A) < 7
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                GC.@preserve A rand!(rng, UnsafeView{UInt64}(pointer(A), length(A)))
+
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]) >>> 12)
+                end
             end
             A
         end

@@ -1,12 +1,15 @@
 # System Image Building
 
-## Building the Julia system image
+## [Building the Julia system image](@id Building-the-Julia-system-image)
 
 Julia ships with a preparsed system image containing the contents of the `Base` module, named
 `sys.ji`.  This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
 as many platforms as possible, so as to give vastly improved startup times.  On systems that do
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
+
+Julia will by default generate its system image on half of the available system threads. This
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
 
 This operation is useful for multiple reasons.  A user may:
 
@@ -19,7 +22,7 @@ This operation is useful for multiple reasons.  A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
-## System image optimized for multiple microarchitectures
+## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
@@ -31,13 +34,16 @@ based on available CPU features.
 ### Specifying multiple system image targets
 
 A multi-microarchitecture system image can be enabled by passing multiple targets
-during system image compilation. This can be done either with the `JULIA_CPU_TARGET` make option
+during system image compilation. This can be done either with the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) make option
 or with the `-C` command line option when running the compilation command manually.
 Multiple targets are separated by `;` in the option string.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.
 All features supported by LLVM are supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
+
+!!! note
+    It is good practice to specify either `clone_all` or `base(<n>)` for every target apart from the first one. This makes it explicit which targets have all functions cloned, and which targets are based on other targets. If this is not done, the default behavior is to not clone every function, and to use the first target's function definition as the fallback when not cloning a function.
 
 1. `clone_all`
 
@@ -101,7 +107,7 @@ See code comments for each components for more implementation details.
     (see comments in `MultiVersioning::runOnModule` for how this is done),
     the pass also generates metadata so that the runtime can load and initialize the
     system image correctly.
-    A detail description of the metadata is available in `src/processor.h`.
+    A detailed description of the metadata is available in `src/processor.h`.
 
 2. System image loading
 
@@ -109,5 +115,5 @@ See code comments for each components for more implementation details.
     parsing the metadata saved during system image generation.
     Host feature detection and selection decision are done in `src/processor_*.cpp`
     depending on the ISA. The target selection will prefer exact CPU name match,
-    larger vector register size, and larget number of features.
+    larger vector register size, and larger number of features.
     An overview of this process is in `src/processor.cpp`.

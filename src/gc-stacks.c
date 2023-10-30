@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static volatile uint32_t num_stack_mappings = 0;
+static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -73,6 +73,10 @@ static void free_stack(void *stkbuf, size_t bufsz)
 }
 #endif
 
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void)
+{
+    return jl_atomic_load_relaxed(&num_stack_mappings);
+}
 
 const unsigned pool_sizes[] = {
     128 * 1024,
@@ -106,10 +110,13 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 
 static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 {
+#ifdef _COMPILER_ASAN_ENABLED_
+    __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
-            arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
+            small_arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
             return;
         }
     }
@@ -119,7 +126,8 @@ static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 {
-    _jl_free_stack(jl_get_ptls_states(), stkbuf, bufsz);
+    jl_task_t *ct = jl_current_task;
+    _jl_free_stack(ct->ptls, stkbuf, bufsz);
 }
 
 
@@ -134,7 +142,10 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
             task->stkbuf = NULL;
-            arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
+#ifdef _COMPILER_ASAN_ENABLED_
+            __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
+            small_arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
     }
 }
@@ -142,23 +153,27 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     size_t ssize = *bufsz;
     void *stk = NULL;
     if (ssize <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(ssize);
         ssize = pool_sizes[pool_id];
-        arraylist_t *pool = &ptls->heap.free_stacks[pool_id];
+        small_arraylist_t *pool = &ptls->heap.free_stacks[pool_id];
         if (pool->len > 0) {
-            stk = arraylist_pop(pool);
+            stk = small_arraylist_pop(pool);
         }
     }
     else {
         ssize = LLT_ALIGN(ssize, jl_page_size);
     }
     if (stk == NULL) {
-        if (num_stack_mappings >= MAX_STACK_MAPPINGS)
+        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS) {
+            // we accept that this can go over by as much as nthreads since it's not a CAS
+            errno = ENOMEM;
             return NULL;
+        }
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);
         if (stk == MAP_FAILED)
@@ -166,8 +181,8 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     }
     *bufsz = ssize;
     if (owner) {
-        arraylist_t *live_tasks = &ptls->heap.live_tasks;
-        arraylist_push(live_tasks, owner);
+        small_arraylist_t *live_tasks = &ptls->heap.live_tasks;
+        mtarraylist_push(live_tasks, owner);
     }
     return stk;
 }
@@ -185,12 +200,13 @@ void sweep_stack_pools(void)
     //            bufsz = t->bufsz
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-            arraylist_t *al = &ptls2->heap.free_stacks[p];
+            small_arraylist_t *al = &ptls2->heap.free_stacks[p];
             size_t n_to_free;
             if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
                 n_to_free = al->len / 2;
@@ -201,12 +217,12 @@ void sweep_stack_pools(void)
                 n_to_free = 0;
             }
             for (int n = 0; n < n_to_free; n++) {
-                void *stk = arraylist_pop(al);
+                void *stk = small_arraylist_pop(al);
                 free_stack(stk, pool_sizes[p]);
             }
         }
 
-        arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = 0;
         size_t ndel = 0;
         size_t l = live_tasks->len;
@@ -215,8 +231,12 @@ void sweep_stack_pools(void)
             continue;
         while (1) {
             jl_task_t *t = (jl_task_t*)lst[n];
+            assert(jl_is_task(t));
             if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                n++;
+                if (t->stkbuf == NULL)
+                    ndel++; // jl_release_task_stack called
+                else
+                    n++;
             }
             else {
                 ndel++;
@@ -226,6 +246,12 @@ void sweep_stack_pools(void)
                     t->stkbuf = NULL;
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
+#ifdef _COMPILER_TSAN_ENABLED_
+                if (t->ctx.tsan_state) {
+                    __tsan_destroy_fiber(t->ctx.tsan_state);
+                    t->ctx.tsan_state = NULL;
+                }
+#endif
             }
             if (n >= l - ndel)
                 break;
@@ -235,4 +261,60 @@ void sweep_stack_pools(void)
         }
         live_tasks->len -= ndel;
     }
+}
+
+JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
+{
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    size_t l = 0; // l is not reset on restart, so we keep getting more aggressive at making a big enough list everything it fails
+restart:
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads since they don't have tasks
+        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL)
+            continue;
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        l += n + (ptls2->root_task->stkbuf != NULL);
+    }
+    l += l / 20; // add 5% for margin of estimation error
+    jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
+    nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    size_t j = 0;
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads since they don't have tasks
+        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL)
+            continue;
+        jl_task_t *t = ptls2->root_task;
+        if (t->stkbuf != NULL) {
+            if (j == l)
+                goto restart;
+            jl_array_data(a,void*)[j++] = t;
+        }
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        for (size_t i = 0; i < n; i++) {
+            jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
+            if (t->stkbuf != NULL) {
+                if (j == l)
+                    goto restart;
+                jl_array_data(a,void*)[j++] = t;
+            }
+        }
+    }
+    if (j < l) {
+        JL_GC_PUSH1(&a);
+        jl_array_del_end(a, l - j);
+        JL_GC_POP();
+    }
+    return a;
 }

@@ -7,8 +7,7 @@ using Base.GMP.MPZ
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
-       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
-       win32_SystemFunction036!
+       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!
 
 "Mersenne Exponent"
 const MEXP = 19937
@@ -66,7 +65,8 @@ function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
           s.val, seed)
 end
 
-function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
+function dsfmt_init_by_array(s::DSFMT_state, seed::StridedVector{UInt32})
+    strides(seed) == (1,) || throw(ArgumentError("seed must have its stride equal to 1"))
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Cvoid,
           (Ptr{Cvoid}, Ptr{UInt32}, Int32),
@@ -195,8 +195,13 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(undef, nval >> 1)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
-          dsfmt, val, (nval - 1) * sizeof(Int32))
+    dsfmtref = Base.cconvert(Ptr{Cvoid}, dsfmt)
+    valref = Base.cconvert(Ptr{Cvoid}, val)
+    GC.@preserve dsfmtref valref begin
+        pdsfmt = Base.unsafe_convert(Ptr{Cvoid}, dsfmtref)
+        pval = Base.unsafe_convert(Ptr{Cvoid}, valref)
+        Base.Libc.memcpy(pdsfmt, pval, (nval - 1) * sizeof(Int32))
+    end
     dsfmt[end] = UInt64(N*2)
 
     for i in 0:degree(jp)

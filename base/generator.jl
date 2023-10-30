@@ -21,7 +21,7 @@ julia> for x in g
 25
 
 julia> collect(g)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
   1
   4
   9
@@ -41,7 +41,7 @@ Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
-    @_inline_meta
+    @inline
     y = iterate(g.iter, s...)
     y === nothing && return nothing
     y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line
@@ -52,7 +52,10 @@ length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
-
+keys(g::Generator) = keys(g.iter)
+last(g::Generator) = g.f(last(g.iter))
+isempty(g::Generator) = isempty(g.iter)
+isdone(g::Generator, state...) = isdone(g.iter, state...)
 
 ## iterator traits
 
@@ -90,11 +93,12 @@ Base.HasLength()
 """
 IteratorSize(x) = IteratorSize(typeof(x))
 IteratorSize(::Type) = HasLength()  # HasLength is the default
+IteratorSize(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
+IteratorSize(::Type{Any}) = SizeUnknown()
 
+IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
-
-IteratorSize(::Type{Any}) = SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 
@@ -123,7 +127,7 @@ Base.HasEltype()
 """
 IteratorEltype(x) = IteratorEltype(typeof(x))
 IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
+IteratorEltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
+IteratorEltype(::Type{Any}) = EltypeUnknown()
 
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
-
-IteratorEltype(::Type{Any}) = EltypeUnknown()

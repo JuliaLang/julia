@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
@@ -92,7 +96,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -103,7 +107,7 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -114,6 +118,10 @@ Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
+
+Functions related to IO or making use of random number generators (RNG) are notable exceptions:
+Since these functions almost invariably must mutate the IO or RNG, functions ending with `!` are used to signify a mutation _other_ than mutating the IO or advancing the RNG state.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates both the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
 
 ## Avoid strange type `Union`s
 
@@ -130,6 +138,32 @@ a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
+## Prefer exported methods over direct field access
+
+Idiomatic Julia code should generally treat a module's exported methods as the
+interface to its types. An object's fields are generally considered
+implementation details and user code should only access them directly if this
+is stated to be the API. This has several benefits:
+
+- Package developers are freer to change the implementation without breaking
+  user code.
+- Methods can be passed to higher-order constructs like [`map`](@ref) (e.g.
+  `map(imag, zs)`) rather than `[z.im for z in zs]`).
+- Methods can be defined on abstract types.
+- Methods can describe a conceptual operation that can be shared across
+  disparate types (e.g. `real(z)` works on Complex numbers or Quaternions).
+
+Julia's dispatch system encourages this style because `play(x::MyType)` only
+defines the `play` method on that particular type, leaving other types to
+have their own implementation.
+
+Similarly, non-exported functions are typically internal and subject to change,
+unless the documentations states otherwise. Names sometimes are given a `_` prefix
+(or suffix) to further suggest that something is "internal" or an
+implementation-detail, but it is not a rule.
+
+Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref match), [`StatStruct`](@ref stat).
+
 ## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
@@ -137,6 +171,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
     as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
@@ -261,7 +296,7 @@ Decide whether the concept in question will be written as `MyType` or `MyType()`
 it.
 
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
-later if they become necessary to solve some problem.
+later if they become necessary to solve some problems.
 
 If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check
@@ -314,8 +349,7 @@ to behave in a certain way, and overly customizing its behavior can make it hard
 ## Avoid type piracy
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
-or other packages on types that you have not defined. In some cases, you can get away with
-type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+or other packages on types that you have not defined. In extreme cases, you can crash Julia
 (e.g. if your method extension or redefinition causes invalid input to be passed to a
 `ccall`). Type piracy can complicate reasoning about code, and may introduce
 incompatibilities that are hard to predict and diagnose.
@@ -348,7 +382,7 @@ You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 
-## Do not write `x->f(x)`
+## Don't write a trivial anonymous function `x->f(x)` for a named function `f`
 
 Since higher-order functions are often called with anonymous functions, it is easy to conclude
 that this is desirable or even necessary. But any function can be passed directly, without being

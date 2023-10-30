@@ -2,7 +2,7 @@
 
 module Cartesian
 
-export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
+export @nloops, @nref, @ncall, @ncallkw, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 ### Cartesian-specific macros
 
@@ -104,8 +104,36 @@ while `@ncall 2 func a b i->c[i]` yields
 macro ncall(N::Int, f, args...)
     pre = args[1:end-1]
     ex = args[end]
-    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
+    vars = (inlineanonymous(ex, i) for i = 1:N)
     Expr(:escape, Expr(:call, f, pre..., vars...))
+end
+
+"""
+    @ncallkw N f kw sym...
+
+Generate a function call expression with keyword arguments `kw...`. As
+in the case of [`@ncall`](@ref), `sym` represents any number of function arguments, the
+last of which may be an anonymous-function expression and is expanded into `N` arguments.
+
+# Example
+```jldoctest
+julia> using Base.Cartesian
+
+julia> f(x...; a, b = 1, c = 2, d = 3) = +(x..., a, b, c, d);
+
+julia> x_1, x_2 = (-1, -2); b = 0; kw = (c = 0, d = 0);
+
+julia> @ncallkw 2 f (; a = 0, b, kw...) x
+-3
+
+```
+"""
+macro ncallkw(N::Int, f, kw, args...)
+    pre = args[1:end-1]
+    ex = args[end]
+    vars = (inlineanonymous(ex, i) for i = 1:N)
+    param = Expr(:parameters, Expr(:(...), kw))
+    Expr(:escape, Expr(:call, f, param, pre..., vars...))
 end
 
 """
@@ -239,8 +267,8 @@ function inlineanonymous(ex::Expr, val)
     if !isa(ex.args[1], Symbol)
         throw(ArgumentError("not a single-argument anonymous function"))
     end
-    sym = ex.args[1]
-    ex = ex.args[2]
+    sym = ex.args[1]::Symbol
+    ex = ex.args[2]::Expr
     exout = lreplace(ex, sym, val)
     exout = poplinenum(exout)
     exprresolve(exout)
@@ -262,7 +290,7 @@ struct LReplace{S<:AbstractString}
 end
 LReplace(sym::Symbol, val::Integer) = LReplace(sym, string(sym), val)
 
-lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
+lreplace(ex::Expr, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
 
 function lreplace!(sym::Symbol, r::LReplace)
     sym == r.pat_sym && return r.val
@@ -313,10 +341,10 @@ end
 
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
-    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
+    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]::Symbol), "_")
         excurly = exprresolve(lreplace!(ex.args[2], r))
-        if isa(excurly, Number)
-            return Symbol(ex.args[1],excurly)
+        if isa(excurly, Int)
+            return Symbol(ex.args[1]::Symbol, excurly)
         else
             ex.args[2] = excurly
             return ex
@@ -353,8 +381,13 @@ const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)
-    if ex.head === :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
-        return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
+    if ex.head === :call
+        callee = ex.args[1]
+        if isa(callee, Symbol)
+            if haskey(exprresolve_arith_dict, callee) && all(Bool[isa(ex.args[i], Number) for i = 2:length(ex.args)])
+                return true, exprresolve_arith_dict[callee](ex.args[2:end]...)
+            end
+        end
     end
     false, 0
 end
@@ -362,8 +395,15 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head === :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
-        return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
+    if ex.head === :call
+        callee = ex.args[1]
+        if isa(callee, Symbol)
+            if callee ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+                return true, exprresolve_cond_dict[callee](ex.args[2], ex.args[3])
+            end
+        end
+    elseif Meta.isexpr(ex, :block, 2) && ex.args[1] isa LineNumberNode
+        return exprresolve_conditional(ex.args[2])
     end
     false, false
 end
@@ -392,10 +432,16 @@ function exprresolve(ex::Expr)
         return ex.args[1][ex.args[2:end]...]
     end
     # Resolve conditionals
-    if ex.head === :if
+    if ex.head === :if || ex.head === :elseif
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
-            ex = tf ? ex.args[2] : ex.args[3]
+            if tf
+                return ex.args[2]
+            elseif length(ex.args) == 3
+                return ex.args[3]
+            else
+                return nothing
+            end
         end
     end
     ex

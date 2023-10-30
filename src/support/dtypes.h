@@ -10,11 +10,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#if defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
-#include <math.h>
-#endif
+#include <math.h> // NAN and INF constants
 
 #include "platform.h"
 #include "analyzer_annotations.h"
@@ -28,6 +24,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
+
+/* See https://github.com/JuliaLang/julia/pull/44587 */
+typedef intptr_t ssize_t;
+#define SSIZE_MAX INTPTR_MAX
+#define _SSIZE_T_
+#define _SSIZE_T_DEFINED
+
+#endif /* defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED) */
 
 #if !defined(_COMPILER_GCC_)
 
@@ -63,15 +71,25 @@
 */
 
 #ifdef _OS_WINDOWS_
-#define STDCALL __stdcall
-# ifdef LIBRARY_EXPORTS
+#define STDCALL  __stdcall
+# ifdef JL_LIBRARY_EXPORTS_INTERNAL
 #  define JL_DLLEXPORT __declspec(dllexport)
-# else
-#  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+# ifdef JL_LIBRARY_EXPORTS_CODEGEN
+#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport)
+# endif
+#define JL_HIDDEN
+#define JL_DLLIMPORT   __declspec(dllimport)
 #else
 #define STDCALL
-#define JL_DLLEXPORT __attribute__ ((visibility("default")))
+#define JL_DLLIMPORT __attribute__ ((visibility("default")))
+#define JL_HIDDEN __attribute__ ((visibility("hidden")))
+#endif
+#ifndef JL_DLLEXPORT
+# define JL_DLLEXPORT JL_DLLIMPORT
+#endif
+#ifndef JL_DLLEXPORT_CODEGEN
+# define JL_DLLEXPORT_CODEGEN JL_DLLIMPORT
 #endif
 
 #ifdef _OS_LINUX_
@@ -106,13 +124,8 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
-#  define STATIC_INLINE static
-#elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
-#  define STATIC_INLINE static __inline
-#else
-#  define STATIC_INLINE static inline
-#endif
+#define STATIC_INLINE static inline
+#define FORCE_INLINE static inline __attribute__((always_inline))
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
@@ -146,20 +159,6 @@
                 __builtin_assume(!!(cond_));            \
                 cond_;                                  \
             }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __assume(!!(cond_));                    \
-                cond_;                                  \
-            }))
 #elif defined(__GNUC__)
 static inline void jl_assume_(int cond)
 {
@@ -178,12 +177,6 @@ static inline void jl_assume_(int cond)
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                __assume_aligned(ptr_, align);                  \
-                ptr_;                                           \
-            }))
 #elif defined(__GNUC__)
 #define jl_assume_aligned(ptr, align) (__extension__ ({         \
                 __typeof__(ptr) ptr_ = (ptr);                   \
@@ -347,16 +340,29 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
     memcpy(ptr, &val, 2);
 }
 
+STATIC_INLINE void *calloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
 #ifdef _OS_WINDOWS_
-#include <errhandlingapi.h>
+    DWORD last_error = GetLastError();
 #endif
+    void *p = calloc(sz == 0 ? 1 : sz, 1);
+    if (p == NULL) {
+        perror("(julia) calloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
 
 STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *p = malloc(sz);
+    void *p = malloc(sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) malloc");
         abort();
@@ -373,7 +379,7 @@ STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    p = realloc(p, sz);
+    p = realloc(p, sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) realloc");
         abort();

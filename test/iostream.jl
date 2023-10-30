@@ -39,7 +39,7 @@
     end
 end
 
-@testset "readbytes_some! via readbytes!" begin
+@testset "readbytes!" begin
     mktemp() do path, file
         function append_to_file(str)
             mark(file)
@@ -47,7 +47,9 @@ end
             flush(file)
             reset(file)
         end
+        # Array
         append_to_file("aaaaaaaaaaaaaaaaa")
+        # readbytes_some
         b = UInt8[0]
         readbytes!(file, b, all=false)
         @test String(b) == "a"
@@ -59,8 +61,43 @@ end
         b = UInt8[]
         readbytes!(file, b, 15)
         @test String(b) == "aaaaaaaaaaaaaa"
+
+        # SubArray
+        append_to_file("aaaaaaaaaaaaaaaaa")
+        # readbytes_some
+        b = view(UInt8[0, 0, 0], 2:2)
+        readbytes!(file, b, all=false)
+        @test String(b) == "a"
+        b = view(UInt8[0, 0, 0], 2:3)
+        readbytes!(file, b, 2, all=false)
+        @test String(b) == "aa"
+        b = view(UInt8[0, 0, 0], 1:3)
+        readbytes!(file, b, 2, all=false)
+        @test b == UInt8['a', 'a', 0]
+        @test String(b[1:2]) == "aa"
+        # with resizing of b
+        b = view(UInt8[0, 0, 0], 1:0)
+        @test_throws MethodError readbytes!(file, b, 2, all=false)
+        @test isempty(b)
+        # readbytes_all
+        b = view(UInt8[0, 0, 0], 2:2)
+        readbytes!(file, b)
+        @test String(b) == "a"
+        b = view(UInt8[0, 0, 0], 2:3)
+        readbytes!(file, b, 2)
+        @test String(b) == "aa"
+        b = view(UInt8[0, 0, 0], 1:3)
+        readbytes!(file, b, 2)
+        @test b == UInt8['a', 'a', 0]
+        @test String(b[1:2]) == "aa"
+        #  with resizing of b
+        b = view(UInt8[0, 0, 0], 1:0)
+        @test_throws MethodError readbytes!(file, b, 2)
+        @test !islocked(file.lock) # Issue #37218
+        @test isempty(b)
     end
 end
+
 @testset "issue #18755" begin
     mktemp() do path, io
         write(io, zeros(UInt8, 131073))
@@ -79,6 +116,24 @@ end
         b = Vector{UInt8}(undef, 4)
         @test readbytes!(io, b) == 4
         @test b == 0x01:0x04
+    end
+end
+
+@testset "read!/write(::IO, A::StridedArray)" begin
+    s1 = reshape(view(rand(UInt8, 16), 1:16), 2, 2, 2, 2)
+    s2 = view(s1, 1:2, 1:2, 1:2, 1:2)
+    s3 = view(s1, 1:2, 1:2, 1, 1:2)
+    mktemp() do path, io
+        b = Vector{UInt8}(undef, 17)
+        for s::StridedArray in (s3, s1, s2)
+            @test write(io, s) == length(s)
+            seek(io, 0)
+            @test readbytes!(io, b) == length(s)
+            seek(io, 0)
+            @test view(b, 1:length(s)) == vec(s)
+            @test read!(io, fill!(deepcopy(s), 0)) == s
+            seek(io, 0)
+        end
     end
 end
 
@@ -108,4 +163,30 @@ end
         open(f -> readbytes!(f, y, 102, all=false), path)
         @test y == [x; 0]
     end
+end
+
+@testset "peek(::IOStream)" begin
+    mktemp() do _, file
+        @test_throws EOFError peek(file)
+        mark(file)
+        write(file, "Lávate las manos")
+        flush(file)
+        reset(file)
+        @test peek(file) == 0x4c
+    end
+end
+
+@testset "issue #36004" begin
+    f = tempname()
+    open(f, "w") do io
+        write(io, "test")
+    end
+    open(f, "r") do io
+        @test length(readavailable(io)) > 0
+    end
+end
+
+@testset "inference" begin
+    @test all(T -> T <: Union{UInt, Int}, Base.return_types(unsafe_write, (IO, Ptr{UInt8}, UInt)))
+    @test all(T -> T === Bool, Base.return_types(eof, (IO,)))
 end
