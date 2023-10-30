@@ -203,10 +203,10 @@ might want to check as and aid to debugging if they fail.
 The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at various optimization levels.
+    An assert might be disabled at some optimization levels.
     Assert should therefore only be used as a debugging tool
     and not used for authentication verification (e.g., verifying passwords or checking array bounds).
-    The user must not rely on the side effects of `@assert` for the correct behavior 
+    The code must not rely on the side effects of running `cond` for the correct behavior
     of a function.
 
 # Examples
