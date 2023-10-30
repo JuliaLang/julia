@@ -76,6 +76,7 @@ export
     cond,
     condskeel,
     copyto!,
+    copytotri!,
     copy_transpose!,
     cross,
     adjoint,
@@ -153,7 +154,6 @@ export
     triu,
     tril!,
     triu!,
-    lacpy!,
 
 # Operators
     \,
