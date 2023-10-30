@@ -2282,7 +2282,7 @@ function allocate_new_blocks!(ir::IRCode, positions_nblocks::Vector{Pair{Int,Int
 
     allocate_stmts!(ir.stmts.inst, GotoNode(0))  # dummy
     allocate_stmts!(ir.stmts.type, Any)
-    allocate_stmts!(ir.stmts.info, nothing)
+    allocate_stmts!(ir.stmts.info, NoCallInfo())
     allocate_stmts!(ir.stmts.flag, 0)
 
     return NewBlocksInfo(positions_nblocks, block_to_range, ssachangemap, bbchangemap)
