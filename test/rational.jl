@@ -52,11 +52,26 @@ using Test
     @test_throws OverflowError Int8(-128)//Int8(-1)
     @test_throws OverflowError Int8(-1)//Int8(-128)
     @test Int8(-128)//Int8(-2) == 64
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(-128) === Rational{Int8}(1)
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(0) === Rational{Int8}(-1, 0)
+    @test Rational{Int8}(0) / Rational{Int8}(-128) === Rational{Int8}(0, 1)
 
     @test_throws InexactError Rational(UInt(1), typemin(Int32))
     @test iszero(Rational{Int}(UInt(0), 1))
     @test Rational{BigInt}(UInt(1), Int(-1)) == -1
-    @test_broken Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+    @test Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+    @test Rational{Int64}(0x01, Int8(-1)) == -1
+    @test Rational{Int64}(Int8(-1), 0x01) == -1
+    @test Rational{Int64}(0x02, Int8(-128)) == -1 // 64
+    @test_throws InexactError Rational{UInt64}(UInt32(1), typemin(Int32))
+    @test_throws InexactError Rational{UInt64}(Int64(1), typemin(Int64))
+    @test_throws InexactError Rational{UInt64}(Int64(-1), Int64(1))
+    @test Rational{UInt64}(typemin(Int32), typemin(Int32)) == 1
+    @test Rational{UInt64}(zero(Int32), typemin(Int32)) == 0
+    @test Rational{UInt64}(zero(Int32), Int32(-1)) == 0
+    @test Rational{Int64}(typemin(Int32), typemin(Int32)) == 1
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -720,6 +735,19 @@ end
 
 @testset "Rational{T} with non-concrete T (issue #41222)" begin
     @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+    @test @inferred(Rational{Unsigned}(2,3)) isa Rational{Unsigned}
+    @test @inferred(Rational{Signed}(2,3)) isa Rational{Signed}
+    @test_throws InexactError Rational{Unsigned}(-1,1)
+    @test_throws InexactError Rational{Unsigned}(-1)
+    @test Rational{Unsigned}(Int8(-128), Int8(-128)) === Rational{Unsigned}(0x01, 0x01)
+    @test Rational{Unsigned}(Int8(-128), Int8(-1)) === Rational{Unsigned}(0x80, 0x01)
+    @test Rational{Unsigned}(Int8(0), Int8(-128)) === Rational{Unsigned}(0x00, 0x01)
+    # Numerator and denominator should have the same type.
+    @test Rational{Integer}(0x02) === Rational{Integer}(0x02, 0x01)
+    @test Rational{Integer}(Int16(3)) === Rational{Integer}(Int16(3), Int16(1))
+    @test Rational{Integer}(0x01,-1) === Rational{Integer}(-1, 1)
+    @test Rational{Integer}(-1, 0x01) === Rational{Integer}(-1, 1)
+    @test_throws InexactError Rational{Integer}(Int8(-1), UInt8(1))
 end
 
 @testset "issue #41489" begin

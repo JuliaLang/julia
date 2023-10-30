@@ -30,16 +30,28 @@ checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
-    num, den = divgcd(num, den)
-    return checked_den(T, T(num), T(den))
+    if T <: Unsigned
+        # Throw InexactError if the result is negative.
+        if !iszero(num) && (signbit(den) ⊻ signbit(num))
+            throw(InexactError(:Rational, Rational{T}, num, den))
+        end
+        unum = uabs(num)
+        uden = uabs(den)
+        r_unum, r_uden = divgcd(unum, uden)
+        return unsafe_rational(T, promote(T(r_unum), T(r_uden))...)
+    else
+        r_num, r_den = divgcd(num, den)
+        return checked_den(T, promote(T(r_num), T(r_den))...)
+    end
 end
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
-function divgcd(x::Integer,y::Integer)
-    g = gcd(x,y)
+function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
+    iszero(x) && iszero(y) && return throw(DivideError())
+    g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
 end
 
@@ -117,7 +129,7 @@ function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))
 end
 function Rational{T}(x::Integer) where T<:Integer
-    unsafe_rational(T, convert(T, x), one(T))
+    unsafe_rational(T, T(x), T(one(x)))
 end
 
 Rational(x::Rational) = x
