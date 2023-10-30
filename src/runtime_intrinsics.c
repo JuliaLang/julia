@@ -338,6 +338,14 @@ static inline float bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT
 
 // bfloat16 conversion API
 
+// for use in APInt (without the ABI shenanigans from below)
+uint16_t julia_float_to_bfloat(float param) {
+    return float_to_bfloat(param);
+}
+float julia_bfloat_to_float(uint16_t param) {
+    return bfloat_to_float(param);
+}
+
 // starting with GCC 13 and Clang 17, we have __bf16 on most platforms
 // (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \

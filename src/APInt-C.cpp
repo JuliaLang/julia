@@ -310,11 +310,15 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
 
 extern "C" float julia_half_to_float(uint16_t ival) JL_NOTSAFEPOINT;
 extern "C" uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
+extern "C" float julia_bfloat_to_float(uint16_t ival) JL_NOTSAFEPOINT;
+extern "C" uint16_t julia_float_to_bfloat(float param) JL_NOTSAFEPOINT;
 
 void LLVMFPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
     if (ty == jl_float16_type)
         Val = julia_half_to_float(*(uint16_t*)pa);
+    else if (ty == jl_bfloat16_type)
+        Val = julia_bfloat_to_float(*(uint16_t*)pa);
     else if (ty == jl_float32_type)
         Val = *(float*)pa;
     else if (jl_float64_type)
@@ -393,6 +397,8 @@ void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerP
     }
     if (oty == jl_float16_type)
         *(uint16_t*)pr = julia_float_to_half(val);
+    else if (oty == jl_bfloat16_type)
+        *(uint16_t*)pr = julia_float_to_bfloat(val);
     else if (oty == jl_float32_type)
         *(float*)pr = val;
     else if (oty == jl_float64_type)
@@ -412,6 +418,8 @@ void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerP
     }
     if (oty == jl_float16_type)
         *(uint16_t*)pr = julia_float_to_half(val);
+    else if (oty == jl_bfloat16_type)
+        *(uint16_t*)pr = julia_float_to_bfloat(val);
     else if (oty == jl_float32_type)
         *(float*)pr = val;
     else if (oty == jl_float64_type)
