@@ -175,8 +175,8 @@ julia> copy(T)
 """
 copy(::Union{Transpose,Adjoint})
 
-Base.copy(A::Transpose{<:Any,<:AbstractMatrix}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
-Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::TransposeAbsMat) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::AdjointAbsMat) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                          A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
@@ -209,4 +209,14 @@ end
 function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
     C = similar(A, T, size(A))
     transpose!(C, parent(A))
+end
+
+function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
+    if axes(dest) == axes(src)
+        f! = inplace_adj_or_trans(src)
+        f!(dest, parent(src))
+    else
+        @invoke Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    end
+    return dest
 end

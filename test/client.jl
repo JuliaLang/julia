@@ -52,3 +52,8 @@ end
         ERROR: ErrorException
         """s, err_str)
 end
+
+@testset "defining `ans` and `err`" begin
+    @test eval(:(ans = 1)) == 1
+    @test eval(:(err = 1)) == 1
+end

@@ -33,8 +33,12 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
-@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
-                         init = ())) == (2, 3.0, '4')
+for t in Any[(1, 2.0, '3'), (;a = 1, b = 2.0, c = '3')]
+    @test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), t;
+                            init = ())) == (2, 3.0, '4')
+    @test @inferred(mapfoldl(x -> x + 1, (x, y) -> (x..., y), t;
+                            init = ())) == (2, 3.0, '4')
+end
 
 @test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 let x = rand(10)
@@ -435,39 +439,39 @@ end
 
 # any & all
 
-@test @inferred any([]) == false
-@test @inferred any(Bool[]) == false
-@test @inferred any([true]) == true
-@test @inferred any([false, false]) == false
-@test @inferred any([false, true]) == true
-@test @inferred any([true, false]) == true
-@test @inferred any([true, true]) == true
-@test @inferred any([true, true, true]) == true
-@test @inferred any([true, false, true]) == true
-@test @inferred any([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, any([])) == false
+@test @inferred(any(Bool[])) == false
+@test @inferred(any([true])) == true
+@test @inferred(any([false, false])) == false
+@test @inferred(any([false, true])) == true
+@test @inferred(any([true, false])) == true
+@test @inferred(any([true, true])) == true
+@test @inferred(any([true, true, true])) == true
+@test @inferred(any([true, false, true])) == true
+@test @inferred(any([false, false, false])) == false
 
-@test @inferred all([]) == true
-@test @inferred all(Bool[]) == true
-@test @inferred all([true]) == true
-@test @inferred all([false, false]) == false
-@test @inferred all([false, true]) == false
-@test @inferred all([true, false]) == false
-@test @inferred all([true, true]) == true
-@test @inferred all([true, true, true]) == true
-@test @inferred all([true, false, true]) == false
-@test @inferred all([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, all([])) == true
+@test @inferred(all(Bool[])) == true
+@test @inferred(all([true])) == true
+@test @inferred(all([false, false])) == false
+@test @inferred(all([false, true])) == false
+@test @inferred(all([true, false])) == false
+@test @inferred(all([true, true])) == true
+@test @inferred(all([true, true, true])) == true
+@test @inferred(all([true, false, true])) == false
+@test @inferred(all([false, false, false])) == false
 
-@test @inferred any(x->x>0, []) == false
-@test @inferred any(x->x>0, Int[]) == false
-@test @inferred any(x->x>0, [-3]) == false
-@test @inferred any(x->x>0, [4]) == true
-@test @inferred any(x->x>0, [-3, 4, 5]) == true
+@test @inferred(Union{Missing,Bool}, any(x->x>0, [])) == false
+@test @inferred(any(x->x>0, Int[])) == false
+@test @inferred(any(x->x>0, [-3])) == false
+@test @inferred(any(x->x>0, [4])) == true
+@test @inferred(any(x->x>0, [-3, 4, 5])) == true
 
-@test @inferred all(x->x>0, []) == true
-@test @inferred all(x->x>0, Int[]) == true
-@test @inferred all(x->x>0, [-3]) == false
-@test @inferred all(x->x>0, [4]) == true
-@test @inferred all(x->x>0, [-3, 4, 5]) == false
+@test @inferred(Union{Missing,Bool}, all(x->x>0, [])) == true
+@test @inferred(all(x->x>0, Int[])) == true
+@test @inferred(all(x->x>0, [-3])) == false
+@test @inferred(all(x->x>0, [4])) == true
+@test @inferred(all(x->x>0, [-3, 4, 5])) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
@@ -690,4 +694,43 @@ end
     @test @inferred(maximum(c)) == maximum(collect(c))
     @test @inferred(prod(b)) == prod(collect(b))
     @test @inferred(minimum(a)) == minimum(collect(a))
+end
+
+function fold_alloc(a)
+    sum(a)
+    foldr(+, a)
+    max(@allocated(sum(a)), @allocated(foldr(+, a)))
+end
+let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
+    b = (a...,)
+    @test fold_alloc(a) == fold_alloc(b) == 0
+end
+
+@testset "concrete eval `[any|all](f, itr::Tuple)`" begin
+    intf = in((1,2,3)); Intf = typeof(intf)
+    symf = in((:one,:two,:three)); Symf = typeof(symf)
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3,4)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,6)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(all(in((:one,:two,:three)),(:three,:four)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((:one,:two,:three)),(:four,:three)))
+    end |> only == Val{true}
 end

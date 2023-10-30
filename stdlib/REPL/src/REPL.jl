@@ -3,17 +3,36 @@
 """
 Run Evaluate Print Loop (REPL)
 
-    Example minimal code
-    ```
-    import REPL
-    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
-    repl = REPL.LineEditREPL(term, true)
-    REPL.run_repl(repl)
-    ```
+Example minimal code
+
+```julia
+import REPL
+term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+repl = REPL.LineEditREPL(term, true)
+REPL.run_repl(repl)
+```
 """
 module REPL
 
+const PRECOMPILE_STATEMENTS = Vector{String}()
+
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+    # We can encounter the situation where the sub-ordinate process used
+    # during precompilation of REPL, can load a valid cache-file.
+    # We need to replay the statements such that the parent process
+    # can also include those. See JuliaLang/julia#51532
+    if Base.JLOptions().trace_compile !== C_NULL && !isempty(PRECOMPILE_STATEMENTS)
+        for statement in PRECOMPILE_STATEMENTS
+            ccall(:jl_write_precompile_statement, Cvoid, (Cstring,), statement)
+        end
+    else
+        empty!(PRECOMPILE_STATEMENTS)
+    end
+end
+
 Base.Experimental.@optlevel 1
+Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -69,10 +88,6 @@ include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 @nospecialize # use only declared type signatures
-
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-end
 
 answer_color(::AbstractREPL) = ""
 
@@ -151,7 +166,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 end
                 value = Core.eval(mod, ast)
                 backend.in_eval = false
-                setglobal!(mod, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -250,11 +265,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -263,7 +276,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
-            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            if mode isa LineEdit.Prompt
+                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
@@ -285,6 +300,19 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     end
     return nothing
 end
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limitflag[]
+        print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    return nothing
+end
+
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -293,8 +321,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Main, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+                repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -316,8 +344,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    setglobal!(Main, :err, excs)
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    setglobal!(Base.MainInclude, :err, excs)
+                    repl_display_error(errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -388,6 +416,7 @@ end
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
+    frontend_task::Task
     BasicREPL(t) = new(t, false)
 end
 
@@ -395,6 +424,7 @@ outstream(r::BasicREPL) = r.terminal
 hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -461,6 +491,7 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
+    frontend_task::Task
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
@@ -502,6 +533,8 @@ end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
+
+setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
@@ -1095,6 +1128,31 @@ function setup_interface(
                 edit_insert(s, '?')
             end
         end,
+        ']' => function (s::MIState,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                    Pkg = Base.require(pkgid)
+                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
+                    pkg_mode = nothing
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                            pkg_mode = mode
+                            break
+                        end
+                    end
+                    # TODO: Cache the `pkg_mode`?
+                    if pkg_mode !== nothing
+                        buf = copy(LineEdit.buffer(s))
+                        transition(s, pkg_mode) do
+                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        end
+                        return
+                    end
+                end
+            end
+            edit_insert(s, ']')
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1248,7 +1306,7 @@ function setup_interface(
                 @goto writeback
             end
             try
-                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
             catch ex
                 ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
                 @info "edit failed" _exception=ex
@@ -1280,6 +1338,7 @@ function setup_interface(
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1305,6 +1364,7 @@ mutable struct StreamREPL <: AbstractREPL
     input_color::String
     answer_color::String
     waserror::Bool
+    frontend_task::Task
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
@@ -1362,9 +1422,80 @@ ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
 ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
 
+function banner(io::IO = stdout; short = false)
+    if Base.GIT_VERSION_INFO.tagged_commit
+        commit_string = Base.TAGGED_RELEASE_BANNER
+    elseif isempty(Base.GIT_VERSION_INFO.commit)
+        commit_string = ""
+    else
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - Base.GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
+        unit = days == 1 ? "day" : "days"
+        distance = Base.GIT_VERSION_INFO.fork_master_distance
+        commit = Base.GIT_VERSION_INFO.commit_short
+
+        if distance == 0
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+        else
+            branch = Base.GIT_VERSION_INFO.branch
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
+        end
+    end
+
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
+
+    if get(io, :color, false)::Bool
+        c = Base.text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
+
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
+
+            """)
+        end
+    else
+        if short
+            print(io,"""
+              o  |  Version $(VERSION)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
+
+            """)
+        end
+    end
+end
+
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     have_color = hascolor(repl)
-    Base.banner(repl.stream)
+    banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1392,7 +1523,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1403,18 +1534,33 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return quote
-        let x = $x
-            $capture_result($n, x)
-            x
+    return Expr(:toplevel, get_usings!([], x)..., quote
+        let __temp_val_a72df459 = $x
+            $capture_result($n, __temp_val_a72df459)
+            __temp_val_a72df459
+        end
+    end)
+end
+
+function get_usings!(usings, ex)
+    ex isa Expr || return usings
+    # get all `using` and `import` statements which are at the top level
+    for (i, arg) in enumerate(ex.args)
+        if Base.isexpr(arg, :toplevel)
+            get_usings!(usings, arg)
+        elseif Base.isexpr(arg, [:using, :import])
+            push!(usings, popat!(ex.args, i))
         end
     end
+    return usings
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
-    mod = REPL.active_module()
+    mod = Base.MainInclude
     if !isdefined(mod, :Out)
+        @eval mod global Out
+        @eval mod export Out
         setglobal!(mod, :Out, Dict{Int, Any}())
     end
     if x !== getglobal(mod, :Out) && x !== nothing # remove this?
@@ -1450,15 +1596,35 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
     push!(__current_ast_transforms(backend), @nospecialize(ast) -> out_transform(ast, n))
     return
 end
+
+"""
+    Out[n]
+
+A variable referring to all previously computed values, automatically imported to the interactive prompt.
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
+
+See also [`ans`](@ref).
+"""
+Base.MainInclude.Out
+
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
+
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+# Needs to occur after this module is finished.
+Base.REPL_MODULE_REF[] = REPL
+
+if Base.generating_output()
+    include("precompile.jl")
+end
 
 end # module
