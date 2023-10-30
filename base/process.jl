@@ -413,7 +413,7 @@ process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
-    function waitkill(P::Process)
+    function waitkill(P::Union{Process,ProcessChain})
         close(P)
         # 0.1 seconds after we hope it dies (from closing stdio),
         # we kill the process with SIGTERM (15)
@@ -430,7 +430,7 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         rethrow()
     end
     close(P.in)
-    if !eof(P.out)
+    if !(eof(P.out)::Bool)
         waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end
@@ -447,7 +447,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """

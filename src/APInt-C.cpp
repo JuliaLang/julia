@@ -30,10 +30,10 @@ const unsigned int host_char_bit = 8;
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
         memcpy(data_a64, p##s, RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
-        s = APInt(numbits, makeArrayRef(data_a64, nbytes / sizeof(integerPart))); \
+        s = APInt(numbits, ArrayRef<uint64_t>(data_a64, nbytes / sizeof(integerPart))); \
     } \
     else { \
-        s = APInt(numbits, makeArrayRef(p##s, numbits / integerPartWidth)); \
+        s = APInt(numbits, ArrayRef<uint64_t>(p##s, numbits / integerPartWidth)); \
     }
 
 /* assign to "integerPart *pr" from "APInt a" */
@@ -313,10 +313,13 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     ASSIGN(r, a)
 }
 
+extern "C" float julia_half_to_float(uint16_t ival) JL_NOTSAFEPOINT;
+extern "C" uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
+
 void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
     if (numbits == 16)
-        Val = __gnu_h2f_ieee(*(uint16_t*)pa);
+        Val = julia_half_to_float(*(uint16_t*)pa);
     else if (numbits == 32)
         Val = *(float*)pa;
     else if (numbits == 64)
@@ -391,7 +394,7 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         val = a.roundToDouble(true);
     }
     if (onumbits == 16)
-        *(uint16_t*)pr = __gnu_f2h_ieee(val);
+        *(uint16_t*)pr = julia_float_to_half(val);
     else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
@@ -408,7 +411,7 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         val = a.roundToDouble(false);
     }
     if (onumbits == 16)
-        *(uint16_t*)pr = __gnu_f2h_ieee(val);
+        *(uint16_t*)pr = julia_float_to_half(val);
     else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)

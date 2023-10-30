@@ -34,6 +34,9 @@ that you may be able to leverage; see the
 """
 abstract type BroadcastStyle end
 
+struct Unknown <: BroadcastStyle end
+BroadcastStyle(::Type{Union{}}, slurp...) = Unknown()  # ambiguity resolution
+
 """
 `Broadcast.Style{C}()` defines a [`BroadcastStyle`](@ref) signaling through the type
 parameter `C`. You can use this as an alternative to creating custom subtypes of `BroadcastStyle`,
@@ -44,9 +47,6 @@ for example
 struct Style{T} <: BroadcastStyle end
 
 BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
-
-struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
@@ -167,16 +167,28 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
 struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <: Base.AbstractBroadcasted
+    style::Style
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
-end
 
-Broadcasted(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
-    Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
-function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Args<:Tuple}
-    # using Core.Typeof rather than F preserves inferrability when f is a type
-    Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
+    Broadcasted(style::Union{Nothing,BroadcastStyle}, f::Tuple, args::Tuple) = error() # disambiguation: tuple is not callable
+    function Broadcasted(style::Union{Nothing,BroadcastStyle}, f::F, args::Tuple, axes=nothing) where {F}
+        # using Core.Typeof rather than F preserves inferrability when f is a type
+        return new{typeof(style), typeof(axes), Core.Typeof(f), typeof(args)}(style, f, args, axes)
+    end
+
+    function Broadcasted(f::F, args::Tuple, axes=nothing) where {F}
+        Broadcasted(combine_styles(args...)::BroadcastStyle, f, args, axes)
+    end
+
+    function Broadcasted{Style}(f::F, args, axes=nothing) where {Style, F}
+        return new{Style, typeof(axes), Core.Typeof(f), typeof(args)}(Style()::Style, f, args, axes)
+    end
+
+    function Broadcasted{Style,Axes,F,Args}(f, args, axes) where {Style,Axes,F,Args}
+        return new{Style, Axes, F, Args}(Style()::Style, f, args, axes)
+    end
 end
 
 struct AndAnd end
@@ -194,16 +206,16 @@ function broadcasted(::OrOr, a, bc::Broadcasted)
     broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
 end
 
-Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,F,Args}) where {NewStyle,Style,Axes,F,Args} =
-    Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)
+Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{<:Any,Axes,F,Args}) where {NewStyle,Axes,F,Args} =
+    Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)::Broadcasted{NewStyle,Axes,F,Args}
 
 function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
     print(io, Broadcasted)
     # Only show the style parameter if we have a set of axes — representing an instantiated
     # "outermost" Broadcasted. The styles of nested Broadcasteds represent an intermediate
     # computation that is not relevant for dispatch, confusing, and just extra line noise.
-    bc.axes isa Tuple && print(io, '{', Style, '}')
-    print(io, '(', bc.f, ", ", bc.args, ')')
+    bc.axes isa Tuple && print(io, "{", Style, "}")
+    print(io, "(", bc.f, ", ", bc.args, ")")
     nothing
 end
 
@@ -231,7 +243,7 @@ BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
     throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
 
-argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
+argtype(::Type{BC}) where {BC<:Broadcasted} = fieldtype(BC, :args)
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
@@ -262,18 +274,14 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, 2))
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, :args))
 Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N<:Integer} = N
 
-_maxndims(T::Type{<:Tuple}) = reduce(max, (ntuple(n -> _ndims(fieldtype(T, n)), Base._counttuple(T))))
-_maxndims(::Type{<:Tuple{T}}) where {T} = ndims(T)
-_maxndims(::Type{<:Tuple{T}}) where {T<:Tuple} = _ndims(T)
+_maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
+_maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
 function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
-    return T<:Tuple || S<:Tuple ? max(_ndims(T), _ndims(S)) : max(ndims(T), ndims(S))
+    return max(T <: Tuple ? 1 : ndims(T), S <: Tuple ? 1 : ndims(S))
 end
-
-_ndims(x) = ndims(x)
-_ndims(::Type{<:Tuple}) = 1
 
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
@@ -289,14 +297,14 @@ Custom [`BroadcastStyle`](@ref)s may override this default in cases where it is 
 to compute and verify the resulting `axes` on-demand, leaving the `axis` field
 of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
 """
-@inline function instantiate(bc::Broadcasted{Style}) where {Style}
+@inline function instantiate(bc::Broadcasted)
     if bc.axes isa Nothing # Not done via dispatch to make it easier to extend instantiate(::Broadcasted{Style})
         axes = combine_axes(bc.args...)
     else
         axes = bc.axes
         check_broadcast_axes(axes, bc.args...)
     end
-    return Broadcasted{Style}(bc.f, bc.args, axes)
+    return Broadcasted(bc.style, bc.f, bc.args, axes)
 end
 instantiate(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc
 # Tuples don't need axes, but when they have axes (for .= assignment), we need to check them (#33020)
@@ -325,24 +333,20 @@ becomes
 This is an optional operation that may make custom implementation of broadcasting easier in
 some cases.
 """
-function flatten(bc::Broadcasted{Style}) where {Style}
+function flatten(bc::Broadcasted)
     isflat(bc) && return bc
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(bc)
-    # build a function `makeargs` that takes a "flat" argument list and
-    # and creates the appropriate input arguments for `f`, e.g.,
-    #          makeargs = (w, x, y, z) -> (w, g(x, y), z)
-    #
-    # `makeargs` is built recursively and looks a bit like this:
-    #     makeargs(w, x, y, z) = (w, makeargs1(x, y, z)...)
-    #                          = (w, g(x, y), makeargs2(z)...)
-    #                          = (w, g(x, y), z)
-    let makeargs = make_makeargs(()->(), bc.args), f = bc.f
-        newf = @inline function(args::Vararg{Any,N}) where N
-            f(makeargs(args...)...)
-        end
-        return Broadcasted{Style}(newf, args, bc.axes)
-    end
+    # build a tuple of functions `makeargs`. Its elements take
+    # the whole "flat" argument list and and generate the appropriate
+    # input arguments for the broadcasted function `f`, e.g.,
+    #          makeargs[1] = ((w, x, y, z)) -> w
+    #          makeargs[2] = ((w, x, y, z)) -> g(x, y)
+    #          makeargs[3] = ((w, x, y, z)) -> z
+    makeargs = make_makeargs(bc.args)
+    f = Base.maybeconstructor(bc.f)
+    newf = (args...) -> (@inline; f(prepare_args(makeargs, args)...))
+    return Broadcasted(bc.style, newf, args, bc.axes)
 end
 
 const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
@@ -351,78 +355,47 @@ _isflat(args::NestedTuple) = false
 _isflat(args::Tuple) = _isflat(tail(args))
 _isflat(args::Tuple{}) = true
 
-cat_nested(t::Broadcasted, rest...) = (cat_nested(t.args...)..., cat_nested(rest...)...)
-cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
-cat_nested() = ()
+cat_nested(bc::Broadcasted) = cat_nested_args(bc.args)
+cat_nested_args(::Tuple{}) = ()
+cat_nested_args(t::Tuple{Any}) = cat_nested(t[1])
+cat_nested_args(t::Tuple) = (cat_nested(t[1])..., cat_nested_args(tail(t))...)
+cat_nested(a) = (a,)
 
 """
-    make_makeargs(makeargs_tail::Function, t::Tuple) -> Function
+    make_makeargs(t::Tuple) -> Tuple{Vararg{Function}}
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
-Ignoring `makeargs_tail` for the moment, the job of `make_makeargs` is
-to return a function that takes in flattened argument list and returns a
-tuple (each entry corresponding to an entry in `t`, having evaluated
-the corresponding element in the broadcast tree). As an additional
-complication, the passed in tuple may be longer than the number of leaves
-in the subtree described by `t`. The `makeargs_tail` function should
-be called on such additional arguments (but not the arguments consumed
-by `t`).
+The returned `Tuple` are functions which take in the (whole) flattened
+list and generate the inputs for the corresponding broadcasted function.
 """
-@inline make_makeargs(makeargs_tail, t::Tuple{}) = makeargs_tail
-@inline function make_makeargs(makeargs_tail, t::Tuple)
-    makeargs = make_makeargs(makeargs_tail, tail(t))
-    (head, tail...)->(head, makeargs(tail...)...)
+make_makeargs(args::Tuple) = _make_makeargs(args, 1)[1]
+
+# We build `makeargs` by traversing the broadcast nodes recursively.
+# note: `n` indicates the flattened index of the next unused argument.
+@inline function _make_makeargs(args::Tuple, n::Int)
+    head, n = _make_makeargs1(args[1], n)
+    rest, n = _make_makeargs(tail(args), n)
+    (head, rest...), n
 end
-function make_makeargs(makeargs_tail, t::Tuple{<:Broadcasted, Vararg{Any}})
-    bc = t[1]
-    # c.f. the same expression in the function on leaf nodes above. Here
-    # we recurse into siblings in the broadcast tree.
-    let makeargs_tail = make_makeargs(makeargs_tail, tail(t)),
-            # Here we recurse into children. It would be valid to pass in makeargs_tail
-            # here, and not use it below. However, in that case, our recursion is no
-            # longer purely structural because we're building up one argument (the closure)
-            # while destructuing another.
-            makeargs_head = make_makeargs((args...)->args, bc.args),
-            f = bc.f
-        # Create two functions, one that splits of the first length(bc.args)
-        # elements from the tuple and one that yields the remaining arguments.
-        # N.B. We can't call headargs on `args...` directly because
-        # args is flattened (i.e. our children have not been evaluated
-        # yet).
-        headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
-        return @inline function(args::Vararg{Any,N}) where N
-            args1 = makeargs_head(args...)
-            a, b = headargs(args1...), makeargs_tail(tailargs(args1...)...)
-            (f(a...), b...)
-        end
-    end
+_make_makeargs(::Tuple{}, n::Int) = (), n
+
+# A help struct to store the flattened index statically
+struct Pick{N} <: Function end
+(::Pick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
+
+# For flat nodes, we just consume one argument (n += 1), and return the "Pick" function
+@inline _make_makeargs1(_, n::Int) = Pick{n}(), n + 1
+# For nested nodes, we form the `makeargs1` based on the child `makeargs` (n += length(cat_nested(bc)))
+@inline function _make_makeargs1(bc::Broadcasted, n::Int)
+    makeargs, n = _make_makeargs(bc.args, n)
+    f = Base.maybeconstructor(bc.f)
+    makeargs1 = (args::Tuple) -> (@inline; f(prepare_args(makeargs, args)...))
+    makeargs1, n
 end
 
-@inline function make_headargs(t::Tuple)
-    let headargs = make_headargs(tail(t))
-        return @inline function(head, tail::Vararg{Any,N}) where N
-            (head, headargs(tail...)...)
-        end
-    end
-end
-@inline function make_headargs(::Tuple{})
-    return @inline function(tail::Vararg{Any,N}) where N
-        ()
-    end
-end
-
-@inline function make_tailargs(t::Tuple)
-    let tailargs = make_tailargs(tail(t))
-        return @inline function(head, tail::Vararg{Any,N}) where N
-            tailargs(tail...)
-        end
-    end
-end
-@inline function make_tailargs(::Tuple{})
-    return @inline function(tail::Vararg{Any,N}) where N
-        tail
-    end
-end
+@inline prepare_args(makeargs::Tuple, @nospecialize(x::Tuple)) = (makeargs[1](x), prepare_args(tail(makeargs), x)...)
+@inline prepare_args(makeargs::Tuple{Any}, @nospecialize(x::Tuple)) = (makeargs[1](x),)
+prepare_args(::Tuple{}, ::Tuple) = ()
 
 ## Broadcasting utilities ##
 
@@ -446,6 +419,10 @@ function combine_styles end
 
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
+function combine_styles(bc::Broadcasted)
+    bc.style isa Union{Nothing,Unknown} || return bc.style
+    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
+end
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
@@ -468,7 +445,9 @@ Base.Broadcast.DefaultArrayStyle{1}()
 function result_style end
 
 result_style(s::BroadcastStyle) = s
-result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
+function result_style(s1::S, s2::S) where S<:BroadcastStyle
+    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+end
 # Test both orders so users typically only have to declare one order
 result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyle(s2, s1))
 
@@ -484,7 +463,8 @@ result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
     ArrayConflict()
 # Fallbacks in case users define `rule` for both argument-orders (not recommended)
-result_join(::Any, ::Any, ::S, ::S) where S<:BroadcastStyle = S()
+result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle = result_style(s1, s2)
+
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
     error("""
 conflicting broadcast rules defined
@@ -512,6 +492,20 @@ julia> Broadcast.combine_axes(1, 1, 1)
 @inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
+"""
+    broadcast_shape(As...) -> Tuple
+
+Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+
+```jldoctest
+julia> Broadcast.broadcast_shape((1,2), (2,1))
+(2, 2)
+
+julia> Broadcast.broadcast_shape((1,), (1,5), (4,5,3))
+(4, 5, 3)
+```
+"""
+function broadcast_shape end
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
@@ -710,7 +704,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -718,17 +712,21 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
-_broadcast_getindex_eltype(bc::Broadcasted) = Base._return_type(bc.f, eltypes(bc.args))
+_broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
 _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 
 eltypes(::Tuple{}) = Tuple{}
-eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
-eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
-eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
+eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
+eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
+eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
+# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
-combine_eltypes(f, args::Tuple) =
-    promote_typejoin_union(Base._return_type(f, eltypes(args)))
+function combine_eltypes(f, args::Tuple)
+    argT = eltypes(args)
+    argT === Union{} && return Union{}
+    return promote_typejoin_union(Base._return_type(f, argT))
+end
 
 ## Broadcasting core
 
@@ -877,11 +875,11 @@ materialize(x) = x
     return materialize!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
 end
 
-@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+@inline function materialize!(dest, bc::Broadcasted{<:Any})
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
-@inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
-    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+@inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{<:Any})
+    return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, axes(dest))))
 end
 
 ## general `copy` methods
@@ -891,7 +889,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
-@inline function copy(bc::Broadcasted{Style}) where {Style}
+@inline function copy(bc::Broadcasted)
     ElType = combine_eltypes(bc.f, bc.args)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
@@ -950,7 +948,7 @@ broadcast_unalias(::Nothing, src) = src
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
 # * "extrudes" the arguments where it is advantageous to pre-compute the broadcasted indices
-@inline preprocess(dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, preprocess_args(dest, bc.args), bc.axes)
+@inline preprocess(dest, bc::Broadcasted) = Broadcasted(bc.style, bc.f, preprocess_args(dest, bc.args), bc.axes)
 preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 
 @inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
@@ -1020,11 +1018,11 @@ ischunkedbroadcast(R, args::Tuple{<:BroadcastedChunkableOp,Vararg{Any}}) = ischu
 ischunkedbroadcast(R, args::Tuple{}) = true
 
 # Convert compatible functions to chunkable ones. They must also be green-lighted as ChunkableOps
-liftfuncs(bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{Style,<:Any,typeof(sign)}) where {Style} = Broadcasted{Style}(identity, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{Style,<:Any,typeof(!)}) where {Style} = Broadcasted{Style}(~, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{Style,<:Any,typeof(*)}) where {Style} = Broadcasted{Style}(&, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{Style,<:Any,typeof(==)}) where {Style} = Broadcasted{Style}((~)∘(xor), map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{<:Any,<:Any,<:Any}) = Broadcasted(bc.style, bc.f, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(sign)}) = Broadcasted(bc.style, identity, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(!)}) = Broadcasted(bc.style, ~, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(*)}) = Broadcasted(bc.style, &, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(==)}) = Broadcasted(bc.style, (~)∘(xor), map(liftfuncs, bc.args), bc.axes)
 liftfuncs(x) = x
 
 liftchunks(::Tuple{}) = ()
@@ -1183,9 +1181,9 @@ end
 end
 Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B, i)
 Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
-# Override materialize! to prevent the BitMaskedBitArray from escaping to an overrideable method
+# Override materialize! to prevent the BitMaskedBitArray from escaping to an overridable method
 @inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
-@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(SubArray(B.parent, to_indices(B.parent, (B.mask,))), bc)
+@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(@inbounds(view(B.parent, B.mask)), bc)
 function Base.fill!(B::BitMaskedBitArray, b::Bool)
     Bc = B.parent.chunks
     Ic = B.mask.chunks
@@ -1297,7 +1295,7 @@ end
         return broadcasted((args...) -> f(args...; kwargs...), args...)
     end
 end
-@inline function broadcasted(f, args...)
+@inline function broadcasted(f::F, args...) where {F}
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
 end
@@ -1305,18 +1303,18 @@ end
 # the totally generic varargs broadcasted(f, args...) method above loses Type{T}s in
 # mapping broadcastable across the args. These additional methods with explicit
 # arguments ensure we preserve Type{T}s in the first or second argument position.
-@inline function broadcasted(f, arg1, args...)
+@inline function broadcasted(f::F, arg1, args...) where {F}
     arg1′ = broadcastable(arg1)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, args′...), f, arg1′, args′...)
 end
-@inline function broadcasted(f, arg1, arg2, args...)
+@inline function broadcasted(f::F, arg1, arg2, args...) where {F}
     arg1′ = broadcastable(arg1)
     arg2′ = broadcastable(arg2)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
-@inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+@inline broadcasted(style::BroadcastStyle, f::F, args...) where {F} = Broadcasted(style, f, args)
 
 """
     BroadcastFunction{F} <: Function

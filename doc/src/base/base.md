@@ -4,7 +4,8 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of available packages.
+languages.  Additional functionality is available from a growing collection of
+[available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
 Some general notes:
@@ -37,6 +38,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+err
 Base.active_project
 Base.set_active_project
 ```
@@ -58,14 +60,18 @@ However, you can create variables with names:
 Finally:
 `where` is parsed as an infix operator for writing parametric method and type definitions;
 `in` and `isa` are parsed as infix operators;
-and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop.
-Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
+`public` is parsed as a keyword when beginning a toplevel statement;
+`outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
+and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
+Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
 
 ```@docs
 module
 export
+public
 import
 using
+as
 baremodule
 function
 macro
@@ -88,6 +94,7 @@ outer
 const
 struct
 mutable struct
+@kwdef
 abstract type
 primitive type
 where
@@ -124,6 +131,7 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.isunordered
 Base.ifelse
 Core.typeassert
 Core.typeof
@@ -137,17 +145,26 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.replaceproperty!
+Base.swapproperty!
+Base.modifyproperty!
 Base.propertynames
 Base.hasproperty
 Core.getfield
 Core.setfield!
+Core.modifyfield!
+Core.replacefield!
+Core.swapfield!
 Core.isdefined
+Core.getglobal
+Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote
 Base.oftype
 Base.widen
 Base.identity
+Base.WeakRef
 ```
 
 ## Properties of Types
@@ -187,6 +204,7 @@ Base.fieldcount
 Base.hasfield
 Core.nfields
 Base.isconst
+Base.isfieldatomic
 ```
 
 ### Memory layout
@@ -226,6 +244,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -257,7 +276,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.Splat
+Base.splat
 Base.Fix1
 Base.Fix2
 ```
@@ -277,6 +296,8 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@nospecializeinfer
+Base.@constprop
 Base.gensym
 Base.@gensym
 var"name"
@@ -285,7 +306,6 @@ Base.@label
 Base.@simd
 Base.@polly
 Base.@generated
-Base.@pure
 Base.@assume_effects
 Base.@deprecate
 ```
@@ -331,6 +351,7 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
+Base.@allocations
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -346,6 +367,8 @@ Base.Sys.iswindows
 Base.Sys.windows_version
 Base.Sys.free_memory
 Base.Sys.total_memory
+Base.Sys.free_physical_memory
+Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
@@ -430,6 +453,8 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
+Base.isexported
+Base.ispublic
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
@@ -443,6 +468,8 @@ Base.identify_package
 Base.locate_package
 Base.require
 Base.compilecache
+Base.isprecompiled
+Base.get_extension
 ```
 
 ## Internals

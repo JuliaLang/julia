@@ -73,12 +73,75 @@ variables.
 all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
+
+!!! warning
+    Mutating the environment is not thread-safe.
+
+# Examples
+```julia-repl
+julia> ENV
+Base.EnvDict with "50" entries:
+  "SECURITYSESSIONID"            => "123"
+  "USER"                         => "username"
+  "MallocNanoZone"               => "0"
+  ⋮                              => ⋮
+
+julia> ENV["JULIA_EDITOR"] = "vim"
+"vim"
+
+julia> ENV["JULIA_EDITOR"]
+"vim"
+```
+
+See also: [`withenv`](@ref), [`addenv`](@ref).
 """
 const ENV = EnvDict()
+
+const get_bool_env_truthy = (
+    "t", "T",
+    "true", "True", "TRUE",
+    "y", "Y",
+    "yes", "Yes", "YES",
+    "1")
+const get_bool_env_falsy = (
+    "f", "F",
+    "false", "False", "FALSE",
+    "n", "N",
+    "no", "No", "NO",
+    "0")
+
+"""
+    Base.get_bool_env(name::String, default::Bool)::Union{Bool,Nothing}
+
+Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
+and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
+return `default`.
+
+Recognized values are the following, and their Capitalized and UPPERCASE forms:
+    truthy: "t", "true", "y", "yes", "1"
+    falsy:  "f", "false", "n", "no", "0"
+"""
+function get_bool_env(name::String, default::Bool)
+    haskey(ENV, name) || return default
+    val = ENV[name]
+    if isempty(val)
+        return default
+    elseif val in get_bool_env_truthy
+        return true
+    elseif val in get_bool_env_falsy
+        return false
+    else
+        return nothing
+    end
+end
 
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
+function get!(default::Callable, ::EnvDict, k::AbstractString)
+    haskey(ENV, k) && return ENV[k]
+    ENV[k] = default()
+end
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
@@ -117,7 +180,7 @@ if Sys.iswindows()
                 m = nothing
             end
             if m === nothing
-                @warn "malformed environment entry: $env"
+                @warn "malformed environment entry" env
                 continue
             end
             return (Pair{String,String}(winuppercase(env[1:prevind(env, m)]), env[nextind(env, m):end]), (pos, blk))
@@ -131,8 +194,8 @@ else # !windows
             env = env::String
             m = findfirst('=', env)
             if m === nothing
-                @warn "malformed environment entry: $env"
-                nothing
+                @warn "malformed environment entry" env
+                continue
             end
             return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
         end
@@ -162,6 +225,10 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
+
+!!! warning
+    Changing the environment is not thread-safe. For running external commands with a different
+    environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """
 function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()

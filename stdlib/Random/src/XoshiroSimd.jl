@@ -2,9 +2,10 @@
 
 module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
-import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, CloseOpen01, UnsafeView,
-                 SamplerType, SamplerTrivial
+import ..Random: rand!
+using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!
 using Base: BitInteger_types
+using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
 
 # Vector-width. Influences random stream.
@@ -148,14 +149,9 @@ _id(x, T) = x
     nothing
 end
 
-@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, f::F) where {T, F}
-    if rng isa TaskLocalRNG
-        task = current_task()
-        s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
-    else
-        (; s0, s1, s2, s3) = rng::Xoshiro
-    end
-
+@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, f::F
+                                       ) where {T, F}
+    s0, s1, s2, s3 = getstate(rng)
     i = 0
     while i+8 <= len
         res = _plus(_rotl23(_plus(s0,s3)),s0)
@@ -180,24 +176,14 @@ end
         s3 = _rotl45(s3)
         ref = Ref(f(res, T))
         # TODO: This may make the random-stream dependent on system endianness
-        ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt8}, Ptr{UInt64}, Csize_t), dst+i, ref, len-i)
+        GC.@preserve ref memcpy(dst+i, Base.unsafe_convert(Ptr{Cvoid}, ref), len-i)
     end
-    if rng isa TaskLocalRNG
-        task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
-    else
-       rng.s0, rng.s1, rng.s2, rng.s3 =  s0, s1, s2, s3
-    end
+    setstate!(rng, (s0, s1, s2, s3, nothing))
     nothing
 end
 
 @noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, f)
-    if rng isa TaskLocalRNG
-        task = current_task()
-        s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
-    else
-        (; s0, s1, s2, s3) = rng::Xoshiro
-    end
-
+    s0, s1, s2, s3 = getstate(rng)
     i = 0
     while i+8 <= len
         res = _plus(_rotl23(_plus(s0,s3)),s0)
@@ -222,7 +208,7 @@ end
         res = _plus(_rotl23(_plus(s0,s3)),s0)
         resLoc = _and(res, 0x0101010101010101)
         ref = Ref(resLoc)
-        ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt8}, Ptr{UInt64}, Csize_t), dst+i, ref, len-i)
+        GC.@preserve ref memcpy(dst+i, Base.unsafe_convert(Ptr{Cvoid}, ref), len-i)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)
@@ -231,11 +217,7 @@ end
         s2 = _xor(s2, t)
         s3 = _rotl45(s3)
     end
-    if rng isa TaskLocalRNG
-        task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
-    else
-        rng.s0, rng.s1, rng.s2, rng.s3 = s0, s1, s2, s3
-    end
+    setstate!(rng, (s0, s1, s2, s3, nothing))
     nothing
 end
 

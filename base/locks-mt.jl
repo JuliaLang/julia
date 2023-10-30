@@ -43,7 +43,7 @@ function lock(l::SpinLock)
         if @inline trylock(l)
             return
         end
-        ccall(:jl_cpu_pause, Cvoid, ())
+        ccall(:jl_cpu_suspend, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
         ccall(:jl_gc_safepoint, Cvoid, ())
     end

@@ -12,6 +12,8 @@ LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir
 
 ifeq ($(OS),WINNT)
 LOADER_CFLAGS += -municode -mconsole -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe
+else ifeq ($(OS),Linux)
+LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBCXX_VERSION)" | cut -d'|' -f1 | sed 's/\\//g')\"
 endif
 
 ifeq ($(OS),WINNT)
@@ -28,6 +30,14 @@ endif
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
 DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+ifneq (,$(findstring MINGW,$(shell uname)))
+# In MSYS2, do not perform path conversion for `DEP_LIBS`.
+# https://www.msys2.org/wiki/Porting/#filesystem-namespaces
+# We define this environment variable for only these two object files,
+# as they're the only ones that require it at the time of writing.
+$(BUILDDIR)/loader_lib.o: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+$(BUILDDIR)/loader_lib.dbg.obj: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+endif # MSYS2
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj
@@ -45,9 +55,9 @@ all: release debug
 release debug :  % : julia-% libjulia-%
 
 $(BUILDDIR)/loader_lib.o : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
-	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_lib.dbg.obj : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
-	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
@@ -60,8 +70,7 @@ dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
 	$(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -S | sed -E 's/ ((%%)|;) /\n/g' | sed -E 's/.global/\n.global/g'
 
 DIRS = $(build_bindir) $(build_libdir)
-$(DIRS):
-	@mkdir -p $@
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 ifeq ($(OS),WINNT)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
@@ -95,25 +104,31 @@ julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
+ifneq (,$(filter $(OS), Linux FreeBSD))
+VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
+endif
+
 ifeq ($(OS),WINNT)
 # On Windows we need to strip out exported functions from the generated import library.
 STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h)
 endif
 
-$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
-	@$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
+	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
 	@# Note that if the objcopy command starts getting too long, we can use `@file` to read
 	@# command-line options from `file` instead.
 	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
 endif
 
-$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
-	@$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
+	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
 endif
@@ -133,8 +148,12 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
+$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
+	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
+
 clean: | $(CLEAN_TARGETS)
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
+	rm -f $(BUILDDIR)/julia.expmap
 
 .PHONY: clean release debug julia-release julia-debug

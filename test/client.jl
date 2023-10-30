@@ -12,7 +12,7 @@ nested_error_pattern = r"""
     ERROR: DivideError: integer division error
     Stacktrace:.*
 
-    caused by: UndefVarError: __not_a_binding__ not defined
+    caused by: UndefVarError: `__not_a_binding__` not defined
     Stacktrace:.*
     """s
 
@@ -31,7 +31,7 @@ nested_error_pattern = r"""
         DivideError: integer division error
         Stacktrace:.*
 
-        caused by: UndefVarError: __not_a_binding__ not defined
+        caused by: UndefVarError: `__not_a_binding__` not defined
         Stacktrace:.*
         """s, sprint(show, excs))
 end
@@ -51,4 +51,9 @@ end
     @test occursin(r"""
         ERROR: ErrorException
         """s, err_str)
+end
+
+@testset "defining `ans` and `err`" begin
+    @test eval(:(ans = 1)) == 1
+    @test eval(:(err = 1)) == 1
 end

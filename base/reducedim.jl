@@ -211,8 +211,8 @@ reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reduce
 let
     BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
-        [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
-        [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
+        Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
+        Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
     global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
         z = zero(f(zero(eltype(A))))
@@ -448,6 +448,8 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
 
+$(_DOCS_ALIASING_WARNING)
+
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
 
@@ -526,6 +528,8 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -598,6 +602,8 @@ prod(f, A::AbstractArray; dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -676,6 +682,8 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -753,6 +761,8 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -817,6 +827,8 @@ extrema(f, A::AbstractArray; dims)
     extrema!(r, A)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -893,6 +905,8 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -965,6 +979,8 @@ any(::Function, ::AbstractArray; dims)
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1083,6 +1099,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1154,6 +1172,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)

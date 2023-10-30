@@ -7,8 +7,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
@@ -43,14 +44,14 @@ julia> ans
 "12"
 ```
 
-In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
-text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
-that has been copied from a REPL session without having to scrub away prompts and outputs. This
-feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
-If it is enabled, you can try it out by pasting the code block above this paragraph straight into
-the REPL. This feature does not work on the standard Windows command prompt due to its limitation
-at detecting when a paste occurs.
+In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
+that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
+without having to scrub away prompts and outputs. This feature is enabled by default but can be
+disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
+out by pasting the code block above this paragraph straight into the REPL. This feature does not
+work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
 Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
 In particular, the `:limit` attribute is set to `true`.
@@ -259,6 +260,7 @@ to do so), or pressing Esc and then the key.
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
 | `meta-w`            | Copy the current region in the kill ring                                                                   |
 | `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
 | `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
@@ -311,7 +313,7 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 ## Tab completion
 
-In both the Julian and help modes of the REPL, one can enter the first few characters of a function
+In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
@@ -332,6 +334,13 @@ If you hit tab again, then you get the list of things that might complete this:
 julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
+
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+
+!!! compat "Julia 1.11"
+    Tab-complete hinting was added in Julia 1.11
 
 Like other components of the REPL, the search is case-sensitive:
 
@@ -413,7 +422,7 @@ Tab completion can also help completing fields:
 ```julia-repl
 julia> x = 3 + 4im;
 
-julia> julia> x.[TAB][TAB]
+julia> x.[TAB][TAB]
 im re
 
 julia> import UUIDs
@@ -569,8 +578,8 @@ Main
 
 It is possible to change this contextual module via the function
 `REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
-and pressing the keybinding Alt-m (the cursor must be on the module name). The
-active module is shown in the prompt:
+and pressing the keybinding Alt-m (the cursor must be on the module name). The `Main` module can be "activated" with an empty prompt plus the keybinding. The
+active module is shown in the prompt (unless it is `Main`):
 
 ```julia-repl
 julia> using REPL
@@ -590,7 +599,7 @@ julia> Core<Alt-m> # using the keybinding to change module
 
 (Core) julia>
 
-(Core) julia> Main<Alt-m> # going back to Main via keybinding
+(Core) julia> <Alt-m> # going back to Main via keybinding
 
 julia>
 ```
@@ -615,6 +624,42 @@ julia> REPL.activate(CustomMod)
   f         0 bytes f (generic function with 1 method)
   var       8 bytes Int64
 ```
+
+## Numbered prompt
+
+It is possible to get an interface which is similar to the IPython REPL and the Mathematica notebook with numbered input prompts and output prefixes. This is done by calling `REPL.numbered_prompt!()`. If you want to have this enabled on startup, add
+
+```julia
+atreplinit() do repl
+    @eval import REPL
+    if !isdefined(repl, :interface)
+        repl.interface = REPL.setup_interface(repl)
+    end
+    REPL.numbered_prompt!(repl)
+end
+```
+
+to your `startup.jl` file. In numbered prompt the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
+
+```julia-repl
+In [1]: 5 + 3
+Out[1]: 8
+
+In [2]: Out[1] + 5
+Out[2]: 13
+
+In [3]: Out
+Out[3]: Dict{Int64, Any} with 2 entries:
+  2 => 13
+  1 => 8
+```
+
+!!! note
+    Since all outputs from previous REPL evaluations are saved in the `Out` variable, one should be careful if they are returning many
+    large in-memory objects like arrays, since they will be protected from garbage collection so long as a reference to them remains in
+    `Out`. If you need to remove references to objects in `Out`, you can clear the entire history it stores with `empty!(Out)`, or clear
+    an individual entry with `Out[n] = nothing`.
+
 
 ## TerminalMenus
 
