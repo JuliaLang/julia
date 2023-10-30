@@ -24,36 +24,6 @@ function verify_ircode(ir)
     Compiler.verify_linetable(ir.linetable)
 end
 
-function singleblock_ircode(n::Int)
-    insts = Compiler.InstructionStream(n)
-    insts.inst .= map(1:n) do i
-        # Dummy expression of form `initial_position => previous_ssavalue` to help visual
-        # inspection:
-        x = i == 1 ? nothing : Compiler.SSAValue(i - 1)
-        Expr(:call, GlobalRef(Base, :(=>)), i, x)
-    end
-    insts.inst[end] = Core.ReturnNode(Core.SSAValue(n - 1))
-    insts.line .= (n + 1) .+ range(1; step = 2, length = n)
-    fill!(insts.type, Any)
-    cfg = CFG([BasicBlock(Compiler.StmtRange(1, n), Int[], Int[])], Int[])
-    Compiler.cfg_reindex!(cfg)
-    linetable = [
-        [LineInfoNode(Main, :f, :dummy, Int32(i), Int32(0)) for i in 1:n]
-        [
-            LineInfoNode(
-                Main,
-                Symbol(:f_, i, :_, j),
-                :dummy,
-                Int32(1000 * i + j),
-                Int32(j == 1 ? i : n + 2(i - 1) + (j - 1)),
-            ) for i in 1:n for j in 1:2
-        ]
-    ]
-    ir = Compiler.IRCode(insts, cfg, linetable, [], Expr[], [])
-    verify_ircode(ir)
-    return ir
-end
-
 # TODO: this test is broken
 #let code = Any[
 #        GotoIfNot(SlotNumber(2), 4),
@@ -800,6 +770,10 @@ function check_linetable(ir, ir0, info)
     end
 end
 
+function single_block(x)
+    x+2x
+end
+
 #=
 Input:
 
@@ -818,7 +792,9 @@ Output:
         return %3
 =#
 @testset "Split a block in two" begin
-    ir0 = singleblock_ircode(3)
+    ir0, _ = only(Base.code_ircode(single_block, (Float64,), optimize_until = "compact 1"))
+    @test length(ir0.stmts) == 3
+
     ir = copy(ir0)
     info = Compiler.allocate_goto_sequence!(ir, [2 => 0])
     verify_ircode(ir)
@@ -857,7 +833,9 @@ Output:
         return %5
 =#
 @testset "Add one branch (two new blocks) to a single-block IR" begin
-    ir0 = singleblock_ircode(3)
+    ir0, _ = only(Base.code_ircode(single_block, (Float64,), optimize_until = "compact 1"))
+    @test length(ir0.stmts) == 3
+
     ir = copy(ir0)
     info = allocate_branches!(ir, [2 => 1])
     verify_ircode(ir)
@@ -909,7 +887,9 @@ This transformation is testing inserting multiple basic blocks at once.  It also
 inserting at boundary locations work.
 =#
 @testset "Insert two more blocks to a two-block IR" begin
-    ir0 = singleblock_ircode(3)
+    ir0, _ = only(Base.code_ircode(single_block, (Float64,), optimize_until = "compact 1"))
+    @test length(ir0.stmts) == 3
+
     @testset "Split a block in two" begin
         info = Compiler.allocate_goto_sequence!(ir0, [2 => 0])
         verify_ircode(ir0)
@@ -956,7 +936,9 @@ Output:
         return %4
 =#
 @testset "Split a block of a pre-compact IR (attach before)" begin
-    ir0 = singleblock_ircode(3)
+    ir0, _ = only(Base.code_ircode(single_block, (Float64,), optimize_until = "compact 1"))
+    @test length(ir0.stmts) == 3
+
     st = Expr(:call, :new_instruction)
     Compiler.insert_node!(ir0, 2, Compiler.NewInstruction(st, Any))
 
@@ -998,7 +980,9 @@ Output:
         return %3
 =#
 @testset "Split a block of a pre-compact IR (attach after)" begin
-    ir0 = singleblock_ircode(3)
+    ir0, _ = only(Base.code_ircode(single_block, (Float64,), optimize_until = "compact 1"))
+    @test length(ir0.stmts) == 3
+
     st = Expr(:call, :new_instruction)
     Compiler.insert_node!(ir0, 2, Compiler.NewInstruction(st, Any), true)
 
