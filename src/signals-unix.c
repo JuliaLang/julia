@@ -27,9 +27,7 @@
 #ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
 #define HAVE_KEVENT
-#elif defined(__FreeBSD__) // generic bsd
-#define HAVE_ITIMER
-#else // generic linux
+#else // generic Linux or BSD
 #define HAVE_TIMER
 #endif
 
@@ -293,6 +291,18 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include "signals-mach.c"
 #else
 
+int jl_lock_stackwalk(void)
+{
+    jl_lock_profile();
+    return 0;
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    (void)lockret;
+    jl_unlock_profile();
+}
+
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
 int is_write_fault(void *context) {
@@ -301,8 +311,8 @@ int is_write_fault(void *context) {
 }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
 struct linux_aarch64_ctx_header {
-	uint32_t magic;
-	uint32_t size;
+    uint32_t magic;
+    uint32_t size;
 };
 const uint32_t linux_esr_magic = 0x45535201;
 
@@ -354,6 +364,12 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;
+        // n.b. if the user might have seen that we were in a state where it
+        // was safe to run GC concurrently, we might briefly enter a state
+        // where our execution is not consistent with the gc_state of this
+        // thread. That will quickly be rectified when we rerun the faulting
+        // instruction and end up right back here, or we start to run the
+        // exception handler and immediately hit the safepoint there.
         if (ct->ptls->defer_signal) {
             jl_safepoint_defer_sigint();
         }
@@ -386,12 +402,12 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if !defined(JL_DISABLE_LIBUNWIND)
-static unw_context_t *signal_context;
+static bt_context_t *signal_context;
 pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
-static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t **ctx)
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -401,9 +417,8 @@ static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t 
     jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
     if (ct2 == NULL) {
         // this thread is not alive or already dead
-        *ctx = NULL;
         pthread_mutex_unlock(&in_signal_lock);
-        return;
+        return 0;
     }
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
@@ -412,9 +427,8 @@ static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t 
     if (err == ETIMEDOUT) {
         sig_atomic_t request = 1;
         if (jl_atomic_cmpswap(&ptls2->signal_request, &request, 0)) {
-            *ctx = NULL;
             pthread_mutex_unlock(&in_signal_lock);
-            return;
+            return 0;
         }
         // Request is either now 0 (meaning the other thread is waiting for
         //   exit_signal_cond already),
@@ -431,15 +445,16 @@ static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t 
     // checking it is 0, and add an acquire barrier for good measure)
     int request = jl_atomic_load_acquire(&ptls2->signal_request);
     assert(request == 0); (void) request;
-    *ctx = signal_context;
+    jl_atomic_store_release(&ptls2->signal_request, 1); // prepare to resume normally
+    *ctx = *signal_context;
+    return 1;
 }
 
-static void jl_thread_resume(int tid, int sig)
+void jl_thread_resume(int tid)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
-    pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
+    pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge (so that signal_request doesn't get mixed up)
     // The other thread is waiting to leave exit_signal_cond (verify that here by
     // checking it is 0, and add an acquire barrier for good measure)
     int request = jl_atomic_load_acquire(&ptls2->signal_request);
@@ -474,14 +489,14 @@ CFI_NORETURN
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    unw_context_t *signal_context;
+    bt_context_t signal_context;
     // This also makes sure `sleep` is aborted.
-    jl_thread_suspend_and_get_state(0, 30, &signal_context);
-    if (signal_context != NULL) {
+    if (jl_thread_suspend_and_get_state(0, 30, &signal_context)) {
         thread0_exit_signo = signo;
         ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
         memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-        jl_thread_resume(0, -1); // resume with message 3 (call jl_exit_thread0_cb)
+        jl_atomic_store_release(&ptls2->signal_request, 3);
+        jl_thread_resume(0); // resume with message 3 (call jl_exit_thread0_cb)
     }
     else {
         // thread 0 is gone? just do the exit ourself
@@ -597,37 +612,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
-#elif defined(HAVE_ITIMER)
-// BSD-style timers
-#include <string.h>
-#include <sys/time.h>
-struct itimerval timerprof;
-
-JL_DLLEXPORT int jl_profile_start_timer(void)
-{
-    timerprof.it_interval.tv_sec = 0;
-    timerprof.it_interval.tv_usec = 0;
-    timerprof.it_value.tv_sec = nsecprof / GIGA;
-    timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
-    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
-    running = 1;
-    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1) {
-        running = 0;
-        return -3;
-    }
-    return 0;
-}
-
-JL_DLLEXPORT void jl_profile_stop_timer(void)
-{
-    if (running) {
-        memset(&timerprof, 0, sizeof(timerprof));
-        setitimer(ITIMER_PROF, &timerprof, NULL);
-        last_timer_delete_time = jl_hrtime();
-        running = 0;
-    }
-}
-
 #else
 
 #error no profile tools available
@@ -654,7 +638,7 @@ static void allocate_segv_handler(void)
 static void *alloc_sigstack(size_t *ssize)
 {
     void *stk = jl_malloc_stack(ssize, NULL);
-    if (stk == MAP_FAILED)
+    if (stk == NULL)
         jl_errorf("fatal error allocating signal stack: mmap: %s", strerror(errno));
     return stk;
 }
@@ -678,7 +662,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 }
 
 const static int sigwait_sigs[] = {
-    SIGINT, SIGTERM, SIGABRT, SIGQUIT,
+    SIGINT, SIGTERM, SIGQUIT,
 #ifdef SIGINFO
     SIGINFO,
 #else
@@ -686,8 +670,6 @@ const static int sigwait_sigs[] = {
 #endif
 #if defined(HAVE_TIMER)
     SIGUSR1,
-#elif defined(HAVE_ITIMER)
-    SIGPROF,
 #endif
     0
 };
@@ -802,11 +784,9 @@ static void *signal_listener(void *arg)
         profile = (sig == SIGUSR1);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
-	            info.si_value.sival_ptr == &timerprof))
+                info.si_value.sival_ptr == &timerprof))
             profile = 0;
 #endif
-#elif defined(HAVE_ITIMER)
-        profile = (sig == SIGPROF);
 #endif
 #endif
 
@@ -877,11 +857,11 @@ static void *signal_listener(void *arg)
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
-        unw_context_t *signal_context;
+        bt_context_t signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
         if (critical || profile) {
-            jl_lock_profile();
+            int lockret = jl_lock_stackwalk();
             int *randperm;
             if (profile)
                  randperm = profile_get_randperm(nthreads);
@@ -889,8 +869,7 @@ static void *signal_listener(void *arg)
                 // Stop the threads in the random or reverse round-robin order.
                 int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
-                jl_thread_suspend_and_get_state(i, 1, &signal_context);
-                if (signal_context == NULL)
+                if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
                     continue;
 
                 // do backtrace on thread contexts for critical signals
@@ -898,7 +877,7 @@ static void *signal_listener(void *arg)
                 if (critical) {
                     bt_size += rec_backtrace_ctx(bt_data + bt_size,
                             JL_MAX_BT_SIZE / nthreads - 1,
-                            signal_context, NULL);
+                            &signal_context, NULL);
                     bt_data[bt_size++].uintptr = 0;
                 }
 
@@ -920,7 +899,7 @@ static void *signal_listener(void *arg)
                         } else {
                             // Get backtrace data
                             bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                    bt_size_max - bt_size_cur - 1, signal_context, NULL);
+                                    bt_size_max - bt_size_cur - 1, &signal_context, NULL);
                         }
                         jl_set_safe_restore(old_buf);
 
@@ -945,17 +924,15 @@ static void *signal_listener(void *arg)
                 }
 
                 // notify thread to resume
-                jl_thread_resume(i, sig);
+                jl_thread_resume(i);
             }
-            jl_unlock_profile();
+            jl_unlock_stackwalk(lockret);
         }
 #ifndef HAVE_MACH
         if (profile && running) {
             jl_check_profile_autostop();
 #if defined(HAVE_TIMER)
             timer_settime(timerprof, 0, &itsprof, NULL);
-#elif defined(HAVE_ITIMER)
-            setitimer(ITIMER_PROF, &timerprof, NULL);
 #endif
         }
 #endif
@@ -1033,6 +1010,19 @@ static void sigint_handler(int sig)
     jl_sigint_passed = 1;
 }
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+static void sigtrap_handler(int sig, siginfo_t *info, void *context)
+{
+    uintptr_t pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc; // TODO: Do this in linux as well
+    uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
+    if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
+        signal(sig, SIG_DFL);
+        sig = SIGILL; // redefine this as as an "unreachable reached" error message
+        sigdie_handler(sig, info, context);
+    }
+}
+#endif
+
 void jl_install_default_signal_handlers(void)
 {
     struct sigaction actf;
@@ -1043,6 +1033,20 @@ void jl_install_default_signal_handlers(void)
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    struct sigaction acttrap;
+    memset(&acttrap, 0, sizeof(struct sigaction));
+    sigemptyset(&acttrap.sa_mask);
+    acttrap.sa_sigaction = sigtrap_handler;
+    acttrap.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+#else
+    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGTRAP");
+    }
+#endif
     struct sigaction actint;
     memset(&actint, 0, sizeof(struct sigaction));
     sigemptyset(&actint.sa_mask);
@@ -1053,9 +1057,6 @@ void jl_install_default_signal_handlers(void)
     }
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGPIPE");
-    }
-    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTRAP");
     }
 
 #if defined(HAVE_MACH)
@@ -1089,11 +1090,6 @@ void jl_install_default_signal_handlers(void)
     }
     // need to ensure the following signals are not SIG_IGN, even though they will be blocked
     act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
-#if defined(HAVE_ITIMER)
-    if (sigaction(SIGPROF, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#endif
 #ifdef SIGINFO
     if (sigaction(SIGINFO, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));

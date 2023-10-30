@@ -598,6 +598,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -1253,7 +1264,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1623,6 +1634,28 @@ end
             end
         end
     end
+end
+
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
 end
 
 @testset "chmod/isexecutable" begin

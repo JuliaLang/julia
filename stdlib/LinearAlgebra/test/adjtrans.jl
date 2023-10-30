@@ -476,6 +476,16 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "copyto! uses adjoint!/transpose!" begin
+    for T in (Float64, ComplexF64), f in (transpose, adjoint), sz in ((5,4), (5,))
+        S = rand(T, sz)
+        adjS = f(S)
+        A = similar(S')
+        copyto!(A, adjS)
+        @test A == adjS
+    end
+end
+
 @testset "aliasing with adjoint and transpose" begin
     A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
     B = copy(A)
@@ -489,13 +499,13 @@ end
     @test B == A .* A'
 end
 
-@testset "test show methods for $t of Factorizations" for t in (Adjoint, Transpose)
-    A = randn(4, 4)
+@testset "test show methods for $t of Factorizations" for t in (adjoint, transpose)
+    A = randn(ComplexF64, 4, 4)
     F = lu(A)
     Fop = t(F)
-    @test "LinearAlgebra."*sprint(show, Fop) ==
+    @test sprint(show, Fop) ==
                   "$t of "*sprint(show, parent(Fop))
-    @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
+    @test sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
 end
 
@@ -641,6 +651,34 @@ end
         A = randn(T, 10, 10)
         @test tr(t(A)) == tr(copy(t(A))) == t(tr(A))
     end
+end
+
+@testset "structured printing" begin
+    D = Diagonal(1:3)
+    @test sprint(Base.print_matrix, Adjoint(D)) == sprint(Base.print_matrix, D)
+    @test sprint(Base.print_matrix, Transpose(D)) == sprint(Base.print_matrix, D)
+    D = Diagonal((1:3)*im)
+    D2 = Diagonal((1:3)*(-im))
+    @test sprint(Base.print_matrix, Transpose(D)) == sprint(Base.print_matrix, D)
+    @test sprint(Base.print_matrix, Adjoint(D)) == sprint(Base.print_matrix, D2)
+
+    struct OneHotVecOrMat{N} <: AbstractArray{Bool,N}
+        inds::NTuple{N,Int}
+        sz::NTuple{N,Int}
+    end
+    Base.size(x::OneHotVecOrMat) = x.sz
+    function Base.getindex(x::OneHotVecOrMat{N}, inds::Vararg{Int,N}) where {N}
+        checkbounds(x, inds...)
+        inds == x.inds
+    end
+    Base.replace_in_print_matrix(o::OneHotVecOrMat{1}, i::Integer, j::Integer, s::AbstractString) =
+        o.inds == (i,) ? s : Base.replace_with_centered_mark(s)
+    Base.replace_in_print_matrix(o::OneHotVecOrMat{2}, i::Integer, j::Integer, s::AbstractString) =
+        o.inds == (i,j) ? s : Base.replace_with_centered_mark(s)
+
+    o = OneHotVecOrMat((2,), (4,))
+    @test sprint(Base.print_matrix, Transpose(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
+    @test sprint(Base.print_matrix, Adjoint(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
 end
 
 end # module TestAdjointTranspose

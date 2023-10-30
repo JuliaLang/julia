@@ -21,6 +21,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -61,6 +62,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -92,12 +94,13 @@ let m = Meta.@lower 1 + 1
         # block 6
         Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
         Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
-        Expr(:leave, 1),
+        Expr(:leave, Core.SSAValue(4)),
         # block 7
         ReturnNode(Core.SSAValue(11)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))

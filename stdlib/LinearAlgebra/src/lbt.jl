@@ -83,11 +83,17 @@ struct lbt_config_t
     exported_symbols::Ptr{Cstring}
     num_exported_symbols::UInt32
 end
-const LBT_BUILDFLAGS_DEEPBINDLESS = 0x01
-const LBT_BUILDFLAGS_F2C_CAPABLE  = 0x02
+const LBT_BUILDFLAGS_DEEPBINDLESS     = 0x01
+const LBT_BUILDFLAGS_F2C_CAPABLE      = 0x02
+const LBT_BUILDFLAGS_CBLAS_DIVERGENCE = 0x04
+const LBT_BUILDFLAGS_COMPLEX_RETSTYLE = 0x08
+const LBT_BUILDFLAGS_SYMBOL_TRIMMING  = 0x10
 const LBT_BUILDFLAGS_MAP = Dict(
     LBT_BUILDFLAGS_DEEPBINDLESS => :deepbindless,
     LBT_BUILDFLAGS_F2C_CAPABLE => :f2c_capable,
+    LBT_BUILDFLAGS_CBLAS_DIVERGENCE => :cblas_divergence,
+    LBT_BUILDFLAGS_COMPLEX_RETSTYLE => :complex_retstyle,
+    LBT_BUILDFLAGS_SYMBOL_TRIMMING  => :symbol_trimming,
 )
 
 struct LBTConfig
@@ -207,9 +213,10 @@ function lbt_set_num_threads(nthreads)
     return ccall((:lbt_set_num_threads, libblastrampoline), Cvoid, (Int32,), nthreads)
 end
 
-function lbt_forward(path; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
+function lbt_forward(path::AbstractString; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
     _clear_config_with() do
-        return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
+        return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring),
+                     path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
     end
 end
 

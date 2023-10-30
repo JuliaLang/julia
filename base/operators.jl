@@ -79,7 +79,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -143,7 +143,7 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a fixed total order (defined together with
-[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
+[`isequal`](@ref)). `isless` is not defined for pairs `(x, y)` of all types. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -154,13 +154,13 @@ Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
-This is the default comparison used by [`sort`](@ref).
+This is the default comparison used by [`sort!`](@ref).
 
 # Implementation
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-See the documentation on [Alternate orderings](@ref) for how to define alternate
+See the documentation on [Alternate Orderings](@ref) for how to define alternate
 ordering methods that can be used in sorting and related functions.
 
 # Examples
@@ -177,6 +177,13 @@ function isless end
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
 
 """
     isgreater(x, y)
@@ -327,6 +334,8 @@ a partial order.
 New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
+
+See also [`isunordered`](@ref).
 
 # Examples
 ```jldoctest
@@ -881,6 +890,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 
@@ -1212,41 +1222,54 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    Splat(f)
+    splat(f)
 
 Equivalent to
 ```julia
     my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
-its argument into the original function. This is useful as an adaptor to pass
-a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument. Additionally has pretty printing.
-
-!!! compat "Julia 1.9"
-    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
+it into the original function. This is useful as an adaptor to pass a
+multi-argument function in a context that expects a single argument, but passes
+a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.Splat(+), zip(1:3,4:6))
+julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
 
-julia> my_add = Base.Splat(+)
-Splat(+)
+julia> my_add = splat(+)
+splat(+)
 
 julia> my_add((1,2,3))
 6
 ```
+"""
+splat(f) = Splat(f)
+
+"""
+    Base.Splat{F} <: Function
+
+Represents a splatted function. That is
+```julia
+Base.Splat(f)(args) === f(args...)
+```
+The preferred way to construct an instance of `Base.Splat` is to use the [`splat`](@ref) function.
+
+!!! compat "Julia 1.9"
+    Splat requires at least Julia 1.9. In earlier versions `splat` returns an anonymous function instead.
+
+See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
 show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
@@ -1264,17 +1287,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function in(x, itr::$ItrT)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for y in itr
+            v = (y == x)
+            if ismissing(v)
+                anymissing = true
+            elseif v
+                return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 const ∈ = in
@@ -1309,7 +1337,7 @@ a function equivalent to `y -> item in y`.
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
-Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+Return a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
 contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
@@ -1331,7 +1359,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref).
+See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1369,8 +1397,6 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
-
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 
