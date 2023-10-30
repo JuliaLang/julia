@@ -238,6 +238,15 @@ end
     @test pinv(M,rtol=0.5)== M
 end
 
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
+end
+
 @testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)
@@ -869,7 +878,7 @@ end
     end
 end
 
-@testset "matrix logarithm is type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+@testset "matrix logarithm is type-inferable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A1 = randn(elty, 4, 4)
     @inferred Union{Matrix{elty},Matrix{complex(elty)}} log(A1)
 end
@@ -1120,12 +1129,12 @@ end
 end
 
 function test_rdiv_pinv_consistency(a, b)
-    @test a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency(a, b)
-    @test (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency(a, b)
     test_rdiv_pinv_consistency(a, b)
@@ -1202,6 +1211,11 @@ end
     # case where no sqrt is needed (s=0)
     A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
     @test exp(log(A2)) ≈ A2
+end
+
+@testset "sqrt of empty Matrix of type $T" for T in [Int,Float32,Float64,ComplexF32,ComplexF64]
+    @test sqrt(Matrix{T}(undef, 0, 0)) == Matrix{T}(undef, 0, 0)
+    @test_throws DimensionMismatch sqrt(Matrix{T}(undef, 0, 3))
 end
 
 struct TypeWithoutZero end

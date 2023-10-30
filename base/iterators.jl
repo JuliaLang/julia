@@ -12,15 +12,19 @@ using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
-    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices,
+    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
-    any, _counttuple, eachindex, ntuple, zero, prod, in, firstindex, lastindex,
+    any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
 using Core: @doc
 
 if Base !== Core.Compiler
 using .Base:
     cld, fld, SubArray, view, resize!, IndexCartesian
+using .Base.Checked: checked_mul
+else
+    # Checked.checked_mul is not available during bootstrapping:
+    const checked_mul = *
 end
 
 import .Base:
@@ -205,7 +209,7 @@ size(e::Enumerate) = size(e.itr)
 end
 last(e::Enumerate) = (length(e.itr), e.itr[end])
 
-eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
+eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
 IteratorSize(::Type{Enumerate{I}}) where {I} = IteratorSize(I)
 IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
@@ -286,8 +290,8 @@ length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
 
-@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
-    return Pair{K, V}(idx, getfield(p, :data)[idx])
+Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
@@ -338,7 +342,11 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
-See also: [`enumerate`](@ref), [`Splat`](@ref Base.Splat).
+!!! note
+
+    `zip()` with no arguments yields an infinite iterator of empty tuples.
+
+See also: [`enumerate`](@ref), [`Base.splat`](@ref).
 
 # Examples
 ```jldoctest
@@ -379,6 +387,22 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
+
+# For a collection of iterators `is`, returns a tuple (b, n), where
+# `b` is true when every component of `is` has a statically-known finite
+# length and all such lengths are equal. Otherwise, `b` is false.
+# `n` is an implementation detail, and will be the `length` of the first
+# iterator if it is statically-known and finite. Otherwise, `n` is `nothing`.
+function _zip_lengths_finite_equal(is)
+    i = is[1]
+    if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
+        return (false, nothing)
+    else
+        b, n = _zip_lengths_finite_equal(tail(is))
+        return (b && (n === nothing || n == length(i)), length(i))
+    end
+end
+_zip_lengths_finite_equal(is::Tuple{}) = (true, nothing)
 size(z::Zip) = _promote_tuple_shape(Base.map(size, z.is)...)
 axes(z::Zip) = _promote_tuple_shape(Base.map(axes, z.is)...)
 _promote_tuple_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
@@ -386,7 +410,7 @@ _promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
 _promote_tuple_shape(a, b) = promote_shape(a, b)
 _promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
 _promote_tuple_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{map(eltype, fieldtypes(Is))...}
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes(Is))...)
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
@@ -460,8 +484,13 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+function reverse(z::Zip)
+    if !first(_zip_lengths_finite_equal(z.is))
+        throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
+    end
+    Zip(Base.map(reverse, z.is))
+end
 
 # filter
 
@@ -482,6 +511,15 @@ and use ``Θ(1)`` additional space, and `flt` will not be called by an
 invocation of `filter`. Calls to `flt` will be made when iterating over the
 returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
+
+!!! warning
+    Subsequent *lazy* transformations on the iterator returned from `filter`, such
+    as those performed by `Iterators.reverse` or `cycle`, will also delay calls to `flt`
+    until collecting or iterating over the returned iterable object. If the filter
+    predicate is nondeterministic or its return values depend on the order of iteration
+    over the elements of `itr`, composition with lazy transformations may result in
+    surprising behavior. If this is undesirable, either ensure that `flt` is a pure
+    function or collect intermediate `filter` iterators before further transformations.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 
@@ -697,7 +735,7 @@ struct Take{I}
     xs::I
     n::Int
     function Take(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Take length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -756,7 +794,7 @@ struct Drop{I}
     xs::I
     n::Int
     function Drop(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Drop length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -1051,7 +1089,7 @@ _prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
-length(P::ProductIterator) = prod(size(P))
+length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -1064,8 +1102,7 @@ end
 
 eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
-_prod_eltype(::Type{I}) where {I<:Tuple} =
-    Tuple{ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...}
+_prod_eltype(::Type{I}) where {I<:Tuple} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...)
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1079,6 +1116,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
     done1 === true || return done1 # false or missing
     return _pisdone(tail(iters), tail(states)) # check tail
 end
+@inline isdone(::ProductIterator{Tuple{}}, states) = true
 @inline isdone(P::ProductIterator, states) = _pisdone(P.iterators, states)
 
 @inline _piterate() = ()
@@ -1162,6 +1200,7 @@ IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
@@ -1173,6 +1212,7 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
+flatten_length(f, T::Type{Union{}}, slurp...) = 0
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     return N * length(f.it)
 end
@@ -1433,6 +1473,7 @@ end
 function _approx_iter_type(itrT::Type, vstate::Type)
     vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
     vstate <: Union{} && return Union{}
+    itrT <: Union{} && return Union{}
     nextvstate = Base._return_type(doiterate, Tuple{itrT, vstate})
     return (nextvstate <: vstate ? vstate : Any)
 end

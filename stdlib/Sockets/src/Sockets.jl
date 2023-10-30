@@ -450,7 +450,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -727,7 +727,7 @@ function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
             return (addr.port, sock)
         end
         close(sock)
-        addr = InetAddr(addr.host, addr.port + 1)
+        addr = InetAddr(addr.host, addr.port + UInt16(1))
         if addr.port == default_port
             error("no ports available")
         end

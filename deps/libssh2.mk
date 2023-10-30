@@ -30,21 +30,13 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
- # Apply patch to fix v1.10.0 CVE (https://github.com/libssh2/libssh2/issues/649), drop with v1.11
-$(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
+$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
 	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-userauth-check.patch
-	echo 1 > $@
-
-# issue:   https://github.com/JuliaLang/julia/issues/45645#issuecomment-1153214379
-# fix pr:  https://github.com/libssh2/libssh2/pull/711
-$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied
-	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-fix-import-lib-name.patch
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls-size_t.patch
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
-	$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied
+	$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -53,7 +45,7 @@ $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<) libssh2
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled

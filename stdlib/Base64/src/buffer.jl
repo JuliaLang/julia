@@ -2,12 +2,12 @@
 
 # Data buffer for pipes.
 mutable struct Buffer
-    data::Vector{UInt8}
+    data::Memory{UInt8}
     ptr::Ptr{UInt8}
     size::Int
 
     function Buffer(bufsize)
-        data = Vector{UInt8}(undef, bufsize)
+        data = Memory{UInt8}(undef, bufsize)
         return new(data, pointer(data), 0)
     end
 end
@@ -18,7 +18,7 @@ Base.setindex!(buffer::Buffer, v::UInt8, i::Integer) = unsafe_store!(buffer.ptr,
 Base.firstindex(buffer::Buffer) = 1
 Base.lastindex(buffer::Buffer) = buffer.size
 Base.pointer(buffer::Buffer) = buffer.ptr
-capacity(buffer::Buffer) = Int(pointer(buffer.data, lastindex(buffer.data) + 1) - buffer.ptr)
+capacity(buffer::Buffer) = Int(pointer(buffer.data, lastindex(buffer.data)) - buffer.ptr) + 1
 
 function consumed!(buffer::Buffer, n::Integer)
     @assert n ≤ buffer.size

@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             MethodInstance, CodeInstance, MethodTable, MethodMatch, PartialOpaque,
              TypeofVararg
 
 const getproperty = Core.getfield
@@ -31,6 +31,10 @@ macro noinline() Expr(:meta, :noinline) end
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# mostly used by compiler/methodtable.jl, but also by reflection.jl
+abstract type MethodTableView end
+abstract type AbstractInterpreter end
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -47,7 +51,7 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+is_return_type(Core.@nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")
@@ -83,7 +87,6 @@ function cld(x::T, y::T) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -96,10 +99,12 @@ add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
+include("cmem.jl")
 include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")
+include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
 
@@ -121,12 +126,9 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort! end
-function issorted end
 include("ordering.jl")
 using .Order
-include("sort.jl")
-using .Sort
+include("compiler/sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -136,6 +138,20 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
+if false
+    import Base: Base, @show
+else
+    macro show(ex...)
+        blk = Expr(:block)
+        for s in ex
+            push!(blk.args, :(println(stdout, $(QuoteNode(s)), " = ",
+                                              begin local value = $(esc(s)) end)))
+        end
+        isempty(ex) || push!(blk.args, :value)
+        blk
+    end
+end
+
 include("compiler/cicache.jl")
 include("compiler/methodtable.jl")
 include("compiler/effects.jl")
@@ -143,16 +159,11 @@ include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 
-function argextype end # imported by EscapeAnalysis
-function stmt_effect_free end # imported by EscapeAnalysis
-function alloc_array_ndims end # imported by EscapeAnalysis
-function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
 
 include("compiler/abstractlattice.jl")
-
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 
@@ -170,7 +181,7 @@ include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
 include("compiler/parsing.jl")
-Core.eval(Core, :(_parse = Compiler.fl_parse))
+Core._setparser!(fl_parse)
 
 end # baremodule Compiler
 ))

@@ -25,14 +25,15 @@ DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(_apply_iterate);
 DECLARE_BUILTIN(_apply_pure);
 DECLARE_BUILTIN(apply_type);
-DECLARE_BUILTIN(arrayref);
-DECLARE_BUILTIN(arrayset);
-DECLARE_BUILTIN(arraysize);
+DECLARE_BUILTIN(memoryref);
+DECLARE_BUILTIN(memoryrefoffset);
+DECLARE_BUILTIN(memoryrefget);
+DECLARE_BUILTIN(memoryrefset);
+DECLARE_BUILTIN(memoryref_isassigned);
 DECLARE_BUILTIN(_call_in_world);
 DECLARE_BUILTIN(_call_in_world_total);
 DECLARE_BUILTIN(_call_latest);
 DECLARE_BUILTIN(replacefield);
-DECLARE_BUILTIN(const_arrayref);
 DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(fieldtype);
 DECLARE_BUILTIN(getfield);
@@ -62,12 +63,6 @@ DECLARE_BUILTIN(finalizer);
 DECLARE_BUILTIN(_compute_sparams);
 DECLARE_BUILTIN(_svec_ref);
 
-JL_CALLABLE(jl_f_invoke_kwsorter);
-#ifdef DEFINE_BUILTIN_GLOBALS
-JL_DLLEXPORT jl_fptr_args_t jl_f_invoke_kwsorter_addr = &jl_f_invoke_kwsorter;
-#else
-JL_DLLEXPORT extern jl_fptr_args_t jl_f_invoke_kwsorter_addr;
-#endif
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);
 JL_CALLABLE(jl_f__primitivetype);

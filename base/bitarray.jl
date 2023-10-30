@@ -18,7 +18,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 !!! note
     Due to its packed storage format, concurrent access to the elements of a `BitArray`
-    where at least one of them is a write is not thread safe.
+    where at least one of them is a write is not thread-safe.
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
@@ -462,7 +462,7 @@ copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integ
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
+    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -807,7 +807,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
 
@@ -1545,12 +1545,12 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
 
     @inbounds begin
         if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+            return (chunk_start-1) << 6 + (top_set_bit(Bc[chunk_start] & mask))
         end
 
         for i = (chunk_start-1):-1:1
             if Bc[i] != 0
-                return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
+                return (i-1) << 6 + (top_set_bit(Bc[i]))
             end
         end
     end
@@ -1779,26 +1779,44 @@ end
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
-    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
     isempty(A) && return dest
     destc = dest.chunks
     Ac = A.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = length(Ac)
+    for i = 1:(len_Ac-1)
         destc[i] = f(Ac[i])
     end
-    destc[end] = f(Ac[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(A)
+    # first zero out the bits mask is going to change
+    # then update bits by `or`ing with a masked RHS
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac aliases destc
+    destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
+    min_bitlen = min(length(A), length(B))
+    min_bitlen <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
     isempty(A) && return dest
+    isempty(B) && return dest
     destc = dest.chunks
     Ac = A.chunks
     Bc = B.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = min(length(Ac), length(Bc))
+    for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
-    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(min_bitlen)
+    # first zero out the bits mask is going to change
+    # then update bits by `or`ing with a masked RHS
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac or Bc aliases destc
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
     dest
 end
 
