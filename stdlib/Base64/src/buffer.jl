@@ -2,7 +2,7 @@
 
 # Data buffer for pipes.
 mutable struct Buffer
-    data::Memory{UInt8}
+    const data::Memory{UInt8}
     offset::Int
     size::Int
 
