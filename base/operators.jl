@@ -462,15 +462,16 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments with respect to [`isless`](@ref) (Except when it encounters a missing value, in this case, missing is returned as maximum). See also the [`maximum`](@ref) function
-to take the maximum element from a collection.
+Return the maximum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`maximum`](@ref) function to take the maximum element from a collection.
 
 # Examples
 ```jldoctest
 julia> max(2, 5, 1)
 5
 
-julia> max(5,6,missing)
+julia> max(5, missing, 6)
 missing
 ```
 """
@@ -479,15 +480,16 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments with respect to [`isless`](@ref) (Except when it encounters a missing value, in this case, missing is returned as minimum). See also the [`minimum`](@ref) function
-to take the minimum element from a collection.
+Return the minimum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`minimum`](@ref) function to take the minimum element from a collection.
 
 # Examples
 ```jldoctest
 julia> min(2, 5, 1)
 1
 
-julia> min(4,missing,6)
+julia> min(4, missing, 6)
 missing
 ```
 """
