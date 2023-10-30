@@ -881,10 +881,8 @@ Return a pair of a value in the codomain (outputs of `f`) and the index or key o
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
-`domain` must be a non-empty iterable.
-
-Indices are of the same type as those returned by [`keys(domain)`](@ref)
-and [`pairs(domain)`](@ref).
+`domain` must be a non-empty iterable supporting [`keys`](@ref). Indices
+are of the same type as those returned by [`keys(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -942,7 +940,7 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index or key of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
