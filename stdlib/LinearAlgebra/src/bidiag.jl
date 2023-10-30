@@ -565,7 +565,12 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     require_one_based_indexing(C, B)
     nA = size(A,1)
     nB = size(B,2)
-    check_A_mul_B!_sizes(C, A, B)
+    if !(size(C,1) == size(B,1) == nA)
+        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
+    end
+    if size(C,2) != nB
+        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
+    end
     iszero(nA) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
