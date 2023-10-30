@@ -80,7 +80,7 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Get's populated with the Dates stdlib if it exists
+    # Gets populated with the Dates stdlib if it exists
     Dates::Union{Module, Nothing}
 end
 
@@ -367,7 +367,7 @@ end
 @inline peek(l::Parser) = l.current_char
 
 # Return true if the character was accepted. When a character
-# is accepted it get's eaten and we move to the next character
+# is accepted it gets eaten and we move to the next character
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false
@@ -611,7 +611,7 @@ function _parse_key(l::Parser)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
-            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+            if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
@@ -665,7 +665,7 @@ end
 #########
 
 function push!!(v::Vector, el)
-    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # Since these types are typically non-inferable, they are a big invalidation risk,
     # and since it's used by the package-loading infrastructure the cost of invalidation
     # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
     # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
@@ -823,15 +823,15 @@ function parse_number_or_date_start(l::Parser)
         elseif accept(l, 'x')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
         end
@@ -899,15 +899,28 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
-    s = take_string_or_substring(l, contains_underscore)
-    v = try
-        Base.parse(Int64, s; base=base)
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
+                               ("hex", UInt64, UInt128, 18,  34),
+                               ("oct", UInt64, UInt128, 24,  45),
+                               ("bin", UInt64, UInt128, 66, 130),
+                               )
+    @eval function $(Symbol("parse_", name))(l::Parser, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}}
+        s = take_string_or_substring(l, contains_underscore)
+        len = length(s)
+        v = try
+            if len ≤ $(n1)
+                Base.parse($(T1), s; base)
+            elseif $(n1) < len ≤ $(n2)
+                Base.parse($(T2), s; base)
+            else
+                Base.parse(BigInt, s; base)
+            end
+        catch e
+            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+        end
+        return v
     end
-    return v
 end
 
 

@@ -56,11 +56,13 @@ nsplit_impl(info::UnionSplitInfo) = length(info.matches)
 getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit_impl(info.matches[idx], 1)
 getresult_impl(::UnionSplitInfo, ::Int) = nothing
 
-struct ConstPropResult
+abstract type ConstResult end
+
+struct ConstPropResult <: ConstResult
     result::InferenceResult
 end
 
-struct ConcreteResult
+struct ConcreteResult <: ConstResult
     mi::MethodInstance
     effects::Effects
     result
@@ -68,13 +70,11 @@ struct ConcreteResult
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
-struct SemiConcreteResult
+struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
     effects::Effects
 end
-
-const ConstResult = Union{ConstPropResult, ConcreteResult, SemiConcreteResult}
 
 """
     info::ConstCallInfo <: CallInfo

@@ -52,12 +52,47 @@ kw"import"
 """
     export
 
-`export` is used within modules to tell Julia which functions should be
+`export` is used within modules to tell Julia which names should be
 made available to the user. For example: `export foo` makes the name
 `foo` available when [`using`](@ref) the module.
 See the [manual section about modules](@ref modules) for details.
 """
 kw"export"
+
+"""
+    public
+
+`public` is used within modules to tell Julia which names are part of the
+public API of the module . For example: `public foo` indicates that the name
+`foo` is public, without making it available when [`using`](@ref)
+the module. See the [manual section about modules](@ref modules) for details.
+
+!!! compat "Julia 1.11"
+    The public keyword was added in Julia 1.11. Prior to this the notion
+    of publicness was less explicit.
+"""
+kw"public"
+
+"""
+    as
+
+`as` is used as a keyword to rename an identifier brought into scope by
+`import` or `using`, for the purpose of working around name conflicts as
+well as for shortening names.  (Outside of `import` or `using` statements,
+`as` is not a keyword and can be used as an ordinary identifier.)
+
+`import LinearAlgebra as LA` brings the imported `LinearAlgebra` standard library
+into scope as `LA`.
+
+`import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
+from `LinearAlgebra` into scope as `eig` and `chol` respectively.
+
+`as` works with `using` only when individual identifiers are brought into scope.
+For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
+but `using LinearAlgebra as LA` is invalid syntax, since it is nonsensical to
+rename *all* exported names from `LinearAlgebra` to `LA`.
+"""
+kw"as"
 
 """
     abstract type
@@ -80,7 +115,7 @@ kw"abstract type", kw"abstract"
 
 `module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting).
+specify which of your names are intended to be public (via `export` and `public`).
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
 See the [manual section about modules](@ref modules) for more details.
@@ -499,7 +534,8 @@ sense to write something like `let x = x`, since the two `x` variables are disti
 the left-hand side locally shadowing the `x` from the outer scope. This can even
 be a useful idiom as new local variables are freshly created each time local scopes
 are entered, but this is only observable in the case of variables that outlive their
-scope via closures.
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
 
 By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
@@ -1293,7 +1329,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -1447,13 +1487,6 @@ parser rather than being implemented as a normal string macro `@var_str`.
 
 """
 kw"var\"name\"", kw"@var_str"
-
-"""
-    ans
-
-A variable referring to the last computed value, automatically set at the interactive prompt.
-"""
-kw"ans"
 
 """
     devnull
@@ -1715,7 +1748,7 @@ The argument `val` to a function or constructor is outside the valid domain.
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -1728,6 +1761,12 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest
@@ -2243,6 +2282,82 @@ instruction, otherwise it'll use a loop.
 replacefield!
 
 """
+    getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
+
+Retrieve the value of the binding `name` from the module `module`. Optionally, an
+atomic ordering can be defined for the operation, otherwise it defaults to
+monotonic.
+
+While accessing module bindings using [`getfield`](@ref) is still supported to
+maintain compatibility, using `getglobal` should always be preferred since
+`getglobal` allows for control over atomic ordering (`getfield` is always
+monotonic) and better signifies the code's intent both to the user as well as the
+compiler.
+
+Most users should not have to call this function directly -- The
+[`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
+`module.name`) should be preferred in all but few very specific use cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = 1
+1
+
+julia> module M
+       a = 2
+       end;
+
+julia> getglobal(@__MODULE__, :a)
+1
+
+julia> getglobal(M, :a)
+2
+```
+"""
+getglobal
+
+"""
+    setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Set or change the value of the binding `name` in the module `module` to `x`. No
+type conversion is performed, so if a type has already been declared for the
+binding, `x` must be of appropriate type or an error is thrown.
+
+Additionally, an atomic ordering can be specified for this operation, otherwise it
+defaults to monotonic.
+
+Users will typically access this functionality through the
+[`setproperty!`](@ref Base.setproperty!) function or corresponding syntax
+(i.e. `module.name = x`) instead, so this is intended only for very specific use
+cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+
+# Examples
+```jldoctest
+julia> module M end;
+
+julia> M.a  # same as `getglobal(M, :a)`
+ERROR: UndefVarError: `a` not defined
+
+julia> setglobal!(M, :a, 1)
+1
+
+julia> M.a
+1
+```
+"""
+setglobal!
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.
@@ -2305,6 +2420,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -3017,7 +3168,7 @@ with elements of type `T` and `N` dimensions.
 If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
-dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+dimension `d` jumps in memory by [`stride(A, d)`] slots. Strided arrays are
 particularly important and useful because they can sometimes be passed directly
 as pointers to foreign language libraries like BLAS.
 """
@@ -3137,6 +3288,15 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
+Unsafe pointer operations are compatible with loading and storing pointers declared with
+`_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
+there is not support for atomically loading the Julia type `T`.
+
+See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+"""
+kw"atomic"
+
+"""
     Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
@@ -3177,11 +3337,9 @@ Base.donotdelete
 """
     Base.compilerbarrier(setting::Symbol, val)
 
-This function puts a barrier at a specified compilation phase.
-It is supposed to only influence the compilation behavior according to `setting`,
-and its runtime semantics is just to return the second argument `val` (except that
-this function will perform additional checks on `setting` in a case when `setting`
-isn't known precisely at compile-time.)
+This function acts a compiler barrier at a specified compilation phase.
+The dynamic semantics of this intrinsic are to return the `val` argument, unmodified.
+However, depending on the `setting`, the compiler is prevented from assuming this behavior.
 
 Currently either of the following `setting`s is allowed:
 - Barriers on abstract interpretation:
@@ -3194,9 +3352,9 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    This function is supposed to be used _with `setting` known precisely at compile-time_.
-    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
-    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+    This function is expected to be used with `setting` known precisely at compile-time.
+    If the `setting` is not known precisely at compile-time, the compiler will emit the
+    strongest barrier(s). No compile-time warning is issued.
 
 # Examples
 
@@ -3250,5 +3408,7 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

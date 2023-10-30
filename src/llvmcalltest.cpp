@@ -17,11 +17,7 @@ using namespace llvm;
 #ifdef _OS_WINDOWS_
 #  define DLLEXPORT __declspec(dllexport)
 #else
-# if defined(_OS_LINUX_)
-#  define DLLEXPORT __attribute__ ((visibility("protected")))
-# else
 #  define DLLEXPORT __attribute__ ((visibility("default")))
-# endif
 #endif
 
 extern "C" {

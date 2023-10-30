@@ -1,4 +1,4 @@
-# Command-line Interface
+# [Command-line Interface](@id cli)
 
 ## Using arguments inside scripts
 
@@ -39,6 +39,73 @@ $ julia --color=yes -O -- script.jl arg1 arg2..
 
 See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.
 
+## The `Main.main` entry point
+
+As of Julia, 1.11, Base export a special macro `@main`. This macro simply expands to the symbol `main`,
+but at the conclusion of executing a script or expression, `julia` will attempt to execute the function
+`Main.main(ARGS)` if such a function has been defined and this behavior was opted into
+using the `@main macro`. This feature is intended to aid in the unification
+of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
+function may be spatially and temporally separated from the invocation. However, for interactive workflows,
+the behavior is equivalent to explicitly calling `exit(main(ARGS))` at the end of the evaluated script or
+expression.
+
+!!! compat "Julia 1.11"
+    The special entry point `Main.main` was added in Julia 1.11. For compatibility with prior julia versions,
+    add an explicit `@isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
+
+To see this feature in action, consider the following definition, which will execute the print function despite there being no explicit call to `main`:
+
+```
+$ julia -e '(@main)(ARGS) = println("Hello World!")'
+Hello World!
+$
+```
+
+Only the `main` binding in the `Main`, module has this special behavior and only if
+the macro `@main` was used within the defining module.
+
+For example, using `hello` instead of `main` will result not result in the `hello` function executing:
+
+```
+$ julia -e 'hello(ARGS) = println("Hello World!")'
+$
+```
+
+and neither will a plain definition of `main`:
+```
+$ julia -e 'main(ARGS) = println("Hello World!")'
+$
+```
+
+However, the opt-in need not occur at definition time:
+$ julia -e 'main(ARGS) = println("Hello World!"); @main'
+Hello World!
+$
+
+The `main` binding may be imported from a package. A hello package defined as
+
+```
+module Hello
+
+export main
+(@main)(ARGS) = println("Hello from the package!")
+
+end
+```
+
+may be used as:
+
+```
+$ julia -e 'using Hello'
+Hello from the package!
+$ julia -e 'import Hello' # N.B.: Execution depends on the binding not whether the package is loaded
+$
+```
+
+However, note that the current best practice recommendation is to not mix application and reusable library
+code in the same package. Helper applications may be distributed as separate packages or as scripts with
+separate `main` entry points in a package's `bin` folder.
 
 ## Parallel mode
 
@@ -69,7 +136,7 @@ Note that although you should have a `~/.julia` directory once you've run Julia 
 first time, you may need to create the `~/.julia/config` folder and the
 `~/.julia/config/startup.jl` file if you use it.
 
-To have startup code run only in [The Julia REPL] (and not when `julia` is *e.g.* run
+To have startup code run only in [The Julia REPL](@ref) (and not when `julia` is *e.g.* run
 on a script), use [`atreplinit`](@ref) in `startup.jl`:
 
 ```julia
@@ -95,19 +162,20 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message).|
 |`--help-hidden`                        |Uncommon options not shown by `-h`|
-|`--project[={<dir>\|@.}]`              |Set `<dir>` as the home project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`--project[={<dir>\|@.}]`              |Set `<dir>` as the active project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
-|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH` environment variable is unset, load `~/.julia/config/startup.jl`|
+|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
-|`--compiled-modules={yes*\|no}`        |Enable or disable incremental precompilation of modules|
+|`--compiled-modules={yes*\|no\|existing}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files.|
 |`--pkgimages={yes*\|no}`               |Enable or disable usage of native code caching in the form of pkgimages|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
-|`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
-|`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
+|`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
+| `--gcthreads {N}`                     |Enable N GC threads; If unspecified is set to half of the compute worker threads.|
+|`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
@@ -125,8 +193,10 @@ The following is a complete list of command-line switches available when launchi
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
 |`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
+|`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|

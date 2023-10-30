@@ -36,7 +36,7 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
-	--without-ssl --without-gnutls --without-libidn2 --without-librtmp \
+	--without-gnutls --without-libidn2 --without-librtmp \
 	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
 	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
 	--without-gssapi --without-brotli

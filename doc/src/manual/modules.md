@@ -7,7 +7,8 @@ Modules in Julia help organize code into coherent units. They are delimited synt
    allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
 2. Modules have facilities for detailed namespace management: each defines a set of names it
-   `export`s, and can import names from other modules with `using` and `import` (we explain these below).
+   `export`s and marks as `public`, and can import names from other modules with `using` and
+   `import` (we explain these below).
 
 3. Modules can be precompiled for faster loading, and may contain code for runtime initialization.
 
@@ -16,7 +17,7 @@ Typically, in larger Julia packages you will see module code organized into file
 ```julia
 module SomeModule
 
-# export, using, import statements are usually here; we discuss these below
+# export, public, using, import statements are usually here; we discuss these below
 
 include("file1.jl")
 include("file2.jl")
@@ -103,6 +104,12 @@ Also, some modules don't export names at all. This is usually done if they use c
 words, such as `derivative`, in their API, which could easily clash with the export lists of other
 modules. We will see how to manage name clashes below.
 
+To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
+one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
+but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
+and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
+[Compat](https://github.com/JuliaLang/Compat.jl) package.
+
 ### Standalone `using` and `import`
 
 Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
@@ -143,7 +150,7 @@ As we will see in the next section `import .NiceStuff` is equivalent to `using .
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
-julia> using LinearAlgebra, Statistics
+julia> using LinearAlgebra, Random
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods
@@ -171,7 +178,7 @@ julia> using .NiceStuff: nice
 julia> struct Cat end
 
 julia> nice(::Cat) = "nice 😸"
-ERROR: error in method definition: function NiceStuff.nice must be explicitly imported to be extended
+ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
 Stacktrace:
  [1] top-level scope
    @ none:0
@@ -440,10 +447,12 @@ recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (`mtime`)
-of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
-to the modification time truncated to the nearest second (to accommodate systems that can't copy
-mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
+For file dependencies loaded by `include`, a change is determined by examining whether the
+file size (`fsize`) or content (condensed into a hash) is unchanged.
+For file dependencies loaded by `include_dependency` a change is determined by examining whether the modification time (`mtime`)
+is unchanged, or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen
 by the search logic in `require` matches the path that had created the precompile file. It also takes
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between
