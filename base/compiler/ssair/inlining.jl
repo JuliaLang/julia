@@ -1188,16 +1188,23 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         item = concrete_result_item(result, info, state; invokesig)
     else
         argtypes = invoke_rewrite(sig.argtypes)
-        if isa(result, ConstPropResult)
-            mi = result.result.linfo
-            validate_sparams(mi.sparam_vals) || return nothing
-            if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
-                item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
-                handle_single_case!(todo, ir, idx, stmt, item, true)
-                return nothing
-            end
+        if isa(result, SemiConcreteResult)
+            result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
         end
-        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
+        if isa(result, SemiConcreteResult)
+            item = semiconcrete_result_item(result, info, flag, state)
+        else
+            if isa(result, ConstPropResult)
+                mi = result.result.linfo
+                validate_sparams(mi.sparam_vals) || return nothing
+                if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
+                    item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
+                    handle_single_case!(todo, ir, idx, stmt, item, true)
+                    return nothing
+                end
+            end
+            item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
+        end
     end
     handle_single_case!(todo, ir, idx, stmt, item, true)
     return nothing
