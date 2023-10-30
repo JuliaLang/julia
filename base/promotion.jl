@@ -3,16 +3,26 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 """
-    typejoin(T, S)
+    typejoin(T, S, ...)
 
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
+Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
+they both inherit. Recurses on additional varargs.
+
+# Examples
+```jldoctest
+julia> typejoin(Int, Float64)
+Real
+
+julia> typejoin(Int, Float64, ComplexF32)
+Number
+```
 """
 typejoin() = Bottom
-typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_total_meta
+    @_foldable_meta
+    @_nospecializeinfer_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -81,9 +91,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    while b !== Any
+    while !(b === Any)
         if a <: b.name.wrapper
-            while a.name !== b.name
+            while !(a.name === b.name)
                 a = supertype(a)::DataType
             end
             if a.name === Type.body.name
@@ -107,9 +117,10 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
+                    aprimary = aprimary::UnionAll
                     # pushfirst!(vars, aprimary.var)
                     _growbeg!(vars, 1)
-                    arrayset(false, vars, aprimary.var, 1)
+                    vars[1] = aprimary.var
                     aprimary = aprimary.body
                 end
             end
@@ -128,7 +139,8 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_total_may_throw_meta
+    @_foldable_meta
+    @_nospecializeinfer_meta
     if a <: b
         return Bottom
     end
@@ -162,7 +174,12 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) =
+    a === Any ? a :
+    a >: Union{Nothing, Missing} ? typesplit(a, Union{Nothing, Missing}) :
+    a >: Nothing ? typesplit(a, Nothing) :
+    a >: Missing ? typesplit(a, Missing) :
+    a
 
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
@@ -180,7 +197,7 @@ function promote_typejoin_union(::Type{T}) where T
 end
 
 function typejoin_union_tuple(T::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     u = Base.unwrap_unionall(T)
     p = (u::DataType).parameters
     lr = length(p)::Int
@@ -224,7 +241,8 @@ function full_va_len(p::Core.SimpleVector)
 end
 
 # reduce typejoin over A[i:end]
-function tailjoin(A, i)
+function tailjoin(A::SimpleVector, i::Int)
+    @_foldable_meta
     if i > length(A)
         return unwrapva(A[end])
     end
@@ -308,6 +326,12 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type, ::Type) = Bottom
+# Define some methods to avoid needing to enumerate unrelated possibilities when presented
+# with Type{<:T}, and return a value in general accordance with the result given by promote_type
+promote_rule(::Type{Bottom}, slurp...) = Bottom
+promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
+promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
+promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -320,12 +344,25 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
 
-See also: [`promote_type`], [`promote_rule`].
+See also: [`promote_type`](@ref), [`promote_rule`](@ref).
 
 # Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
+
+julia> promote_type(Int8, Float16, Float32)
+Float32
+
+julia> reduce(Base.promote_typejoin, (Int8, Float16, Float32))
+Real
+
+julia> promote(1, "x")
+ERROR: promotion of types Int64 and String failed to change any arguments
+[...]
+
+julia> promote_type(Int, String)
+Any
 ```
 """
 function promote end
@@ -444,6 +481,11 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+function TupleOrBottom(tt...)
+    any(p -> p === Union{}, tt) && return Union{}
+    return Tuple{tt...}
+end
+
 """
     promote_op(f, argtypes...)
 
@@ -455,7 +497,12 @@ Guess what an appropriate container eltype would be for storing results of
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
+function promote_op(f, S::Type...)
+    argT = TupleOrBottom(S...)
+    argT === Union{} && return Union{}
+    return _return_type(f, argT)
+end
+
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
@@ -476,7 +523,7 @@ xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
-(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
+(<=)(x::T, y::T) where {T<:Real} = (x == y) | (x < y)
 
 rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
 mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)

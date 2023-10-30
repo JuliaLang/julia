@@ -4,6 +4,7 @@ module TestBLAS
 
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
+using Libdl: dlsym, dlopen
 fabs(x::Real) = abs(x)
 fabs(x::Complex) = abs(real(x)) + abs(imag(x))
 
@@ -11,16 +12,21 @@ fabs(x::Complex) = abs(real(x)) + abs(imag(x))
 function pack(A, uplo)
     AP = eltype(A)[]
     n = size(A, 1)
-    for j in 1:n, i in (uplo==:L ? (j:n) : (1:j))
+    for j in 1:n, i in (uplo === :L ? (j:n) : (1:j))
         push!(AP, A[i,j])
     end
     return AP
 end
 
 @testset "vec_pointer_stride" begin
-    a = zeros(4,4,4)
-    @test BLAS.asum(view(a,1:2:4,:,:)) == 0 # vector like
+    a = float(rand(1:20,4,4,4))
+    @test BLAS.asum(a) == sum(a) # dense case
+    @test BLAS.asum(view(a,1:2:4,:,:)) == sum(view(a,1:2:4,:,:)) # vector like
+    @test BLAS.asum(view(a,1:3,2:2,3:3)) == sum(view(a,1:3,2:2,3:3))
+    @test BLAS.asum(view(a,1:1,1:3,1:1)) == sum(view(a,1:1,1:3,1:1))
+    @test BLAS.asum(view(a,1:1,1:1,1:3)) == sum(view(a,1:1,1:1,1:3))
     @test_throws ArgumentError BLAS.asum(view(a,1:3:4,:,:)) # non-vector like
+    @test_throws ArgumentError BLAS.asum(view(a,1:2,1:1,1:3))
 end
 Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
@@ -222,11 +228,19 @@ Random.seed!(100)
                 @test_throws DimensionMismatch BLAS.symm('R','U',Cmn,Cnn)
                 @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cmn)
                 @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cnm)
+                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cmn,one(elty),Cnn)
+                @test_throws DimensionMismatch BLAS.symm!('R','U',one(elty),Asymm,Cnm,one(elty),Cmn)
+                @test_throws DimensionMismatch BLAS.symm!('R','U',one(elty),Asymm,Cnn,one(elty),Cnm)
+                @test_throws DimensionMismatch BLAS.symm!('R','U',one(elty),Asymm,Cmn,one(elty),Cnn)
                 if elty <: BlasComplex
                     @test_throws DimensionMismatch BLAS.hemm('L','U',Cnm,Cnn)
                     @test_throws DimensionMismatch BLAS.hemm('R','U',Cmn,Cnn)
                     @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cmn)
                     @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cnm)
+                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cmn,one(elty),Cnn)
+                    @test_throws DimensionMismatch BLAS.hemm!('R','U',one(elty),Aherm,Cnm,one(elty),Cmn)
+                    @test_throws DimensionMismatch BLAS.hemm!('R','U',one(elty),Aherm,Cnn,one(elty),Cnm)
+                    @test_throws DimensionMismatch BLAS.hemm!('R','U',one(elty),Aherm,Cmn,one(elty),Cnn)
                 end
             end
         end
@@ -433,6 +447,40 @@ Random.seed!(100)
             end
         end
     end
+    @testset "gemmt" begin
+        for (wrapper, uplo) in ((LowerTriangular, 'L'), (UpperTriangular, 'U'))
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'N', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'T', I4, I4)) ≈ wrapper(I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'N', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            @test wrapper(BLAS.gemmt(uplo, 'T', 'T', el2, I4, I4)) ≈ wrapper(el2 * I4)
+            I4cp = copy(I4)
+            @test wrapper(BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
+            I4cp[:] = I4
+            @test wrapper(BLAS.gemmt!(uplo, 'N', 'T', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
+            I4cp[:] = I4
+            @test wrapper(BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
+            I4cp[:] = I4
+            @test wrapper(BLAS.gemmt!(uplo, 'T', 'T', one(elty), I4, I4, elm1, I4cp)) ≈ wrapper(Z4)
+            @test I4cp ≈ Z4
+            M1 = uplo == 'U' ? U4 : I4
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'N', I4, U4)) ≈ wrapper(M1)
+            M2 = uplo == 'U' ? I4 : U4'
+            @test wrapper(BLAS.gemmt(uplo, 'N', 'T', I4, U4)) ≈ wrapper(M2)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'N', one(elty), I43, I4, elm1, I4)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'T', 'N', one(elty), I4, I43, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'N', 'T', one(elty), I43, I43, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemmt!(uplo, 'T', 'T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
+        end
+    end
     @testset "gemm" begin
         @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
         @test all(BLAS.gemm('N', 'T', I4, I4) .== I4)
@@ -441,7 +489,7 @@ Random.seed!(100)
         @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)
         @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)
         @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)
-        @test all(LinearAlgebra.BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
+        @test all(BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
         I4cp = copy(I4)
         @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
@@ -518,7 +566,7 @@ Base.getindex(A::WrappedArray, i::Int) = A.A[i]
 Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
 Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
-Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
+Base.cconvert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.cconvert(Ptr{T}, A.A)
 
 Base.strides(A::WrappedArray) = strides(A.A)
 Base.elsize(::Type{WrappedArray{T,N}}) where {T,N} = Base.elsize(Array{T,N})
@@ -689,7 +737,7 @@ end
     end
     @test BLAS.iamax(a) == 0
     @test_throws "dest" BLAS.scal!(b[1], a)
-    @testset "nrm2/asum" begin # OpenBLAS allways return 0.0
+    @testset "nrm2/asum" begin # OpenBLAS always return 0.0
         @test_throws "input" BLAS.nrm2(a)
         @test_throws "input" BLAS.asum(a)
     end
@@ -698,6 +746,13 @@ end
         @test_throws "input" BLAS.gemv!('N', true, A, a, false, copy(b))
         @test_throws "dest" BLAS.gemv!('N', true, A, copy(a), false, b)
     end
+end
+
+# Make sure we can use `Base.libblas_name`.  Avoid causing
+# https://github.com/JuliaLang/julia/issues/48427 again.
+@testset "libblas_name" begin
+    dot_sym = dlsym(dlopen(Base.libblas_name), "cblas_ddot" * (Sys.WORD_SIZE == 64 ? "64_" : ""))
+    @test 23.0 === @ccall $(dot_sym)(2::Int, [2.0, 3.0]::Ref{Cdouble}, 1::Int, [4.0, 5.0]::Ref{Cdouble}, 1::Int)::Cdouble
 end
 
 end # module TestBLAS

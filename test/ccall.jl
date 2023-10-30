@@ -802,7 +802,7 @@ if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
-# with cfucntion and that object identity is preserved
+# with cfunction and that object identity is preserved
 mutable struct IdentityTestKV{K, V}
     (T::Type{<:IdentityTestKV})(S) = (@test T === S; T)
 end
@@ -1020,7 +1020,7 @@ end
 
 else
 
-@test_broken "cfunction: no support for closures on this platform"
+@test_broken "cfunction: no support for closures on this platform" === nothing
 
 end
 
@@ -1125,12 +1125,12 @@ struct Struct_AA64_2
     v2::Float64
 end
 
-# This is a homogenious short vector aggregate
+# This is a homogeneous short vector aggregate
 struct Struct_AA64_3
     v1::VecReg{8,Int8}
     v2::VecReg{2,Float32}
 end
-# This is NOT a homogenious short vector aggregate
+# This is NOT a homogeneous short vector aggregate
 struct Struct_AA64_4
     v2::VecReg{2,Float32}
     v1::VecReg{8,Int16}
@@ -1516,6 +1516,12 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
+fn45187() = nothing
+
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1589,6 +1595,32 @@ function caller22734(ptr)
     ccall(ptr, Float64, (Ref{Abstract22734},), obj)
 end
 @test caller22734(ptr22734) === 32.0
+
+# issue #46786 -- non-isbitstypes passed "by-value"
+struct NonBits46786
+    x::Union{Int16,NTuple{3,UInt8}}
+end
+let ptr = @cfunction(identity, NonBits46786, (NonBits46786,))
+    obj1 = NonBits46786((0x01,0x02,0x03))
+    obj2 = ccall(ptr, NonBits46786, (NonBits46786,), obj1)
+    @test obj1 === obj2
+end
+let ptr = @cfunction(identity, Base.RefValue{NonBits46786}, (Base.RefValue{NonBits46786},))
+    obj1 = Base.RefValue(NonBits46786((0x01,0x02,0x03)))
+    obj2 = ccall(ptr, Base.RefValue{NonBits46786}, (Base.RefValue{NonBits46786},), obj1)
+    @test obj1 !== obj2
+    @test obj1.x === obj2.x
+end
+
+mutable struct MutNonBits46786
+    x::Union{Int16,NTuple{3,UInt8}}
+end
+let ptr = @cfunction(identity, MutNonBits46786, (MutNonBits46786,))
+    obj1 = MutNonBits46786((0x01,0x02,0x03))
+    obj2 = ccall(ptr, MutNonBits46786, (MutNonBits46786,), obj1)
+    @test obj1 !== obj2
+    @test obj1.x === obj2.x
+end
 
 # 26297#issuecomment-371165725
 #   test that the first argument to cglobal is recognized as a tuple literal even through
@@ -1725,37 +1757,11 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
-        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
-        $(Expr(:foreigncall,
-               :($(Expr(:escape, :((:func, libstring))))),
-               :($(Expr(:escape, :Cstring))),
-               :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
-               0,
-               :(:ccall),
-               :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
-    # pointer interpolation
-    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
-    @test Base.remove_linenums!(call) == Base.remove_linenums!(
-    quote
-        func = $(Expr(:escape, :fptr))
-        begin
-            if !(func isa Ptr{Cvoid})
-                name = :fptr
-                throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
-            end
-        end
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
-    end)
-
+    local fptr = :x
+    @test_throws ArgumentError("interpolated function `fptr` was not a Ptr{Cvoid}, but Symbol") @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin
@@ -1767,7 +1773,7 @@ end
     @test_throws ArgumentError("args in @ccall need type annotations. 'x' doesn't have one.") ccall_macro_parse(:( foo(x)::Cint ))
     # missing type annotations on varargs arguments
     @test_throws ArgumentError("args in @ccall need type annotations. 'y' doesn't have one.") ccall_macro_parse(:( foo(x::Cint ; y)::Cint ))
-    # no reqired args on varargs call
+    # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
     @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
@@ -1791,7 +1797,7 @@ end
     str_identity = @cfunction(identity, Cstring, (Cstring,))
     foo = @ccall $str_identity("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
-    # test interpolation of an expresison that returns a pointer.
+    # test interpolation of an expression that returns a pointer.
     foo = @ccall $(@cfunction(identity, Cstring, (Cstring,)))("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
 
@@ -1884,6 +1890,12 @@ end
     function cglobal33413_literal_notype()
         return cglobal(:sin)
     end
+    function cglobal49142_nothing()
+        return cglobal(nothing)
+    end
+    function cglobal45187fn()
+        return cglobal((:fn, fn45187))
+    end
     @test unsafe_load(cglobal33413_ptrvar()) == 1
     @test unsafe_load(cglobal33413_ptrinline()) == 1
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
@@ -1892,10 +1904,33 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+    @test_throws(TypeError, cglobal49142_nothing())
+    @test_throws(TypeError, cglobal45187fn())
+    @test_throws(TypeError, @eval cglobal(nothing))
+    @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
 end
 
 @testset "ccall_effects" begin
-    ctest_total(x) = @Base.assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
+    ctest_total(x) = Base.@assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
+end
+
+const libfrobozz = ""
+
+function somefunction_not_found()
+    ccall((:somefunction, libfrobozz), Cvoid, ())
+end
+
+function somefunction_not_found_libc()
+    ccall(:test,Int,())
+end
+
+@testset "library not found" begin
+    if Sys.islinux()
+        @test_throws "could not load symbol \"somefunction\"" somefunction_not_found()
+    else
+        @test_throws "could not load library \"\"" somefunction_not_found()
+    end
+    @test_throws "could not load symbol \"test\"" somefunction_not_found_libc()
 end

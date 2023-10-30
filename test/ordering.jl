@@ -2,21 +2,24 @@
 
 using Test
 
-import Base.Order: Forward, Reverse
+import Base.Order: Forward, Reverse, ord, Lt, By, ReverseOrdering
 
 # every argument can flip the integer order by passing the right value. Here,
 # we enumerate a few of these combinations and check that all these flips
 # compound so that in total we either have an increasing or decreasing sort.
 for (s1, rev) in enumerate([true, false])
-    for (s2, lt) in enumerate([>, <, (a, b) -> a - b > 0, (a, b) -> a - b < 0])
+    for (s2, lt) in enumerate([(a, b)->isless(b, a), isless, >, <, (a, b) -> a - b > 0, (a, b) -> a - b < 0])
         for (s3, by) in enumerate([-, +])
             for (s4, order) in enumerate([Reverse, Forward])
-                if iseven(s1 + s2 + s3 + s4)
-                    target = [1, 2, 3]
-                else
-                    target = [3, 2, 1]
-                end
+                is_fwd = iseven(s1 + s2 + s3 + s4)
+                target = is_fwd ? (1:3) : (3:-1:1)
+                # arrays, integer and float ranges sometimes have different code paths
                 @test target == sort([2, 3, 1], rev=rev, lt=lt, by=by, order=order)
+
+                @test target == sort(1:3, rev=rev, lt=lt, by=by, order=order)
+                @test target == sort(3:-1:1, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) == sort(1.0:3, rev=rev, lt=lt, by=by, order=order)
+                @test float(target) == sort(3.0:-1:1, rev=rev, lt=lt, by=by, order=order)
             end
         end
     end
@@ -40,3 +43,11 @@ struct SomeOtherOrder <: Base.Order.Ordering end
 
 @test reverse(Forward) === Reverse
 @test reverse(Reverse) === Forward
+
+@test ord(isless, identity, false, Forward) === Forward
+@test ord(isless, identity, true, Forward) === Reverse
+@test ord(<, identity, false, Forward) === Lt(<)
+@test ord(isless, abs, false, Forward) === By(abs)
+@test ord(<, abs, false, Forward) === By(abs, Lt(<))
+@test ord(<, abs, true, Forward) === ReverseOrdering(By(abs, Lt(<)))
+@test ord(<, abs, true, Reverse) === By(abs, Lt(<))

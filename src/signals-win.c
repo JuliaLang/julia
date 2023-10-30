@@ -85,14 +85,16 @@ void __cdecl crt_sig_handler(int sig, int num)
             jl_try_throw_sigint();
         }
         break;
-    default: // SIGSEGV, (SSIGTERM, IGILL)
-        if (jl_get_safe_restore())
-            jl_rethrow();
+    default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
+        if (sig == SIGSEGV && jl_get_safe_restore()) {
+            signal(sig, (void (__cdecl *)(int))crt_sig_handler);
+            jl_sig_throw();
+        }
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_show_sigill(&Context);
-        jl_critical_error(sig, &Context, jl_get_current_task());
+        jl_critical_error(sig, 0, &Context, jl_get_current_task());
         raise(sig);
     }
 }
@@ -122,10 +124,8 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
+void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -133,8 +133,9 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!jl_get_safe_restore()) {
+    if (ct && !jl_get_safe_restore()) {
         assert(excpt != NULL);
+        jl_ptls_t ptls = ct->ptls;
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
             ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
@@ -165,7 +166,7 @@ HANDLE hMainThread = INVALID_HANDLE_VALUE;
 // Try to throw the exception in the master thread.
 static void jl_try_deliver_sigint(void)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     jl_lock_profile();
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
@@ -191,7 +192,8 @@ static void jl_try_deliver_sigint(void)
             jl_safe_printf("error: GetThreadContext failed\n");
             return;
         }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread);
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+        jl_throw_in_ctx(ct, jl_interrupt_exception, &ctxThread);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread, &ctxThread)) {
             jl_safe_printf("error: SetThreadContext failed\n");
@@ -226,102 +228,113 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
+    if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
+        return EXCEPTION_CONTINUE_SEARCH;
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct->ptls != NULL && ct->ptls->gc_state != JL_GC_STATE_WAITING) {
+        jl_ptls_t ptls = ct->ptls;
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-            case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+            if (ct->eh != NULL) {
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_diverror_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
-            case EXCEPTION_STACK_OVERFLOW:
+            }
+            break;
+        case EXCEPTION_STACK_OVERFLOW:
+            if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
-            case EXCEPTION_ACCESS_VIOLATION:
-                if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                    jl_set_gc_and_wait();
-                    // Do not raise sigint on worker thread
-                    if (ptls->tid != 0)
-                        return EXCEPTION_CONTINUE_EXECUTION;
-                    if (ptls->defer_signal) {
-                        jl_safepoint_defer_sigint();
-                    }
-                    else if (jl_safepoint_consume_sigint()) {
-                        jl_clear_force_sigint();
-                        jl_throw_in_ctx(jl_interrupt_exception, ExceptionInfo->ContextRecord);
-                    }
+            }
+            break;
+        case EXCEPTION_ACCESS_VIOLATION:
+            if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
+                jl_set_gc_and_wait();
+                // Do not raise sigint on worker thread
+                if (ptls->tid != 0)
                     return EXCEPTION_CONTINUE_EXECUTION;
+                if (ptls->defer_signal) {
+                    jl_safepoint_defer_sigint();
                 }
-                if (jl_get_safe_restore()) {
-                    jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
-                    return EXCEPTION_CONTINUE_EXECUTION;
+                else if (jl_safepoint_consume_sigint()) {
+                    jl_clear_force_sigint();
+                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
                 }
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+            if (jl_get_safe_restore()) {
+                jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+            if (ct->eh != NULL) {
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
+                    jl_throw_in_ctx(ct, jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+            }
+        default:
+            break;
         }
-        if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
-            jl_safe_printf("\n");
-            jl_show_sigill(ExceptionInfo->ContextRecord);
-        }
-        jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
-        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-            case EXCEPTION_ACCESS_VIOLATION:
-                jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
-            case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-                jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
-            case EXCEPTION_BREAKPOINT:
-                jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
-            case EXCEPTION_DATATYPE_MISALIGNMENT:
-                jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
-            case EXCEPTION_FLT_DENORMAL_OPERAND:
-                jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
-            case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-                jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
-            case EXCEPTION_FLT_INEXACT_RESULT:
-                jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
-            case EXCEPTION_FLT_INVALID_OPERATION:
-                jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
-            case EXCEPTION_FLT_OVERFLOW:
-                jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
-            case EXCEPTION_FLT_STACK_CHECK:
-                jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
-            case EXCEPTION_FLT_UNDERFLOW:
-                jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
-            case EXCEPTION_ILLEGAL_INSTRUCTION:
-                jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
-            case EXCEPTION_IN_PAGE_ERROR:
-                jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
-            case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
-            case EXCEPTION_INT_OVERFLOW:
-                jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
-            case EXCEPTION_INVALID_DISPOSITION:
-                jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
-            case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-                jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
-            case EXCEPTION_PRIV_INSTRUCTION:
-                jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
-            case EXCEPTION_SINGLE_STEP:
-                jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
-            case EXCEPTION_STACK_OVERFLOW:
-                jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
-            default:
-                jl_safe_printf("UNKNOWN"); break;
-        }
-        jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-
-        jl_critical_error(0, ExceptionInfo->ContextRecord, ct);
-        static int recursion = 0;
-        if (recursion++)
-            exit(1);
-        else
-            jl_exit(1);
     }
-    return EXCEPTION_CONTINUE_SEARCH;
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
+        jl_safe_printf("\n");
+        jl_show_sigill(ExceptionInfo->ContextRecord);
+    }
+    jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
+    switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+    case EXCEPTION_ACCESS_VIOLATION:
+        jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
+    case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+        jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
+    case EXCEPTION_BREAKPOINT:
+        jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
+    case EXCEPTION_DATATYPE_MISALIGNMENT:
+        jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
+    case EXCEPTION_FLT_DENORMAL_OPERAND:
+        jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
+    case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+        jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
+    case EXCEPTION_FLT_INEXACT_RESULT:
+        jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
+    case EXCEPTION_FLT_INVALID_OPERATION:
+        jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
+    case EXCEPTION_FLT_OVERFLOW:
+        jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
+    case EXCEPTION_FLT_STACK_CHECK:
+        jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
+    case EXCEPTION_FLT_UNDERFLOW:
+        jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
+    case EXCEPTION_ILLEGAL_INSTRUCTION:
+        jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
+    case EXCEPTION_IN_PAGE_ERROR:
+        jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
+    case EXCEPTION_INT_OVERFLOW:
+        jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
+    case EXCEPTION_INVALID_DISPOSITION:
+        jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
+    case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+        jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
+    case EXCEPTION_PRIV_INSTRUCTION:
+        jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
+    case EXCEPTION_SINGLE_STEP:
+        jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
+    case EXCEPTION_STACK_OVERFLOW:
+        jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
+    default:
+        jl_safe_printf("UNKNOWN"); break;
+    }
+    jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+
+    jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
+    static int recursion = 0;
+    if (recursion++)
+        exit(1);
+    else
+        jl_exit(1);
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
@@ -330,6 +343,54 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 }
 
 static volatile HANDLE hBtThread = 0;
+
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+{
+    (void)timeout;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL) // this thread is not alive
+        return 0;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL) // this thread is already dead
+        return 0;
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return 0;
+    assert(sizeof(*ctx) == sizeof(CONTEXT));
+    memset(ctx, 0, sizeof(CONTEXT));
+    ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    if (!GetThreadContext(hThread, ctx)) {
+        if ((DWORD)-1 == ResumeThread(hThread))
+            abort();
+        return 0;
+    }
+    return 1;
+}
+
+void jl_thread_resume(int tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == ResumeThread(hThread)) {
+        fputs("failed to resume main thread! aborting.", stderr);
+        abort();
+    }
+}
+
+int jl_lock_stackwalk(void)
+{
+    uv_mutex_lock(&jl_in_stackwalk);
+    jl_lock_profile();
+    return 0;
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    (void)lockret;
+    jl_unlock_profile();
+    uv_mutex_unlock(&jl_in_stackwalk);
+}
+
 
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
@@ -344,58 +405,45 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 continue;
             }
             else {
-                uv_mutex_lock(&jl_in_stackwalk);
-                jl_lock_profile();
-                if ((DWORD)-1 == SuspendThread(hMainThread)) {
+                // TODO: bring this up to parity with other OS by adding loop over tid here
+                int lockret = jl_lock_stackwalk();
+                CONTEXT ctxThread;
+                if (!jl_thread_suspend_and_get_state(0, 0, &ctxThread)) {
+                    jl_unlock_stackwalk(lockret);
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
+                    jl_profile_stop_timer();
                     break;
                 }
-                CONTEXT ctxThread;
-                memset(&ctxThread, 0, sizeof(CONTEXT));
-                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                if (!GetThreadContext(hMainThread, &ctxThread)) {
-                    fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    jl_profile_stop_timer();
-                }
-                else {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
 
-                    jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
-                    // store threadid but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                // store threadid but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
-                    // store task id
-                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                // store task id (never null)
+                bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
-                    // store cpu cycle clock
-                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                // store cpu cycle clock
+                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
-                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
-                    // Mark the end of this block with two 0's
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                }
-                jl_unlock_profile();
-                uv_mutex_unlock(&jl_in_stackwalk);
-                if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                    jl_profile_stop_timer();
-                    fputs("failed to resume main thread! aborting.", stderr);
-                    jl_gc_debug_critical_error();
-                    abort();
-                }
+                // Mark the end of this block with two 0's
+                bt_data_prof[bt_size_cur++].uintptr = 0;
+                bt_data_prof[bt_size_cur++].uintptr = 0;
+                jl_unlock_stackwalk(lockret);
+                jl_thread_resume(0);
                 jl_check_profile_autostop();
             }
         }
     }
-    jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
     jl_profile_stop_timer();
-    hBtThread = 0;
+    hBtThread = NULL;
     return 0;
 }
 
@@ -470,11 +518,15 @@ void jl_install_default_signal_handlers(void)
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-    size_t ssize = sig_stack_size;
-    void *stk = jl_malloc_stack(&ssize, NULL);
-    collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
-    collect_backtrace_fiber.uc_stack.ss_size = ssize;
-    jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
-    uv_mutex_init(&backtrace_lock);
-    have_backtrace_fiber = 1;
+    if (!have_backtrace_fiber) {
+        size_t ssize = sig_stack_size;
+        void *stk = jl_malloc_stack(&ssize, NULL);
+        if (stk == NULL)
+            jl_errorf("fatal error allocating signal stack: mmap: %s", strerror(errno));
+        collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
+        collect_backtrace_fiber.uc_stack.ss_size = ssize;
+        jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
+        uv_mutex_init(&backtrace_lock);
+        have_backtrace_fiber = 1;
+    }
 }

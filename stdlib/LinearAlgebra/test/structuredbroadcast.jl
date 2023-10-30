@@ -100,6 +100,8 @@ end
     @test_throws ArgumentError broadcast!(+, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
     @test_throws ArgumentError broadcast!(+, copy(◣), ◣, A) == LowerTriangular(broadcast(*, ◣, A))
     @test_throws ArgumentError broadcast!(+, copy(◥), ◥, A) == UpperTriangular(broadcast(*, ◥, A))
+    @test_throws ArgumentError broadcast!(*, copy(◥), ◣, 2)
+    @test_throws ArgumentError broadcast!(*, copy(Bu), Bl, 2)
 end
 
 @testset "map[!] over combinations of structured matrices" begin
@@ -200,7 +202,7 @@ end
     Bu2 = 2 .* Bl
     @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
 
-    # Example of Nested Brodacasts
+    # Example of Nested Broadcasts
     tmp = (1 .* 2) .* (Bidiagonal(1:3, 1:2, 'U') .* (3 .* 4)) .* (5 .* Bidiagonal(1:3, 1:2, 'L'))
     @test typeof(tmp) <: Tridiagonal
 
