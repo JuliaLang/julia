@@ -59,7 +59,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, si, sv)
+                apply_hardlimit = multiple_matches && !isdispatchtuple(sig_n)
+                result = abstract_call_method(interp, method, sig_n, svec(), apply_hardlimit, si, sv)
                 (; rt, edge, effects) = result
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
@@ -86,7 +87,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_conditional = ignorelimited(this_rt)
             this_rt = widenwrappedconditional(this_rt)
         else
-            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
+            apply_hardlimit = multiple_matches && !isdispatchtuple(sig)
+            result = abstract_call_method(interp, method, sig, match.sparams, apply_hardlimit, si, sv)
             (; rt, edge, effects) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
@@ -501,6 +503,13 @@ function abstract_call_method(interp::AbstractInterpreter,
     edgecycle = edgelimited = false
     topmost = nothing
 
+    # The `method_for_inference_heuristics` will expand the given method's generator if
+    # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
+    # The other `CodeInfo`s we inspect will already have this field inflated, so we just
+    # access it directly instead (to avoid regeneration).
+    world = get_world_counter(interp)
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
+
     for sv′ in AbsIntStackUnwind(sv)
         infmi = frame_instance(sv′)
         if method === infmi.def
@@ -520,7 +529,7 @@ function abstract_call_method(interp::AbstractInterpreter,
                 break
             end
             topmost === nothing || continue
-            if edge_matches_sv(interp, sv′, method, sig, sparams, hardlimit, sv)
+            if edge_matches_sv(interp, sv′, method, sig, callee_method2, hardlimit, sv)
                 topmost = sv′
                 edgecycle = true
             end
@@ -642,15 +651,8 @@ function abstract_call_method(interp::AbstractInterpreter,
 end
 
 function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
-                         method::Method, @nospecialize(sig), sparams::SimpleVector,
+                         method::Method, @nospecialize(sig), callee_method2::Union{Method, Nothing},
                          hardlimit::Bool, sv::AbsIntState)
-    # The `method_for_inference_heuristics` will expand the given method's generator if
-    # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
-    # The other `CodeInfo`s we inspect will already have this field inflated, so we just
-    # access it directly instead (to avoid regeneration).
-    world = get_world_counter(interp)
-    callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
-
     inf_method2 = method_for_inference_limit_heuristics(frame) # limit only if user token match
     inf_method2 isa Method || (inf_method2 = nothing)
     if callee_method2 !== inf_method2
