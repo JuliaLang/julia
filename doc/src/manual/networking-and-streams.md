@@ -67,7 +67,7 @@ abcd
 "abcd"
 ```
 
-Note that depending on your terminal settings, your TTY(teletype terminal) may be line buffered and might thus require an additional enter before the data is sent to Julia.
+Note that depending on your terminal settings, your TTY ("teletype terminal") may be line buffered and might thus require an additional enter before `stdin` data is sent to Julia.
 When running Julia from the command line in a TTY, output is sent to the console by default, and standard input is read from the keyboard.
 
 To read every line from [`stdin`](@ref) you can use [`eachline`](@ref):
@@ -212,9 +212,10 @@ If you want to redirect stdout to a file
 out_file = open("output.txt", "w")
 
 # Redirect stdout to file
-stdout = out_file
-
-# Your code here
+redirect_stdout(out_file) do
+    # Your code here
+    println("This output goes to `out_file` via the `stdout` variable.")
+end
 
 # Close file
 close(out_file)
