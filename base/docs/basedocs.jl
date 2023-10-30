@@ -2868,7 +2868,7 @@ abstract.
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 <: IntOrString # instance of Int is included in the union
+julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
 julia> "Hello!" isa IntOrString # String's are also included
