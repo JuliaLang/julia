@@ -197,16 +197,17 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. Debugging tool for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-                                            
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the prefered syntax for
+writing assertions, which are conditions that are assumed to be true, but that the user
+might want to check as and aid to debugging if they fail.
+The optional message `text` is displayed upon assertion failure.
+
 !!! warning
     An assert might be disabled at various optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords).
-    The user must not rely on the return value of `@assert` for the correct behavior 
-    of a function, nor should side effects needed for the correct behavior of assert.
-
+    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
+    The user must not rely on the side effects of `@assert` for the correct behavior 
+    of a function.
 
 # Examples
 ```jldoctest
