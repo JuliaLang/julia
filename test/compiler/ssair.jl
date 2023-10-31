@@ -707,7 +707,7 @@ function allocate_branches!(ir::Compiler.IRCode, positions_nbranches)
                 ibb1 = block.newbb
                 ibb3 = ibb1 + 2
                 b1 = ir.cfg.blocks[ibb1]
-                ir.stmts.inst[last(b1.stmts)] = GotoIfNot(false, ibb3)
+                ir.stmts.stmt[last(b1.stmts)] = GotoIfNot(false, ibb3)
                 Core.Compiler.cfg_insert_edge!(ir.cfg, ibb1, ibb3)
             end
         end
@@ -850,9 +850,9 @@ Output:
         [3, 4, 5],
     )
     (b1, b2, b3, _) = ir.cfg.blocks
-    @test ir.stmts.inst[last(b1.stmts)] == GotoNode(2)
-    @test ir.stmts.inst[last(b2.stmts)] == GotoIfNot(false, 4)
-    @test ir.stmts.inst[last(b3.stmts)] == GotoNode(4)
+    @test ir.stmts.stmt[last(b1.stmts)] == GotoNode(2)
+    @test ir.stmts.stmt[last(b2.stmts)] == GotoIfNot(false, 4)
+    @test ir.stmts.stmt[last(b3.stmts)] == GotoNode(4)
     check_linetable(ir, ir0, info)
 end
 
@@ -912,7 +912,7 @@ inserting at boundary locations work.
         ],
         [2, 3, 5, 7, 8],
     )
-    @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == GotoNode.(2:6)
+    @test [ir.stmts.stmt[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == GotoNode.(2:6)
     check_linetable(ir, ir0, info)
 end
 

@@ -2280,7 +2280,7 @@ function allocate_new_blocks!(ir::IRCode, positions_nblocks::Vector{Pair{Int,Int
         end
     end
 
-    allocate_stmts!(ir.stmts.inst, GotoNode(0))  # dummy
+    allocate_stmts!(ir.stmts.stmt, GotoNode(0))  # dummy
     allocate_stmts!(ir.stmts.type, Any)
     allocate_stmts!(ir.stmts.info, NoCallInfo())
     allocate_stmts!(ir.stmts.flag, 0)
@@ -2440,8 +2440,8 @@ function allocate_goto_sequence!(ir::IRCode, positions_nblocks)
     function set_goto(ibb1::Int)
         ibb2 = ibb1 + 1
         b1 = ir.cfg.blocks[ibb1]
-        @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(0)
-        ir.stmts.inst[last(b1.stmts)] = GotoNode(ibb2)
+        @assert ir.stmts.stmt[last(b1.stmts)] === GotoNode(0)
+        ir.stmts.stmt[last(b1.stmts)] = GotoNode(ibb2)
         cfg_insert_edge!(ir.cfg, ibb1, ibb2)
     end
     for sp in split_positions(blocks)
