@@ -2293,6 +2293,22 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
+"""
+    LoopInfo
+
+Describes a loop within the IR. Each loop should have one header, and at least one latch.
+
+```
+entry:
+  goto #exit if not %cond
+header:
+  goto #exit if not %cond
+latch:
+  goto #header
+exit:
+  return
+```
+"""
 struct LoopInfo
     header::Int
     latches::Vector{Int}
@@ -2358,119 +2374,26 @@ function construct_loopinfo(ir, domtree)
     return loops 
 end
 
-
-function licm_pass!(ir::IRCode, loops)
-    cfg = ir.cfg
-
-    # TODO: Processing order, we should proceess innermost to outermost loops,
-    staged_blocks = IdDict{Int, Vector{Int}}()
-    for (h, loop) in loops
-        # Find stmts that are invariant w.r.t this loop
-        invariant_stmts = Int[]
-
-        # TODO: Order to visit loops in: Innermost to outermost
-        for idx in loop.blocks
-            bb = cfg.blocks[idx]
-            for id in bb.stmts
-                stmt = ir.stmts[id][:inst]
-                if invariant_stmt(ir, loop, invariant_stmts, stmt)
-                    # XXX: Need to account for, we either need
-                    #      to move the entire block or check ?reverse-dominance?
-                    # if (x > 0)
-                    #   sqrt(x)
-                    push!(invariant_stmts, id)
-                end
-            end
-
-            # Move stmts as far as possible
-            if haskey(staged_blocks, idx)
-                staged_stmts = staged_blocks[idx]
-                new_staged_stmts = Int[]
-                for (i, id) in enumerate(staged_stmts)
-                    stmt = ir.stmts[id]
-                    if invariant_stmt(ir, loop, invariant_stmts, stmt)
-                        # XXX: Need to account for, we either need
-                        #      to move the entire block or check ?reverse-dominance?
-                        # if (x > 0)
-                        #   sqrt(x)
-                        push!(invariant_stmts, id)
-                    else
-                        push!(new_staged_stmts, id)
-                    end
-                end
-                staged_blocks[idx] = new_staged_stmts
-            end
+function invariant(ir, LI, invariant_stmts, stmt)
+    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || stmt isa Bool
+        return true
+    elseif stmt isa SSAValue
+        id = stmt.id
+        bb = block_for_inst(ir.cfg, id)
+        if bb ∉ LI.blocks
+            return true
         end
-
-        # isempty(invariant_stmts) && continue
-        staged_blocks[h] = invariant_stmts
+        return id ∈ invariant_stmts 
     end
+    return false
+end
 
-    # Now we no longer need a correct loop info / domtree and we can take the sledgehammer to the CFG/IR
-    irstream = ir.stmts
-    valmap   = IdDict{Int, Int}()
-    for (h, loop) in loops
-        # Non-loop predecessors
-        header = cfg.blocks[loop.header]
-        predecessors = filter(bb -> bb ∉ loop.latches, header.preds)
-
-        @assert length(predecessors) == 1
-        # XXX: If predecessors are more than one we might need to move PhiNodes
-        entry_bb = first(predecessors)
-
-        insertion_point = last(cfg.blocks[entry_bb].stmts)
-        # Copy invariant stmts to new BB 
-        # start = length(irstream) + 1
-        for id in staged_blocks[h]
-            inst = irstream[id]
-            ssaval = copy_inst!(ir, insertion_point, inst, true)
-            inst[:inst] = ssaval
-
-            # Fixup SSAValue's
-            ir[ssaval] = Core.Compiler.ssamap(ir[ssaval]) do val
-                if haskey(valmap, val.id)
-                    return valmap[val.id]
-                else
-                    return val
-                end
-            end
-
-            valmap[id] = ssaval.id # record new SSAValue id
-        end
-        insert_node!(ir, insertion_point, Nothing, GotoNode(h), true)
-
-        # Insert pre-header into CFG
-        # push!(cfg.blocks, BasicBlock(StmtRange(start, length(irstream)), predecessors, Int[loop.header]))
-        push!(cfg.blocks, BasicBlock(StmtRange(-1, 0), predecessors, Int[loop.header]))
-        pre_header = length(cfg.blocks)
-        cfg.blocks[loop.header] = BasicBlock(header.stmts, [pre_header, loop.latches...], header.succs)
-
-        for pred in predecessors
-            bb = cfg.blocks[loop.header]
-            succs = map(bb->bb == loop.header ? pre_header : bb, bb.succs)
-            cfg.blocks[loop.header] = BasicBlock(bb.stmts, bb.preds, succs)
-        end
-
-        # CFG now looks right, time to fixup the terminators and phi nodes
-        for id in header.stmts
-            node = irstream[id]
-            stmt = node[:inst]
-            if stmt isa PhiNode 
-                edges = Any[bb == entry_bb ? pre_header : bb for bb in stmt.edges]
-                node[:inst] = PhiNode(edges, stmt.values)
-            else
-                break
-            end
-        end
-        
-        # XXX: How do we deal with implicit fallthrough?
-        #      Need to fixup the terminators. Maybe domsort will cure all things
+function invariant_expr(ir, LI, invariant_stmts, stmt)
+    invar = true
+    for useref in userefs(stmt)
+        invar &= invariant(ir, LI, invariant_stmts, useref[])
     end
-
-    # XXX: The cfg stmt ranges are all wrong
-    # Now domsort the IR so that everything is neat and tidy.
-    domtree = construct_domtree(cfg)
-    return domsort_ssa!(ir, domtree)
+    return invar
 end
 
 function invariant_stmt(ir, loop, invariant_stmts, stmt)
@@ -2480,30 +2403,85 @@ function invariant_stmt(ir, loop, invariant_stmts, stmt)
     return invariant(ir, loop, invariant_stmts, stmt)
 end
 
-function invariant(ir, loop, invariant_stmts, stmt)
-    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || stmt isa Bool
-        return true
-    elseif stmt isa SSAValue
-        id = stmt.id
-        bb = block_for_inst(ir.cfg, id)
-        if bb ∉ loop.blocks
-            return true
-        end
-        return id ∈ invariant_stmts 
-    end
-
-    # Check for pure / not side-effecting, 
-    # since we hoist into pre-header throwing is okay. 
-    if stmt isa Core.MethodInstance
-        return stmt.def.pure
-    end
-    return false
+function find_invariant_stmts(ir, LI)
+	stmts = Int[]
+	for BB in LI.blocks
+		for stmt in ir.cfg.blocks[BB].stmts
+			# Okay to throw
+			if (ir.stmts[stmt][:flag] & IR_FLAG_EFFECT_FREE) != 0
+				# Check if stmt is invariant
+				if invariant_stmt(ir, LI, stmts, ir.stmts[stmt][:inst])
+					push!(stmts, stmt)
+				end
+			end
+		end
+	end
+	return stmts
 end
 
-function invariant_expr(ir, loop, invariant_stmts, stmt)
-    invar = true
-    for useref in userefs(stmt)
-        invar &= invariant(ir, loop, invariant_stmts, useref[])
+function insert_preheader!(ir, LI)
+	header = LI.header
+	preds = ir.cfg.blocks[header].preds
+	entering = filter(BB->BB ∉ LI.blocks, preds)
+	
+	# split the header
+	split = first(ir.cfg.blocks[header].stmts)
+	info = allocate_goto_sequence!(ir, [split => 0])
+
+	map!(BB->info.bbchangemap[BB], entering, entering)
+	
+	preheader = header
+	header = info.bbchangemap[header]
+	
+	on_phi_label(i) = i ∈ entering ? preheader : i
+
+	for stmt in ir.cfg.blocks[header].stmts
+		inst = ir.stmts[stmt][:inst]
+		if inst isa PhiNode
+            edges = inst.edges::Vector{Int32}
+            for i in 1:length(edges)
+                edges[i] = on_phi_label(edges[i])
+            end
+		else
+			continue
+		end
+	end
+
+	# TODO: should we mutate LI instead?
+	blocks = map(BB->info.bbchangemap[BB], LI.blocks)
+	latches = map(BB->info.bbchangemap[BB], LI.latches)
+
+	for latch in latches
+		cfg_delete_edge!(ir.cfg, latch, preheader)
+		cfg_insert_edge!(ir.cfg, latch, header)
+		stmt = ir.stmts[last(ir.cfg.blocks[4].stmts)]
+		stmt[:inst] = GotoNode(header)
+	end
+
+	verify_ir(ir)
+	
+	return preheader, LoopInfo(header, latches, blocks)
+end
+
+function move_invariant!(ir, preheader, LI)
+	insertion_point = last(ir.cfg.blocks[preheader].stmts)
+	stmts = find_invariant_stmts(ir, LI)
+	inserter = InsertBefore(ir, SSAValue(insertion_point))
+	for stmt in stmts
+		new_stmt = inserter(NewInstruction(ir.stmts[stmt]))
+		ir.stmts[stmt] = new_stmt
+	end
+
+end
+
+function licm_pass!(ir::IRCode, loops=construct_loopinfo(ir, construct_domtree(ir.cfg.blocks)))
+    # TODO: Check for benefit
+    # TODO: More than one Loop in the function. `LI` become stale and would need to be recalculated
+    # TODO: Processing order, we should proceess innermost to outermost loops,
+    for (h, LI) in loops
+        # Find stmts that are invariant w.r.t this loop
+        preheader, LI = insert_preheader!(ir, LI)
+        move_invariant!(ir, preheader, LI)
     end
-    return invar
+    ir = compact!(ir)
 end
