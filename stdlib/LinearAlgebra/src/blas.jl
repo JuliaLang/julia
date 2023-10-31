@@ -52,6 +52,7 @@ export
     # xTBSV
     # xTPSV
     ger!,
+    geru!,
     # xGERU
     # xGERC
     her!,
@@ -1413,6 +1414,25 @@ for (fname, elty) in ((:dger_,:Float64),
                  Ref{BlasInt}),
                  m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
             A
+        end
+    end
+end
+
+### geru
+
+"""
+    geru!(alpha, x, y, A)
+    Performs an unconjugated rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*y' + A`.
+"""
+function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+    if isreal(α)
+        if isreal(x) && isreal(y) && isreal(A)
+            BLAS.ger!(α, x, y, A)
+        end
+    else
+        if iscomplex(x) && iscomplex(y) && iscomplex(A)
+                # For complex inputs, call zgeru (conjugate-ignoring) to perform the rank-1 update
+            BLAS.zgeru!(Complex(α), x, y, A)
         end
     end
 end
