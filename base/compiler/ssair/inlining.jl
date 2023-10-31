@@ -1478,7 +1478,6 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature,
     state::InliningState)
     cases = compute_inlining_cases(info, flag, sig, state)
-    info isa ConstCallInfo && empty!(info.results) # clear code to save memory
     cases === nothing && return nothing
     cases, all_covered, joint_effects = cases
     handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
