@@ -1059,7 +1059,7 @@ julia> broadcast(+, A, B)
  42  52  62
 ```
 
-Broadcasting takes sevaral conceptual steps. First, it aligns dimensions in
+Broadcasting takes several conceptual steps. First, it aligns dimensions in
 array arguments starting with the leading ones[^2] by filling lacking dimensions
 with a singleton dimension if needed, to make sure that the argument arrays have
 the same number of dimensions.  Then, it expands singleton dimensions to match
