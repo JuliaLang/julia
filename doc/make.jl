@@ -1,3 +1,4 @@
+using Test
 # Install dependencies needed to build the documentation.
 Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
@@ -368,7 +369,7 @@ end
 
 const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
-function preRelease_versions(available_folders)
+function check_versions(available_folders)
     vnums = [VersionNumber(x) for x in available_folders]
     master_version = maximum(vnums)
     filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
@@ -409,10 +410,12 @@ function preRelease_versions(available_folders)
             push!(pre_release_versions, "v$(master_version)")
         end
     end
-
     return pre_release_versions
 end
 
+@testset "check_versions" begin
+    @test check_versions(["v1.9.0"]) == ["v1.9.0"]
+end
 
 # Hack to make rc docs visible in the version selector
 struct Versions versions end
@@ -421,7 +424,8 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     available_folders = readdir(dir)
     cd(() -> filter!(!islink, available_folders), dir)
     filter!(x -> occursin(Base.VERSION_REGEX, x), available_folders)
-    return Documenter.Writers.HTMLWriter.expand_versions(dir, preRelease_versions(available_folders))
+
+    return Documenter.Writers.HTMLWriter.expand_versions(dir, check_versions(available_folders))
 end
 
 if "deploy" in ARGS
