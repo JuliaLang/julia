@@ -901,10 +901,16 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
+
     if src isa String && inferred_result !== nothing
-        src = inferred_result.inferred_src
+        # if the inferred source for this globally-cached method is available,
+        # use it destructively as it will never be used again
+        ir = inflate_ir!(inferred_result.inferred_src, mi)
+    else
+        ir = retrieve_ir_for_inlining(mi, src)
     end
-    return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
+
+    return InliningTodo(mi, ir, effects)
 end
 
 # the special resolver for :invoke-d call
@@ -1472,6 +1478,7 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature,
     state::InliningState)
     cases = compute_inlining_cases(info, flag, sig, state)
+    info isa ConstCallInfo && empty!(info.results) # clear code to save memory
     cases === nothing && return nothing
     cases, all_covered, joint_effects = cases
     handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
