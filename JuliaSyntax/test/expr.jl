@@ -463,6 +463,9 @@
         @test parsestmt("f(.+)")   == Expr(:call, :f, Expr(:., :+))
         @test parsestmt("(a, .+)") == Expr(:tuple, :a, Expr(:., :+))
         @test parsestmt("A.:.+")   == Expr(:., :A, QuoteNode(Symbol(".+")))
+
+        # Issue #341
+        @test parsestmt("./x", ignore_errors=true) == Expr(:call, Expr(:error, Expr(:., :/)), :x)
     end
 
     @testset "let" begin
