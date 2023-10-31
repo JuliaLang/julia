@@ -194,7 +194,7 @@ stat(fd::Integer)           = stat(RawFD(fd))
 """
     stat(file)
 
-Return a `Base.StatStruct` whose fields contain information about the file.
+Return a structure whose fields contain information about the file.
 The fields of the structure are:
 
 | Name    | Type                            | Description                                                        |
