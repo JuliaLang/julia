@@ -73,15 +73,15 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-@inline function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
+function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
 
     ht = d.ht
     t = @_gc_preserve_begin ht
 
-    ref = RefValue{Ptr{Memory{Any}}}(pointer_from_objref(ht))
+    ref = Ref{Ptr{Any}}(pointer_from_objref(ht))
     # # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
-    keyindex = ccall(:jl_table_assign_bp, Cssize_t, (Ptr{Ptr{Memory{Any}}}, Any, Any, Cint), ref, key, C_NULL, 0)
+    keyindex = ccall(:jl_table_assign_bp, Cssize_t, (Ptr{Ptr{Any}}, Any, Any, Cint), ref, key, C_NULL, 0)
     d.ht = unsafe_pointer_to_objref(ref[])::Memory{Any}
 
     @_gc_preserve_end t
@@ -100,7 +100,7 @@ function _setindex!(d::IdDict{K, V}, val::V, key::K, keyindex::Int, inserted::Bo
     return nothing
 end
 
-@inline function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     keyindex, inserted = ht_keyindex!(d, key)
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
@@ -168,7 +168,7 @@ isempty(d::IdDict) = length(d) == 0
 
 copy(d::IdDict) = typeof(d)(d)
 
-@inline function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     keyindex, inserted = ht_keyindex!(d, key)
 
     if inserted
