@@ -2106,7 +2106,28 @@ function add_preds!(all_new_preds::Vector{Int32}, bbs::Vector{BasicBlock}, bb_re
     end
 end
 
+function cfg_simplify_fastpath!(ir::IRCode)
+    bbs = ir.cfg.blocks
+    nblocks = length(bbs)
+    nblocks == 1 && return true
+    for i = 1:nblocks
+        bb = bbs[i]
+        if i == nblocks
+            ir[SSAValue(last(bb.stmts))][:stmt] isa ReturnNode && continue
+        elseif length(bb.succs) == 1
+            isterminator(ir[SSAValue(last(bb.stmts))][:stmt]) || continue
+        end
+        return false
+    end
+    resize!(bbs, 1)
+    bbs[1] = BasicBlock(StmtRange(1:length(ir.stmts)), empty!(bbs[1].preds), empty!(bbs[1].succs))
+    empty!(ir.cfg.index)
+    return true
+end
+
 function cfg_simplify!(ir::IRCode)
+    cfg_simplify_fastpath!(ir) && return ir
+
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))

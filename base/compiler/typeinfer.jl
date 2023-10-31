@@ -228,7 +228,15 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
     end
     opt = result.src
     if opt isa OptimizationState
-        result.src = opt = ir_to_codeinf!(opt)
+        if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
+            result.src = opt = ir_to_codeinf!(opt)
+        elseif !iszero(caller.cache_mode & CACHE_MODE_VOLATILE)
+            result.src = opt = cfg_simplify!(opt.ir::IRCode)
+        elseif !iszero(caller.cache_mode & CACHE_MODE_LOCAL) && is_inlineable(opt.src)
+            result.src = opt = cfg_simplify!(opt.ir::IRCode)
+        else
+            result.src = opt = nothing
+        end
     end
     if opt isa CodeInfo
         opt.min_world = first(valid_worlds)
@@ -876,7 +884,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
         volatile_inf_result = isinferred && let inferred_src = result.src
-                isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
+                isa(inferred_src, IRCode) ? true :
+                (isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline))
             end ? VolatileInferenceResult(result) : nothing
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true

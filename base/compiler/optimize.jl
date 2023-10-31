@@ -88,6 +88,7 @@ function inlining_policy(interp::AbstractInterpreter,
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
     elseif isa(src, IRCode)
+        # n.b. the inlineability was computed within `finish!`
         return src
     elseif isa(src, SemiConcreteResult)
         return src
@@ -183,10 +184,9 @@ include("compiler/ssair/passes.jl")
 include("compiler/ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
+    src = ir_to_codeinf!(opt.src, opt.ir::IRCode)
     opt.ir = nothing
-    validate_code_in_debug_mode(linfo, src, "optimized")
+    validate_code_in_debug_mode(opt.linfo, src, "optimized")
     return src
 end
 
