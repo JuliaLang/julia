@@ -335,7 +335,8 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                     tempb = jl_get_module_binding(m, var, 1);
                     tempb->usingfailed = 1;
                     jl_printf(JL_STDERR,
-                              "WARNING: both %s and %s have a public function called \"%s\". Specify which one to use with \"%s.%s\" or \"%s.%s\".\n",
+                              "WARNING: both %s and %s have an export called \"%s\". Specify which one to use with \"%s.%s\" or \"%s.%s\".\n",
+                      
                               jl_symbol_name(owner->name),
                               jl_symbol_name(imp->name), jl_symbol_name(var),
                               jl_symbol_name(owner->name),jl_symbol_name(var),
