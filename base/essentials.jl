@@ -322,7 +322,7 @@ julia> convert(BigFloat, x)
 ```
 
 If `T` is a collection type and `x` a collection, the result of
-`convert(T, x)` may alias all or part of `x`.
+`convert(T, x)` may share memory with all or part of `x`.
 ```jldoctest
 julia> x = Int[1, 2, 3];
 

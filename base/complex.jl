@@ -1115,8 +1115,8 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 Return an array containing the complex analog of each entry in array `A`.
 
-Equivalent to `complex.(A)`, except that the return value may alias all or part
-of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
+Equivalent to `complex.(A)`, except that the return value may share memory with all or
+part of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
 
 # Examples
 ```jldoctest

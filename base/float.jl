@@ -1163,8 +1163,8 @@ floattype(::Type{Int16}) = Float16
 
 Return an array containing the floating-point analog of each entry in array `A`.
 
-Equivalent to `float.(A)`, except that the return value may alias all or part
-of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
+Equivalent to `float.(A)`, except that the return value may share memory with all or
+part of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
 
 # Examples
 ```jldoctest
