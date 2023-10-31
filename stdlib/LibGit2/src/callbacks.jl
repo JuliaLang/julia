@@ -197,7 +197,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
 
          # Use `copy` to ensure shredding the `git_cred` does not shred the `cred`s copy
         cred.user = something(git_cred.username, "")
-        cred.pass = git_cred.password !== nothing ? copy(git.cred_password) : ""
+        cred.pass = git_cred.password !== nothing ? copy(git_cred.password) : ""
         Base.shred!(git_cred)
         revised = true
 
