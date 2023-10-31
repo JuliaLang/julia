@@ -1923,7 +1923,7 @@ julia> copytotri!('L', A, B)
 """
 function copytotri!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(A, B)
-    chkuplo(uplo)
+    LinearAlgebra.BLAS.chkuplo(uplo)
     m, n = size(A)
     if uplo == 'U'
         @inbounds for j=1:n
