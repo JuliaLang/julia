@@ -76,7 +76,7 @@ function term(io::IO, md::List, columns)
             print(io, lstrip(line))
             l < length(lines) && println(io)
         end
-        i < length(md.items) && println(io)
+        i < length(md.items) && print(io, '\n'^(1 + md.loose))
     end
 end
 
