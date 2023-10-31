@@ -8,8 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-JL_DLLEXPORT
-inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val);
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val);
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -32,7 +31,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
 
 // returns where a key is stored, or -pos if the key was not present and was inserted at pos
 // result is 1-indexed
-inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val)
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val)
 {
     // pa points to a **un**rooted address
     uint_t hv;
@@ -196,6 +195,18 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
     if (i >= alen)
         return (size_t)-1;
     return i;
+}
+
+JL_DLLEXPORT
+ssize_t jl_eqtable_keyindex(jl_id_dict_t *d, jl_value_t *key)
+{
+    jl_genericmemory_t *h = d->ht;
+
+    ssize_t index = jl_table_assign_bp(&h, key, NULL, 0);
+    jl_atomic_store_release((_Atomic(jl_genericmemory_t*)*)&d->ht, h);
+    jl_gc_wb(d, h);
+
+    return index;
 }
 
 #undef hash_size
