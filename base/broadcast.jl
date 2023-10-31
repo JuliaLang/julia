@@ -896,8 +896,8 @@ end
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     destc = dest.chunks
-    length(destc)<=0 && return dest
     bcp = preprocess(dest, bc)
+    length(bcp) <= 0 && return dest
     len = num_bit_chunks(length(bcp))
     @inbounds for i = 0:(len - 2)
         z = UInt64(0)
