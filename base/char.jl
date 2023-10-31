@@ -181,9 +181,9 @@ end
 end
 
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
-convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
-convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
-convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)
+convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)::T
+convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)::T
+convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)::T
 convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
 rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
@@ -318,7 +318,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
-    get(io, :compact, false) && return
+    get(io, :compact, false)::Bool && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)

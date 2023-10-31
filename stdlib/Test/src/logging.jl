@@ -120,9 +120,9 @@ end
 # Log testing tools
 
 # Failure result type for log testing
-mutable struct LogTestFailure <: Result
+struct LogTestFailure <: Result
     orig_expr
-    source::Union{Nothing,LineNumberNode}
+    source::LineNumberNode
     patterns
     logs
 end
@@ -149,12 +149,12 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
     if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
-    push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, nothing, t.source))
-    t
+    push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, nothing, t.source, false))
+    return t
 end
 
 """

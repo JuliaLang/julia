@@ -14,9 +14,9 @@ export llvmlibunwind
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-llvmlibunwind_handle = C_NULL
-llvmlibunwind_path = ""
+artifact_dir::String = ""
+llvmlibunwind_handle::Ptr{Cvoid} = C_NULL
+llvmlibunwind_path::String = ""
 
 const llvmlibunwind = "libunwind"
 

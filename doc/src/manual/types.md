@@ -57,9 +57,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -108,9 +108,26 @@ local x::Int8  # in a local declaration
 x::Int8 = 10   # as the left-hand side of an assignment
 ```
 
-and applies to the whole current scope, even before the declaration. Currently, type declarations
-cannot be used in global scope, e.g. in the REPL, since Julia does not yet have constant-type
-globals.
+and applies to the whole current scope, even before the declaration.
+
+As of Julia 1.8, type declarations can now be used in global scope i.e.
+type annotations can be added to global variables to make accessing them type stable.
+```julia
+julia> x::Int = 10
+10
+
+julia> x = 3.5
+ERROR: InexactError: Int64(3.5)
+
+julia> function foo(y)
+           global x = 15.8    # throws an error when foo is called
+           return x + y
+       end
+foo (generic function with 1 method)
+
+julia> foo(10)
+ERROR: InexactError: Int64(15.8)
+```
 
 Declarations can also be attached to function definitions:
 
@@ -230,8 +247,8 @@ default method by many combinations of concrete types. Thanks to multiple dispat
 has full control over whether the default or more specific method is used.
 
 An important point to note is that there is no loss in performance if the programmer relies on
-a function whose arguments are abstract types, because it is recompiled for each tuple of argument
-concrete types with which it is invoked. (There may be a performance issue, however, in the case
+a function whose arguments are abstract types, because it is recompiled for each tuple of concrete
+argument types with which it is invoked. (There may be a performance issue, however, in the case
 of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
@@ -408,6 +425,9 @@ true
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
+
+For many user-defined types `X`, you may want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
+so that instances of that type act as 0-dimensional "scalars" for [broadcasting](@ref Broadcasting).
 
 ## Mutable Composite Types
 
@@ -958,24 +978,29 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
+For convenience, `NamedTuple` types are printed using the [`@NamedTuple`](@ref) macro which provides a
+convenient `struct`-like syntax for declaring these types via `key::Type` declarations,
+where an omitted `::Type` corresponds to `::Any`.
+
 
 ```jldoctest
-julia> typeof((a=1,b="hello"))
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+julia> typeof((a=1,b="hello")) # prints in macro form
+@NamedTuple{a::Int64, b::String}
+
+julia> NamedTuple{(:a, :b), Tuple{Int64, String}} # long form of the type
+@NamedTuple{a::Int64, b::String}
 ```
 
-The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
-`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+The `begin ... end` form of the `@NamedTuple` macro allows the declarations to be
+split across multiple lines (similar to a struct declaration), but is otherwise equivalent:
+
 
 ```jldoctest
-julia> @NamedTuple{a::Int, b::String}
-NamedTuple{(:a, :b), Tuple{Int64, String}}
-
 julia> @NamedTuple begin
            a::Int
            b::String
        end
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+@NamedTuple{a::Int64, b::String}
 ```
 
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
@@ -983,10 +1008,10 @@ The constructed `NamedTuple` type can be either a concrete type, with both param
 or a type that specifies only field names:
 
 ```jldoctest
-julia> @NamedTuple{a::Float32,b::String}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1, ""))
 (a = 1.0f0, b = "")
 
-julia> NamedTuple{(:a, :b)}((1,""))
+julia> NamedTuple{(:a, :b)}((1, ""))
 (a = 1, b = "")
 ```
 
@@ -1313,6 +1338,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
 
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
+
 ## Operations on Types
 
 Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions
@@ -1524,7 +1559,7 @@ when the `:compact` property is set to `true`, falling back to the long
 representation if the property is `false` or absent:
 ```jldoctest polartype
 julia> function Base.show(io::IO, z::Polar)
-           if get(io, :compact, false)
+           if get(io, :compact, false)::Bool
                print(io, z.r, "ℯ", z.Θ, "im")
            else
                print(io, z.r, " * exp(", z.Θ, "im)")
@@ -1595,5 +1630,5 @@ in unfavorable cases, you can easily end up making the performance of your code 
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
-[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
+[^1]: "Small" is defined by the `max_union_splitting` configuration, which currently defaults to 4.
 [^2]: A few popular languages have singleton types, including Haskell, Scala and Ruby.

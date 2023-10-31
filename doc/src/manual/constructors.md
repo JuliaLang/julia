@@ -244,8 +244,8 @@ ERROR: UndefRefError: access to undefined reference
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
 and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
-and immutable structs of other plain data types. The initial contents of a plain data type is
-undefined:
+and immutable structs of other plain data types (see also: [`isbits`](@ref), [`isbitstype`](@ref)).
+The initial contents of a plain data type is undefined:
 
 ```julia-repl
 julia> struct HasPlain
@@ -491,6 +491,7 @@ operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia'
 type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
+Note that the infix use of `⊘` works because Julia has a set of symbols that are recognized to be infix operators.
 The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
 `OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;

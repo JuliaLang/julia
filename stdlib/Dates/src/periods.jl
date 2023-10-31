@@ -58,7 +58,7 @@ Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 """
     default(p::Period) -> Period
 
-Returns a sensible "default" value for the input Period by returning `T(1)` for Year,
+Return a sensible "default" value for the input Period by returning `T(1)` for Year,
 Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
@@ -325,7 +325,7 @@ end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
-    isconcretetype(T) ? sum(T, x.periods) : throw(MethodError(convert,(T,x)))
+    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x, y])
@@ -418,7 +418,7 @@ const OtherPeriod = Union{Month, Quarter, Year}
 
 const zero_or_fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
 const nonzero_otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
-otherperiod_seed(x::OtherPeriod) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
+otherperiod_seed(x) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
 # tons() will overflow for periods longer than ~300,000 years, implying a hash collision
 # which is relatively harmless given how infrequently such periods should appear
 Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
@@ -443,8 +443,8 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
-toms(c::Nanosecond)  = div(value(c), 1000000)
-toms(c::Microsecond) = div(value(c), 1000)
+toms(c::Nanosecond)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microsecond) = div(value(c), 1000, RoundNearest)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000 * value(c)
 toms(c::Minute)      = 60000 * value(c)
@@ -465,3 +465,7 @@ days(c::Year)        = 365.2425 * value(c)
 days(c::Quarter)     = 91.310625 * value(c)
 days(c::Month)       = 30.436875 * value(c)
 days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(days, c.periods))
+seconds(x::Nanosecond) = value(x) / 1000000000
+seconds(x::Microsecond) = value(x) / 1000000
+seconds(x::Millisecond) = value(x) / 1000
+seconds(x::Period) = value(Second(x))

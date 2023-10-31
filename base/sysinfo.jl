@@ -20,6 +20,8 @@ export BINDIR,
        loadavg,
        free_memory,
        total_memory,
+       free_physical_memory,
+       total_physical_memory,
        isapple,
        isbsd,
        isdragonfly,
@@ -247,18 +249,44 @@ function loadavg()
 end
 
 """
+    Sys.free_physical_memory()
+
+Get the free memory of the system in bytes. The entire amount may not be available to the
+current process; use `Sys.free_memory()` for the actually available amount.
+"""
+free_physical_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_physical_memory()
+
+Get the total memory in RAM (including that which is currently used) in bytes. The entire
+amount may not be available to the current process; see `Sys.total_memory()`.
+"""
+total_physical_memory() = ccall(:uv_get_total_memory, UInt64, ())
+
+"""
     Sys.free_memory()
 
 Get the total free memory in RAM in bytes.
 """
-free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
 Get the total memory in RAM (including that which is currently used) in bytes.
+This amount may be constrained, e.g., by Linux control groups. For the unconstrained
+amount, see `Sys.physical_memory()`.
 """
-total_memory() = ccall(:uv_get_total_memory, UInt64, ())
+function total_memory()
+    constrained = ccall(:uv_get_constrained_memory, UInt64, ())
+    physical = total_physical_memory()
+    if 0 < constrained <= physical
+        return constrained
+    else
+        return physical
+    end
+end
 
 """
     Sys.get_process_title()
@@ -306,7 +334,7 @@ function isunix(os::Symbol)
     elseif os === :Emscripten
         # Emscripten implements the POSIX ABI and provides traditional
         # Unix-style operating system functions such as file system support.
-        # Therefor, we consider it a unix, even though this need not be
+        # Therefore, we consider it a unix, even though this need not be
         # generally true for a jsvm embedding.
         return true
     else
@@ -515,9 +543,21 @@ function which(program_name::String)
     for path_dir in path_dirs
         for pname in program_names
             program_path = joinpath(path_dir, pname)
-            # If we find something that matches our name and we can execute
-            if isfile(program_path) && isexecutable(program_path)
-                return program_path
+            try
+                # If we find something that matches our name and we can execute
+                if isfile(program_path) && isexecutable(program_path)
+                    return program_path
+                end
+            catch e
+                # If we encounter a permission error, we skip this directory
+                # and continue to the next directory in the PATH variable.
+                if isa(e, Base.IOError) && e.code == Base.UV_EACCES
+                    # Permission denied, continue searching
+                    continue
+                else
+                    # Rethrow the exception if it's not a permission error
+                    rethrow(e)
+                end
             end
         end
     end

@@ -103,7 +103,7 @@ end
         min = Top(T,Base.min)
         max = Top(T,Base.max)
         (==) = Top(T,_compare)
-        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equivalent
         @test minmax(3., 5.) == (3., 5.)
         @test minmax(5., 3.) == (3., 5.)
         @test minmax(3., NaN) ≣ (NaN, NaN)
@@ -1071,6 +1071,15 @@ end
     @test Float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
     @test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
     @test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+
+    # Test lsb/msb gaps of 54 (won't fit in 64 bit mantissa)
+    @test Float64(Int128(9007199254740993)) == 9.007199254740992e15
+    @test Float64(UInt128(9007199254740993)) == 9.007199254740992e15
+    # Test 2^104-1 and 2^104 (2^104 is cutoff for which case is run in the conversion algorithm)
+    @test Float64(Int128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(Int128(20282409603651670423947251286016)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286016)) == 2.028240960365167e31
 end
 @testset "Float vs Int128 comparisons" begin
     @test Int128(1e30) == 1e30
@@ -1159,6 +1168,17 @@ Base.@irrational i46051 4863.185427757 1548big(pi)
     # issue #46051
     @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
+
+@testset "Irrational round, float, ceil" begin
+    using .MathConstants
+    @test round(π) === 3.0
+    @test round(Int, ℯ) === 3
+    @test floor(ℯ) === 2.0
+    @test floor(Int, φ) === 1
+    @test ceil(γ) === 1.0
+    @test ceil(Int, catalan) === 1
+end
+
 @testset "issue #6365" begin
     for T in (Float32, Float64)
         for i = 9007199254740992:9007199254740996
@@ -2210,9 +2230,7 @@ end
 @test_throws ErrorException reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
-    @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
-    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
+    @test_throws ArgumentError reinterpret(Float64, Complex{Int64}(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2254,6 +2272,17 @@ end
 @test_throws InexactError convert(Int, big(2)^100)
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
+
+@testset "infinity to integer conversion" begin
+    for T in (
+        UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt
+    )
+        for S in (Float16, Float32, Float64, BigFloat)
+            @test_throws InexactError convert(T, typemin(S))
+            @test_throws InexactError convert(T, typemax(S))
+        end
+    end
+end
 
 @testset "issue #9789" begin
     @test_throws InexactError convert(Int8, typemax(UInt64))
@@ -2474,17 +2503,32 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
             d == 0 && continue
             fastd = Base.multiplicativeinverse(d)
             for n in numrange
+                d == -1 && n == typemin(typeof(n)) && continue
                 @test div(n,d) == div(n,fastd)
             end
         end
     end
     testmi(-1000:1000, -100:100)
-    testmi(typemax(Int)-1000:typemax(Int), -100:100)
-    testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
     @test_throws ArgumentError Base.multiplicativeinverse(0)
-    testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
-    testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+    for T in [Int8, Int16, Int32, Int64, Int128]
+        testmi(map(T, typemin(T)+1:typemin(T)+100), map(T, -50:50))
+    end
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        testmi(map(T, typemax(T)-50:typemax(T)), map(T, 1:50))
+        testmi(rand(T, 50), rand(T, 50))
+        @test_throws ArgumentError Base.multiplicativeinverse(T(0))
+    end
+
+    # Division overflow is not handled
+    T = Int8
+    fastd = Base.multiplicativeinverse(T(-1))
+    @test_throws DivideError div(typemin(T), T(-1))
+    # does not throw:
+    # @test_throws div(typemin(T), fastd)
+    # test broadcasting works.
+    @test div.(3, Base.multiplicativeinverse(3)) == 1
 end
+
 @testset "ndims/indices/size/length" begin
     @test ndims(1) == 0
     @test ndims(Integer) == 0
@@ -2667,13 +2711,35 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+    # to hit n is even and n % 4 == 2 condition
+    @test rem2pi(T(3), RoundToZero)  == 3
+    @test rem2pi(T(3), RoundNearest) == 3
+    @test rem2pi(T(3), RoundDown)    == 3
+    @test rem2pi(T(3), RoundUp)      ≈ 3 - 2π
+    @test rem2pi(T(-3), RoundToZero)  == -3
+    @test rem2pi(T(-3), RoundNearest) == -3
+    @test rem2pi(T(-3), RoundDown)    ≈ -3 + 2π
+    @test rem2pi(T(-3), RoundUp)      == -3
+    # to hit even n condition and n % 4 != 2 condition
+    @test rem2pi(T(13), RoundToZero)  ≈ 13-4π
+    @test rem2pi(T(13), RoundNearest) ≈ 13-4π
+    @test rem2pi(T(13), RoundDown)    ≈ 13-4π
+    @test rem2pi(T(13), RoundUp)      ≈ 13-6π
+    @test rem2pi(T(-13), RoundToZero)  ≈ -13+4π
+    @test rem2pi(T(-13), RoundNearest) ≈ -13+4π
+    @test rem2pi(T(-13), RoundDown)    ≈ -13+6π
+    @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
-@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64, BigFloat)
+    nan = reinterpret(Float64, reinterpret(UInt64, NaN) | rand(UInt64))
     for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
-        for x in (Inf, -Inf, NaN, -NaN)
+        for x in (Inf, -Inf, NaN, -NaN, nan)
             @test isnan(rem2pi(T(x), r))
             @test rem2pi(T(x), r) isa T
+            if isnan(x) && T !== BigFloat
+                @test rem2pi(T(x), r) === T(x)
+            end
         end
     end
 end
@@ -2835,6 +2901,7 @@ end
     let float_types = Set()
         allsubtypes!(Base, AbstractFloat, float_types)
         allsubtypes!(Core, AbstractFloat, float_types)
+        filter!(!isequal(Core.BFloat16), float_types)   # defined externally
         @test !isempty(float_types)
 
         for T in float_types
@@ -2918,5 +2985,159 @@ end
         @test false == ceil(Bool, 0.0)
         @test true == ceil(Bool, 0.6)
         @test false == ceil(Bool, -0.7)
+    end
+end
+
+Base.@irrational irrational_1548_pi 4863.185427757 1548big(pi)
+Base.@irrational irrational_inv_1548_pi 1/big(irrational_1548_pi)
+@testset "@irrational" begin
+    @test irrational_1548_pi ≈ 1548big(pi)
+    @test Float64(irrational_1548_pi) == 1548π
+    @test irrational_1548_pi ≈ 1548pi
+    @test irrational_1548_pi != 1548pi
+
+    @test irrational_inv_1548_pi ≈ inv(1548big(pi))
+    @test Float64(irrational_inv_1548_pi) == 1/(1548π)
+    @test irrational_inv_1548_pi ≈ inv(1548pi)
+    @test irrational_inv_1548_pi != inv(1548pi)
+end
+
+@testset "modf" begin
+    @testset "remd" begin
+        denorm_min = nextfloat(0.0)
+        minfloat = floatmin(Float64)
+        maxfloat = floatmax(Float64)
+        values = [3.0,denorm_min,-denorm_min, minfloat,
+                 -minfloat, maxfloat, -maxfloat]
+         #  rem (0, y) == 0 for y != 0.
+        for val in values
+            @test isequal(rem(0.0, val), 0.0)
+        end
+        #  rem (-0, y) == -0 for y != 0.
+        for val in values
+            @test isequal(rem(-0.0, val), -0.0)
+        end
+        #  rem (+Inf, y) == NaN
+        values2 = [3.0,-1.1,0.0,-0.0,denorm_min,minfloat,
+                   maxfloat,Inf,-Inf]
+        for val in values2
+            @test isequal(rem(Inf, val), NaN)
+        end
+        #  rem (-Inf, y) == NaN
+        for val in values2
+            @test isequal(rem(-Inf, val), NaN)
+        end
+        #  rem (x, +0) == NaN
+        values3 = values2[begin:end-2]
+        for val in values3
+            @test isequal(rem(val, 0.0), NaN)
+        end
+        #  rem (x, -0) == NaN
+        for val in values3
+            @test isequal(rem(val, -0.0), NaN)
+        end
+        #  rem (x, +Inf) == x for x not infinite.
+        @test isequal(rem(0.0, Inf), 0.0)
+        @test isequal(rem(-0.0, Inf), -0.0)
+        @test isequal(rem(denorm_min, Inf), denorm_min)
+        @test isequal(rem(minfloat, Inf), minfloat)
+        @test isequal(rem(maxfloat, Inf), maxfloat)
+        @test isequal(rem(3.0, Inf), 3.0)
+        #  rem (x, -Inf) == x for x not infinite.
+        @test isequal(rem(0.0, -Inf), 0.0)
+        @test isequal(rem(-0.0, -Inf), -0.0)
+        @test isequal(rem(denorm_min, -Inf), denorm_min)
+        @test isequal(rem(minfloat, -Inf), minfloat)
+        @test isequal(rem(maxfloat, -Inf), maxfloat)
+        @test isequal(rem(3.0, -Inf), 3.0)
+        #NaN tests
+        @test isequal(rem(0.0, NaN), NaN)
+        @test isequal(rem(1.0, NaN), NaN)
+        @test isequal(rem(Inf, NaN), NaN)
+        @test isequal(rem(NaN, 0.0), NaN)
+        @test isequal(rem(NaN, 1.0), NaN)
+        @test isequal(rem(NaN, Inf), NaN)
+        @test isequal(rem(NaN, NaN), NaN)
+        #Sign tests
+        @test isequal(rem(6.5, 2.25), 2.0)
+        @test isequal(rem(-6.5, 2.25), -2.0)
+        @test isequal(rem(6.5, -2.25), 2.0)
+        @test isequal(rem(-6.5, -2.25), -2.0)
+        values4 = [maxfloat,-maxfloat,minfloat,-minfloat,
+                  denorm_min, -denorm_min]
+        for val in values4
+            @test isequal(rem(maxfloat,val), 0.0)
+        end
+        for val in values4
+            @test isequal(rem(-maxfloat,val), -0.0)
+        end
+        @test isequal(rem(minfloat, maxfloat), minfloat)
+        @test isequal(rem(minfloat, -maxfloat), minfloat)
+        values5 = values4[begin+2:end]
+        for val in values5
+            @test isequal(rem(minfloat,val), 0.0)
+        end
+        @test isequal(rem(-minfloat, maxfloat), -minfloat)
+        @test isequal(rem(-minfloat, -maxfloat), -minfloat)
+        for val in values5
+            @test isequal(rem(-minfloat,val), -0.0)
+        end
+        values6 = values4[begin:end-2]
+        for val in values6
+            @test isequal(rem(denorm_min,val), denorm_min)
+        end
+        @test isequal(rem(denorm_min, denorm_min), 0.0)
+        @test isequal(rem(denorm_min, -denorm_min), 0.0)
+        for val in values6
+            @test isequal(rem(-denorm_min,val), -denorm_min)
+        end
+        @test isequal(rem(-denorm_min, denorm_min), -0.0)
+        @test isequal(rem(-denorm_min, -denorm_min), -0.0)
+        #Max value tests
+        values7 = [0x3p-1074,-0x3p-1074,0x3p-1073,-0x3p-1073]
+        for val in values7
+            @test isequal(rem(0x1p1023,val),  0x1p-1073)
+        end
+        @test isequal(rem(0x1p1023, 0x3p-1022), 0x1p-1021)
+        @test isequal(rem(0x1p1023, -0x3p-1022), 0x1p-1021)
+        for val in values7
+            @test isequal(rem(-0x1p1023,val),  -0x1p-1073)
+        end
+        @test isequal(rem(-0x1p1023, 0x3p-1022), -0x1p-1021)
+        @test isequal(rem(-0x1p1023, -0x3p-1022), -0x1p-1021)
+
+    end
+
+    @testset "remf" begin
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-149)), Float32(0x1p-149))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-149)), Float32(0x1p-149))
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-148)), Float32(0x1p-147))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-148)), Float32(0x1p-147))
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-126)), Float32(0x1p-125))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-126)), Float32(0x1p-125))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-149)), -Float32(0x1p-149))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-149)), -Float32(0x1p-149))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-148)), -Float32(0x1p-147))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-148)), -Float32(0x1p-147))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-126)), -Float32(0x1p-125))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-126)), -Float32(0x1p-125))
+    end
+
+end
+
+@testset "FP(inf) == inf" begin
+    # Iterate through all pairs of FP types
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    for F ∈ fp_types, G ∈ fp_types, f ∈ (typemin, typemax)
+        i = f(F)
+        @test i == G(i)
+    end
+end
+
+@testset "small int FP conversion" begin
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    m = Int(maxintfloat(Float16))
+    for F ∈ fp_types, G ∈ fp_types, n ∈ (-m):m
+        @test n == G(F(n)) == F(G(n))
     end
 end

@@ -64,11 +64,6 @@
 #endif
 #endif
 
-// SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
-// This is not recommended, as the memory state after such an exception should
-// be considered untrusted, but can be helpful during development
-// #define SEGV_EXCEPTION
-
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
@@ -82,9 +77,6 @@
 
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
-
-// Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
 
 
 // method dispatch profiling --------------------------------------------------
@@ -128,7 +120,7 @@
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  16*1000 // nanoseconds (16us)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  100*1000 // nanoseconds (100us)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
@@ -138,6 +130,9 @@
 
 // threadpools specification
 #define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
+
+// GC threads
+#define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
