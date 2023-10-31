@@ -398,7 +398,8 @@ end
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
+                A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -428,7 +429,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
     α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -450,8 +451,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-    α::Number = true, β::Number = false) where {T<:BlasFloat}
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar,
+        A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+        α::Number = true, β::Number = false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
         throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -687,7 +689,7 @@ end
     return _generic_matvecmul!(C, ta, Anew, B, _add)
 end
 
-function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
+Base.@constprop :aggressive function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                             _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     @assert tA in ('N', 'T', 'C')
