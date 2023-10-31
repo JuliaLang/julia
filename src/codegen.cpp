@@ -833,8 +833,10 @@ static const auto jltypeerror_func = new JuliaFunction<>{
 };
 static const auto jlundefvarerror_func = new JuliaFunction<>{
     XSTR(jl_undefined_var_error),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+    [](LLVMContext &C) {
+        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted);
+        return FunctionType::get(getVoidTy(C), {T, T}, false);
+    },
     get_attrs_noreturn,
 };
 static const auto jlhasnofield_func = new JuliaFunction<>{
@@ -1954,7 +1956,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
-static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa);
+static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
 static Value *get_current_task(jl_codectx_t &ctx);
@@ -3076,7 +3078,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         }
     }
     // todo: use type info to avoid undef check
-    return emit_checked_var(ctx, bp, name, false, ctx.tbaa().tbaa_binding);
+    return emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
 }
 
 static bool emit_globalset(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, const jl_cgval_t &rval_info, AtomicOrdering Order)
@@ -4869,15 +4871,16 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
 
 // --- accessing and assigning variables ---
 
-static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
+static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, jl_value_t *scope)
 {
     ++EmittedUndefVarErrors;
     BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
     BasicBlock *ifok = BasicBlock::Create(ctx.builder.getContext(), "ok");
     ctx.builder.CreateCondBr(ok, ifok, err);
     ctx.builder.SetInsertPoint(err);
-    ctx.builder.CreateCall(prepare_call(jlundefvarerror_func),
-        mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)name)));
+    ctx.builder.CreateCall(prepare_call(jlundefvarerror_func), {
+            mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)name)),
+            mark_callee_rooted(ctx, literal_pointer_val(ctx, scope))});
     ctx.builder.CreateUnreachable();
     ifok->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(ifok);
@@ -4965,7 +4968,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
     return julia_binding_gv(ctx, b);
 }
 
-static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa)
+static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa)
 {
     LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
     setName(ctx.emission_context, v, jl_symbol_name(name) + StringRef(".checked"));
@@ -4976,7 +4979,7 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.decorateInst(v);
     }
-    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name);
+    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, scope);
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
 
@@ -5002,7 +5005,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
         sparam = (jl_unionall_t*)sparam->body;
         assert(jl_is_unionall(sparam));
     }
-    undef_var_error_ifnot(ctx, isnull, sparam->var->name);
+    undef_var_error_ifnot(ctx, isnull, sparam->var->name, (jl_value_t*)jl_static_parameter_sym);
     return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
@@ -5160,7 +5163,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
     }
     if (isnull) {
         setName(ctx.emission_context, isnull, jl_symbol_name(varname) + StringRef("_is_null"));
-        undef_var_error_ifnot(ctx, isnull, varname);
+        undef_var_error_ifnot(ctx, isnull, varname, (jl_value_t*)jl_local_sym);
     }
     return v;
 }
@@ -5756,7 +5759,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 literal_pointer_val(ctx, jl_undefref_exception));
         }
         else {
-            undef_var_error_ifnot(ctx, cond, var);
+            undef_var_error_ifnot(ctx, cond, var, (jl_value_t*)jl_local_sym);
         }
         return ghostValue(ctx, jl_nothing_type);
     }

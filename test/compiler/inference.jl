@@ -731,7 +731,7 @@ for (codetype, all_ssa) in Any[
     test_inferred_static(codetype, all_ssa)
 end
 @test f18679() === ()
-@test_throws UndefVarError(:any_undef_global) g18679()
+@test_throws UndefVarError(:any_undef_global, @__MODULE__) g18679()
 @test h18679() === nothing
 
 
