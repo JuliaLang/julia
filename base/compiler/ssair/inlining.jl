@@ -905,10 +905,12 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     if src isa String && inferred_result !== nothing
         # if the inferred source for this globally-cached method is available,
         # use it destructively as it will never be used again
-        ir = inflate_ir!(inferred_result.inferred_src, mi)
+        src = inferred_result.inferred_src
+        preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
     else
-        ir = retrieve_ir_for_inlining(mi, src)
+        preserve_local_sources = true
     end
+    ir = retrieve_ir_for_inlining(mi, src, preserve_local_sources)
 
     return InliningTodo(mi, ir, effects)
 end
@@ -987,12 +989,22 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig, inferred_result)
 end
 
-function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
+function retrieve_ir_for_inlining(mi::MethodInstance, src::String, ::Bool=true)
     src = _uncompressed_ir(mi.def, src)
     return inflate_ir!(src, mi)
 end
-retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)
-retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode) = copy(ir)
+function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool=true)
+    if preserve_local_sources
+        src = copy(src)
+    end
+    return inflate_ir!(src, mi)
+end
+function retrieve_ir_for_inlining(::MethodInstance, ir::IRCode, preserve_local_sources::Bool=true)
+    if preserve_local_sources
+        ir = copy(ir)
+    end
+    return ir
+end
 
 function flags_for_effects(effects::Effects)
     flags::UInt32 = 0
@@ -1524,7 +1536,9 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     else
-        return InliningTodo(mi, retrieve_ir_for_inlining(mi, result.ir), result.effects)
+        preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
+        ir = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
+        return InliningTodo(mi, ir, result.effects)
     end
 end
 
