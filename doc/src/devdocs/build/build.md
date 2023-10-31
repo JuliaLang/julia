@@ -259,20 +259,36 @@ You can build a different version of LLVM from a remote Git repository with the 
 # Force source build of LLVM
 USE_BINARYBUILDER_LLVM = 0
 # Use Git for fetching LLVM source code
+# this is either `1` to get all of them
 DEPS_GIT = 1
-# URL of the Git repository you want to obtain LLVM from:
-LLVM_GIT_URL = ...
-# Name of the branch to check out automatically
-LLVM_BRANCH = ...
-LLVM_SHA1 = $(LLVM_BRANCH)
+# or a space-separated list of specific dependencies to download with git
+DEPS_GIT = llvm
 
 # Other useful options:
-# List of LLVM targets to build.  It is strongly recommended to keep at least all the
-# default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
-# LLVM_TARGETS = ...
-# Use ccache for faster recompilation in case you need to restart a build.
-# USECCACHE = 1
+#URL of the Git repository you want to obtain LLVM from:
+#  LLVM_GIT_URL = ...
+#Name of the alternate branch to clone from git
+#  LLVM_BRANCH = julia-16.0.6-0
+#SHA hash of the alterate commit to check out automatically
+#  LLVM_SHA1 = $(LLVM_BRANCH)
+#List of LLVM targets to build.  It is strongly recommended to keep at least all the
+#default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
+#  LLVM_TARGETS = ...
+#Use ccache for faster recompilation in case you need to restart a build.
+#  USECCACHE = 1
+#  CMAKE_GENERATOR=Ninja
+#  LLVM_ASSERTIONS=1
+#  LLVM_DEBUG=Symbols
 ```
+
+The various build phases are controlled by specific files:
+ * `deps/llvm.version` : touch or change to checkout a new version, `make get-llvm check-llvm`
+ * `deps/srccache/llvm/source-extracted` : result of `make extract-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make configure-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make compile-llvm`
+ * `usr-staging/llvm/build_Release*.tgz` : result of `make stage-llvm` (regenerate with `make reinstall-llvm`)
+ * `usr/manifest/llvm` : result of `make install-llvm` (regenerate with `make uninstall-llvm`)
+ * `make version-check-llvm` : runs every time to warn the user if there are local modifications
 
 Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
 
