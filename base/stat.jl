@@ -43,7 +43,7 @@ The following fields of this struct is considered public API:
 | gid     | `UInt`                          | The group id of the file owner                                     |
 | rdev    | `UInt`                          | If this file refers to a device, the ID of the device it refers to |
 | blksize | `Int64`                         | The file-system preferred block size for the file                  |
-| blocks  | `Int64`                         | The number of such blocks allocated                                |
+| blocks  | `Int64`                         | The number of 512-byte blocks allocated                            |
 | mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
 | ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
 
