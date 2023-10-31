@@ -137,6 +137,7 @@ Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
+Base.copymutable(::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
