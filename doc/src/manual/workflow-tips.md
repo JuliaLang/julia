@@ -10,62 +10,46 @@ your experience at the command line.
 
 ### A basic editor/REPL workflow
 
-The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
-line. A common pattern includes the following elements:
+The most basic Julia workflows involve using a text editor in conjunction with the `julia` command line.
 
-  * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
-    within it
+Create a file, say `Tmp.jl`, and include within it
+```julia
+module Tmp
 
-    ```julia
-    module Tmp
-    export say_hello
+say_hello() = println("Hello!")
 
-    say_hello() = println("Hello!")
+# Your other definitions here
 
-    # your other definitions here
+end # module
 
-    end
-    ```
-  * **Put your test code in another file.** Create another file, say `tst.jl`, which looks like
+using .Tmp
+```
+Then, in the same directory, start the Julia REPL (using the `julia` command).
+Run the new file as follows:
+```
+julia> include("Tmp.jl")
 
-    ```julia
-    include("Tmp.jl")
-    import .Tmp
-    # using .Tmp # we can use `using` to bring the exported symbols in `Tmp` into our namespace
+julia> Tmp.say_hello()
+Hello!
+```
+Explore ideas in the REPL. Save good ideas in `Tmp.jl`.
+To reload the file after it has been changed, just `include` it again.
 
-    Tmp.say_hello()
-    # say_hello()
+The key in the above is that your code is encapsulated in a module.
+That allows you to edit `struct` definitions and remove methods, without restarting Julia.
 
-    # your other test code here
-    ```
+(Explanation: `struct`s cannot be edited after definition, nor can methods be deleted.
+But you _can_ overwrite the definition of a module, which is what we do when we re-`include("Tmp.jl")`).
 
-    and includes tests for the contents of `Tmp`.
-    Alternatively, you can wrap the contents of your test file in a module, as
+In addition, the encapsulation of code in a module protects it from being influenced
+by previous state in the REPL, protecting you from hard-to-detect errors.
 
-    ```julia
-    module Tst
-        include("Tmp.jl")
-        import .Tmp
-        #using .Tmp
-
-        Tmp.say_hello()
-        # say_hello()
-
-        # your other test code here
-    end
-    ```
-
-    The advantage is that your testing code is now contained in a module and does not use the global scope in `Main` for
-    definitions, which is a bit more tidy.
-
-  * `include` the `tst.jl` file in the Julia REPL with `include("tst.jl")`.
-
-  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`. To execute `tst.jl` after it has been changed, just `include` it again.
 
 ## Browser-based workflow
 
-It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
-See the package home for details.
+There are a few ways to interact with Julia in a browser:
+- Using Pluto notebooks through [Pluto.jl](https://github.com/fonsp/Pluto.jl)
+- Using Jupyter notebooks through [IJulia.jl](https://github.com/JuliaLang/IJulia.jl)
 
 ## Revise-based workflows
 
@@ -83,35 +67,36 @@ the following modifications:
 1. Put your code in a module somewhere on your load path. There are
    several options for achieving this, of which two recommended choices are:
 
-   a. For long-term projects, use
-      [PkgTemplates](https://github.com/invenia/PkgTemplates.jl):
+   - For long-term projects, use
+     [PkgTemplates](https://github.com/invenia/PkgTemplates.jl):
 
-      ```julia
-      using PkgTemplates
-      t = Template()
-      generate("MyPkg", t)
-      ```
-      This will create a blank package, `"MyPkg"`, in your `.julia/dev` directory.
-      Note that PkgTemplates allows you to control many different options
-      through its `Template` constructor.
+     ```julia
+     using PkgTemplates
+     t = Template()
+     t("MyPkg")
+     ```
 
-      In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and
-      `MyPkg/test/runtests.jl` for the tests.
+     This will create a blank package, `"MyPkg"`, in your `.julia/dev` directory.
+     Note that PkgTemplates allows you to control many different options
+     through its `Template` constructor.
 
-   b. For "throw-away" projects, you can avoid any need for cleanup
-      by doing your work in your temporary directory (e.g., `/tmp`).
+     In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and
+     `MyPkg/test/runtests.jl` for the tests.
 
-      Navigate to your temporary directory and launch Julia, then do the following:
+   - For "throw-away" projects, you can avoid any need for cleanup
+     by doing your work in your temporary directory (e.g., `/tmp`).
 
-      ```julia
-      pkg> generate MyPkg              # type ] to enter pkg mode
-      julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
-      ```
-      If you restart your Julia session you'll have to re-issue that command
-      modifying `LOAD_PATH`.
+     Navigate to your temporary directory and launch Julia, then do the following:
 
-      In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and create any
-      test file of your choosing.
+     ```julia-repl
+     pkg> generate MyPkg            # type ] to enter pkg mode
+     julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
+     ```
+     If you restart your Julia session you'll have to re-issue that command
+     modifying `LOAD_PATH`.
+
+     In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and create any
+     test file of your choosing.
 
 2. Develop your package
 
@@ -122,7 +107,7 @@ the following modifications:
    Then navigate to the directory containing your test file (here
    assumed to be `"runtests.jl"`) and do the following:
 
-   ```julia
+   ```julia-repl
    julia> using MyPkg
 
    julia> include("runtests.jl")
@@ -130,5 +115,4 @@ the following modifications:
 
    You can iteratively modify the code in MyPkg in your editor and re-run the
    tests with `include("runtests.jl")`.  You generally should not need to restart
-   your Julia session to see the changes take effect (subject to a few limitations,
-   see https://timholy.github.io/Revise.jl/stable/limitations/).
+   your Julia session to see the changes take effect (subject to a few [limitations](https://timholy.github.io/Revise.jl/stable/limitations/)).

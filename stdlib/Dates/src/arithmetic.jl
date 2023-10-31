@@ -6,7 +6,10 @@
 
 # TimeType arithmetic
 (+)(x::TimeType) = x
-(-)(x::T, y::T) where {T<:TimeType} = x.instant - y.instant
+(-)(x::Date, y::Date) = x.instant - y.instant
+(-)(x::Time, y::Time) = x.instant - y.instant
+(-)(x::DateTime, y::DateTime) = x.instant - y.instant
+(-)(x::AbstractDateTime, y::AbstractDateTime) = -(promote(x, y)...)
 
 # Date-Time arithmetic
 """
@@ -69,6 +72,11 @@ function (-)(dt::Date, z::Month)
     mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
     return Date(ny, mm, d <= ld ? d : ld)
 end
+
+(+)(x::Date, y::Quarter) = x + Month(y)
+(-)(x::Date, y::Quarter) = x - Month(y)
+(+)(x::DateTime, y::Quarter) = x + Month(y)
+(-)(x::DateTime, y::Quarter) = x - Month(y)
 (+)(x::Date, y::Week) = return Date(UTD(value(x) + 7 * value(y)))
 (-)(x::Date, y::Week) = return Date(UTD(value(x) - 7 * value(y)))
 (+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))
@@ -78,6 +86,12 @@ end
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
+
+# Missing support
+(+)(x::AbstractTime, y::Missing) = missing
+(+)(x::Missing, y::AbstractTime) = missing
+(-)(x::AbstractTime, y::Missing) = missing
+(-)(x::Missing, y::AbstractTime) = missing
 
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)

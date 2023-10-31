@@ -30,7 +30,12 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-GitCredential(cred::UserPasswordCredential, url::AbstractString) = parse(GitCredential, url)
+function GitCredential(user_pass_cred::UserPasswordCredential, url::AbstractString)
+    cred = parse(GitCredential, url)
+    cred.username = user_pass_cred.user
+    cred.password = deepcopy(user_pass_cred.pass)
+    return cred
+end
 
 Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.path, c1.username, c1.password, c1.use_http_path) ==
                                                    (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)
@@ -41,7 +46,8 @@ function Base.shred!(cred::GitCredential)
     cred.host = nothing
     cred.path = nothing
     cred.username = nothing
-    cred.password !== nothing && Base.shred!(cred.password)
+    pwd = cred.password
+    pwd !== nothing && Base.shred!(pwd)
     cred.password = nothing
     return cred
 end
@@ -102,11 +108,11 @@ end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
-    while !eof(io)
-        key = readuntil(io, '=')
+    while !(eof(io)::Bool)
+        key::AbstractString = readuntil(io, '=')
         if key == "password"
             value = Base.SecretBuffer()
-            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+            while !(eof(io)::Bool) && (c = read(io, UInt8)) != UInt8('\n')
                 write(value, c)
             end
             seekstart(value)
@@ -117,12 +123,12 @@ function Base.read!(io::IO, cred::GitCredential)
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
-            Base.shred!(parse(GitCredential, value)) do urlcred
+            Base.shred!(parse(GitCredential, value::AbstractString)) do urlcred
                 copy!(cred, urlcred)
             end
         elseif key in GIT_CRED_ATTRIBUTES
             field = getproperty(cred, Symbol(key))
-            field !== nothing && Symbol(key) == :password && Base.shred!(field)
+            field !== nothing && Symbol(key) === :password && Base.shred!(field)
             setproperty!(cred, Symbol(key), value)
         elseif !all(isspace, key)
             @warn "Unknown git credential attribute found: $(repr(key))"
@@ -177,16 +183,16 @@ end
 
 function run!(helper::GitCredentialHelper, operation::AbstractString, cred::GitCredential)
     cmd = `$(helper.cmd) $operation`
-    p = open(cmd, "r+")
+    open(cmd, "r+") do p
+        # Provide the helper with the credential information we know
+        write(p, cred)
+        write(p, "\n")
+        t = @async close(p.in)
 
-    # Provide the helper with the credential information we know
-    write(p, cred)
-    write(p, "\n")
-    t = @async close(p.in)
-
-    # Process the response from the helper
-    Base.read!(p, cred)
-    wait(p)
+        # Process the response from the helper
+        Base.read!(p, cred)
+        wait(t)
+    end
 
     return cred
 end
@@ -214,7 +220,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
     helpers = GitCredentialHelper[]
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
-    for entry in GitConfigIter(cfg, r"credential.*\.helper")
+    for entry in GitConfigIter(cfg, r"credential.*\.helper$")
         section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 
@@ -222,21 +228,11 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         ismatch(url, cred) || continue
 
         # An empty credential.helper resets the list to empty
-        isempty(value) && empty!(helpers)
-
-        # Due to a bug in libgit2 iteration we may read credential helpers out of order.
-        # See: https://github.com/libgit2/libgit2/issues/4361
-        #
-        # Typically the ordering doesn't matter but does in this particular case. Disabling
-        # credential helpers avoids potential issues with using the wrong credentials or
-        # writing credentials to the wrong helper.
         if isempty(value)
-            @warn """Resetting the helper list is currently unsupported:
-                     ignoring all git credential helpers""" maxlog=1
-            return GitCredentialHelper[]
+            empty!(helpers)
+        else
+            Base.push!(helpers, parse(GitCredentialHelper, value))
         end
-
-        Base.push!(helpers, parse(GitCredentialHelper, value))
     end
 
     return helpers
@@ -263,6 +259,7 @@ function default_username(cfg::GitConfig, cred::GitCredential)
 end
 
 function use_http_path(cfg::GitConfig, cred::GitCredential)
+    seen_specific = false
     use_path = false  # Default is to ignore the path
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-useHttpPath
@@ -272,8 +269,11 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     for entry in GitConfigIter(cfg, r"credential.*\.usehttppath")
         section, url, name, value = split_cfg_entry(entry)
 
-        ismatch(url, cred) || continue
-        use_path = value == "true"
+        # Ignore global configuration if we have already encountered more specific entry
+        if ismatch(url, cred) && (!isempty(url) || !seen_specific)
+            seen_specific = !isempty(url)
+            use_path = value == "true"
+        end
     end
 
     return use_path

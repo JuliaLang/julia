@@ -1,316 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type AbstractCmd end
-
-# libuv process option flags
-const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
-const UV_PROCESS_DETACHED = UInt8(1 << 3)
-const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
-
-struct Cmd <: AbstractCmd
-    exec::Vector{String}
-    ignorestatus::Bool
-    flags::UInt32 # libuv process flags
-    env::Union{Array{String},Nothing}
-    dir::String
-    Cmd(exec::Vector{String}) =
-        new(exec, false, 0x00, nothing, "")
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir) =
-        new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir))
-    function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
-                 windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
-                 windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
-        flags = detach * UV_PROCESS_DETACHED |
-                windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
-                windows_hide * UV_PROCESS_WINDOWS_HIDE
-        new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir))
-    end
-end
-
-has_nondefault_cmd_flags(c::Cmd) =
-    c.ignorestatus ||
-    c.flags != 0x00 ||
-    c.env !== nothing ||
-    c.dir !== ""
-
-"""
-    Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
-
-Construct a new `Cmd` object, representing an external program and arguments, from `cmd`,
-while changing the settings of the optional keyword arguments:
-
-* `ignorestatus::Bool`: If `true` (defaults to `false`), then the `Cmd` will not throw an
-  error if the return code is nonzero.
-* `detach::Bool`: If `true` (defaults to `false`), then the `Cmd` will be run in a new
-  process group, allowing it to outlive the `julia` process and not have Ctrl-C passed to
-  it.
-* `windows_verbatim::Bool`: If `true` (defaults to `false`), then on Windows the `Cmd` will
-  send a command-line string to the process with no quoting or escaping of arguments, even
-  arguments containing spaces. (On Windows, arguments are sent to a program as a single
-  "command-line" string, and programs are responsible for parsing it into arguments. By
-  default, empty arguments and arguments with spaces or tabs are quoted with double quotes
-  `"` in the command line, and `\\` or `"` are preceded by backslashes.
-  `windows_verbatim=true` is useful for launching programs that parse their command line in
-  nonstandard ways.) Has no effect on non-Windows systems.
-* `windows_hide::Bool`: If `true` (defaults to `false`), then on Windows no new console
-  window is displayed when the `Cmd` is executed. This has no effect if a console is
-  already open or on non-Windows systems.
-* `env`: Set environment variables to use when running the `Cmd`. `env` is either a
-  dictionary mapping strings to strings, an array of strings of the form `"var=val"`, an
-  array or tuple of `"var"=>val` pairs, or `nothing`. In order to modify (rather than
-  replace) the existing environment, create `env` by `copy(ENV)` and then set
-  `env["var"]=val` as desired.
-* `dir::AbstractString`: Specify a working directory for the command (instead
-  of the current directory).
-
-For any keywords that are not specified, the current settings from `cmd` are used. Normally,
-to create a `Cmd` object in the first place, one uses backticks, e.g.
-
-    Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
-"""
-Cmd
-
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
-==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags)
-
-struct OrCmds <: AbstractCmd
-    a::AbstractCmd
-    b::AbstractCmd
-    OrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
-end
-
-struct ErrOrCmds <: AbstractCmd
-    a::AbstractCmd
-    b::AbstractCmd
-    ErrOrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
-end
-
-struct AndCmds <: AbstractCmd
-    a::AbstractCmd
-    b::AbstractCmd
-    AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
-end
-
-hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
-==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
-
-shell_escape(cmd::Cmd; special::AbstractString="") =
-    shell_escape(cmd.exec..., special=special)
-shell_escape_posixly(cmd::Cmd) =
-    shell_escape_posixly(cmd.exec...)
-
-function show(io::IO, cmd::Cmd)
-    print_env = cmd.env !== nothing
-    print_dir = !isempty(cmd.dir)
-    (print_env || print_dir) && print(io, "setenv(")
-    print(io, '`')
-    join(io, map(cmd.exec) do arg
-        replace(sprint(context=io) do io
-            with_output_color(:underline, io) do io
-                print_shell_word(io, arg, shell_special)
-            end
-        end, '`' => "\\`")
-    end, ' ')
-    print(io, '`')
-    print_env && (print(io, ","); show(io, cmd.env))
-    print_dir && (print(io, "; dir="); show(io, cmd.dir))
-    (print_dir || print_env) && print(io, ")")
-    nothing
-end
-
-function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
-    print(io, "pipeline(")
-    show(io, cmds.a)
-    print(io, ", ")
-    print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
-    show(io, cmds.b)
-    print(io, ")")
-end
-
-function show(io::IO, cmds::AndCmds)
-    show(io, cmds.a)
-    print(io, " & ")
-    show(io, cmds.b)
-end
-
-const STDIN_NO  = 0
-const STDOUT_NO = 1
-const STDERR_NO = 2
-
-struct FileRedirect
-    filename::String
-    append::Bool
-    FileRedirect(filename::AbstractString, append::Bool) = FileRedirect(convert(String, filename), append)
-    function FileRedirect(filename::String, append::Bool)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            @warn "For portability use devnull instead of a file redirect" maxlog=1
-        end
-        return new(filename, append)
-    end
-end
-
-# setup_stdio ≈ cconvert
-# rawhandle ≈ unsafe_convert
-rawhandle(::DevNull) = C_NULL
-rawhandle(x::OS_HANDLE) = x
-if OS_HANDLE !== RawFD
-    rawhandle(x::RawFD) = Libc._get_osfhandle(x)
-end
-
-const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
-const StdIOSet = NTuple{3, Redirectable}
-
-struct CmdRedirect <: AbstractCmd
-    cmd::AbstractCmd
-    handle::Redirectable
-    stream_no::Int
-    readable::Bool
-end
-CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
-
-function show(io::IO, cr::CmdRedirect)
-    print(io, "pipeline(")
-    show(io, cr.cmd)
-    print(io, ", ")
-    if cr.stream_no == STDOUT_NO
-        print(io, "stdout")
-    elseif cr.stream_no == STDERR_NO
-        print(io, "stderr")
-    elseif cr.stream_no == STDIN_NO
-        print(io, "stdin")
-    else
-        print(io, cr.stream_no)
-    end
-    print(io, cr.readable ? "<" : ">")
-    show(io, cr.handle)
-    print(io, ")")
-end
-
-"""
-    ignorestatus(command)
-
-Mark a command object so that running it will not throw an error if the result code is non-zero.
-"""
-ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
-ignorestatus(cmd::Union{OrCmds,AndCmds}) =
-    typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
-
-"""
-    detach(command)
-
-Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
-"""
-detach(cmd::Cmd) = Cmd(cmd; detach=true)
-
-# like String(s), but throw an error if s contains NUL, since
-# libuv requires NUL-terminated strings
-function cstr(s)
-    if Base.containsnul(s)
-        throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
-    end
-    return String(s)
-end
-
-# convert various env representations into an array of "key=val" strings
-byteenv(env::AbstractArray{<:AbstractString}) =
-    String[cstr(x) for x in env]
-byteenv(env::AbstractDict) =
-    String[cstr(string(k)*"="*string(v)) for (k,v) in env]
-byteenv(env::Nothing) = nothing
-byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
-    String[cstr(k*"="*string(v)) for (k,v) in env]
-
-"""
-    setenv(command::Cmd, env; dir="")
-
-Set environment variables to use when running the given `command`. `env` is either a
-dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or zero
-or more `"var"=>val` pair arguments. In order to modify (rather than replace) the existing
-environment, create `env` by `copy(ENV)` and then setting `env["var"]=val` as desired, or
-use `withenv`.
-
-The `dir` keyword argument can be used to specify a working directory for the command.
-"""
-setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
-    setenv(cmd, env; dir=dir)
-setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
-
-(&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
-redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
-redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-
-# Stream Redirects
-redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
-redir_out(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDOUT_NO)
-redir_err(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
-
-# File redirects
-redir_out(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
-redir_out(src::AbstractString, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
-redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
-redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
-redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
-
-"""
-    pipeline(command; stdin, stdout, stderr, append=false)
-
-Redirect I/O to or from the given `command`. Keyword arguments specify which of the
-command's streams should be redirected. `append` controls whether file output appends to the
-file. This is a more general version of the 2-argument `pipeline` function.
-`pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
-and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
-
-**Examples**:
-
-```julia
-run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
-run(pipeline(`update`, stdout="log.txt", append=true))
-```
-"""
-function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
-    if append && stdout === nothing && stderr === nothing
-        throw(ArgumentError("append set to true, but no output redirections specified"))
-    end
-    if stdin !== nothing
-        cmd = redir_out(stdin, cmd)
-    end
-    if stdout !== nothing
-        cmd = append ? redir_out_append(cmd, stdout) : redir_out(cmd, stdout)
-    end
-    if stderr !== nothing
-        cmd = append ? redir_err_append(cmd, stderr) : redir_err(cmd, stderr)
-    end
-    return cmd
-end
-
-pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
-pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
-
-"""
-    pipeline(from, to, ...)
-
-Create a pipeline from a data source to a destination. The source and destination can be
-commands, I/O streams, strings, or results of other `pipeline` calls. At least one argument
-must be a command. Strings refer to filenames. When called with more than two arguments,
-they are chained together from left to right. For example, `pipeline(a,b,c)` is equivalent to
-`pipeline(pipeline(a,b),c)`. This provides a more concise way to specify multi-stage
-pipelines.
-
-**Examples**:
-
-```julia
-run(pipeline(`ls`, `grep xyz`))
-run(pipeline(`ls`, "out.txt"))
-run(pipeline("out.txt", `grep xyz`))
-```
-"""
-pipeline(a, b, c, d...) = pipeline(pipeline(a, b), c, d...)
-
 mutable struct Process <: AbstractPipe
     cmd::Cmd
     handle::Ptr{Cvoid}
@@ -319,13 +8,12 @@ mutable struct Process <: AbstractPipe
     err::IO
     exitcode::Int64
     termsignal::Int32
-    exitnotify::Condition
-    closenotify::Condition
+    exitnotify::ThreadSynchronizer
     function Process(cmd::Cmd, handle::Ptr{Cvoid})
         this = new(cmd, handle, devnull, devnull, devnull,
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
-                   Condition(), Condition())
+                   ThreadSynchronizer())
         finalizer(uvfinalize, this)
         return this
     end
@@ -350,9 +38,13 @@ pipe_writer(p::ProcessChain) = p.in
 # release ownership of the libuv handle
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
-        disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
-        proc.handle = C_NULL
+        iolock_begin()
+        if proc.handle != C_NULL
+            disassociate_julia_struct(proc.handle)
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+            proc.handle = C_NULL
+        end
+        iolock_end()
     end
     nothing
 end
@@ -364,54 +56,81 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
+    disassociate_julia_struct(proc.handle) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
-    notify(proc.exitnotify)
+    lock(proc.exitnotify)
+    try
+        notify(proc.exitnotify)
+    finally
+        unlock(proc.exitnotify)
+    end
     nothing
 end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
-    proc.handle = C_NULL
-    notify(proc.closenotify)
+    Libc.free(@atomicswap :not_atomic proc.handle = C_NULL)
     nothing
 end
 
-const SpawnIOs = Vector{Any} # convenience name for readability
+const SpawnIO  = Union{IO, RawFD, OS_HANDLE}
+const SpawnIOs = Vector{SpawnIO} # convenience name for readability
+
+function as_cpumask(cpus::Vector{UInt16})
+    n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
+    cpumask = zeros(Bool, n)
+    for i in cpus
+        cpumask[i] = true
+    end
+    return cpumask
+end
 
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
-    iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
-        let h = rawhandle(io)
-            h === C_NULL     ? (0x00, UInt(0)) :
-            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
-            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io")
+    cpumask = cmd.cpus
+    cpumask === nothing || (cpumask = as_cpumask(cpumask))
+    GC.@preserve stdio begin
+        iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
+            let h = rawhandle(io)
+                h === C_NULL     ? (0x00, UInt(0)) :
+                h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+                h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
+                error("invalid spawn handle $h from $io")
+            end
+            for io in stdio]
+        handle = Libc.malloc(_sizeof_uv_process)
+        disassociate_julia_struct(handle)
+        (; exec, flags, env, dir) = cmd
+        iolock_begin()
+        err = ccall(:jl_spawn, Int32,
+                  (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
+                   Ptr{Tuple{Cint, UInt}}, Int,
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
+            file, exec, loop, handle,
+            iohandles, length(iohandles),
+            flags,
+            env === nothing ? C_NULL : env,
+            isempty(dir) ? C_NULL : dir,
+            cpumask === nothing ? C_NULL : cpumask,
+            cpumask === nothing ? 0 : length(cpumask),
+            @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+        if err == 0
+            pp = Process(cmd, handle)
+            associate_julia_struct(handle, pp)
+        else
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         end
-        for io in stdio]
-    handle = Libc.malloc(_sizeof_uv_process)
-    disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
-    error = ccall(:jl_spawn, Int32,
-              (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
-               Ptr{Tuple{Cint, UInt}}, Int,
-               UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
-        iohandles, length(iohandles),
-        cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
-        isempty(cmd.dir) ? C_NULL : cmd.dir,
-        uv_jl_return_spawn::Ptr{Cvoid})
-    if error != 0
-        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
-        throw(_UVError("could not spawn " * repr(cmd), error))
+        iolock_end()
     end
-    pp = Process(cmd, handle)
-    associate_julia_struct(handle, pp)
+    if err != 0
+        throw(_UVError("could not spawn " * repr(cmd), err))
+    end
     return pp
 end
 
-_spawn(cmds::AbstractCmd) = _spawn(cmds, Any[])
+_spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIO[])
 
 # optimization: we can spawn `Cmd` directly without allocating the ProcessChain
 function _spawn(cmd::Cmd, stdios::SpawnIOs)
@@ -495,7 +214,7 @@ end
 # open the child end of each element of `stdios`, and initialize the parent end
 function setup_stdios(f, stdios::SpawnIOs)
     nstdio = length(stdios)
-    open_io = Vector{Any}(undef, nstdio)
+    open_io = SpawnIOs(undef, nstdio)
     close_io = falses(nstdio)
     try
         for i in 1:nstdio
@@ -517,10 +236,10 @@ function setup_stdio(stdio::PipeEndpoint, child_readable::Bool)
         rd, wr = link_pipe(!child_readable, child_readable)
         try
             open_pipe!(stdio, child_readable ? wr : rd)
-        catch ex
+        catch
             close_pipe_sync(rd)
             close_pipe_sync(wr)
-            rethrow(ex)
+            rethrow()
         end
         child = child_readable ? rd : wr
         return (child, true)
@@ -559,18 +278,19 @@ function setup_stdio(stdio::FileRedirect, child_readable::Bool)
     return (io, true)
 end
 
-# incrementally move data between an IOBuffer and a system Pipe
+# incrementally move data between an arbitrary IO and a system Pipe,
+# including copying the EOF (shutdown) when finished
 # TODO: probably more efficient (when valid) to use `stdio` directly as the
 #       PipeEndpoint buffer field in some cases
-function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
+function setup_stdio(stdio::IO, child_readable::Bool)
     parent = PipeEndpoint()
     rd, wr = link_pipe(!child_readable, child_readable)
     try
         open_pipe!(parent, child_readable ? wr : rd)
-    catch ex
+    catch
         close_pipe_sync(rd)
         close_pipe_sync(wr)
-        rethrow(ex)
+        rethrow()
     end
     child = child_readable ? rd : wr
     try
@@ -579,22 +299,17 @@ function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
             @async try
                 write(in, out)
             catch ex
-                @warn "Process error" exception=(ex, catch_backtrace())
+                @warn "Process I/O error" exception=(ex, catch_backtrace())
             finally
                 close(parent)
+                child_readable || closewrite(stdio)
             end
         end
-    catch ex
+    catch
         close_pipe_sync(child)
-        rethrow(ex)
+        rethrow()
     end
     return (child, true)
-end
-
-function setup_stdio(io, child_readable::Bool)
-    # if there is no specialization,
-    # assume that rawhandle is defined for it
-    return (io, false)
 end
 
 close_stdio(stdio::OS_HANDLE) = close_pipe_sync(stdio)
@@ -610,86 +325,114 @@ close_stdio(stdio) = close(stdio)
 #   - An Filesystem.File or IOStream object to redirect the output to
 #   - A FileRedirect, containing a string specifying a filename to be opened for the child
 
-spawn_opts_swallow(stdios::StdIOSet) = Any[stdios...]
-spawn_opts_inherit(stdios::StdIOSet) = Any[stdios...]
+spawn_opts_swallow(stdios::StdIOSet) = SpawnIO[stdios...]
+spawn_opts_inherit(stdios::StdIOSet) = SpawnIO[stdios...]
 spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Any[in, out, err]
+    SpawnIO[in, out, err]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Any[in, out, err]
+    SpawnIO[in, out, err]
 
 function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()
-    processes = _spawn(cmd, Any[devnull, out, stderr])
+    processes = _spawn(cmd, SpawnIO[devnull, out, stderr])
     # if the user consumes all the data, also check process exit status for success
     ondone = () -> (success(processes) || pipeline_error(processes); nothing)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
-function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+"""
+    open(command, mode::AbstractString, stdio=devnull)
+
+Run `command` asynchronously. Like `open(command, stdio; read, write)` except specifying
+the read and write flags via a mode string instead of keyword arguments.
+Possible mode strings are:
+
+| Mode | Description | Keywords                         |
+|:-----|:------------|:---------------------------------|
+| `r`  | read        | none                             |
+| `w`  | write       | `write = true`                   |
+| `r+` | read, write | `read = true, write = true`      |
+| `w+` | read, write | `read = true, write = true`      |
+"""
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
     if mode == "r+" || mode == "w+"
-        return open(cmds, other, read = true, write = true)
+        return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
-        return open(cmds, other)
+        return open(cmds, stdio)
     elseif mode == "w"
-        return open(cmds, other, write = true)
+        return open(cmds, stdio, write = true)
     else
-        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+        throw(ArgumentError("mode must be \"r\", \"w\", \"r+\", or \"w+\", not $(repr(mode))"))
     end
 end
 
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, other=devnull; write::Bool = false, read::Bool = !write)
+    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
 
 Start running `command` asynchronously, and return a `process::IO` object.  If `read` is
-true, then reads from the process come from the process's standard output and `other` optionally
+true, then reads from the process come from the process's standard output and `stdio` optionally
 specifies the process's standard input stream.  If `write` is true, then writes go to
-the process's standard input and `other` optionally specifies the process's standard output
+the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false, read::Bool=!write)
+function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
     if read && write
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in read-write mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, out, stderr])
+        processes = _spawn(cmds, SpawnIO[in, out, stderr])
         processes.in = in
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[other, out, stderr])
+        processes = _spawn(cmds, SpawnIO[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, other, stderr])
+        processes = _spawn(cmds, SpawnIO[in, stdio, stderr])
         processes.in = in
     else
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in no-access mode"))
-        processes = _spawn(cmds, Any[devnull, devnull, stderr])
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
+        processes = _spawn(cmds, SpawnIO[devnull, devnull, stderr])
     end
     return processes
 end
 
 """
-    open(f::Function, command, mode::AbstractString="r", stdio=devnull)
+    open(f::Function, command, args...; kwargs...)
 
-Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting process
-stream, then closes the input stream and waits for the process to complete.
-Returns the value returned by `f`.
+Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the
+resulting process stream, then closes the input stream and waits for the process
+to complete. Return the value returned by `f` on success. Throw an error if the
+process failed, or if the process attempts to print anything to stdout.
 """
-function open(f::Function, cmds::AbstractCmd, args...)
-    P = open(cmds, args...)
+function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
+    P = open(cmds, args...; kwargs...)
+    function waitkill(P::Union{Process,ProcessChain})
+        close(P)
+        # 0.1 seconds after we hope it dies (from closing stdio),
+        # we kill the process with SIGTERM (15)
+        local t = Timer(0.1) do t
+            process_running(P) && kill(P)
+        end
+        wait(P)
+        close(t)
+    end
     ret = try
         f(P)
     catch
-        kill(P)
+        waitkill(P)
         rethrow()
-    finally
-        close(P.in)
+    end
+    close(P.in)
+    if !(eof(P.out)::Bool)
+        waitkill(P)
+        throw(_UVError("open(do)", UV_EPIPE))
     end
     success(P) || pipeline_error(P)
     return ret
@@ -704,7 +447,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """
@@ -712,7 +455,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -720,6 +463,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 Run a command object, constructed with backticks (see the [Running External Programs](@ref)
 section in the manual). Throws an error if anything goes wrong, including the process
 exiting with a non-zero status (when `wait` is true).
+
+The `args...` allow you to pass through file descriptors to the command, and are ordered
+like regular unix file descriptors (eg `stdin, stdout, stderr, FD(3), FD(4)...`).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
@@ -770,7 +516,7 @@ function test_success(proc::Process)
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process " * repr(proc.cmd), proc.exitcode))
     end
-    return proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
+    return proc.exitcode == 0 && proc.termsignal == 0
 end
 
 function success(x::Process)
@@ -833,14 +579,15 @@ function pipeline_error(procs::ProcessChain)
 end
 
 """
-    kill(p::Process, signum=SIGTERM)
+    kill(p::Process, signum=Base.SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
 Returns successfully if the process has already exited, but throws an
 error if killing the process failed for other reasons (e.g. insufficient
 permissions).
 """
-function kill(p::Process, signum::Integer)
+function kill(p::Process, signum::Integer=SIGTERM)
+    iolock_begin()
     if process_running(p)
         @assert p.handle != C_NULL
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
@@ -848,10 +595,11 @@ function kill(p::Process, signum::Integer)
             throw(_UVError("kill", err))
         end
     end
+    iolock_end()
+    nothing
 end
-kill(ps::Vector{Process}) = foreach(kill, ps)
-kill(ps::ProcessChain) = foreach(kill, ps.processes)
-kill(p::Process) = kill(p, SIGTERM)
+kill(ps::Vector{Process}, signum::Integer=SIGTERM) = for p in ps; kill(p, signum); end
+kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
 
 """
     getpid(process) -> Int32
@@ -862,16 +610,15 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
+    # TODO: due to threading, this method is only weakly synchronized with the user application
+    iolock_begin()
     ppid = Int32(0)
-    if p.handle != C_NULL
+    if p.handle != C_NULL # e.g. process_running
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
+    iolock_end()
     ppid <= 0 && throw(_UVError("getpid", UV_ESRCH))
     return ppid
-end
-
-function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
-    return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
 
 ## process status ##
@@ -903,79 +650,26 @@ function process_status(s::Process)
            error("process status error")
 end
 
-## implementation of `cmd` syntax ##
-
-arg_gen() = String[]
-arg_gen(x::AbstractString) = String[cstr(x)]
-function arg_gen(cmd::Cmd)
-    if has_nondefault_cmd_flags(cmd)
-        throw(ArgumentError("Non-default environment behavior is only permitted for the first interpolant."))
-    end
-    cmd.exec
-end
-
-function arg_gen(head)
-    if isiterable(typeof(head))
-        vals = String[]
-        for x in head
-            push!(vals, cstr(string(x)))
+function wait(x::Process)
+    process_exited(x) && return
+    iolock_begin()
+    if !process_exited(x)
+        preserve_handle(x)
+        lock(x.exitnotify)
+        iolock_end()
+        try
+            wait(x.exitnotify)
+        finally
+            unlock(x.exitnotify)
+            unpreserve_handle(x)
         end
-        return vals
     else
-        return String[cstr(string(head))]
+        iolock_end()
     end
+    nothing
 end
 
-function arg_gen(head, tail...)
-    head = arg_gen(head)
-    tail = arg_gen(tail...)
-    vals = String[]
-    for h = head, t = tail
-        push!(vals, cstr(string(h,t)))
-    end
-    return vals
-end
-
-function cmd_gen(parsed)
-    args = String[]
-    if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
-        cmd = parsed[1][1]
-        (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
-        append!(args, cmd.exec)
-        for arg in tail(parsed)
-            append!(args, arg_gen(arg...))
-        end
-        return Cmd(Cmd(args), ignorestatus, flags, env, dir)
-    else
-        for arg in parsed
-            append!(args, arg_gen(arg...))
-        end
-        return Cmd(args)
-    end
-end
-
-"""
-    @cmd str
-
-Similar to `cmd`, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
-The [`Cmd`](@ref) object can be run as a process and can outlive the spawning julia process (see `Cmd` for more).
-
-# Examples
-```jldoctest
-julia> cm = @cmd " echo 1 "
-`echo 1`
-
-julia> run(cm)
-1
-Process(`echo 1`, ProcessExited(0))
-```
-"""
-macro cmd(str)
-    return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
-end
-
-wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
-wait(x::ProcessChain) = for p in x.processes; wait(p); end
+wait(x::ProcessChain) = foreach(wait, x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
@@ -983,6 +677,7 @@ show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p),
 for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+Iterators.reverse(cmd::Cmd) = Iterators.reverse(cmd.exec)
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)

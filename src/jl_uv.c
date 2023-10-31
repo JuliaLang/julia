@@ -22,11 +22,6 @@
 #include "support/ios.h"
 #include "uv.h"
 
-#if defined(_COMPILER_MICROSOFT_) && !defined(write)
-#include <io.h>
-#define write _write
-#endif
-
 #include "julia_assert.h"
 
 #ifdef __cplusplus
@@ -35,6 +30,68 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+static uv_timer_t wait_empty_worker;
+
+static void walk_print_cb(uv_handle_t *h, void *arg)
+{
+    if (!uv_is_active(h) || !uv_has_ref(h))
+        return;
+    const char *type = uv_handle_type_name(h->type);
+    if (!type)
+        type = "<unknown>";
+    uv_os_fd_t fd;
+    if (h->type == UV_PROCESS)
+        fd = uv_process_get_pid((uv_process_t*)h);
+    else if (uv_fileno(h, &fd))
+        fd = (uv_os_fd_t)-1;
+    const char *pad = "                "; // 16 spaces
+    int npad = fd == -1 ? 0 : snprintf(NULL, 0, "%zd", (size_t)fd);
+    if (npad < 0)
+        npad = 0;
+    npad += strlen(type);
+    pad += npad < strlen(pad) ? npad : strlen(pad);
+    if (fd == -1)
+        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+    else
+        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+}
+
+static void wait_empty_func(uv_timer_t *t)
+{
+    // make sure this is hidden now, since we would auto-unref it later
+    uv_unref((uv_handle_t*)&signal_async);
+    if (!uv_loop_alive(t->loop))
+        return;
+    jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
+                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   (size_t)uv_os_getpid());
+    uv_walk(jl_io_loop, walk_print_cb, NULL);
+    jl_gc_collect(JL_GC_FULL);
+}
+
+void jl_wait_empty_begin(void)
+{
+    JL_UV_LOCK();
+    if (wait_empty_worker.type != UV_TIMER && jl_io_loop) {
+        // try to purge anything that is just waiting for cleanup
+        jl_io_loop->stop_flag = 0;
+        uv_run(jl_io_loop, UV_RUN_NOWAIT);
+        uv_timer_init(jl_io_loop, &wait_empty_worker);
+        uv_update_time(jl_io_loop);
+        uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
+        uv_unref((uv_handle_t*)&wait_empty_worker);
+    }
+    JL_UV_UNLOCK();
+}
+
+void jl_wait_empty_end(void)
+{
+    JL_UV_LOCK();
+    uv_close((uv_handle_t*)&wait_empty_worker, NULL);
+    JL_UV_UNLOCK();
+}
+
+
 
 static void jl_signal_async_cb(uv_async_t *hdl)
 {
@@ -54,31 +111,46 @@ jl_mutex_t jl_uv_mutex;
 void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
-    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
+    uv_unref((uv_handle_t*)&signal_async);
+    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
-int jl_uv_n_waiters = 0;
+_Atomic(int) jl_uv_n_waiters = 0;
 
 void JL_UV_LOCK(void)
 {
     if (jl_mutex_trylock(&jl_uv_mutex)) {
     }
     else {
-        jl_atomic_fetch_add(&jl_uv_n_waiters, 1);
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, 1);
+        jl_fence(); // [^store_buffering_2]
         jl_wake_libuv();
         JL_LOCK(&jl_uv_mutex);
-        jl_atomic_fetch_add(&jl_uv_n_waiters, -1);
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, -1);
     }
 }
 
-void jl_uv_call_close_callback(jl_value_t *val)
+JL_DLLEXPORT void jl_iolock_begin(void)
 {
-    jl_value_t *args[2];
+    JL_UV_LOCK();
+}
+
+JL_DLLEXPORT void jl_iolock_end(void)
+{
+    JL_UV_UNLOCK();
+}
+
+
+static void jl_uv_call_close_callback(jl_value_t *val)
+{
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
     args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
             jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
     assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
+    JL_GC_POP();
 }
 
 static void jl_uv_closeHandle(uv_handle_t *handle)
@@ -94,13 +166,14 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data) {
-        size_t last_age = jl_get_ptls_states()->world_age;
-        // TODO: data race on jl_world_counter across many files, to be fixed in a separate revision
-        jl_get_ptls_states()->world_age = jl_world_counter;
+        jl_task_t *ct = jl_current_task;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_uv_call_close_callback((jl_value_t*)handle->data);
-        jl_get_ptls_states()->world_age = last_age;
+        ct->world_age = last_age;
+        return;
     }
-    if (handle == (uv_handle_t*)&signal_async)
+    if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&wait_empty_worker)
         return;
     free(handle);
 }
@@ -119,6 +192,10 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         free(req);
         return;
     }
+    if (uv_is_closing((uv_handle_t*)stream)) { // avoid double-close on the stream
+        free(req);
+        return;
+    }
     if (status == 0 && uv_is_writable(stream) && stream->write_queue_size != 0) {
         // new data was written, wait for it to flush too
         uv_buf_t buf;
@@ -126,14 +203,12 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         buf.len = 0;
         req->data = NULL;
         if (uv_write(req, stream, &buf, 1, (uv_write_cb)jl_uv_flush_close_callback) == 0)
-            return;
-    }
-    if (!uv_is_closing((uv_handle_t*)stream)) { // avoid double-close on the stream
-        if (stream->type == UV_TTY)
-            uv_tty_set_mode((uv_tty_t*)stream, UV_TTY_MODE_NORMAL);
-        uv_close((uv_handle_t*)stream, &jl_uv_closeHandle);
+            return; // success
     }
     free(req);
+    if (stream->type == UV_TTY)
+        uv_tty_set_mode((uv_tty_t*)stream, UV_TTY_MODE_NORMAL);
+    uv_close((uv_handle_t*)stream, &jl_uv_closeHandle);
 }
 
 static void uv_flush_callback(uv_write_t *req, int status)
@@ -146,7 +221,7 @@ static void uv_flush_callback(uv_write_t *req, int status)
 // Turn a normal write into a blocking write (primarily for use from C and gdb).
 // Warning: This calls uv_run, so it can have unbounded side-effects.
 // Be care where you call it from! - the libuv loop is also not reentrant.
-void jl_uv_flush(uv_stream_t *stream)
+JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
 {
     if (stream == (void*)STDIN_FILENO ||
         stream == (void*)STDOUT_FILENO ||
@@ -162,7 +237,7 @@ void jl_uv_flush(uv_stream_t *stream)
         uv_buf_t buf;
         buf.base = (char*)(&buf + 1);
         buf.len = 0;
-        uv_write_t *write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        uv_write_t *write_req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         write_req->data = (void*)&fired;
         if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0) {
             JL_UV_UNLOCK();
@@ -190,30 +265,25 @@ JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = da
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
-        jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        int r = uv_run(loop,UV_RUN_ONCE);
-        JL_UV_UNLOCK();
-        return r;
-    }
-    return 0;
-}
+extern _Atomic(unsigned) _threadedregion;
 
-JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
+JL_DLLEXPORT int jl_process_events(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
-        jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        int r = uv_run(loop,UV_RUN_NOWAIT);
-        JL_UV_UNLOCK();
-        return r;
+    jl_task_t *ct = jl_current_task;
+    uv_loop_t *loop = jl_io_loop;
+    jl_gc_safepoint_(ct->ptls);
+    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
+        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
+            loop->stop_flag = 0;
+            uv_ref((uv_handle_t*)&signal_async); // force the loop alive
+            int r = uv_run(loop, UV_RUN_NOWAIT);
+            uv_unref((uv_handle_t*)&signal_async);
+            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
+            JL_UV_UNLOCK();
+            return r;
+        }
+        jl_gc_safepoint_(ct->ptls);
     }
     return 0;
 }
@@ -225,15 +295,15 @@ static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, 
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
+    JL_UV_LOCK();
     if (handle->type == UV_PROCESS && ((uv_process_t*)handle)->pid != 0) {
         // take ownership of this handle,
         // so we can waitpid for the resource to exit and avoid leaving zombies
         assert(handle->data == NULL); // make sure Julia has forgotten about it already
         ((uv_process_t*)handle)->exit_cb = jl_proc_exit_cleanup_cb;
-        return;
+        uv_unref(handle);
     }
-    JL_UV_LOCK();
-    if (handle->type == UV_FILE) {
+    else if (handle->type == UV_FILE) {
         uv_fs_t req;
         jl_uv_file_t *fd = (jl_uv_file_t*)handle;
         if ((ssize_t)fd->file != -1) {
@@ -241,31 +311,28 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             fd->file = (uv_os_fd_t)(ssize_t)-1;
         }
         jl_uv_closeHandle(handle); // synchronous (ok since the callback is known to not interact with any global state)
-        JL_UV_UNLOCK();
-        return;
     }
-
-    if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t));
-        req->handle = (uv_stream_t*)handle;
-        jl_uv_flush_close_callback(req, 0);
-        JL_UV_UNLOCK();
-        return;
-    }
-
-    // avoid double-closing the stream
-    if (!uv_is_closing(handle)) {
-        uv_close(handle, &jl_uv_closeHandle);
+    else if (!uv_is_closing(handle)) { // avoid double-closing the stream
+        if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
+            // flush the stream write-queue first
+            uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
+            req->handle = (uv_stream_t*)handle;
+            jl_uv_flush_close_callback(req, 0);
+        }
+        else {
+            uv_close(handle, &jl_uv_closeHandle);
+        }
     }
     JL_UV_UNLOCK();
 }
 
 JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
 {
-    // avoid double-closing the stream
-    if (!uv_is_closing(handle)) {
+    if (!uv_is_closing(handle)) { // avoid double-closing the stream
         JL_UV_LOCK();
-        uv_close(handle, &jl_uv_closeHandle);
+        if (!uv_is_closing(handle)) { // double-check
+            uv_close(handle, &jl_uv_closeHandle);
+        }
         JL_UV_UNLOCK();
     }
 }
@@ -281,12 +348,13 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
     handle->data = NULL;
 }
 
-#define UV_CLOSED 0x02 // UV_HANDLE_CLOSED on Windows (same value)
+#define UV_HANDLE_CLOSED 0x02
 
 JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
-                          uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
+                          uint32_t flags, char **env, char *cwd, char* cpumask,
+                          size_t cpumask_size, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
@@ -296,8 +364,8 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
     // unused fields:
     //opts.uid = 0;
     //opts.gid = 0;
-    //opts.cpumask = NULL;
-    //opts.cpumask_size = 0;
+    opts.cpumask = cpumask;
+    opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;
@@ -306,7 +374,7 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         if (!(flags == UV_INHERIT_FD || flags == UV_INHERIT_STREAM || flags == UV_IGNORE)) {
             proc->type = UV_PROCESS;
             proc->loop = loop;
-            proc->flags = UV_CLOSED;
+            proc->flags = UV_HANDLE_CLOSED;
             return UV_EINVAL;
         }
     }
@@ -365,6 +433,14 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_hardlink(char *path, char *new_path)
+{
+    uv_fs_t req;
+    int ret = uv_fs_link(unused_uv_loop_arg, &req, path, new_path, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;
@@ -389,12 +465,20 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
     return ret;
 }
 
-JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
-                             int64_t offset)
+JL_DLLEXPORT int jl_fs_access(char *path, int mode)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    uv_fs_t req;
+    int ret = uv_fs_access(unused_uv_loop_arg, &req, path, mode, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
+                             int64_t offset) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (ptls->safe_restore || ptls->tid != 0)
+    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0)
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -463,7 +547,7 @@ JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
     return err;
 }
 
-JL_DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
+static void jl_uv_writecb(uv_write_t *req, int status) JL_NOTSAFEPOINT
 {
     free(req);
     if (status < 0) {
@@ -493,8 +577,8 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
 
     // TODO: Hack to make CoreIO thread-safer
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->tid != 0) {
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }
@@ -516,9 +600,9 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
     else {
         // Write to libuv stream...
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
-        char *data = (char*)(req+1);
-        memcpy(data,str,n);
+        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t) + n);
+        char *data = (char*)(req + 1);
+        memcpy(data, str, n);
         uv_buf_t buf[1];
         buf[0].base = data;
         buf[0].len = n;
@@ -560,10 +644,10 @@ extern int vasprintf(char **str, const char *fmt, va_list ap);
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
-    char *str=NULL;
+    char *str = NULL;
     int c;
     va_list al;
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     al = args;
 #else
     va_copy(al, args);
@@ -594,6 +678,10 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
     static char buf[1000];
     buf[0] = '\0';
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     va_list args;
     va_start(args, fmt);
@@ -605,46 +693,39 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
         // nothing we can do; ignore the failure
     }
-}
-
-JL_DLLEXPORT void jl_exit(int exitcode)
-{
-    uv_tty_reset_mode();
-    jl_atexit_hook(exitcode);
-    exit(exitcode);
-}
-
-JL_DLLEXPORT int jl_getpid(void)
-{
 #ifdef _OS_WINDOWS_
-    return GetCurrentProcessId();
-#else
-    return getpid();
+    SetLastError(last_error);
 #endif
+    errno = last_errno;
+}
+
+typedef union {
+    struct sockaddr in;
+    struct sockaddr_in v4;
+    struct sockaddr_in6 v6;
+} uv_sockaddr_in;
+
+static void jl_sockaddr_fill(uv_sockaddr_in *addr, uint16_t port, void *host, int ipv6)
+{
+    memset(addr, 0, sizeof(*addr));
+    if (ipv6) {
+        addr->v6.sin6_family = AF_INET6;
+        memcpy(&addr->v6.sin6_addr, host, 16);
+        addr->v6.sin6_port = port;
+    }
+    else {
+        addr->v4.sin_family = AF_INET;
+        addr->v4.sin_addr.s_addr = *(uint32_t*)host;
+        addr->v4.sin_port = port;
+    }
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
-JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
-                             unsigned int flags)
+JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host,
+                             unsigned int flags, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
-    // TODO: do we need a lock here?
-    return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
-}
-
-JL_DLLEXPORT int jl_tcp_bind6(uv_tcp_t *handle, uint16_t port, void *host,
-                              unsigned int flags)
-{
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    // TODO: do we need a lock here
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
@@ -656,6 +737,8 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -666,9 +749,6 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
-    }
-    else {
-        return -1;
     }
     return res;
 }
@@ -681,6 +761,8 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -692,69 +774,26 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
     }
-    else {
-        return -1;
-    }
     return res;
 }
 
-JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, uint32_t host,
-                             uint32_t flags)
+JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, void *host,
+                             uint32_t flags, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-JL_DLLEXPORT int jl_udp_bind6(uv_udp_t *handle, uint16_t port, void *host,
-                              uint32_t flags)
+JL_DLLEXPORT int jl_udp_send(uv_udp_send_t *req, uv_udp_t *handle, uint16_t port, void *host,
+                             char *data, uint32_t size, uv_udp_send_cb cb, int ipv6)
 {
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
-}
-
-JL_DLLEXPORT int jl_udp_send(uv_udp_t *handle, uint16_t port, uint32_t host,
-                             void *data, uint32_t size, uv_udp_send_cb cb)
-{
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     uv_buf_t buf[1];
-    buf[0].base = (char *) data;
+    buf[0].base = data;
     buf[0].len = size;
-    uv_udp_send_t *req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
-    req->data = handle->data;
-    JL_UV_LOCK();
     int r = uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_udp_send6(uv_udp_t *handle, uint16_t port, void *host,
-                              void *data, uint32_t size, uv_udp_send_cb cb)
-{
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    uv_buf_t buf[1];
-    buf[0].base = (char *) data;
-    buf[0].len = size;
-    uv_udp_send_t *req = (uv_udp_send_t *) malloc(sizeof(uv_udp_send_t));
-    req->data = handle->data;
-    JL_UV_LOCK();
-    int r = uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, cb);
-    JL_UV_UNLOCK();
     return r;
 }
 
@@ -766,7 +805,7 @@ JL_DLLEXPORT int jl_uv_sizeof_interface_address(void)
 JL_DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,
                                            int *count)
 {
-    return uv_interface_addresses(ifAddrStruct,count);
+    return uv_interface_addresses(ifAddrStruct, count);
 }
 
 JL_DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
@@ -793,124 +832,73 @@ JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
 }
 
 JL_DLLEXPORT int jl_getnameinfo(uv_loop_t *loop, uv_getnameinfo_t *req,
-        uint32_t host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = host;
-    addr.sin_port = port;
-
-    req->data = NULL;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
 }
-
-JL_DLLEXPORT int jl_getnameinfo6(uv_loop_t *loop, uv_getnameinfo_t *req,
-        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
-{
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin6_family = AF_INET6;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_port = port;
-
-    req->data = NULL;
-    JL_UV_LOCK();
-    int r = uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
-    JL_UV_UNLOCK();
-    return r;
-}
-
 
 JL_DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_addr;
 }
+
 JL_DLLEXPORT struct addrinfo *jl_next_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_next;
 }
 
-JL_DLLEXPORT int jl_sockaddr_in_is_ip4(struct sockaddr_in *addr)
+JL_DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr *addr)
 {
-    return (addr->sin_family==AF_INET);
+    return (addr->sa_family == AF_INET);
 }
 
-JL_DLLEXPORT int jl_sockaddr_in_is_ip6(struct sockaddr_in *addr)
+JL_DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr *addr)
 {
-    return (addr->sin_family==AF_INET6);
+    return (addr->sa_family == AF_INET6);
 }
 
-JL_DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr_storage *addr)
-{
-    return (addr->ss_family==AF_INET);
-}
-
-JL_DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr_storage *addr)
-{
-    return (addr->ss_family==AF_INET6);
-}
-
-JL_DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr_in *addr)
+JL_DLLEXPORT uint32_t jl_sockaddr_host4(struct sockaddr_in *addr)
 {
     return addr->sin_addr.s_addr;
 }
 
-JL_DLLEXPORT unsigned int jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
+JL_DLLEXPORT unsigned jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
 {
     memcpy(host, &addr->sin6_addr, 16);
     return addr->sin6_scope_id;
 }
 
-JL_DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,
-                                       uint16_t port)
+JL_DLLEXPORT uint16_t jl_sockaddr_port4(struct sockaddr_in *addr)
 {
-    if (addr->ss_family==AF_INET)
-        ((struct sockaddr_in*)addr)->sin_port = port;
+    return addr->sin_port;
+}
+
+JL_DLLEXPORT uint16_t jl_sockaddr_port6(struct sockaddr_in6 *addr)
+{
+    return addr->sin6_port;
+}
+
+
+JL_DLLEXPORT void jl_sockaddr_set_port(uv_sockaddr_in *addr, uint16_t port)
+{
+    if (addr->in.sa_family == AF_INET)
+        addr->v4.sin_port = port;
     else
-        ((struct sockaddr_in6*)addr)->sin6_port = port;
+        addr->v6.sin6_port = port;
 }
 
-JL_DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port,
-                                 uv_connect_cb cb)
+JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port,
+                                uv_connect_cb cb, int ipv6)
 {
-    struct sockaddr_in addr;
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = host;
-    addr.sin_port = port;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)&addr,cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port,
-                                 uv_connect_cb cb)
-{
-    struct sockaddr_in6 addr;
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_family = AF_INET6;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_port = port;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)&addr,cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr,
-                                uv_connect_cb cb)
-{
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)addr,cb);
-    JL_UV_UNLOCK();
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
+    uv_connect_t *req = (uv_connect_t*)malloc_s(sizeof(uv_connect_t));
+    req->data = NULL;
+    int r = uv_tcp_connect(req, handle, &addr.in, cb);
+    if (r)
+        free(req);
     return r;
 }
 
@@ -930,7 +918,7 @@ JL_DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 
 JL_DLLEXPORT int jl_has_so_reuseport(void)
 {
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && !defined(_OS_DARWIN_)
     return 1;
 #else
     return 0;
@@ -1034,16 +1022,16 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode_enum);
 }
 
-typedef int (*work_cb_t)(void *, void *);
+typedef int (*work_cb_t)(void *, void *, void *);
 typedef void (*notify_cb_t)(int);
 
 struct work_baton {
     uv_work_t req;
     work_cb_t work_func;
+    void      *ccall_fptr;
     void      *work_args;
     void      *work_retval;
     notify_cb_t notify_func;
-    int       tid;
     int       notify_idx;
 };
 
@@ -1054,7 +1042,7 @@ struct work_baton {
 void jl_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->work_func(baton->work_args, baton->work_retval);
+    baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
 }
 
 void jl_work_notifier(uv_work_t *req, int status)
@@ -1064,12 +1052,13 @@ void jl_work_notifier(uv_work_t *req, int status)
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work_args, void *work_retval,
                                notify_cb_t notify_func, int notify_idx)
 {
-    struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
+    struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
+    baton->ccall_fptr = ccall_fptr;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
     baton->notify_func = notify_func;
@@ -1081,101 +1070,6 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_
 
     return 0;
 }
-
-JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop)
-{
-    JL_UV_LOCK();
-    uv_stop(loop);
-    // TODO: use memory/compiler fence here instead of the lock
-    JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT void jl_uv_update_time(uv_loop_t* loop)
-{
-    JL_UV_LOCK();
-    uv_update_time(loop);
-    JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT int jl_uv_timer_start(uv_timer_t* handle, uv_timer_cb cb,
-                                   uint64_t timeout, uint64_t repeat)
-{
-    JL_UV_LOCK();
-    int r = uv_timer_start(handle, cb, timeout, repeat);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_timer_stop(uv_timer_t* handle)
-{
-    JL_UV_LOCK();
-    int r = uv_timer_stop(handle);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_scandir(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
-                                  uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_scandir(loop, req, path, flags, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_readlink(uv_loop_t* loop, uv_fs_t* req, const char* path,
-                                   uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_readlink(loop, req, path, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_open(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
-                               int mode, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_open(loop, req, path, flags, mode, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_ftruncate(uv_loop_t* loop, uv_fs_t* req, uv_os_fd_t handle,
-                                    int64_t offset, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_ftruncate(loop, req, handle, offset, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_futime(uv_loop_t* loop, uv_fs_t* req, uv_os_fd_t handle, double atime,
-                                 double mtime, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_futime(loop, req, handle, atime, mtime, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
-                                  uv_read_cb read_cb)
-{
-    JL_UV_LOCK();
-    int r = uv_read_start(handle, alloc_cb, read_cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_read_stop(uv_stream_t* handle)
-{
-    JL_UV_LOCK();
-    int r = uv_read_stop(handle);
-    JL_UV_UNLOCK();
-    return r;
-}
-
 
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)

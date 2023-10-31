@@ -1,14 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
 
 @testset "nonmissingtype" begin
-    @test Base.nonmissingtype(Union{Int, Missing}) == Int
-    @test Base.nonmissingtype(Union{Rational, Missing}) == Rational
-    @test Base.nonmissingtype(Any) == Any
-    @test Base.nonmissingtype(Missing) == Union{}
+    @test nonmissingtype(Union{Int, Missing}) == Int
+    @test nonmissingtype(Union{Rational, Missing}) == Rational
+    @test nonmissingtype(Any) == Any
+    @test nonmissingtype(Missing) == Union{}
 end
 
 @testset "convert" begin
@@ -16,9 +19,10 @@ end
     @test convert(Union{Int, Missing}, 1.0) === 1
     @test convert(Union{Nothing, Missing}, missing) === missing
     @test convert(Union{Nothing, Missing}, nothing) === nothing
+    @test convert(Union{Missing, Nothing, Float64}, 1) === 1.0
 
-    @test_throws MethodError convert(Missing, 1)
-    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Missing, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
@@ -62,6 +66,7 @@ end
     @test isequal(missing, missing)
     @test !isequal(1, missing)
     @test !isequal(missing, 1)
+    @test !isequal('c', missing)
     @test (missing < missing) === missing
     @test (missing < 1) === missing
     @test (1 < missing) === missing
@@ -75,14 +80,14 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
+    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, ~, +, -]
+    for f in [!, ~, +, -, *, &, |, xor, nand, nor]
         @test ismissing(f(missing))
     end
 
@@ -102,6 +107,19 @@ end
             @test ismissing(f(missing, arg))
             @test ismissing(f(arg, missing))
         end
+    end
+end
+
+@testset "two-argument functions" begin
+    two_argument_functions = [atan, hypot, log]
+
+    # All two-argument functions return missing when operating on two missing's
+    # All two-argument functions return missing when operating on a scalar and an missing
+    # All two-argument functions return missing when operating on an missing and a scalar
+    for f in two_argument_functions
+        @test ismissing(f(missing, missing))
+        @test ismissing(f(1, missing))
+        @test ismissing(f(missing, 1))
     end
 end
 
@@ -127,6 +145,22 @@ end
     @test ismissing(xor(true, missing))
     @test ismissing(xor(missing, false))
     @test ismissing(xor(false, missing))
+    @test ismissing(nand(missing, true))
+    @test ismissing(nand(true, missing))
+    @test nand(missing, false) == true
+    @test nand(false, missing) == true
+    @test ismissing(⊼(missing, true))
+    @test ismissing(⊼(true, missing))
+    @test ⊼(missing, false) == true
+    @test ⊼(false, missing) == true
+    @test nor(missing, true) == false
+    @test nor(true, missing) == false
+    @test ismissing(nor(missing, false))
+    @test ismissing(nor(false, missing))
+    @test ⊽(missing, true) == false
+    @test ⊽(true, missing) == false
+    @test ismissing(⊽(missing, false))
+    @test ismissing(⊽(false, missing))
 
     @test ismissing(missing & 1)
     @test ismissing(1 & missing)
@@ -134,11 +168,21 @@ end
     @test ismissing(1 | missing)
     @test ismissing(xor(missing, 1))
     @test ismissing(xor(1, missing))
+    @test ismissing(nand(missing, 1))
+    @test ismissing(nand(1, missing))
+    @test ismissing(⊼(missing, 1))
+    @test ismissing(⊼(1, missing))
+    @test ismissing(nor(missing, 1))
+    @test ismissing(nor(1, missing))
+    @test ismissing(⊽(missing, 1))
+    @test ismissing(⊽(1, missing))
 end
 
-@testset "* string concatenation" begin
+@testset "* string/char concatenation" begin
     @test ismissing("a" * missing)
+    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
+    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
@@ -157,22 +201,28 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float, inv]
+                            isinteger, isreal, transpose, adjoint, float, complex, inv]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
         @test ismissing(f(missing))
     end
 
+    @test ismissing(clamp(missing, 1, 2))
+
     for T in (Int, Float64)
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)
         @test oneunit(Union{T, Missing}) === T(1)
+        @test float(Union{T, Missing}) === Union{float(T), Missing}
+        @test complex(Union{T, Missing}) === Union{complex(T), Missing}
     end
 
     @test_throws MethodError zero(Union{Symbol, Missing})
     @test_throws MethodError one(Union{Symbol, Missing})
     @test_throws MethodError oneunit(Union{Symbol, Missing})
+    @test_throws MethodError float(Union{Symbol, Missing})
+    @test_throws MethodError complex(Union{Symbol, Missing})
 
     for T in (Unit,)
         @test zero(Union{T, Missing}) === T(0)
@@ -183,10 +233,14 @@ Base.one(::Type{Unit}) = 1
     @test zero(Missing) === missing
     @test one(Missing) === missing
     @test oneunit(Missing) === missing
+    @test float(Missing) === Missing
+    @test complex(Missing) === Missing
 
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
+    @test_throws MethodError float(Any)
+    @test_throws MethodError complex(Any)
 
     @test_throws MethodError zero(String)
     @test_throws MethodError zero(Union{String, Missing})
@@ -218,14 +272,14 @@ end
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
     @test sprint(show, missing, context=:compact => true) == "missing"
-    @test sprint(show, [missing]) == "$Missing[missing]"
+    @test sprint(show, [missing]) == "[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Array{$Missing,1}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing\n"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Array{$(Union{Int, Missing}),2}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing\n"
 end
 
 @testset "arrays with missing values" begin
@@ -239,6 +293,14 @@ end
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
     @test eltype(adjoint([1, missing])) == Union{Int, Missing}
+    # issue #32777
+    let a = [0, nothing, 0.0, missing]
+        @test a[1] === 0.0
+        @test a[2] === nothing
+        @test a[3] === 0.0
+        @test a[4] === missing
+        @test a isa Vector{Union{Missing, Nothing, Float64}}
+    end
 end
 
 @testset "== and != on arrays" begin
@@ -417,10 +479,10 @@ end
             @test_throws BoundsError x[3, 1]
             @test findfirst(==(2), x) === nothing
             @test isempty(findall(==(2), x))
-            @test_throws ArgumentError argmin(x)
-            @test_throws ArgumentError findmin(x)
-            @test_throws ArgumentError argmax(x)
-            @test_throws ArgumentError findmax(x)
+            @test_throws "reducing over an empty collection is not allowed" argmin(x)
+            @test_throws "reducing over an empty collection is not allowed" findmin(x)
+            @test_throws "reducing over an empty collection is not allowed" argmax(x)
+            @test_throws "reducing over an empty collection is not allowed" findmax(x)
         end
     end
 
@@ -429,24 +491,31 @@ end
         for T in (Int, Float64),
             A in (rand(T, 10), rand(T, 1000), rand(T, 10000))
             if T === Int
-                @test sum(A) === sum(skipmissing(A)) ===
-                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+                @test sum(A) === @inferred(sum(skipmissing(A))) ===
+                    @inferred(reduce(+, skipmissing(A))) ===
+                    @inferred(mapreduce(identity, +, skipmissing(A)))
             else
-                @test sum(A) ≈ sum(skipmissing(A)) ===
-                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+                @test sum(A) ≈ @inferred(sum(skipmissing(A))) ===
+                    @inferred(reduce(+, skipmissing(A))) ===
+                    @inferred(mapreduce(identity, +, skipmissing(A)))
             end
-            @test mapreduce(cos, *, A) ≈ mapreduce(cos, *, skipmissing(A))
+            @test mapreduce(cos, *, A) ≈
+                @inferred(mapreduce(cos, *, skipmissing(A)))
 
             B = Vector{Union{T,Missing}}(A)
             replace!(x -> rand(Bool) ? x : missing, B)
             if T === Int
-                @test sum(collect(skipmissing(B))) === sum(skipmissing(B)) ===
-                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+                @test sum(collect(skipmissing(B))) ===
+                    @inferred(sum(skipmissing(B))) ===
+                    @inferred(reduce(+, skipmissing(B))) ===
+                    @inferred(mapreduce(identity, +, skipmissing(B)))
             else
-                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ===
-                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+                @test sum(collect(skipmissing(B))) ≈ @inferred(sum(skipmissing(B))) ===
+                    @inferred(reduce(+, skipmissing(B))) ===
+                    @inferred(mapreduce(identity, +, skipmissing(B)))
             end
-            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈
+                @inferred(mapreduce(cos, *, skipmissing(A)))
 
             # Test block full of missing values
             B[1:length(B)÷2] .= missing
@@ -461,7 +530,7 @@ end
             @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
         end
 
-        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        # Patterns that exercise code paths for inputs with 1 or 2 non-missing values
         @test sum(skipmissing([1, missing, missing, missing])) === 1
         @test sum(skipmissing([missing, missing, missing, 1])) === 1
         @test sum(skipmissing([1, missing, missing, missing, 2])) === 3
@@ -470,8 +539,26 @@ end
         for n in 0:3
             itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
             @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
-            @test_throws ArgumentError reduce(x -> x/2, itr)
-            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+            @test_throws "reducing over an empty collection is not allowed" reduce(x -> x/2, itr)
+            @test_throws "reducing over an empty collection is not allowed" mapreduce(x -> x/2, +, itr)
+        end
+
+        # issue #35504
+        nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+            (missing, missing))
+        @test sum(skipmissing(nt)) === 0
+
+        # issues #38627 and #124
+        @testset for len in [1, 2, 15, 16, 1024, 1025]
+            v = repeat(Union{Int,Missing}[1], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == len
+
+            v = repeat(Union{Int,Missing}[missing], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == 0
         end
     end
 
@@ -502,6 +589,16 @@ end
     @test coalesce(missing, nothing) === nothing
 end
 
+@testset "@coalesce" begin
+    @test @coalesce() === missing
+    @test @coalesce(1) === 1
+    @test @coalesce(nothing) === nothing
+    @test @coalesce(missing) === missing
+
+    @test @coalesce(1, error("failed")) === 1
+    @test_throws ErrorException @coalesce(missing, error("failed"))
+end
+
 mutable struct Obj; x; end
 @testset "weak references" begin
     @noinline function mk_wr(r, wr)
@@ -515,4 +612,42 @@ mutable struct Obj; x; end
     mk_wr(ref, wref)
     @test ismissing(wref[1] == missing)
     @test ismissing(missing == wref[1])
+end
+
+@testset "showerror missing function" begin
+    me = try missing(1) catch e e end
+    @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
+end
+
+@testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
+    (([2, missing, -2, 5, missing], [3, 1, 4, 2, 5], [2, 5, 4, 1, 3]),
+     ([NaN, missing, 5, -0.0, NaN, missing, Inf, 0.0, -Inf],
+      [9, 4, 8, 3, 7, 1, 5, 2, 6], [2, 6, 1, 5, 7, 3, 8, 4, 9]),
+     ([missing, "a", "c", missing, "b"], [2, 5, 3, 1, 4], [1, 4, 3, 5, 2]))
+    @test sortperm(X) == P
+    @test sortperm(X, alg=QuickSort) == P
+    @test sortperm(X, alg=MergeSort) == P
+
+    XP = X[P]
+    @test isequal(sort(X), XP)
+    @test isequal(sort(X, alg=QuickSort), XP)
+    @test isequal(sort(X, alg=MergeSort), XP)
+
+    @test sortperm(X, rev=true) == RP
+    @test sortperm(X, alg=QuickSort, rev=true) == RP
+    @test sortperm(X, alg=MergeSort, rev=true) == RP
+
+    XRP = X[RP]
+    @test isequal(sort(X, rev=true), XRP)
+    @test isequal(sort(X, alg=QuickSort, rev=true), XRP)
+    @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
+end
+
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
 end

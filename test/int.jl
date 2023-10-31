@@ -54,30 +54,39 @@ using Random
         end
     end
 end
-@testset "signed" begin
-    @test signed(3) == 3
-    @test signed(UInt(3)) == 3
+@testset "signed and unsigned" begin
+    @test signed(3) === 3
+    @test signed(UInt(3)) === 3
     @test isa(signed(UInt(3)), Int)
-    @test signed(UInt(0) - 1) == -1
+    @test signed(UInt(0) - 1) === -1
     @test_throws InexactError signed(UInt(-3))
+    @test signed(true) === 1
+    @test unsigned(true) isa Unsigned
+    @test unsigned(true) === unsigned(1)
+
+    @test signed(Bool) === Int
+    @test signed(Bool) === typeof(signed(true))
+    @test unsigned(Bool) === UInt
+    @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
+    @test bswap(true) == true
     @test bswap(Int8(3)) == 3
-    @test bswap(UInt8(3)) == 3
+    @test bswap(UInt8(3)) === 0x3
     @test bswap(Int16(3)) == 256*3
     @test bswap(Int16(256)) == 1
     @test bswap(Int16(257)) == 257
     @test bswap(Int32(1)) == 2^(3*8)
     @test bswap(Int32(2)^(3*8)) == 1
-    @test bswap(Int64(1)) == Int64(2)^(7*8)
+    @test bswap(Int64(1)) === Int64(2)^(7*8)
     @test bswap(Int64(2)^(7*8)) == 1
-    @test bswap(Int128(1)) == Int128(2)^(15*8)
-    @test bswap(Int128(2)^(15*8)) == Int128(1)
-    @test bswap(UInt128(2)^(15*8)) == UInt128(1)
+    @test bswap(Int128(1)) === Int128(2)^(15*8)
+    @test bswap(Int128(2)^(15*8)) === Int128(1)
+    @test bswap(UInt128(2)^(15*8)) === UInt128(1)
 end
 @testset "count_zeros" begin
-    @test count_zeros(10) == Sys.WORD_SIZE - 2
-    @test count_zeros(UInt8(10)) == 6
+    @test count_zeros(10) === Sys.WORD_SIZE - 2
+    @test count_zeros(UInt8(10)) === 6
 end
 @testset "Conversions" begin
     @test convert(Signed, UInt128(3)) === Int128(3)
@@ -96,11 +105,11 @@ end
 end
 
 @testset "trunc, floor, ceil" begin
-    @test trunc(3) == 3
-    @test trunc(Integer, 3) == 3
+    @test trunc(3) === 3
+    @test trunc(Integer, 3) === 3
 
-    @test floor(3) == 3
-    @test ceil(3) == 3
+    @test floor(3) === 3
+    @test ceil(3) === 3
 end
 
 @testset "big" begin
@@ -112,10 +121,11 @@ end
 end
 
 @test round(UInt8, 123) == 123
-@test mod(123, UInt8) == 0x7b
+@test mod(123, UInt8) === 0x7b
 
-primitive type MyBitsType <: Integer 8 end
+primitive type MyBitsType <: Signed 8 end
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+@test signed(MyBitsType) === MyBitsType
 
 UItypes = Base.BitUnsigned_types
 SItypes = Base.BitSigned_types
@@ -132,6 +142,10 @@ SItypes = Base.BitSigned_types
     for T in SItypes, S in UItypes
         R = sizeof(S) < sizeof(Int) ? Int : S
         @test promote(R(3), T(3)) === (sizeof(R) < sizeof(T) ? (T(3), T(3)) : (R(3), R(3)))
+    end
+
+    for i in 1:length(UItypes)
+        @test promote(UItypes[i](3), SItypes[i](3)) === (UItypes[i](3), UItypes[i](3))
     end
 end
 @testset "limiting conversions" begin
@@ -185,8 +199,35 @@ end
                 @test val >> -scount === val << ucount
             end
         end
+        for T2 in Base.BitInteger_types
+            for op in (>>, <<, >>>)
+                if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
+                    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2)))
+                else
+                    @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
+                    # #47835, TODO implement interval arithmetic analysis
+                    @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
+                end
+            end
+        end
     end
 end
+
+@testset "bit rotations" begin
+    val1 = 0b01100011
+    @test 0b00011011 === bitrotate(val1, 3)
+    @test 0b01101100 === bitrotate(val1, -3)
+    @test val1 === bitrotate(val1, 0)
+
+    for T in Base.BitInteger_types
+        @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
+    end
+
+    val2 = 0xabcd
+    @test 0x5e6d === bitrotate(val2, 3)
+    @test 0xb579 === bitrotate(val2, -3)
+end
+
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)
@@ -212,12 +253,12 @@ end
     @test typeof(widen(Int64(-3))) == Int128
     @test typeof(widen(Int128(-3))) == BigInt
 
-    @test widemul(false, false) == false
-    @test widemul(false, 3) == 0
-    @test widemul(3, true) == widemul(true, 3) == 3
+    @test widemul(false, false) === false
+    @test widemul(false, 3) === 0
+    @test widemul(3, true) === widemul(true, 3) === 3
 
     let i=Int64(2)^63-1, k=widemul(i,i)
-        @test widemul(i,i)==85070591730234615847396907784232501249
+        @test widemul(i,i)===85070591730234615847396907784232501249
         j=div(k,2)
         @test div(k,j)==2
         j=div(k,5)
@@ -246,6 +287,40 @@ end
 @testset "x % T returns a T, T = $T" for T in [Base.BitInteger_types..., BigInt],
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
+end
+
+@testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
+    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+        @test signed(U) === S
+        @test unsigned(S) === U
+        @test typemin(S) % Signed === typemin(S)
+        @test typemax(U) % Unsigned === typemax(U)
+        @test -one(S) % Unsigned % Signed === -one(S)
+        @test ~one(U) % Signed % Unsigned === ~one(U)
+    end
+end
+
+@testset "typemin typemax" begin
+    @test typemin(Int8   ) === Int8(-128)
+    @test typemax(Int8   ) === Int8(127)
+    @test typemin(UInt8  ) === UInt8(0)
+    @test typemax(UInt8  ) === UInt8(255)
+    @test typemin(Int16  ) === Int16(-32768)
+    @test typemax(Int16  ) === Int16(32767)
+    @test typemin(UInt16 ) === UInt16(0)
+    @test typemax(UInt16 ) === UInt16(65535)
+    @test typemin(Int32  ) === Int32(-2147483648)
+    @test typemax(Int32  ) === Int32(2147483647)
+    @test typemin(UInt32 ) === UInt32(0)
+    @test typemax(UInt32 ) === UInt32(4294967295)
+    @test typemin(Int64  ) === Int64(-9223372036854775808)
+    @test typemax(Int64  ) === Int64(9223372036854775807)
+    @test typemin(UInt64 ) === UInt64(0)
+    @test typemax(UInt64 ) === UInt64(0xffff_ffff_ffff_ffff)
+    @test typemin(UInt128) === UInt128(0)
+    @test typemax(UInt128) === UInt128(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff)
+    @test typemin(Int128 ) === Int128(-170141183460469231731687303715884105728)
+    @test typemax(Int128 ) === Int128(170141183460469231731687303715884105727)
 end
 
 @testset "issue #15489" begin
@@ -285,10 +360,16 @@ end
     end
 end
 
-@testset "issue #21092" begin
+@testset "Underscores in big_str" begin
     @test big"1_0_0_0" == BigInt(1000)
     @test_throws ArgumentError big"1_0_0_0_"
     @test_throws ArgumentError big"_1_0_0_0"
+
+    @test big"1_0.2_5" == BigFloat(10.25)
+    @test_throws ArgumentError big"_1_0.2_5"
+    @test_throws ArgumentError big"1_0.2_5_"
+    @test_throws ArgumentError big"1_0_.2_5"
+    @test_throws ArgumentError big"1_0._2_5"
 end
 
 # issue #26779
@@ -301,4 +382,72 @@ let i = MyInt26779(1)
     @test_throws MethodError i >> 1
     @test_throws MethodError i << 1
     @test_throws MethodError i >>> 1
+end
+
+@testset "rounding division" begin
+    for x = -100:100
+        for y = 1:100
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
+                @test div(x,y,rnd) == round(x/y,rnd)
+                @test div(x,-y,rnd) == round(x/-y,rnd)
+            end
+            @test divrem(x,y,RoundFromZero) == (div(x,y,RoundFromZero), rem(x,y,RoundFromZero))
+            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero), rem(x,-y,RoundFromZero))
+        end
+    end
+    for (a, b, nearest, away, up, from_zero) in (
+            (3, 2, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2, 2),
+            (-3, 2, -2, -2, -1, -2),
+            (5, 2, 2, 3, 3, 3),
+            (-5, 2, -2, -3, -2, -3),
+            (-5, 3, -2, -2, -2, -2),
+            (5, -3, -2, -2, -2, -2))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test div(a, b, RoundNearest) === nearest
+            @test div(a, b, RoundNearestTiesAway) === away
+            @test div(a, b, RoundNearestTiesUp) === up
+            @test div(a, b, RoundFromZero) === from_zero
+        end
+    end
+
+    @test div(typemax(Int64), typemax(Int64)-1, RoundNearest) == 1
+    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -1
+    @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
+    @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
+    @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
+
+    # Exhaustively test (U)Int8 to catch any overflow-style issues
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
+        for T in (UInt8, Int8)
+            for x in typemin(T):typemax(T)
+                for y in typemin(T):typemax(T)
+                    if y == 0 || (T <: Signed && x == typemin(T) && y == -1)
+                        @test_throws DivideError div(x, y, r)
+                    else
+                        @test div(x, y, r) == T(div(widen(T)(x), widen(T)(y), r))
+                    end
+                end
+            end
+        end
+    end
+end
+
+@testset "bitreverse" begin
+    for T in Base.BitInteger_types
+        x = rand(T)::T
+        @test bitreverse(x) isa T
+        @test reverse(bitstring(x)) == bitstring(bitreverse(x))
+    end
+    @test bitreverse(0x80) === 0x01
+    @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
+    @test bitreverse(Int32(456618293)) === Int32(-1399919400)
+end
+
+@testset "BitIntegerType" begin
+    @test Int isa Base.BitIntegerType
+    @test Base.BitIntegerType === Union{
+        Type{ Int8}, Type{ Int16}, Type{ Int32}, Type{ Int64}, Type{ Int128},
+        Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt128}}
 end

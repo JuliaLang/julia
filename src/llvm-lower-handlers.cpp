@@ -1,26 +1,36 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+#include "passes.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/DepthFirstIterator.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/CFG.h>
-#include <llvm/IR/Value.h>
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
-#include "llvm-version.h"
 #include "julia.h"
 #include "julia_assert.h"
+#include "llvm-codegen-shared.h"
+#include <map>
 
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG
+STATISTIC(MaxExceptionHandlerDepth, "Maximum nesting of exception handlers");
+STATISTIC(ExceptionHandlerBuffers, "Number of exception handler buffers inserted");
 
 using namespace llvm;
 
@@ -50,7 +60,7 @@ using namespace llvm;
  *                 \                 /
  *              br i1 %cond, %left2, %right2
  *                 /                 \
- *           jl_pop_hander          ret
+ *           jl_pop_handler          ret
  *           ret
  *
  *    The frontend doesn't emit structures like this. However, the optimizer
@@ -65,69 +75,50 @@ using namespace llvm;
  * handler structures to tell LLVM that it is free to re-use the stack slot
  * while the handler is not being used.
  */
-struct LowerExcHandlers : public FunctionPass {
-    static char ID;
-    LowerExcHandlers() : FunctionPass(ID)
-    {}
 
-private:
-    Function *except_enter_func;
-    Function *leave_func;
-    Function *jlenter_func;
-    Function *setjmp_func;
-    Function *lifetime_start;
-    Function *lifetime_end;
-
-    bool doInitialization(Module &M) override;
-    bool runOnFunction(Function &F) override;
-};
-
+namespace {
 /*
  * If the module doesn't have declarations for the jl_enter_handler and setjmp
  * functions, insert them.
  */
-static void ensure_enter_function(Module &M)
+static void ensure_enter_function(Module &M, const Triple &TT)
 {
     auto T_int8  = Type::getInt8Ty(M.getContext());
     auto T_pint8 = PointerType::get(T_int8, 0);
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
-    if (!M.getNamedValue("jl_enter_handler")) {
-        std::vector<Type*> ehargs(0);
+    if (!M.getNamedValue(XSTR(jl_enter_handler))) {
+        SmallVector<Type*, 0> ehargs(0);
         ehargs.push_back(T_pint8);
         Function::Create(FunctionType::get(T_void, ehargs, false),
-                         Function::ExternalLinkage, "jl_enter_handler", &M);
+                         Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
-        std::vector<Type*> args2(0);
+        SmallVector<Type*, 0> args2(0);
         args2.push_back(T_pint8);
-#ifndef _OS_WINDOWS_
-        args2.push_back(T_int32);
-#endif
+        if (!TT.isOSWindows()) {
+            args2.push_back(T_int32);
+        }
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, jl_setjmp_name, &M)
             ->addFnAttr(Attribute::ReturnsTwice);
     }
 }
 
-bool LowerExcHandlers::doInitialization(Module &M) {
-    except_enter_func = M.getFunction("julia.except_enter");
-    if (!except_enter_func)
-        return false;
-    ensure_enter_function(M);
-    leave_func = M.getFunction("jl_pop_handler");
-    jlenter_func = M.getFunction("jl_enter_handler");
-    setjmp_func = M.getFunction(jl_setjmp_name);
-
-    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-    return true;
-}
-
-bool LowerExcHandlers::runOnFunction(Function &F) {
+static bool lowerExcHandlers(Function &F) {
+    Module &M = *F.getParent();
+    Triple TT(M.getTargetTriple());
+    Function *except_enter_func = M.getFunction("julia.except_enter");
     if (!except_enter_func)
         return false; // No EH frames in this module
+    ensure_enter_function(M, TT);
+    Function *leave_func = M.getFunction(XSTR(jl_pop_handler));
+    Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
+    Function *setjmp_func = M.getFunction(jl_setjmp_name);
+
+    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
+    Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
+    Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
 
     /* Step 1: EH Depth Numbering */
     std::map<llvm::CallInst *, int> EnterDepth;
@@ -170,29 +161,36 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
         /* Remember the depth at the BB boundary */
         ExitDepth[BB] = Depth;
     }
+    MaxExceptionHandlerDepth.updateMax(MaxDepth);
+    ExceptionHandlerBuffers += MaxDepth;
 
     /* Step 2: EH Frame lowering */
     // Allocate stack space for each handler. We allocate these as separate
-    // allocas so the optimizer can later merge and reaarange them if it wants
+    // allocas so the optimizer can later merge and rearrange them if it wants
     // to.
     Value *handler_sz = ConstantInt::get(Type::getInt32Ty(F.getContext()),
                                          sizeof(jl_handler_t));
     Value *handler_sz64 = ConstantInt::get(Type::getInt64Ty(F.getContext()),
                                            sizeof(jl_handler_t));
     Instruction *firstInst = &F.getEntryBlock().front();
-    std::vector<AllocaInst *> buffs;
+    SmallVector<Instruction *, 0> buffs;
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()),
-                                       0,
-                                       handler_sz, "", firstInst);
-        buff->setAlignment(16);
-        buffs.push_back(buff);
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
+                handler_sz, Align(16), "", firstInst);
+        if (allocaAddressSpace) {
+            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, Type::getInt8PtrTy(F.getContext(), AddressSpace::Generic));
+            buff_casted->insertAfter(buff);
+            buffs.push_back(buff_casted);
+        } else {
+            buffs.push_back(buff);
+        }
     }
 
     // Lower enter funcs
     for (auto it : EnterDepth) {
         assert(it.second >= 0);
-        AllocaInst *buff = buffs[it.second];
+        Instruction *buff = buffs[it.second];
         CallInst *enter = it.first;
         auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
         Value *lifetime_args[] = {
@@ -200,14 +198,15 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
             buff
         };
         CallInst::Create(lifetime_start, lifetime_args, "", new_enter);
-#ifndef _OS_WINDOWS_
-        // For LLVM 3.3 compatibility
-        Value *args[] = {buff,
-                         ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
-        auto sj = CallInst::Create(setjmp_func, args, "", enter);
-#else
-        auto sj = CallInst::Create(setjmp_func, buff, "", enter);
-#endif
+        CallInst *sj;
+        if (!TT.isOSWindows()) {
+            // For LLVM 3.3 compatibility
+            Value *args[] = {buff,
+                            ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
+            sj = CallInst::Create(setjmp_func, args, "", enter);
+        } else {
+            sj = CallInst::Create(setjmp_func, buff, "", enter);
+        }
         // We need to mark this on the call site as well. See issue #6757
         sj->setCanReturnTwice();
         if (auto dbg = enter->getMetadata(LLVMContext::MD_dbg)) {
@@ -234,17 +233,16 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     return true;
 }
 
-char LowerExcHandlers::ID = 0;
-static RegisterPass<LowerExcHandlers> X("LowerExcHandlers", "Lower Julia Exception Handlers",
-                                         false /* Only looks at CFG */,
-                                         false /* Analysis Pass */);
+} // anonymous namespace
 
-Pass *createLowerExcHandlersPass()
+PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager &AM)
 {
-    return new LowerExcHandlers();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLowerExcHandlersPass());
+    bool modified = lowerExcHandlers(F);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyLLVMIR(F));
+#endif
+    if (modified) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
+    return PreservedAnalyses::all();
 }

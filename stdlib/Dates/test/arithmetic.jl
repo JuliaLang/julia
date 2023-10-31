@@ -10,6 +10,11 @@ using Dates
     b = Dates.Time(11, 59, 59)
     @test Dates.CompoundPeriod(a - b) == Dates.Hour(12)
 end
+
+@testset "TimeType arithmetic" begin
+    @test_throws MethodError DateTime(2023, 5, 2) - Date(2023, 5, 1)
+end
+
 @testset "Wrapping arithmetic for Months" begin
     # This ends up being trickier than expected because
     # the user might do 2014-01-01 + Month(-14)
@@ -150,6 +155,12 @@ end
         @test Dates.second(dt2) == 45
         @test Dates.millisecond(dt2) == 500
     end
+    @testset "DateTime-Quarter arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.DateTime(2000, 3, 27)
+        @test dt + Dates.Quarter(-1) == Dates.DateTime(1999, 9, 27)
+    end
+
     @testset "DateTime-Month arithmetic" begin
         dt = Dates.DateTime(1999, 12, 27)
         @test dt + Dates.Month(1) == Dates.DateTime(2000, 1, 27)
@@ -250,6 +261,24 @@ end
         @test dt - Dates.Millisecond(1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
         @test dt + Dates.Millisecond(-1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
     end
+    @testset "DateTime-Microsecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Microsecond(1) == dt
+        @test dt + Dates.Microsecond(501) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Microsecond(1) == dt
+        @test dt - Dates.Microsecond(501) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+    end
+    @testset "DateTime-Nanosecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Nanosecond(1) == dt
+        @test dt + Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Nanosecond(1) == dt
+        @test dt - Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+    end
 end
 @testset "Date arithmetic" begin
     @testset "Date-Year arithmetic" begin
@@ -265,6 +294,11 @@ end
         @test dt - Dates.Year(1) == Dates.Date(1999, 2, 28)
         @test dt + Dates.Year(4) == Dates.Date(2004, 2, 29)
         @test dt - Dates.Year(4) == Dates.Date(1996, 2, 29)
+    end
+    @testset "Date-Quarter arithmetic" begin
+        dt = Dates.Date(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.Date(2000, 3, 27)
+        @test dt - Dates.Quarter(1) == Dates.Date(1999, 9, 27)
     end
     @testset "Date-Month arithmetic" begin
         dt = Dates.Date(1999, 12, 27)
@@ -305,6 +339,7 @@ end
         @test dt + Dates.Time(1, 0, 0) == Dates.DateTime(1999, 12, 27, 1, 0, 0)
         @test dt + Dates.Time(0, 1, 0) == Dates.DateTime(1999, 12, 27, 0, 1, 0)
         @test dt + Dates.Time(0, 0, 1) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+        @test Dates.Time(0, 0, 1) + dt == Dates.DateTime(1999, 12, 27, 0, 0, 1)
 
         t = Dates.Time(0, 0, 0) + Dates.Hour(24)
         @test dt + t == Dates.DateTime(1999, 12, 27, 0, 0, 0)
@@ -324,6 +359,15 @@ end
     @test t + Dates.Millisecond(1) == Dates.Time(0, 0, 0, 1)
     @test t + Dates.Microsecond(1) == Dates.Time(0, 0, 0, 0, 1)
     @test_throws MethodError t + Dates.Day(1)
+    @testset "Time-TimePeriod arithmetic inequalities" begin
+        t = Dates.Time(4, 20)
+        @test t - Dates.Nanosecond(1) < t
+        @test t + Dates.Nanosecond(1) > t
+        @test t + Dates.Hour(24) < typemax(Dates.Time)
+        @test t - Dates.Hour(24) > typemin(Dates.Time)
+        @test t + Dates.Hour(23) < t
+        @test t + Dates.Hour(25) > t
+    end
 end
 @testset "Month arithmetic and non-associativity" begin
     # Month arithmetic minimizes "edit distance", or number of changes
@@ -475,6 +519,24 @@ end
     @testset "TimeZone" begin
         # best we can get in Dates as there is no other tz functionality
         @test ((a, b) -> now(typeof(a))).(UTC(), [1,2,3]) isa Vector{DateTime}
+    end
+end
+
+@testset "Missing arithmetic" begin
+    for t ∈ [Date, Time, Day, Month, Week, Year, Hour, Microsecond, Millisecond, Minute, Nanosecond, Second]
+        @test ismissing(t(1) + missing)
+        @test ismissing(missing + t(1))
+        @test ismissing(t(1) - missing)
+        @test ismissing(missing - t(1))
+    end
+end
+
+@testset "Diff of dates" begin
+    for t ∈ [Day, Week, Hour, Minute]
+        a = DateTime(2021,1,1):t(1):DateTime(2021,2,1)
+        d = diff(a)
+        @test d == diff(collect(a))
+        @test eltype(d) === typeof(a[1] - a[2])
     end
 end
 

@@ -1,15 +1,9 @@
 # Unicode
 
-```@meta
-DocTestSetup = :(using Unicode)
-```
-
 ```@docs
+Unicode.julia_chartransform
 Unicode.isassigned
+Unicode.isequal_normalized
 Unicode.normalize
 Unicode.graphemes
-```
-
-```@meta
-DocTestSetup = nothing
 ```

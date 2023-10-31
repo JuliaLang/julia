@@ -1,2 +1,2 @@
-# treat patches as files that should not be modified
-*.patch -text
+# treat all files as files that should not be modified
+* -text

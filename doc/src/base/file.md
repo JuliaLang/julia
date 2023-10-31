@@ -8,12 +8,14 @@ Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
+Base.Filesystem.hardlink
 Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.Filesystem.diskstat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
 Base.Filesystem.mtime
@@ -29,10 +31,10 @@ Base.Filesystem.rm
 Base.Filesystem.touch
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
-Base.Filesystem.mktemp(::Any)
-Base.Filesystem.mktemp(::Function, ::Any)
-Base.Filesystem.mktempdir(::Any)
-Base.Filesystem.mktempdir(::Function, ::Any)
+Base.Filesystem.mktemp(::AbstractString)
+Base.Filesystem.mktemp(::Function, ::AbstractString)
+Base.Filesystem.mktempdir(::AbstractString)
+Base.Filesystem.mktempdir(::Function, ::AbstractString)
 Base.Filesystem.isblockdev
 Base.Filesystem.ischardev
 Base.Filesystem.isdir
@@ -48,9 +50,6 @@ Base.Filesystem.issticky
 Base.Filesystem.homedir
 Base.Filesystem.dirname
 Base.Filesystem.basename
-Base.@__FILE__
-Base.@__DIR__
-Base.@__LINE__
 Base.Filesystem.isabspath
 Base.Filesystem.isdirpath
 Base.Filesystem.joinpath
@@ -59,6 +58,8 @@ Base.Filesystem.normpath
 Base.Filesystem.realpath
 Base.Filesystem.relpath
 Base.Filesystem.expanduser
+Base.Filesystem.contractuser
+Base.Filesystem.samefile
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext

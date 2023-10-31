@@ -9,31 +9,31 @@ function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
         throw(DomainError(handle))
     end
-    ccall(:uv_handle_size,Csize_t,(Int32,),handle)
+    return ccall(:uv_handle_size, Csize_t, (Int32,), handle)
 end
 
 function uv_sizeof_req(req)
     if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
         throw(DomainError(req))
     end
-    ccall(:uv_req_size,Csize_t,(Int32,),req)
+    return ccall(:uv_req_size, Csize_t, (Int32,), req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_",lowercase(string(h)))) = uv_sizeof_handle($h)
+@eval const $(Symbol("_sizeof_", lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_",lowercase(string(r)))) = uv_sizeof_req($r)
+@eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
-uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Any),req,data)
-uv_req_set_data(req,data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data,Cvoid,(Ptr{Cvoid},Ptr{Cvoid}),req,data)
+uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
-    quote
-        data = uv_handle_data($(esc(hand)))
+    return quote
+        local data = uv_handle_data($(esc(hand)))
         data == C_NULL && return
         unsafe_pointer_to_objref(data)::($(esc(typ)))
     end
@@ -44,6 +44,9 @@ associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Cvoid}) =
     handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)
+
+iolock_begin() = ccall(:jl_iolock_begin, Cvoid, ())
+iolock_end() = ccall(:jl_iolock_end, Cvoid, ())
 
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
@@ -58,8 +61,11 @@ function preserve_handle(x)
 end
 function unpreserve_handle(x)
     lock(preserve_handle_lock)
-    v = uvhandles[x]::Int
-    if v == 1
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1
@@ -71,7 +77,7 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::AbstractString
+    msg::String
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
@@ -82,59 +88,78 @@ function _UVError(pfx::AbstractString, code::Integer)
     code = Int32(code)
     IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")"), code)
 end
+function _UVError(pfx::AbstractString, code::Integer, sfxs::AbstractString...)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")", " ", sfxs...), code)
+end
 
-struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
-uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name,Cstring,(Int32,),err))
+struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), err))
+uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))
 
-uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix,c)) : nothing
+uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)) : nothing
 
 ## event loop ##
 
-eventloop() = uv_eventloop::Ptr{Cvoid}
-#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Cvoid},()) # this would probably be fine, but is nowhere supported
+eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
+
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
 
 function process_events()
-    return ccall(:jl_process_events, Int32, (Ptr{Cvoid},), eventloop())
+    return ccall(:jl_process_events, Int32, ())
 end
 
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
+function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
-    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
-    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
-    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
-    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
-    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
-
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
+    nothing
 end
 
 """
-    stdin
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
 :stdin
 
 """
-    stdout
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
 :stdout
 
 """
-    stderr
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """

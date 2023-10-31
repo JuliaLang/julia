@@ -20,6 +20,8 @@ export BINDIR,
        loadavg,
        free_memory,
        total_memory,
+       free_physical_memory,
+       total_physical_memory,
        isapple,
        isbsd,
        isdragonfly,
@@ -35,25 +37,27 @@ export BINDIR,
 
 import ..Base: show
 
-global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 """
-    Sys.BINDIR
+    Sys.BINDIR::String
 
 A string containing the full path to the directory containing the `julia` executable.
 """
-:BINDIR
+global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 """
-    Sys.STDLIB
+    Sys.STDLIB::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+# In case STDLIB change after julia is built, the variable below can be used
+# to update cached method locations to updated ones.
+const BUILD_STDLIB_PATH = STDLIB
 
 # helper to avoid triggering precompile warnings
 
 """
-    Sys.CPU_THREADS
+    Sys.CPU_THREADS::Int
 
 The number of logical CPU cores available in the system, i.e. the number of threads
 that the CPU can run concurrently. Note that this is not necessarily the number of
@@ -62,36 +66,38 @@ CPU cores, for example, in the presence of
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-CPU_THREADS = 1 # for bootstrap, changed on startup
+global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
-    Sys.ARCH
+    Sys.ARCH::Symbol
 
 A symbol representing the architecture of the build configuration.
 """
-const ARCH = ccall(:jl_get_ARCH, Any, ())
+const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL
+    Sys.KERNEL::Symbol
 
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
-const KERNEL = ccall(:jl_get_UNAME, Any, ())
+const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
 
 """
-    Sys.MACHINE
+    Sys.MACHINE::String
 
 A string containing the build triple.
 """
-const MACHINE = Base.MACHINE
+const MACHINE = Base.MACHINE::String
 
 """
-    Sys.WORD_SIZE
+    Sys.WORD_SIZE::Int
 
 Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
+
+global SC_CLK_TCK::Clong, CPU_NAME::String, JIT::String
 
 function __init__()
     env_threads = nothing
@@ -111,6 +117,12 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    __init_build()
+    nothing
+end
+# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
+# without pulling in anything unnecessary like `CPU_NAME`
+function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
@@ -203,7 +215,8 @@ end
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
-    Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    err = ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count)
+    Base.uv_error("uv_cpu_info", err)
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
@@ -219,7 +232,8 @@ Gets the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
-    Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
+    err = ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_)
+    Base.uv_error("uv_uptime", err)
     return uptime_[]
 end
 
@@ -235,18 +249,44 @@ function loadavg()
 end
 
 """
+    Sys.free_physical_memory()
+
+Get the free memory of the system in bytes. The entire amount may not be available to the
+current process; use `Sys.free_memory()` for the actually available amount.
+"""
+free_physical_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_physical_memory()
+
+Get the total memory in RAM (including that which is currently used) in bytes. The entire
+amount may not be available to the current process; see `Sys.total_memory()`.
+"""
+total_physical_memory() = ccall(:uv_get_total_memory, UInt64, ())
+
+"""
     Sys.free_memory()
 
-Get the total free memory in RAM in kilobytes.
+Get the total free memory in RAM in bytes.
 """
-free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
-Get the total memory in RAM (including that which is currently used) in kilobytes.
+Get the total memory in RAM (including that which is currently used) in bytes.
+This amount may be constrained, e.g., by Linux control groups. For the unconstrained
+amount, see `Sys.physical_memory()`.
 """
-total_memory() = ccall(:uv_get_total_memory, UInt64, ())
+function total_memory()
+    constrained = ccall(:uv_get_constrained_memory, UInt64, ())
+    physical = total_physical_memory()
+    if 0 < constrained <= physical
+        return constrained
+    else
+        return physical
+    end
+end
 
 """
     Sys.get_process_title()
@@ -275,8 +315,8 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of getrusage(2) on Linux and FreeBSD.
-    - windows api `GetProcessMemoryInfo`
+    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
@@ -294,7 +334,7 @@ function isunix(os::Symbol)
     elseif os === :Emscripten
         # Emscripten implements the POSIX ABI and provides traditional
         # Unix-style operating system functions such as file system support.
-        # Therefor, we consider it a unix, even though this need not be
+        # Therefore, we consider it a unix, even though this need not be
         # generally true for a jsvm embedding.
         return true
     else
@@ -433,16 +473,18 @@ const WINDOWS_VISTA_VER = v"6.0"
     Sys.isexecutable(path::String)
 
 Return `true` if the given `path` has executable permissions.
+
+!!! note
+    Prior to Julia 1.6, this did not correctly interrogate filesystem
+    ACLs on Windows, therefore it would return `true` for any
+    file.  From Julia 1.6 on, it correctly determines whether the
+    file is marked as executable or not.
 """
 function isexecutable(path::String)
-    if iswindows()
-        return isfile(path)
-    else
-        # We use `access()` and `X_OK` to determine if a given path is
-        # executable by the current user.  `X_OK` comes from `unistd.h`.
-        X_OK = 0x01
-        ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-    end
+    # We use `access()` and `X_OK` to determine if a given path is
+    # executable by the current user.  `X_OK` comes from `unistd.h`.
+    X_OK = 0x01
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
 
@@ -457,6 +499,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
@@ -483,7 +528,7 @@ function which(program_name::String)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
         pathsep = iswindows() ? ';' : ':'
-        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
         if iswindows()
@@ -498,9 +543,21 @@ function which(program_name::String)
     for path_dir in path_dirs
         for pname in program_names
             program_path = joinpath(path_dir, pname)
-            # If we find something that matches our name and we can execute
-            if isexecutable(program_path)
-                return realpath(program_path)
+            try
+                # If we find something that matches our name and we can execute
+                if isfile(program_path) && isexecutable(program_path)
+                    return program_path
+                end
+            catch e
+                # If we encounter a permission error, we skip this directory
+                # and continue to the next directory in the PATH variable.
+                if isa(e, Base.IOError) && e.code == Base.UV_EACCES
+                    # Permission denied, continue searching
+                    continue
+                else
+                    # Rethrow the exception if it's not a permission error
+                    rethrow(e)
+                end
             end
         end
     end

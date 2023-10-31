@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_assert.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
@@ -29,10 +30,10 @@ const unsigned int host_char_bit = 8;
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
         memcpy(data_a64, p##s, RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
-        s = APInt(numbits, makeArrayRef(data_a64, nbytes / sizeof(integerPart))); \
+        s = APInt(numbits, ArrayRef<uint64_t>(data_a64, nbytes / sizeof(integerPart))); \
     } \
     else { \
-        s = APInt(numbits, makeArrayRef(p##s, numbits / integerPartWidth)); \
+        s = APInt(numbits, ArrayRef<uint64_t>(p##s, numbits / integerPartWidth)); \
     }
 
 /* assign to "integerPart *pr" from "APInt a" */
@@ -312,14 +313,19 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     ASSIGN(r, a)
 }
 
-void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
+extern "C" float julia_half_to_float(uint16_t ival) JL_NOTSAFEPOINT;
+extern "C" uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
+
+void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
-    if (numbits == 32)
+    if (numbits == 16)
+        Val = julia_half_to_float(*(uint16_t*)pa);
+    else if (numbits == 32)
         Val = *(float*)pa;
     else if (numbits == 64)
         Val = *(double*)pa;
     else
-        jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+        jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     if (onumbits <= 64) { // fast-path, if possible
         if (isSigned) {
@@ -387,12 +393,14 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         CREATE(a)
         val = a.roundToDouble(true);
     }
-    if (onumbits == 32)
+    if (onumbits == 16)
+        *(uint16_t*)pr = julia_float_to_half(val);
+    else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
         *(double*)pr = val;
     else
-        jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+        jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
 }
 
 extern "C" JL_DLLEXPORT
@@ -402,7 +410,9 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         CREATE(a)
         val = a.roundToDouble(false);
     }
-    if (onumbits == 32)
+    if (onumbits == 16)
+        *(uint16_t*)pr = julia_float_to_half(val);
+    else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
         *(double*)pr = val;

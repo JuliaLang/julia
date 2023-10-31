@@ -17,7 +17,7 @@
  @param executableBookmark NSURL file bookmark for the julia executable to run.
  @param args Arguments to pass to julia.
  @param reply Async result with task and standard in, out, and error. An error
- occured if task is nil.
+ occurred if task is nil.
  */
 - (void)eval:(NSString *_Nonnull)juliaProgram
     withJulia:(NSData *_Nonnull)executableBookmark

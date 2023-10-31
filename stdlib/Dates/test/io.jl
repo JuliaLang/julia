@@ -5,61 +5,12 @@ module IOTests
 using Test
 using Dates
 
-@testset "string/show representation of Period" begin
-    @test string(Dates.Year(2018)) == "2018 years"
-    @test sprint(show, Dates.Year(2018)) == "Dates.Year(2018)"
-    @test sprint(print, Dates.Year(2018)) == "2018 years"
-    @test repr(Dates.Year(2018)) == "Dates.Year(2018)"
-
-    @test string(Dates.Month(12)) == "12 months"
-    @test sprint(show, Dates.Month(12)) == "Dates.Month(12)"
-    @test sprint(print, Dates.Month(12)) == "12 months"
-    @test repr(Dates.Month(12)) == "Dates.Month(12)"
-
-    @test string(Dates.Week(4)) == "4 weeks"
-    @test sprint(show, Dates.Week(4)) == "Dates.Week(4)"
-    @test sprint(print, Dates.Week(4)) == "4 weeks"
-    @test repr(Dates.Week(4)) == "Dates.Week(4)"
-
-    @test string(Dates.Day(12)) == "12 days"
-    @test sprint(show, Dates.Day(12)) == "Dates.Day(12)"
-    @test sprint(print,Dates.Day(12)) == "12 days"
-    @test repr(Dates.Day(12)) == "Dates.Day(12)"
-
-    @test string(Dates.Hour(12)) == "12 hours"
-    @test sprint(show, Dates.Hour(12)) == "Dates.Hour(12)"
-    @test sprint(print,Dates.Hour(12)) == "12 hours"
-    @test repr(Dates.Hour(12)) == "Dates.Hour(12)"
-
-    @test string(Dates.Minute(12)) == "12 minutes"
-    @test sprint(show, Dates.Minute(12)) == "Dates.Minute(12)"
-    @test sprint(print,Dates.Minute(12)) == "12 minutes"
-    @test repr(Dates.Minute(12)) == "Dates.Minute(12)"
-
-    @test string(Dates.Second(12)) == "12 seconds"
-    @test sprint(show, Dates.Second(12)) == "Dates.Second(12)"
-    @test sprint(print,Dates.Second(12)) == "12 seconds"
-    @test repr(Dates.Second(12)) == "Dates.Second(12)"
-
-    @test string(Dates.Millisecond(12)) == "12 milliseconds"
-    @test sprint(show, Dates.Millisecond(12)) == "Dates.Millisecond(12)"
-    @test sprint(print,Dates.Millisecond(12)) == "12 milliseconds"
-    @test repr(Dates.Millisecond(12)) == "Dates.Millisecond(12)"
-
-    @test string(Dates.Microsecond(12)) == "12 microseconds"
-    @test sprint(show, Dates.Microsecond(12)) == "Dates.Microsecond(12)"
-    @test sprint(print,Dates.Microsecond(12)) == "12 microseconds"
-    @test repr(Dates.Microsecond(12)) == "Dates.Microsecond(12)"
-
-    @test string(Dates.Nanosecond(12)) == "12 nanoseconds"
-    @test sprint(show, Dates.Nanosecond(12)) == "Dates.Nanosecond(12)"
-    @test sprint(print,Dates.Nanosecond(12)) == "12 nanoseconds"
-    @test repr(Dates.Nanosecond(12)) == "Dates.Nanosecond(12)"
-end
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+include(joinpath(BASE_TEST_PATH, "testhelpers", "withlocales.jl"))
 
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
-    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(1, 1, 1)"
+    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(\"0001-01-01\")"
     @test string(Dates.Date(0, 12, 31)) == "0000-12-31" # December 31, 1 BC/BCE
     @test Dates.Date(1, 1, 1) - Dates.Date(0, 12, 31) == Dates.Day(1)
     @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0, 2, 29)
@@ -68,21 +19,33 @@ end
     @test string(Dates.Date(-1000000, 1, 1)) == "-1000000-01-01"
     @test string(Dates.Date(1000000, 1, 1)) == "1000000-01-01"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
-    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)"
+    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(\"2000-01-01T00:00:00.001\")"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 2)) == "2000-01-01T00:00:00.002"
-    @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.5"
+    @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.500"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 998)) == "2000-01-01T00:00:00.998"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 999)) == "2000-01-01T00:00:00.999"
-    @test string(Dates.Time(0)) == "00:00:00"
-    @test string(Dates.Time(0, 1)) == "00:01:00"
-    @test string(Dates.Time(0, 1, 2)) == "00:01:02"
-    @test string(Dates.Time(0, 1, 2, 3)) == "00:01:02.003"
-    @test string(Dates.Time(0, 1, 2, 3, 4)) == "00:01:02.003004"
-    @test string(Dates.Time(0, 1, 2, 3, 4, 5)) == "00:01:02.003004005"
-    @test string(Dates.Time(0, 0, 0, 0, 1)) == "00:00:00.000001"
-    @test string(Dates.Time(0, 0, 0, 0, 0, 1)) == "00:00:00.000000001"
-    @test string(Dates.Time(0, 0, 0, 1)) == "00:00:00.001"
 end
+
+@testset "string/show representation of Time" begin
+    tests = [
+        Dates.Time(0) => ("00:00:00", "Dates.Time(0)"),
+        Dates.Time(0, 1) => ("00:01:00", "Dates.Time(0, 1)"),
+        Dates.Time(0, 1, 2) => ("00:01:02", "Dates.Time(0, 1, 2)"),
+        Dates.Time(0, 1, 2, 3) => ("00:01:02.003", "Dates.Time(0, 1, 2, 3)"),
+        Dates.Time(0, 1, 2, 3, 4) => ("00:01:02.003004", "Dates.Time(0, 1, 2, 3, 4)"),
+        Dates.Time(0, 1, 2, 3, 4, 5) => ("00:01:02.003004005", "Dates.Time(0, 1, 2, 3, 4, 5)"),
+        Dates.Time(0, 0, 0, 0, 0, 1) => ("00:00:00.000000001", "Dates.Time(0, 0, 0, 0, 0, 1)"),
+        Dates.Time(0, 0, 0, 1) => ("00:00:00.001", "Dates.Time(0, 0, 0, 1)"),
+    ]
+
+    for (t, (printed, shown)) in tests
+        @test sprint(print, t) == printed
+        @test string(t) == printed
+        @test sprint(show, t) == shown
+        @test repr(t) == shown
+    end
+end
+
 @testset "DateTime parsing" begin
     # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
@@ -97,12 +60,15 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SS\\P\""
+    @test sprint(show, dateformat"yyyy-mm-dd\THH:MM:SS.s") == "dateformat\"yyyy-mm-dd\\THH:MM:SS.s\""
+    @test sprint(show, dateformat"yyyy-mm-ddTHH:MM:SS.s") == "dateformat\"yyyy-mm-ddTHH:MM:SS.s\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
     @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
     @test sprint(show, DateFormat("xxmmxx").tokens[2]) == "DatePart(mm)"
 end
+
 @testset "Common Parsing Patterns" begin
     #'1996-January-15'
     dt = Dates.DateTime(1996, 1, 15)
@@ -289,6 +255,7 @@ end
     @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
     @test Dates.DateTime(string(dt)) == dt
 end
+
 @testset "prefix." begin
     s = "/1996/1/15"
     f = "/yyyy/m/d"
@@ -297,6 +264,7 @@ end
     @test Dates.format(dt, f) == s
     @test_throws ArgumentError Dates.DateTime("1996/1/15", f)
 end
+
 @testset "French and Chinese" begin
     # from Jiahao
     @test Dates.Date("2009年12月01日", "yyyy年mm月dd日") == Dates.Date(2009, 12, 1)
@@ -339,6 +307,7 @@ end
     # doesn't parse month name greater than 4 chars
     @test_throws ArgumentError Dates.Date("28avril2014", f; locale="french")
 end
+
 @testset "year digits parsing" begin
     # From Tony Fong
     f = "dduuuyy"
@@ -394,6 +363,7 @@ end
 
     @test typeof(Dates.Date.(dr)) == Array{Date, 1}
 end
+
 @testset "Issue 13" begin
     t = Dates.DateTime(1, 1, 1, 14, 51, 0, 118)
     @test Dates.DateTime("[14:51:00.118]", "[HH:MM:SS.sss]") == t
@@ -403,6 +373,7 @@ end
     @test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
     @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t
 end
+
 @testset "RFC1123Format" begin
     dt = Dates.DateTime(2014, 8, 23, 17, 22, 15)
     @test Dates.format(dt, Dates.RFC1123Format) == "Sat, 23 Aug 2014 17:22:15"
@@ -431,6 +402,7 @@ end
     @test parse(Dates.DateTime, "Mon, 12 Nov 2016 07:45:36", Dates.RFC1123Format) == dt  # Wrong day of week
     @test_throws ArgumentError parse(Date, "Foo, 12 Nov 2016 07:45:36", Dates.RFC1123Format)
 end
+
 @testset "Issue 15195" begin
     f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
@@ -481,6 +453,7 @@ end
     @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
     @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
 end
+
 @testset "Issue 21001" begin
     for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "678"])
         local dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
@@ -490,8 +463,12 @@ end
         @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
     end
 end
+
 # Issue #21504
 @test tryparse(Dates.Date, "0-1000") === nothing
+
+# Issue #44003
+@test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
 
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
@@ -499,7 +476,8 @@ end
     @test Dates.parse_components(".12", Dates.DateFormat(".s")) == [Dates.Millisecond(120)]
     @test Dates.parse_components(".123", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
     @test Dates.parse_components(".1230", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
-    @test_throws InexactError Dates.parse_components(".1234", Dates.DateFormat(".s"))
+    # Issue #44003
+    @test_throws ArgumentError Dates.parse_components(".1234", Dates.DateFormat(".s"))
 
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
@@ -547,11 +525,97 @@ end
 
 @testset "midnight" begin
     # issue #28203: 24:00 is a valid ISO 8601 time
-    @test DateTime("2018-01-01 24:00","yyyy-mm-dd HH:MM") == DateTime("2018-01-02T00:00:00") ==
-          DateTime(2018, 1, 1, 24) == DateTime(2018, 1, 2)
-    @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
+    @test DateTime("2018-01-01 24:00", "yyyy-mm-dd HH:MM") ==
+          DateTime("2018-01-02T00:00:00") ==
+          DateTime(2018, 1, 1, 24) ==
+          DateTime(2018, 1, 2)
+    @test_throws ArgumentError DateTime("2018-01-01 24:01", "yyyy-mm-dd HH:MM")
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
+end
+
+@testset "AM/PM" begin
+    for (t12, t24) in (
+        ("12:00am", "00:00"),
+        ("12:07am", "00:07"),
+        ("01:24AM", "01:24"),
+        ("12:00pm", "12:00"),
+        ("12:15pm", "12:15"),
+        ("11:59PM", "23:59"),
+    )
+        d = DateTime("2018-01-01T$t24:00")
+        t = Time("$t24:00")
+        for HH in ("HH", "II")
+            @test DateTime("2018-01-01 $t12", "yyyy-mm-dd $HH:MMp") == d
+            @test Time("$t12", "$HH:MMp") == t
+        end
+        local tmstruct, strftime
+        withlocales(["C"]) do locale
+            # test am/pm comparison handling
+            tmstruct = Libc.strptime("%I:%M%p", t12)
+            strftime = Libc.strftime("%I:%M%p", tmstruct)
+            nothing
+        end
+        @test Time(tmstruct) == t
+        @test uppercase(t12) ==
+              Dates.format(t, "II:MMp") ==
+              Dates.format(d, "II:MMp") ==
+              strftime
+    end
+    for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+        @test_throws ArgumentError Time(bad, "II:MMp")
+    end
+    # if am/pm is missing, defaults to 24-hour clock
+    @test Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
+end
+
+@testset "Issue #10561, two-digit year parsing ambiguities" begin
+    # All two-digit dates (whether full or resulting from truncation, e.g. 2010 -> 10)
+    # encoded in two digit year format YY are parsed as year 00YY
+
+    for test_year in ("00", "01", "99", "2021")
+        @test Date(test_year, dateformat"yy") == Date(parse(Int, test_year))
+    end
+end
+
+@testset "inference with dynamic dateformat string" begin
+    datetime = DateTime(2020, 4, 7)
+    f1() = DateTime("2020-04-07", "yyyy-mm-dd")
+    f2() = DateTime("2020-04-07", DateFormat("yyyy-mm-dd"))
+    f3() = parse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
+    @test (@inferred f1()) == (@inferred f2()) == (@inferred f3()) == datetime
+    g() = tryparse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
+    @test (@inferred Nothing g()) == datetime
+end
+
+@testset "Issue #43883: parsing empty strings" begin
+    for (T, name, fmt) in zip(
+            (DateTime, Date, Time),
+            ("DateTime", "Date or Time", "Date or Time"),
+            ("yyyy-mm-ddHHMMSS.s", "yyymmdd", "HHMMSS")
+        )
+        @test_throws ArgumentError T("")
+        @test_throws ArgumentError T("", fmt)
+        @test_throws ArgumentError T("", DateFormat(fmt))
+        try
+            T("")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test_throws ArgumentError parse(T, "")
+        @test_throws ArgumentError parse(T, "", DateFormat(fmt))
+        try
+            parse(T, "")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test tryparse(T, "") === nothing
+        @test tryparse(T, "", DateFormat(fmt)) === nothing
+    end
 end
 
 end

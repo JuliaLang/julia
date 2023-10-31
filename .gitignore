@@ -12,15 +12,18 @@
 /source-dist.tmp
 /source-dist.tmp1
 
+*.expmap
 *.exe
 *.dll
 *.dwo
 *.do
 *.o
+*.o.tmp
 *.obj
 *.so
 *.dylib
 *.dSYM
+*.h.gen
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
@@ -29,3 +32,15 @@
 
 /perf*
 .DS_Store
+.idea/*
+.vscode/*
+*.heapsnapshot
+.cache
+# Buildkite: Ignore the entire .buildkite directory
+/.buildkite
+
+# Buildkite: Ignore the unencrypted repo_key
+repo_key
+
+# Buildkite: Ignore any agent keys (public or private) we have stored
+agent_key*

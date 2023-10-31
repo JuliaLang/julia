@@ -7,8 +7,8 @@ major syntactic and functional differences. The following are some noteworthy di
 may trip up Julia users accustomed to MATLAB:
 
   * Julia arrays are indexed with square brackets, `A[i,j]`.
-  * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B` will modify `A`
-    as well.
+  * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B`
+    will modify `A` as well. To avoid this, use `A = copy(B)`.
   * Julia values are not copied when passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * Julia does not automatically grow arrays in an assignment statement. Whereas in MATLAB `a(4) = 3.2`
@@ -18,8 +18,8 @@ may trip up Julia users accustomed to MATLAB:
     which grow `Vector`s much more efficiently than MATLAB's `a(end+1) = val`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as [`im`](@ref), not `i` or `j` as in MATLAB.
   * In Julia, literal numbers without a decimal point (such as `42`) create integers instead of floating
-    point numbers. As a result, some operations can throw
-    a domain error if they expect a float; for example, `julia> a = -1; 2^a` throws a domain error, as the
+    point numbers. As a result, some operations can throw a domain error if they expect a float; for example,
+    `julia> a = -1; 2^a` throws a domain error, as the
     result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors) for details).
   * In Julia, multiple values are returned and assigned as tuples, e.g. `(a, b) = (1, 2)` or `a, b = 1, 2`.
     MATLAB's `nargout`, which is often used in MATLAB to do optional work based on the number of returned
@@ -35,10 +35,10 @@ may trip up Julia users accustomed to MATLAB:
     - To construct block matrices (concatenating in the first two dimensions), use either [`hvcat`](@ref)
       or combine spaces and semicolons (`[a b; c d]`).
   * In Julia, `a:b` and `a:b:c` construct `AbstractRange` objects. To construct a full vector like in MATLAB,
-    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange` object will
-    act like a normal array in most cases but is more efficient because it lazily computes its values.
-    This pattern of creating specialized objects instead of full arrays is used frequently, and is
-    also seen in functions such as [`range`](@ref), or with iterators such as `enumerate`, and
+    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange`
+    object will act like a normal array in most cases but is more efficient because it lazily computes
+    its values. This pattern of creating specialized objects instead of full arrays is used frequently,
+    and is also seen in functions such as [`range`](@ref), or with iterators such as `enumerate`, and
     `zip`. The special objects can mostly be used as if they were normal arrays.
   * Functions in Julia return values from their last expression or the `return` keyword instead of
     listing the names of variables to return in the function definition (see [The return Keyword](@ref)
@@ -46,7 +46,7 @@ may trip up Julia users accustomed to MATLAB:
   * A Julia script may contain any number of functions, and all definitions will be externally visible
     when the file is loaded. Function definitions can be loaded from files outside the current working
     directory.
-  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`max`](@ref) are performed
+  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`maximum`](@ref) are performed
     over every element of an array when called with a single argument, as in `sum(A)`, even if `A`
     has more than one dimension.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
@@ -70,7 +70,7 @@ may trip up Julia users accustomed to MATLAB:
     in an interactive session. In Julia, unlike MATLAB, `ans` is not set when Julia code is run in
     non-interactive mode.
   * Julia's `struct`s do not support dynamically adding fields at runtime, unlike MATLAB's `class`es.
-    Instead, use a [`Dict`](@ref).
+    Instead, use a [`Dict`](@ref). Dict in Julia isn't ordered.
   * In Julia each module has its own global scope/namespace, whereas in MATLAB there is just one global
     scope.
   * In MATLAB, an idiomatic way to remove unwanted values is to use logical indexing, like in the
@@ -80,6 +80,9 @@ may trip up Julia users accustomed to MATLAB:
     `x[x.>3]` and `x = x[x.>3]`. Using [`filter!`](@ref) reduces the use of temporary arrays.
   * The analogue of extracting (or "dereferencing") all elements of a cell array, e.g. in `vertcat(A{:})`
     in MATLAB, is written using the splat operator in Julia, e.g. as `vcat(A...)`.
+  * In Julia, the `adjoint` function performs conjugate transposition; in MATLAB, `adjoint` provides the
+    "adjugate" or classical adjoint, which is the transpose of the matrix of cofactors.
+  * In Julia, a^b^c is evaluated a^(b^c) while in MATLAB it's (a^b)^c.
 
 ## Noteworthy differences from R
 
@@ -94,6 +97,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, varargs are specified using the splat operator `...`, which always follows the name
     of a specific variable, unlike R, for which `...` can occur in isolation.
   * In Julia, modulus is `mod(a, b)`, not `a %% b`. `%` in Julia is the remainder operator.
+  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * In Julia, not all data structures support logical indexing. Furthermore, logical indexing in Julia
     is supported only with vectors of length equal to the object being indexed. For example:
 
@@ -119,7 +123,6 @@ For users coming to Julia from R, these are some noteworthy differences:
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
   * Julia's `->` creates an anonymous function.
-  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
     In R, this same notation would perform an element-wise (Hadamard) product. To get the element-wise
@@ -158,8 +161,11 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, vectors and matrices are concatenated using [`hcat`](@ref), [`vcat`](@ref) and
     [`hvcat`](@ref), not `c`, `rbind` and `cbind` like in R.
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
-    object that is used for iteration without high memory overhead. To convert a range into a vector, use
+    object that is used for iteration. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
+  * The `:` operator has a different precedence in R and Julia. In particular, in Julia arithmetic operators
+    have higher precedence than the `:` operator, whereas the reverse is true in R. For example, `1:n-1` in
+    Julia is equivalent to `1:(n-1)` in R.
   * Julia's [`max`](@ref) and [`min`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)
     replace `max` and `min` in R, there are important differences.
@@ -196,20 +202,29 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 ## Noteworthy differences from Python
 
-  * Julia requires `end` to end a block. Unlike Python, Julia has no `pass` keyword.
+  * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
+    is not significant as it is in Python. Unlike Python, Julia has no `pass` keyword.
+  * Strings are denoted by double quotation marks (`"text"`) in Julia (with three double quotation marks for multi-line strings), whereas in Python they can be denoted either by single (`'text'`) or double quotation marks (`"text"`). Single quotation marks are used for characters in Julia (`'c'`).
+  * String concatenation is done with `*` in Julia, not `+` like in Python. Analogously, string repetition is done with `^`, not `*`. Implicit string concatenation of string literals like in Python (e.g. `'ab' 'cd' == 'abcd'`) is not done in Julia.
+  * Python Lists—flexible but slow—correspond to the Julia `Vector{Any}` type or more generally `Vector{T}` where `T` is some non-concrete element type. "Fast" arrays like NumPy arrays that store elements in-place (i.e., `dtype` is `np.float64`, `[('f1', np.uint64), ('f2', np.int32)]`, etc.) can be represented by `Array{T}` where `T` is a concrete, immutable element type. This includes built-in types like `Float64`, `Int32`, `Int64` but also more complex types like `Tuple{UInt64,Float64}` and many user-defined types as well.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
-  * Julia does not support negative indices. In particular, the last element of a list or array is
-    indexed with `end` in Julia, not `-1` as in Python.
-  * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
-    is not significant as it is in Python.
+  * Unlike Python, Julia allows [AbstractArrays with arbitrary indexes](https://julialang.org/blog/2017/04/offset-arrays/).
+    Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
+    `a[end]` and `a[end-1]` in Julia.
+  * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
+  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
+  * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
+  * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
+    in array-indexing.  The `range` function is also supported.
+  * In Julia, indexing a matrix with arrays like `X[[1,2], [1,3]]` refers to a sub-matrix that contains the intersections of the first and second rows with the first and third columns. In Python, `X[[1,2], [1,3]]` refers to a vector that contains the values of cell `[1,1]` and `[2,3]` in the matrix. `X[[1,2], [1,3]]` in Julia is equivalent with `X[np.ix_([0,1],[0,2])]` in Python. `X[[0,1], [0,2]]` in Python is equivalent with `X[[CartesianIndex(1,1), CartesianIndex(2,3)]]` in Julia.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
     expression, it is considered done; otherwise the input continues. One way to force an expression
     to continue is to wrap it in parentheses.
-  * Julia arrays are column major (Fortran ordered) whereas NumPy arrays are row major (C-ordered)
+  * Julia arrays are column-major (Fortran-ordered) whereas NumPy arrays are row-major (C-ordered)
     by default. To get optimal performance when looping over arrays, the order of the loops should
-    be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
+    be reversed in Julia relative to NumPy (see [relevant section of Performance Tips](@ref man-performance-column-major)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
     means `A = [1, 1]; B = A; B += [3, 3]` doesn't change values in `A`, it rather rebinds the name `B`
     to the result of the right-hand side `B = B + 3`, which is a new array. For in-place operation, use `B .+= 3`
@@ -219,23 +234,45 @@ For users coming to Julia from R, these are some noteworthy differences:
     the function `f(x=rand()) = x` returns a new random number every time it is invoked without argument.
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
+  * In Julia, keyword arguments must be passed using keywords, unlike Python in which it is usually possible
+    to pass them positionally. Attempting to pass a keyword argument positionally alters the method
+    signature leading to a `MethodError` or calling of the wrong method.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
-  * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
-    This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
+  * In Julia, the commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`), unlike in Python, where `int` is an arbitrary length integer.
+    This means in Julia the `Int` type will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
     such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
+  * The imaginary unit `sqrt(-1)` is represented in Julia as `im`, not `j` as in Python.
+  * In Julia, the exponentiation operator is `^`, not `**` as in Python.
+  * Julia uses `nothing` of type `Nothing` to represent a null value, whereas Python uses `None` of type `NoneType`.
+  * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
+  * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
+  * In Julia, a function may contain multiple concrete implementations (called *methods*), which are selected via multiple dispatch based on the types of all arguments to the call, as compared to functions in Python, which have a single implementation and no polymorphism (as opposed to Python method calls which use a different syntax and allows dispatch on the receiver of the method).
+  * There are no classes in Julia. Instead there are structures (mutable or immutable), containing data but no methods.
+  * Calling a method of a class instance in Python (`x = MyClass(*args); x.f(y)`) corresponds to a function call in Julia, e.g. `x = MyType(args...); f(x, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
+  * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
+  * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
+  * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
+  * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia (compared with Python, Julia is faster at ordinary control flow but slower at exception-catching).
+  * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
+  * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
+  * In Julia, rounding and truncation are explicit. Python's `int(3.7)` should be `floor(Int, 3.7)` or `Int(floor(3.7))` and is distinguished from `round(Int, 3.7)`. `floor(x)` and `round(x)` on their own return an integer value of the same type as `x` rather than always returning `Int`.
+  * In Julia, parsing is explicit. Python's `float("3.7")` would be `parse(Float64, "3.7")` in Julia.
+  * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.  Perhaps surprisingly, in Python `if "False"` and `bool("False")` both evaluate to `True` (because `"False"` is a non-empty string); in Julia, `parse(Bool, "false")` returns `false`.
+  * In Julia, a new local scope is introduced by most code blocks, including loops and `try` — `catch` — `finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
 
 ## Noteworthy differences from C/C++
 
   * Julia arrays are indexed with square brackets, and can have more than one dimension `A[i,j]`.
     This syntax is not just syntactic sugar for a reference to a pointer or address as in C/C++. See
-    the Julia documentation for the syntax for array construction (it has changed between versions).
+    [the manual entry about array construction](@ref man-multi-dim-arrays).
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B` will modify `A`
     as well. Updating operators like `+=` do not operate in-place, they are equivalent to `A = A + B`
     which rebinds the left-hand side to the result of the right-hand side expression.
   * Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row major ordered by
     default. To get optimal performance when looping over arrays, the order of the loops should be
-    reversed in Julia relative to C/C++ (see relevant section of [Performance Tips](@ref man-performance-tips)).
+    reversed in Julia relative to C/C++ (see [relevant section of Performance Tips](@ref man-performance-column-major)).
   * Julia values are not copied when assigned or passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
@@ -245,16 +282,22 @@ For users coming to Julia from R, these are some noteworthy differences:
     a larger size type, such as `Int64` (if `Int` is `Int32`), `Int128`, or the arbitrarily large
     `BigInt` type. There are no numeric literal suffixes, such as `L`, `LL`, `U`, `UL`, `ULL` to indicate
     unsigned and/or signed vs. unsigned. Decimal literals are always signed, and hexadecimal literals
-    (which start with `0x` like C/C++), are unsigned. Hexadecimal literals also, unlike C/C++/Java
+    (which start with `0x` like C/C++), are unsigned, unless when they encode more than 128 bits,
+    in which case they are of type `BigInt`. Hexadecimal literals also, unlike C/C++/Java
     and unlike decimal literals in Julia, have a type based on the *length* of the literal, including
     leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
     [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
-    `UInt64` and 17 to 32 hex digits type `UInt128`. This needs to be taken into account when defining
+    `UInt64`, 17 to 32 hex digits type `UInt128`, and more that 32 hex digits type `BigInt`.
+    This needs to be taken into account when defining
     hexadecimal masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
     and 32 bit [`Float32`](@ref) bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
     literals are rounded (and not promoted to the `BigFloat` type) if they can not be exactly represented.
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary
-    (prefixed with `0b`) literals are also treated as unsigned.
+    (prefixed with `0b`) literals are also treated as unsigned (or `BigInt` for more than 128 bits).
+  * In Julia, the division operator [`/`](@ref) returns a floating point number when both operands
+    are of integer type.  To perform integer division, use [`div`](@ref) or [`÷`](@ref div).
+  * Indexing an `Array` with floating point types is generally an error in Julia. The Julia
+    equivalent of the C expression `a[i / 2]` is `a[i ÷ 2 + 1]`, where `i` is of integer type.
   * String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain
     `"` characters without quoting it like `"\""`. String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which
@@ -272,11 +315,11 @@ For users coming to Julia from R, these are some noteworthy differences:
     meaning within `[ ]`, something to watch out for. `;` can be used to separate expressions on a
     single line, but are not strictly necessary in many cases, and are more an aid to readability.
   * In Julia, the operator [`⊻`](@ref xor) ([`xor`](@ref)) performs the bitwise XOR operation, i.e.
-    [`^`](@ref) in C/C++.  Also, the bitwise operators do not have the same precedence as C/++, so
+    [`^`](@ref) in C/C++.  Also, the bitwise operators do not have the same precedence as C/C++, so
     parenthesis may be required.
   * Julia's [`^`](@ref) is exponentiation (pow), not bitwise XOR as in C/C++ (use [`⊻`](@ref xor), or
     [`xor`](@ref), in Julia)
-  * Julia has two right-shift operators, `>>` and `>>>`.  `>>>` performs an arithmetic shift, `>>`
+  * Julia has two right-shift operators, `>>` and `>>>`.  `>>` performs an arithmetic shift, `>>>`
     always performs a logical shift, unlike C/C++, where the meaning of `>>` depends on the type of
     the value being shifted.
   * Julia's `->` creates an anonymous function, it does not access a member via a pointer.
@@ -308,3 +351,123 @@ For users coming to Julia from R, these are some noteworthy differences:
     in order to have dynamic dispatch. On the other hand, in Julia every method is "virtual" (although
     it's more general than that since methods are dispatched on every argument type, not only `this`,
     using the most-specific-declaration rule).
+
+### Julia &hArr; C/C++: Namespaces
+  * C/C++ `namespace`s correspond roughly to Julia `module`s.
+  * There are no private globals or fields in Julia.  Everything is publicly accessible
+    through fully qualified paths (or relative paths, if desired).
+  * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule: myfun` (Julia).
+  * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia)
+    * In Julia, only `export`ed symbols are made available to the calling module.
+    * In C++, only elements found in the included (public) header files are made available.
+  * Caveat: `import`/`using` keywords (Julia) also *load* modules (see below).
+  * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
+    * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
+
+### Julia &hArr; C/C++: Module loading
+  * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
+    * Caveat: C/C++ libraries often house multiple "software modules" whereas Julia
+      "packages" typically house one.
+    * Reminder: Julia `module`s are global scopes (not necessarily "software modules").
+  * **Instead of build/`make` scripts**, Julia uses "Project Environments" (sometimes called
+    either "Project" or "Environment").
+    * Build scripts are only needed for more complex applications
+      (like those needing to compile or download C/C++ executables).
+    * To develop application or project in Julia, you can initialize its root directory
+      as a "Project Environment", and house application-specific code/packages there.
+      This provides good control over project dependencies, and future reproducibility.
+    * Available packages are added to a "Project Environment" with the `Pkg.add()` function or Pkg REPL mode.
+      (This does not **load** said package, however).
+    * The list of available packages (direct dependencies) for a "Project Environment" are
+      saved in its `Project.toml` file.
+    * The *full* dependency information for a "Project Environment" is auto-generated & saved
+      in its `Manifest.toml` file by `Pkg.resolve()`.
+  * Packages ("software modules") available to the "Project Environment" are loaded with
+    `import` or `using`.
+    * In C/C++, you `#include <moduleheader>` to get object/function declarations, and link in
+      libraries when you build the executable.
+    * In Julia, calling using/import again just brings the existing module into scope, but does not load it again
+      (similar to adding the non-standard `#pragma once` to C/C++).
+  * **Directory-based package repositories** (Julia) can be made available by adding repository
+    paths to the `Base.LOAD_PATH` array.
+    * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
+      being loaded with `import` or `using`. They are simply available to the project.
+    * Directory-based package repositories are the **quickest solution** to developing local
+      libraries of "software modules".
+
+### Julia &hArr; C/C++: Assembling modules
+  * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
+    * In Julia, `import [PkgName]`/`using [PkgName]` statements load `[PkgName].jl` located
+      in a package's `[PkgName]/src/` subdirectory.
+    * In turn, `[PkgName].jl` typically loads associated source files with calls to
+      `include "[someotherfile].jl"`.
+  * `include "./path/to/somefile.jl"` (Julia) is very similar to
+    `#include "./path/to/somefile.jl"` (C/C++).
+    * However `include "..."` (Julia) is not used to include header files (not required).
+    * **Do not use** `include "..."` (Julia) to load code from other "software modules"
+      (use `import`/`using` instead).
+    * `include "path/to/some/module.jl"` (Julia) would instantiate multiple versions of the
+      same code in different modules (creating *distinct* types (etc.) with the *same* names).
+    * `include "somefile.jl"` is typically used to assemble multiple files *within the same
+      Julia package* ("software module"). It is therefore relatively straightforward to ensure
+      file are `include`d only once (No `#ifdef` confusion).
+
+### Julia &hArr; C/C++: Module interface
+  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
+    specific symbols that are intended for their users as `public`or `export`ed.
+    * Often, Julia `module`s simply add functionality by generating new "methods" to existing
+      functions (ex: `Base.push!`).
+    * Developers of Julia packages therefore cannot rely on header files for interface
+      documentation.
+    * Interfaces for Julia packages are typically described using docstrings, README.md,
+      static web pages, ...
+  * Some developers choose not to `export` all symbols required to use their package/module,
+    but should still mark unexported user facing symbols as `public`.
+    * Users might be expected to access these components by qualifying functions/structs/...
+      with the package/module name (ex: `MyModule.run_this_task(...)`).
+
+### Julia &hArr; C/C++: Quick reference
+
+| Software Concept   | Julia | C/C++ |
+| :---               | :---  | :---  |
+| unnamed scope      | `begin` ... `end`        | `{` ... `}`                                  |
+| function scope     | `function x()` ... `end` | `int x() {` ... `}`                          |
+| global scope       | `module MyMod` ... `end` | `namespace MyNS {` ... `}`                   |
+| software module    | A Julia "package"        | `.h`/`.hpp` files<br>+compiled `somelib.a`   |
+| assembling<br>software modules | `SomePkg.jl`: ...<br>`import("subfile1.jl")`<br>`import("subfile2.jl")`<br>... | `$(AR) *.o` &rArr; `somelib.a` |
+| import<br>software module | `import SomePkg`  | `#include <somelib>`<br>+link in `somelib.a` |
+| module library     | `LOAD_PATH[]`, \*Git repository,<br>\*\*custom package registry  | more `.h`/`.hpp` files<br>+bigger compiled `somebiglib.a` |
+
+\* The Julia package manager supports registering multiple packages from a single Git repository.<br>
+\* This allows users to house a library of related packages in a single repository.<br>
+\*\* Julia registries are primarily designed to provide versioning \& distribution of packages.<br>
+\*\* Custom package registries can be used to create a type of module library.
+
+
+## Noteworthy differences from Common Lisp
+
+- Julia uses 1-based indexing for arrays by default, and it can also handle arbitrary [index offsets](@ref man-custom-indices).
+
+- Functions and variables share the same namespace (“Lisp-1”).
+
+- There is a [`Pair`](@ref) type, but it is not meant to be used as a `COMMON-LISP:CONS`. Various iterable collections can be used interchangeably in most parts of the language (eg splatting, tuples, etc). `Tuple`s are the closest to Common Lisp lists for *short* collections of heterogeneous elements. Use `NamedTuple`s in place of alists. For larger collections of homogeneous types, `Array`s and `Dict`s should be used.
+
+- The typical Julia workflow for prototyping also uses continuous manipulation of the image, implemented with the [Revise.jl](https://github.com/timholy/Revise.jl) package.
+
+- For performance, Julia prefers that operations have [type stability](@ref man-type-stability). Where Common Lisp abstracts away from the underlying machine operations, Julia cleaves closer to them. For example:
+  - Integer division using `/` always returns a floating-point result, even if the computation is exact.
+    - `//` always returns a rational result
+    - `÷` always returns a (truncated) integer result
+  - Bignums are supported, but conversion is not automatic; ordinary integers [overflow](@ref faq-integer-arithmetic).
+  - Complex numbers are supported, but to get complex results, [you need complex inputs](@ref faq-domain-errors).
+  - There are multiple Complex and Rational types, with different component types.
+
+- Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can't be assigned to from outside the module (except with `eval(mod, :(var = val))` as an escape hatch).
+
+- Macros start with `@`, and are not as seamlessly integrated into the language as Common Lisp; consequently, macro usage is not as widespread as in the latter. A form of hygiene for [macros](@ref Metaprogramming) is supported by the language. Because of the different surface syntax, there is no equivalent to `COMMON-LISP:&BODY`.
+
+- *All* functions are generic and use multiple dispatch. Argument lists don't have to follow the same template, which leads to a powerful idiom (see [`do`](@ref)). Optional and keyword arguments are handled differently. Method ambiguities are not resolved like in the Common Lisp Object System, necessitating the definition of a more specific method for the intersection.
+
+- Symbols do not belong to any package, and do not contain any values *per se*. `M.var` evaluates the symbol `var` in the module `M`.
+
+- A functional programming style is fully supported by the language, including closures, but isn't always the idiomatic solution for Julia. Some [workarounds](@ref man-performance-captured) may be necessary for performance when modifying captured variables.

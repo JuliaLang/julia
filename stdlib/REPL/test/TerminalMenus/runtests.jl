@@ -4,41 +4,31 @@ import REPL
 using REPL.TerminalMenus
 using Test
 
-TerminalMenus.config(supress_output=true)
-
-function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...)
-    # If we cannot write to the buffer, skip the test
-    !(:buffer in fieldnames(typeof(stdin))) && return true
-
+function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)
     keydict =  Dict(:up => "\e[A",
                     :down => "\e[B",
                     :enter => "\r")
 
+    new_stdin = Base.BufferStream()
     for key in keys
         if isa(key, Symbol)
-            write(stdin.buffer, keydict[key])
+            write(new_stdin, keydict[key])
         else
-            write(stdin.buffer, "$key")
+            write(new_stdin, "$key")
         end
     end
+    TerminalMenus.terminal.in_stream = new_stdin
 
-    request(menu) == expectedResult
+    return request(menu; suppress_output=true, kwargs...)
 end
 
 include("radio_menu.jl")
 include("multiselect_menu.jl")
+include("dynamic_menu.jl")
+include("multiselect_with_skip_menu.jl")
+include("pager.jl")
 
-# Other test
-
-# scroll must only accept symbols
-@test_throws TypeError TerminalMenus.config(scroll=true)
-# :foo is not a valid scroll option
-@test_throws ArgumentError TerminalMenus.config(scroll=:foo)
-# Test scroll wrap
-TerminalMenus.config(scroll=:wrap)
-@test TerminalMenus.CONFIG[:scroll_wrap] == true
-# Updating some params shouldn't change other ones
-TerminalMenus.config(charset=:ascii)
-@test TerminalMenus.CONFIG[:scroll_wrap] == true
-TerminalMenus.config(scroll=:nowrap)
-@test TerminalMenus.CONFIG[:scroll_wrap] == false
+# Legacy tests
+include("legacytests/old_radio_menu.jl")
+include("legacytests/old_multiselect_menu.jl")
+include("legacytests/config.jl")
