@@ -1202,7 +1202,7 @@ differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
 
 To change the behavior of `copymutable` on a custom collection is typically
-sufficient to define `similar` for that collection.
+sufficient to define [`similar`](@ref) for that collection.
 
 # Examples
 ```jldoctest
