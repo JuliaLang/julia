@@ -559,20 +559,16 @@ end
 
 # type and dimensionality specified, accepting dims as series of Ints
 eval(Core, :(function (self::Type{Array{T,1}})(::UndefInitializer, m::Int) where {T}
-    @noinline
     mem = fieldtype(fieldtype(self, :ref), :mem)(undef, m)
     return $(Expr(:new, :self, :(memoryref(mem)), :((m,))))
 end))
 eval(Core, :(function (self::Type{Array{T,2}})(::UndefInitializer, m::Int, n::Int) where {T}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n))), :((m, n))))
 end))
 eval(Core, :(function (self::Type{Array{T,3}})(::UndefInitializer, m::Int, n::Int, o::Int) where {T}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n, o))), :((m, n, o))))
 end))
 eval(Core, :(function (self::Type{Array{T, N}})(::UndefInitializer, d::Vararg{Int, N}) where {T, N}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(d...))), :d))
 end))
 # type and dimensionality specified, accepting dims as tuples of Ints

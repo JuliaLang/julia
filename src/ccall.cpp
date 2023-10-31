@@ -32,6 +32,7 @@ TRANSFORMED_CCALL_STAT(jl_svec_ref);
 TRANSFORMED_CCALL_STAT(jl_string_ptr);
 TRANSFORMED_CCALL_STAT(jl_symbol_name);
 TRANSFORMED_CCALL_STAT(jl_genericmemory_owner);
+TRANSFORMED_CCALL_STAT(jl_alloc_genericmemory);
 TRANSFORMED_CCALL_STAT(memcpy);
 TRANSFORMED_CCALL_STAT(memset);
 TRANSFORMED_CCALL_STAT(memmove);
@@ -1770,6 +1771,28 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *obj = emit_genericmemoryowner(ctx, boxed(ctx, argv[0]));
         JL_GC_POP();
         return mark_julia_type(ctx, obj, true, jl_any_type);
+    }
+    else if (is_libjulia_func(jl_alloc_genericmemory)) {
+        ++CCALL_STAT(jl_alloc_genericmemory);
+        assert(lrt == ctx.types().T_prjlvalue);
+        assert(!isVa && !llvmcall && nccallargs == 2);
+        const jl_cgval_t &typ = argv[0];
+        const jl_cgval_t &nel = argv[1];
+        auto arg_typename = [&] JL_NOTSAFEPOINT {
+            auto istyp = argv[0].constant;
+            if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)){
+                auto eltype = jl_tparam1(istyp);
+                if (jl_is_datatype(eltype))
+                    return jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+                else if (jl_is_uniontype(eltype))
+                    return (char *)"Union";
+            }
+            return (char *)"<unknown type>";
+            };
+        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
+        setName(ctx.emission_context, alloc, StringRef("Memory{") + arg_typename() + StringRef("}[]"));
+        JL_GC_POP();
+        return mark_julia_type(ctx, alloc, true, jl_any_type);
     }
     else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
         ++CCALL_STAT(memcpy);
