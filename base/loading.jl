@@ -2398,12 +2398,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
-            if cache_objects
-                # Ensure that the user can execute the `.so` we're generating
-                # Note that on windows, `filemode(path)` typically returns `0o666`, so this
-                # addition of the execute bit for the user is doubly needed.
-                chmod(tmppath_so, filemode(path) & 0o777 | 0o331)
-            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
