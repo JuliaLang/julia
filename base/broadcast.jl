@@ -898,19 +898,21 @@ end
     destc = dest.chunks
     length(destc)<=0 && return dest
     bcp = preprocess(dest, bc)
-    @inbounds for i = 0:length(destc)-2
+    len = num_bit_chunks(length(bcp))
+    @inbounds for i = 0:(len - 2)
         z = UInt64(0)
-        for j=0:63
-           z |= (bcp[i*64 + j + 1]::Bool) << (j&63)
+        for j = 0:63
+           z |= (bcp[i*64 + j + 1]::Bool) << (j & 63)
         end
-        destc[i+1] = z
+        destc[i + 1] = z
     end
-    i = length(destc)-1
-    z = UInt64(0)
-    @inbounds for j=0:(length(bcp)-1)&63
-         z |= (bcp[i*64 + j + 1]::Bool) << (j&63)
+    @inbounds let i = len - 1
+        z = UInt64(0)
+        for j = 0:((length(bcp) - 1) & 63)
+             z |= (bcp[i*64 + j + 1]::Bool) << (j & 63)
+        end
+        destc[i + 1] = z
     end
-    @inbounds destc[i+1] = z
     return dest
 end
 
