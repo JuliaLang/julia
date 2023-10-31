@@ -1422,7 +1422,8 @@ end
 
 """
     geru!(alpha, x, y, A)
-    Performs an unconjugated rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*y' + A`.
+
+Performs an unconjugated rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*y' + A`.
 """
 function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
     if isreal(α)
