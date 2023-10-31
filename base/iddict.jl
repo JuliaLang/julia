@@ -83,7 +83,7 @@ function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
 end
 
 function _setindex!(d::IdDict{K, V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
-    d.ht[keyindex+1] = val
+    @inbounds d.ht[keyindex+1] = val
     d.count += inserted
 
     if d.ndel >= ((3*length(d.ht))>>2)
@@ -169,7 +169,7 @@ function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where 
         _setindex!(d, val, key, keyindex, inserted)
         return val::V
     else
-        return d.ht[keyindex+1]::V
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
@@ -193,7 +193,7 @@ function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V
         _setindex!(d, val, key, keyindex, inserted)
         return val::V
     else
-        return d.ht[keyindex+1]::V
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
