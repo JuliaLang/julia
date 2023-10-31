@@ -1196,13 +1196,12 @@ end
 """
     copymutable(a)
 
-Make a mutable copy of an array or iterable `a`.  For `a::Array`,
-this is equivalent to `copy(a)`, but for other array types it may
-differ depending on the type of `similar(a)`.  For generic iterables
-this is equivalent to `collect(a)`.
+Make a mutable copy of an array or iterable `a`. The result should have the same content as
+`a`, but support mutation. For `Array`s and most iterables this is equivalent to
+`collect(a)`, but for other array types it may differ depending on the type of `similar(a)`.
 
-To change the behavior of `copymutable` on a custom collection is typically
-sufficient to define [`similar`](@ref) for that collection.
+To change the behavior of `copymutable` on a custom collection, define [`similar`](@ref)
+for that collection.
 
 # Examples
 ```jldoctest
@@ -1211,6 +1210,20 @@ julia> tup = (1, 2, 3)
 
 julia> Base.copymutable(tup)
 3-element Vector{Int64}:
+ 1
+ 2
+ 3
+
+julia> using StaticArrays
+
+julia> s = SVector{3}(1,2,3)
+3-element SVector{3, Int64} with indices SOneTo(3):
+ 1
+ 2
+ 3
+
+julia> Base.copymutable(s)
+3-element MVector{3, Int64} with indices SOneTo(3):
  1
  2
  3
