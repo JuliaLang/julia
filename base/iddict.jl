@@ -24,10 +24,10 @@ IdDict{Any, String} with 3 entries:
 ```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
-    ht::Vector{Any}
+    ht::Memory{Any}
     count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(undef, 32), 0, 0)
+    IdDict{K,V}() where {K, V} = new{K,V}(Memory{Any}(undef, 32), 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
@@ -69,7 +69,7 @@ end
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
-    d.ht = ccall(:jl_idtable_rehash, Vector{Any}, (Any, Csize_t), d.ht, newsz)
+    d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)
     d
 end
 
@@ -86,14 +86,14 @@ end
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)
+        val = convert(V, val)::V
     end
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max((length(d.ht)%UInt)>>1, 32))
         d.ndel = 0
     end
     inserted = RefValue{Cint}(0)
-    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
     d.count += inserted[]
     return d
 end
@@ -133,8 +133,11 @@ function delete!(d::IdDict{K}, @nospecialize(key)) where K
 end
 
 function empty!(d::IdDict)
-    resize!(d.ht, 32)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
+    d.ht = Memory{Any}(undef, 32)
+    ht = d.ht
+    t = @_gc_preserve_begin ht
+    memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht))
+    @_gc_preserve_end t
     d.ndel = 0
     d.count = 0
     return d
@@ -155,7 +158,7 @@ copy(d::IdDict) = typeof(d)(d)
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
-        val = isa(default, V) ? default : convert(V, default)
+        val = isa(default, V) ? default : convert(V, default)::V
         setindex!(d, val, key)
         return val
     else

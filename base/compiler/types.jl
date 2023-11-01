@@ -16,7 +16,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
-abstract type AbstractInterpreter end
+:(AbstractInterpreter)
+
 abstract type AbstractLattice end
 
 struct ArgInfo
@@ -31,6 +32,14 @@ struct StmtInfo
     """
     used::Bool
 end
+
+struct MethodInfo
+    propagate_inbounds::Bool
+    method_for_inference_limit_heuristics::Union{Nothing,Method}
+end
+MethodInfo(src::CodeInfo) = MethodInfo(
+    src.propagate_inbounds,
+    src.method_for_inference_limit_heuristics::Union{Nothing,Method})
 
 """
     v::VarState
@@ -58,10 +67,10 @@ A type that represents the result of running type inference on a chunk of code.
 See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
-    linfo::MethodInstance
-    argtypes::Vector{Any}
-    overridden_by_const::BitVector
-    result                   # ::Type, or InferenceState if WIP
+    const linfo::MethodInstance
+    const argtypes::Vector{Any}
+    const overridden_by_const::BitVector
+    result                   # extended lattice element if inferred, nothing otherwise
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
@@ -69,7 +78,10 @@ mutable struct InferenceResult
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
+        # def = linfo.def
+        # nargs = def isa Method ? Int(def.nargs) : 0
+        # @assert length(cache_argtypes) == nargs
+        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
@@ -141,6 +153,7 @@ struct InferenceParams
     aggressive_constant_propagation::Bool
     unoptimize_throw_blocks::Bool
     assume_bindings_static::Bool
+    ignore_recursion_hardlimit::Bool
 
     function InferenceParams(
         max_methods::Int,
@@ -151,7 +164,8 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         unoptimize_throw_blocks::Bool,
-        assume_bindings_static::Bool)
+        assume_bindings_static::Bool,
+        ignore_recursion_hardlimit::Bool)
         return new(
             max_methods,
             max_union_splitting,
@@ -161,7 +175,8 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             unoptimize_throw_blocks,
-            assume_bindings_static)
+            assume_bindings_static,
+            ignore_recursion_hardlimit)
     end
 end
 function InferenceParams(
@@ -174,7 +189,8 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=unoptimize_throw_blocks::Bool=# true,
-        #=assume_bindings_static::Bool=# false);
+        #=assume_bindings_static::Bool=# false,
+        #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
@@ -183,7 +199,8 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
-    assume_bindings_static::Bool = params.assume_bindings_static)
+    assume_bindings_static::Bool = params.assume_bindings_static,
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
     return InferenceParams(
         max_methods,
         max_union_splitting,
@@ -193,7 +210,8 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         unoptimize_throw_blocks,
-        assume_bindings_static)
+        assume_bindings_static,
+        ignore_recursion_hardlimit)
 end
 
 """
@@ -229,10 +247,6 @@ Parameters that control optimizer operation.
   generating `:invoke` expression based on the [`@nospecialize`](@ref) annotation,
   in order to avoid over-specialization.
 ---
-- `opt_params.trust_inference::Bool = false`\\
-  If `false`, the inliner will unconditionally generate a fallback block when union-splitting
-  a callsite, in case of existing subtyping bugs. This option may be removed in the future.
----
 - `opt_params.assume_fatal_throw::Bool = false`\\
   If `true`, gives the optimizer license to assume that any `throw` is fatal and thus the
   state after a `throw` is not externally observable. In particular, this gives the
@@ -248,7 +262,6 @@ struct OptimizationParams
     inline_error_path_cost::Int
     max_tuple_splat::Int
     compilesig_invokes::Bool
-    trust_inference::Bool
     assume_fatal_throw::Bool
 
     function OptimizationParams(
@@ -259,7 +272,6 @@ struct OptimizationParams
         inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
-        trust_inference::Bool,
         assume_fatal_throw::Bool)
         return new(
             inlining,
@@ -269,7 +281,6 @@ struct OptimizationParams
             inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
-            trust_inference,
             assume_fatal_throw)
     end
 end
@@ -282,7 +293,6 @@ function OptimizationParams(
         #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
-        #=trust_inference::Bool=# false,
         #=assume_fatal_throw::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
@@ -291,7 +301,6 @@ function OptimizationParams(
     inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
-    trust_inference::Bool = params.trust_inference,
     assume_fatal_throw::Bool = params.assume_fatal_throw)
     return OptimizationParams(
         inlining,
@@ -301,56 +310,68 @@ function OptimizationParams(
         inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
-        trust_inference,
         assume_fatal_throw)
 end
 
 """
-    NativeInterpreter
+    NativeInterpreter <: AbstractInterpreter
 
 This represents Julia's native type inference algorithm and the Julia-LLVM codegen backend.
-It contains many parameters used by the compilation pipeline.
 """
 struct NativeInterpreter <: AbstractInterpreter
-    # Cache of inference results for this particular interpreter
-    cache::Vector{InferenceResult}
     # The world age we're working inside of
     world::UInt
+
     # method table to lookup for during inference on this world age
     method_table::CachedMethodTable{InternalMethodTable}
+
+    # Cache of inference results for this particular interpreter
+    inf_cache::Vector{InferenceResult}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
     opt_params::OptimizationParams
 
-    function NativeInterpreter(world::UInt = get_world_counter();
-                               inf_params = InferenceParams(),
-                               opt_params = OptimizationParams(),
-                               )
-        cache = Vector{InferenceResult}() # Initially empty cache
+    # a boolean flag to indicate if this interpreter is performing semi concrete interpretation
+    irinterp::Bool
+end
 
-        # Sometimes the caller is lazy and passes typemax(UInt).
-        # we cap it to the current world age
-        if world == typemax(UInt)
-            world = get_world_counter()
-        end
-
-        method_table = CachedMethodTable(InternalMethodTable(world))
-
-        # If they didn't pass typemax(UInt) but passed something more subtly
-        # incorrect, fail out loudly.
-        @assert world <= get_world_counter()
-
-        return new(cache, world, method_table, inf_params, opt_params)
+function NativeInterpreter(world::UInt = get_world_counter();
+                           inf_params::InferenceParams = InferenceParams(),
+                           opt_params::OptimizationParams = OptimizationParams())
+    # Sometimes the caller is lazy and passes typemax(UInt).
+    # we cap it to the current world age for correctness
+    if world == typemax(UInt)
+        world = get_world_counter()
     end
+
+    # If they didn't pass typemax(UInt) but passed something more subtly
+    # incorrect, fail out loudly.
+    @assert world <= get_world_counter()
+
+    method_table = CachedMethodTable(InternalMethodTable(world))
+
+    inf_cache = Vector{InferenceResult}() # Initially empty cache
+
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, #=irinterp=#false)
+end
+
+function NativeInterpreter(interp::NativeInterpreter;
+                           world::UInt = interp.world,
+                           method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
+                           inf_cache::Vector{InferenceResult} = interp.inf_cache,
+                           inf_params::InferenceParams = interp.inf_params,
+                           opt_params::OptimizationParams = interp.opt_params,
+                           irinterp::Bool = interp.irinterp)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, irinterp)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
-InferenceParams(ni::NativeInterpreter) = ni.inf_params
-OptimizationParams(ni::NativeInterpreter) = ni.opt_params
-get_world_counter(ni::NativeInterpreter) = ni.world
-get_inference_cache(ni::NativeInterpreter) = ni.cache
-code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(ni))
+InferenceParams(interp::NativeInterpreter) = interp.inf_params
+OptimizationParams(interp::NativeInterpreter) = interp.opt_params
+get_world_counter(interp::NativeInterpreter) = interp.world
+get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
+code_cache(interp::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(interp))
 
 """
     already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
@@ -434,7 +455,35 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
+
+typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    InferenceLattice(SimpleInferenceLattice.instance) :
+    InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    InferenceLattice(SimpleInferenceLattice.instance) :
+    InferenceLattice(IPOResultLattice.instance)
+optimizer_lattice(interp::NativeInterpreter) = SimpleInferenceLattice.instance
+
+"""
+    switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
+
+This interface allows `ir_abstract_constant_propagation` to convert `interp` to a new
+`irinterp::AbstractInterpreter` to perform semi-concrete interpretation.
+`NativeInterpreter` uses this interface to switch its lattice to `optimizer_lattice` during
+semi-concrete interpretation on `IRCode`.
+"""
+switch_to_irinterp(interp::AbstractInterpreter) = interp
+switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
+
+"""
+    switch_from_irinterp(irinterp::AbstractInterpreter) -> interp::AbstractInterpreter
+
+The inverse operation of `switch_to_irinterp`, allowing `typeinf` to convert `irinterp` back
+to a new `interp::AbstractInterpreter` to perform ordinary abstract interpretation.
+"""
+switch_from_irinterp(irinterp::AbstractInterpreter) = irinterp
+switch_from_irinterp(irinterp::NativeInterpreter) = NativeInterpreter(irinterp; irinterp=false)
 
 abstract type CallInfo end
 

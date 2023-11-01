@@ -70,7 +70,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
 {
-    if (tpid < 0 || tpid >= jl_n_threadpools)
+    if (tpid < -1 || tpid >= jl_n_threadpools)
         return 0;
     task->threadpoolid = tpid;
     return 1;
@@ -83,11 +83,10 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    // one-extend unbias back to 64-bits
-    return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
+    return cong(max, &ptls->rngseed);
 }
 
 // initialize the threading infrastructure
@@ -108,7 +107,69 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-// thread function: used by all except the main thread
+static inline int may_mark(void) JL_NOTSAFEPOINT
+{
+    return (jl_atomic_load(&gc_n_threads_marking) > 0);
+}
+
+static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    return (jl_atomic_load(&ptls->gc_sweeps_requested) > 0);
+}
+
+// parallel gc thread function
+void jl_parallel_gc_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
+
+    // initialize this thread (set tid and create heap)
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
+
+    // wait for all threads
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    while (1) {
+        uv_mutex_lock(&gc_threads_lock);
+        while (!may_mark() && !may_sweep(ptls)) {
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
+        }
+        uv_mutex_unlock(&gc_threads_lock);
+        if (may_mark()) {
+            gc_mark_loop_parallel(ptls, 0);
+        }
+        if (may_sweep(ptls)) { // not an else!
+            gc_sweep_pool_parallel();
+            jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
+        }
+    }
+}
+
+// concurrent gc thread function
+void jl_concurrent_gc_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
+
+    // initialize this thread (set tid and create heap)
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
+
+    // wait for all threads
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    while (1) {
+        uv_sem_wait(&gc_sweep_assists_needed);
+        gc_free_pages();
+    }
+}
+
+// thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
@@ -268,7 +329,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
-    if (jl_typeis(task, jl_task_type)) {
+    if (jl_is_task(task)) {
         int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
         return task;
@@ -448,7 +509,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     break;
                 }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);

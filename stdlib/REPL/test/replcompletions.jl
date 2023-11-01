@@ -23,6 +23,9 @@ let ex = quote
         end
         type_test = Test_x(Test_y(1))
         (::Test_y)() = "", ""
+        unicode_αβγ = Test_y(1)
+
+        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
         module CompletionFoo2
 
         end
@@ -121,7 +124,7 @@ let ex = quote
 
         const tuple = (1, 2)
 
-        test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+        test_y_array=[(@__MODULE__).Test_y(rand()) for i in 1:10]
         test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
                          occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                          "α"=>12, :α=>13)
@@ -132,7 +135,12 @@ let ex = quote
         macro testcmd_cmd(s) end
         macro tϵsτcmδ_cmd(s) end
 
-        end
+        var"complicated symbol with spaces" = 5
+
+        struct WeirdNames end
+        Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+
+        end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
         test_dict_ℂ = Dict(1=>2)
@@ -149,9 +157,12 @@ end
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
+
+test_methods_list(@nospecialize(f), tt) = map(x -> string(x.method), Base._methods_by_ftype(Base.signature_type(f, tt), 10, Base.get_world_counter()))
+
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -243,6 +254,11 @@ let s = "Main.CompletionFoo.type_test.x"
     @test "xx" in c
     @test r == 30:30
     @test s[r] == "x"
+end
+
+let s = "Main.CompletionFoo.unicode_αβγ.y"
+    c, r = test_complete(s)
+    @test "yy" in c
 end
 
 let s = "Main.CompletionFoo.bar.no_val_available"
@@ -418,8 +434,9 @@ end
 let s = "CompletionFoo.test(1, 1, "
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test c[2] == string(first(methods(Main.CompletionFoo.test, Tuple{}))) # corresponding to the vararg
+    m = test_methods_list(Main.CompletionFoo.test, Tuple{Int, Int, Vararg})
+    @test c[1] == m[1]
+    @test c[2] == m[2]
     @test length(c) == 2
     # In particular, this checks that test(x::Real, y::Real) is not a valid completion
     # since it is strictly less specific than test(x::T, y::T) where T
@@ -430,7 +447,7 @@ end
 let s = "CompletionFoo.test(CompletionFoo.array,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any, Vararg}))
     @test length(c) == 2
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
@@ -439,7 +456,7 @@ end
 let s = "CompletionFoo.test(1,1,1,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test, Tuple{Any, Any, Any, Vararg}))
     @test length(c) == 1
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
@@ -463,7 +480,7 @@ end
 
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test c[1] == first(test_methods_list(prevind, Tuple{String, Int, Vararg}))
     @test r == 1:7
     @test s[r] == "prevind"
 end
@@ -472,7 +489,7 @@ for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{T,})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test2, Tuple{T, Vararg}))
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
@@ -480,19 +497,19 @@ end
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test2, Tuple{Cmd, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test only(c) == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64, Vararg}))
     @test r == 1:19
     @test length(c) == 1
     @test s[r] == "CompletionFoo.test3"
@@ -501,7 +518,7 @@ end
 let s = "CompletionFoo.test4(\"e\",r\" \","
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, Regex})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test4, Tuple{String, Regex, Vararg}))
     @test r == 1:19
     @test length(c) == 1
     @test s[r] == "CompletionFoo.test4"
@@ -512,7 +529,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == first(test_methods_list(Main.CompletionFoo.test5, Tuple{BitArray{1}, Vararg}))
 end
 
 # test partial expression expansion
@@ -520,14 +537,14 @@ let s = "CompletionFoo.test5(Bool[x==1 for x=1:4],"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{Array{Bool,1}})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test5, Tuple{Array{Bool,1}, Vararg}))
 end
 
 let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
+    @test c[1] == first(test_methods_list(Main.CompletionFoo.test4, Tuple{String, String, Vararg}))
 end
 
 # Test that string escaping is handled correct
@@ -548,22 +565,17 @@ let s = "convert("
     @test length(c2) > REPL.REPLCompletions.MAX_METHOD_COMPLETIONS
 end
 
-########## Test where the current inference logic fails ########
-# Fails due to inference fails to determine a concrete type for arg 1
-# But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
-let s = "CompletionFoo.test5(AbstractArray[[]][1],"
+let s = "CompletionFoo.test5(AbstractArray[Bool[]][1],"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
 
-# equivalent to above but due to the time macro the completion fails to find the concrete type
-let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
-#################################################################
 
 # method completions with kwargs
 let s = "CompletionFoo.kwtest( "
@@ -780,7 +792,7 @@ end
 let s = "CompletionFoo.test10(\"a\", Union{Signed,Bool,String}[3][1], "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 2
     @test all(startswith("test10("), c)
     @test allunique(c)
     @test !any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
@@ -790,7 +802,7 @@ end
 let s = "CompletionFoo.test11(Integer[false][1], Integer[14][1], "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 3
     @test all(startswith("test11("), c)
     @test allunique(c)
 end
@@ -798,16 +810,16 @@ end
 let s = "CompletionFoo.test11(Integer[-7][1], Integer[0x6][1], 6,"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 3
+    @test length(c) == 2
     @test any(str->occursin("test11(a::Integer, b, c)", str), c)
     @test any(str->occursin("test11(u, v::Integer, w)", str), c)
-    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+    @test !any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
 end
 
 let s = "CompletionFoo.test11(3, 4,"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 2
     @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
     @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
 end
@@ -1107,17 +1119,21 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, file
-        path = tempdir()
-        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+    mktempdir() do path
+        unreadable = joinpath(path, "replcompletion-unreadable")
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        hidden_file = joinpath(unreadable, "hidden")
+        touch(hidden_file)
+
+        # Create symlink to a file that is in an unreadable directory
+        chmod(hidden_file, 0o755)
+        chmod(unreadable, 0o000)
+        symlink(hidden_file, joinpath(path, "replcompletions-link"))
 
         try
-            file = joinpath(path, "tmp-executable")
-            touch(file)
-            chmod(file, 0o755)
-            mkdir(unreadable)
-            chmod(unreadable, 0o000)
-
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
@@ -1125,10 +1141,13 @@ let s, c, r
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
+
+                c,r = test_scomplete("replcompletions-link")
+                @test isempty(c)
             end
         finally
-            rm(file)
-            rm(unreadable)
+            # If we don't fix the permissions here, our cleanup fails.
+            chmod(unreadable, 0o700)
         end
     end
 
@@ -1173,7 +1192,7 @@ let current_dir, forbidden
             catch e
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
-            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            c, r = test_complete("\""*escape_string(joinpath(path, "selfsym")))
             @test c == ["selfsymlink"]
         end
     end
@@ -1203,26 +1222,62 @@ end
 mktempdir() do path
     space_folder = randstring() * " α"
     dir = joinpath(path, space_folder)
-    dir_space = replace(space_folder, " " => "\\ ")
-
     mkdir(dir)
     cd(path) do
-        open(joinpath(space_folder, "space .file"),"w") do f
-            s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c, r = test_scomplete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file" in c
+        touch(joinpath(space_folder, "space .file"))
 
-            s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c, r = test_complete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space .file\"" in c
-        end
-        # Test for issue #10324
-        s = "cd(\"$dir_space"
+        dir_space = replace(space_folder, " " => "\\ ")
+        s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+        # Also use shell escape rules within cmd backticks
+        s = "`$s"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+
+        # escape string according to Julia escaping rules
+        julia_esc(str) = escape_string(str, ('\"','$'))
+
+        # For normal strings the string should be properly escaped according to
+        # the usual rules for Julia strings.
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
         c, r = test_complete(s)
-        @test r == 5:15
-        @test s[r] ==  dir_space
+        @test s[r] == "space"
+        @test "space .file\"" in c
+
+        # '$' is the only character which can appear in a windows filename and
+        # which needs to be escaped in Julia strings (on unix we could do this
+        # test with all sorts of special chars)
+        touch(joinpath(space_folder, "needs_escape\$.file"))
+        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        s = "cd(\"$escpath"
+        c, r = test_complete(s)
+        @test s[r] == "needs_escape\\\$"
+        @test "needs_escape\\\$.file\"" in c
+
+        if !Sys.iswindows()
+            touch(joinpath(space_folder, "needs_escape2\n\".file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape2\n\""))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape2\\n\\\""
+            @test "needs_escape2\\n\\\".file\"" in c
+
+            touch(joinpath(space_folder, "needs_escape3\\.file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape3\\"))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape3\\\\"
+            @test "needs_escape3\\\\.file\"" in c
+        end
+
+        # Test for issue #10324
+        s = "cd(\"$space_folder"
+        c, r = test_complete(s)
+        @test r == 5:14
+        @test s[r] == space_folder
 
         #Test for #18479
         for c in "'`@\$;&"
@@ -1236,8 +1291,9 @@ mktempdir() do path
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c, r, res = test_complete("\""*test_dir)
-                @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                escdir = julia_esc(test_dir)
+                c, r, res = test_complete("\""*escdir)
+                @test c[1] == escdir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1281,7 +1337,7 @@ if Sys.iswindows()
         @test r == length(s)-1:length(s)
         @test file in c
 
-        s = "cd(\"..\\"
+        s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == length(s)+1:length(s)
         @test temp_name * "\\\\" in c
@@ -1408,22 +1464,22 @@ end
     c, r = test_complete("CompletionFoo.kwtest3(a;foob")
     @test c == ["foobar="]
     c, r = test_complete("CompletionFoo.kwtest3(a; le")
-    @test "length" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete("CompletionFoo.kwtest3.(a;\nlength")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a, length=4, l")
     @test "length" ∈ c
     @test "length=" ∉ c # since it was already used, do not suggest it again
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; kwargs..., fo")
-    @test "foreach" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "foreach" ∉ c
     @test "foobar=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, le")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c # the first method could be called and `anotherkwarg` slurped
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!")
@@ -1437,7 +1493,7 @@ end
     c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
     @test c == ["namedarg="]
     c, r = test_complete_foo("kwtest3(blabla; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     @test "namedarg=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(blabla; named.")
@@ -1445,11 +1501,11 @@ end
     c, r = test_complete_foo("kwtest3(blabla; named..., another!")
     @test c == ["another!kwarg="]
     c, r = test_complete_foo("kwtest3(blabla; named..., len")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     c, r = test_complete_foo("kwtest3(1+3im; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     # TODO: @test "namedarg=" ∉ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(1+3im; named.")
@@ -1606,10 +1662,16 @@ let s = ":(function foo(::Int) end).args[1].args[2]."
     @test c == Any[]
 end
 
-let s = "log(log.(x),"
+let s = "log(log.(varfloat),"
     c, r = test_complete_foo(s)
     @test !isempty(c)
 end
+
+# TODO: this is a bad test
+#let s = "log(log.(noexist),"
+#    c, r = test_complete_foo(s)
+#    @test isempty(c)
+#end
 
 let s = "Base.return_types(getin"
     c, r = test_complete_foo(s)
@@ -1626,9 +1688,10 @@ end
 let s = "test(1,1, "
     c, r, res = test_complete_foo(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test c[2] == string(first(methods(Main.CompletionFoo.test, Tuple{})))  # corresponding to the vararg
-    @test length(c) == 2
+    m = test_methods_list(Main.CompletionFoo.test, Tuple{Int, Int, Vararg})
+    @test length(m) == 2 == length(c)
+    @test c[1] == m[1]
+    @test c[2] == m[2]
     # In particular, this checks that test(x::Real, y::Real) is not a valid completion
     # since it is strictly less specific than test(x::T, y::T) where T
     @test r == 1:4
@@ -1647,7 +1710,7 @@ end
 
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete_foo(s)
-    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test c[1] == first(test_methods_list(prevind, Tuple{String, Int, Vararg}))
     @test r == 1:7
     @test s[r] == "prevind"
 end
@@ -1698,8 +1761,7 @@ end
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin
     # getfield type completion can work for complicated expression
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct Rs
                 rs::Vector{Regex}
@@ -1716,8 +1778,7 @@ end
         @test length(c) == fieldcount(Regex)
     end
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct R
                 r::Regex
@@ -1739,10 +1800,8 @@ end
     end
 end
 
-
 @testset "https://github.com/JuliaLang/julia/issues/47593" begin
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct TEST_47594
                 var"("::Int
@@ -1754,3 +1813,301 @@ end
         @test c == Any["var\"(\""]
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/36437
+struct Issue36437{T}
+    v::T
+end
+Base.propertynames(::Issue36437) = (:a, :b, :c)
+function Base.getproperty(v::Issue36437, s::Symbol)
+    if s === :a
+        return 1
+    elseif s === :b
+        return 2
+    elseif s === :c
+        return getfield(v, :v)
+    else
+        throw(ArgumentError(lazy"`(v::Issue36437).$s` is not supported"))
+    end
+end
+
+let s = "Issue36437(42)."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+let s = "Some(Issue36437(42)).value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+some_issue36437 = Some(Issue36437(42))
+
+let s = "some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# get completions for :toplevel/:tuple expressions
+let s = "some_issue36437.value.a, some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+let s = "@show some_issue36437.value.a; some_issue36437.value."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+# https://github.com/JuliaLang/julia/issues/51505
+let s = "()."
+    c, r, res = test_complete_context(s)
+    @test res
+end
+
+# aggressive concrete evaluation on mutable allocation in `repl_frame`
+let s = "Ref(Issue36437(42))[]."
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+    @test "v" ∉ c
+end
+
+# concrete evaluation through `getindex`ing dictionary
+global_dict = Dict{Symbol, Any}(:r => r"foo")
+let s = "global_dict[:r]."
+    c, r, res = test_complete_context(s)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+global_dict_nested = Dict{Symbol, Any}(:g => global_dict)
+let s = "global_dict_nested[:g][:r]."
+    c, r, res = test_complete_context(s)
+    @test res
+    for fname in fieldnames(Regex)
+        @test String(fname) in c
+    end
+end
+
+# dict completions through nested `getindex`ing
+let s = "global_dict_nested["
+    c, r, res = test_complete_context(s)
+    @test res
+    @test ":g]" in c
+end
+let s = "global_dict_nested[:g]["
+    c, r, res = test_complete_context(s)
+    @test res
+    @test ":r]" in c
+end
+
+const global_xs = [Some(42)]
+let s = "pop!(global_xs)."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "value" in c
+end
+@test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# https://github.com/JuliaLang/julia/issues/51499
+# allow aggressive concrete evaluation for child uncached frames
+struct Issue51499CompletionDict
+    inner::Dict{Symbol,Any}
+    leaf_func # Function that gets invoked on leaf objects before being returned.
+    function Issue51499CompletionDict(inner::Dict, leaf_func=identity)
+        inner = Dict{Symbol,Any}(Symbol(k) => v for (k, v) in inner)
+        return new(inner, leaf_func)
+    end
+end
+function Base.getproperty(tcd::Issue51499CompletionDict, name::Symbol)
+    prop = getfield(tcd, :inner)[name]
+    isa(prop, Issue51499CompletionDict) && return prop
+    return getfield(tcd, :leaf_func)(prop)
+end
+Base.propertynames(tcd::Issue51499CompletionDict) = keys(getfield(tcd, :inner))
+
+const issue51499 = Ref{Any}(nothing)
+tcd3 = Issue51499CompletionDict(
+    Dict(:a => 1.0, :b => 2.0),
+    function (x)
+        issue51499[] = x
+        return sin(x)
+    end)
+tcd2 = Issue51499CompletionDict(
+    Dict(:v => tcd3, :w => 1.0))
+tcd1 = Issue51499CompletionDict(
+    Dict(:x => tcd2, :y => 1.0))
+let (c, r, res) = test_complete_context("tcd1.")
+    @test res
+    @test "x" in c && "y" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.")
+    @test res
+    @test "v" in c && "w" in c
+    @test isnothing(issue51499[])
+end
+let (c, r, res) = test_complete_context("tcd1.x.v.")
+    @test res
+    @test "a" in c && "b" in c
+    @test isnothing(issue51499[])
+end
+@test tcd1.x.v.a == sin(1.0)
+@test issue51499[] == 1.0
+
+# aggressive constant propagation for mutable `Const`s
+mutable_const_prop = Dict{Symbol,Any}(:key => Any[Some(r"x")])
+getkeyelem(d) = d[:key][1]
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).")
+    @test res
+    @test "value" in c
+end
+let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
+    @test res
+    for name in fieldnames(Regex)
+        @test String(name) in c
+    end
+end
+
+# JuliaLang/julia/#51548
+# don't return wrong result due to mutable inconsistency
+function issue51548(T, a)
+    # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
+    # constant-fold `isempty(xs)::Const(true)` and return wrong result
+    xs = T[]
+    if a isa T
+        push!(xs, a)
+    end
+    return Val(isempty(xs))
+end;
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(issue51548(Any, r"issue51548")), @__MODULE__; limit_aggressive_inference=true)
+    @test !isnothing(inferred)
+    RT = Core.Compiler.widenconst(inferred)
+    @test Val{false} <: RT
+end
+
+# Test completion of var"" identifiers (#49280)
+let s = "var\"complicated "
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"complicated symbol with spaces\""]
+end
+
+for s in ("WeirdNames().var\"oh ", "WeirdNames().var\"")
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"oh no!\"", "var\"oh yes!\""]
+end
+
+# Test completion of non-Expr literals
+let s = "\"abc\"."
+    c, r = test_complete(s)
+    # (no completion, but shouldn't error)
+    @test isempty(c)
+end
+
+let s = "`abc`.e"
+    c, r = test_complete(s)
+    # (completions for the fields of `Cmd`)
+    @test c == Any["env", "exec"]
+end
+
+# suppress false positive field completions (when `getproperty`/`propertynames` is overloaded)
+struct Issue51499_2
+    inner::Dict{Symbol,Any}
+end
+Base.getproperty(issue51499::Issue51499_2, name::Symbol) = getfield(issue51499, :inner)[name]
+Base.propertynames(issue51499::Issue51499_2) = keys(getfield(issue51499, :inner))
+const issue51499_2_1 = Issue51499_2(Dict(:a => nothing))
+const issue51499_2_2 = Issue51499_2(Dict(:b => nothing))
+let s = "(rand(Bool) ? issue51499_2_1 : issue51499_2_2)."
+    c, r, res = test_complete_context(s)
+    @test "inner" ∉ c
+end
+
+# Test completion for a case when type inference returned `Union` of the same types
+union_somes(a, b) = rand() < 0.5 ? Some(a) : Some(b)
+let s = "union_somes(1, 1.0)."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "value" in c
+end
+union_some_ref(a, b) = rand() < 0.5 ? Some(a) : Ref(b)
+let s = "union_some_ref(1, 1.0)."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "value" in c && "x" in c
+end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+@testset "public but non-exported symbols only complete qualified (#51331)" begin
+    c, r, res = test_complete("ispub")
+    @test res
+    @test "ispublic" ∉ c
+
+    c, r, res = test_complete("Base.ispub")
+    @test res
+    @test "ispublic" ∈ c
+
+    @test Base.ispublic(Base, :ispublic)
+    # If this last test starts failing, that's okay, just pick a new example symbol:
+    @test !Base.isexported(Base, :ispublic)
+end
+
+# issue #51194
+for (s, compl) in (("2*CompletionFoo.nam", "named"),
+                   (":a isa CompletionFoo.test!1", "test!12"),
+                   ("-CompletionFoo.Test_y(3).", "yy"),
+                   ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
+                   ("foo'CompletionFoo.test!1", "test!12"))
+    c, r = test_complete(s)
+    @test only(c) == compl
+end
+
+# allows symbol completion within incomplete :macrocall
+# https://github.com/JuliaLang/julia/issues/51827
+macro issue51827(args...)
+    length(args) ≥ 2 || error("@issue51827: incomplete arguments")
+    return args
+end
+let s = "@issue51827 Base.ac"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "acquire" in c
+end
+
+let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
+    @test t isa Core.Const
+    @test t.val == `a b`
+end
+
+# issue #51823
+@test "include" in test_complete_context("inc", Main)[1]

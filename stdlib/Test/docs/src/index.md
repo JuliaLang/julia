@@ -380,6 +380,8 @@ function type_multiply(a::Float64, b::Float64)
     a * b
 end
 
+export greet, simple_add, type_multiply
+
 end
 ```
 
@@ -405,13 +407,13 @@ using Test
 
 @testset "Example tests" begin
 
-	@testset "Math tests" begin
-		include("math_tests.jl")
-	end
+    @testset "Math tests" begin
+        include("math_tests.jl")
+    end
 
-	@testset "Greeting tests" begin
-		include("greeting_tests.jl")
-	end
+    @testset "Greeting tests" begin
+        include("greeting_tests.jl")
+    end
 end
 ```
 
@@ -426,22 +428,22 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 
 ```julia
 @testset "Testset 1" begin
-	@test 2 == simple_add(1, 1)
-	@test 3.5 == simple_add(1, 2.5)
+    @test 2 == simple_add(1, 1)
+    @test 3.5 == simple_add(1, 2.5)
         @test_throws MethodError simple_add(1, "A")
         @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
-	@test 1.0 == type_multiply(1.0, 1.0)
+    @test 1.0 == type_multiply(1.0, 1.0)
         @test isa(type_multiply(2.0, 2.0), Float64)
-	@test_throws MethodError type_multiply(1, 2.5)
+    @test_throws MethodError type_multiply(1, 2.5)
 end
 ```
 
 #### Writing Tests for `greeting_tests.jl`
 
-Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+Using our knowledge of `Test.jl`, here are some example tests we could add to `greeting_tests.jl`:
 
 ```julia
 @testset "Testset 3" begin

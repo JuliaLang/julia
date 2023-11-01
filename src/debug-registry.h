@@ -88,8 +88,9 @@ public:
 
     struct libc_frames_t {
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-        std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
-        std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
+        typedef void (*frame_register_func)(void *) JL_NOTSAFEPOINT;
+        std::atomic<frame_register_func> libc_register_frame_{nullptr};
+        std::atomic<frame_register_func> libc_deregister_frame_{nullptr};
 
         void libc_register_frame(const char *Entry) JL_NOTSAFEPOINT;
 
@@ -137,7 +138,7 @@ public:
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress) JL_NOTSAFEPOINT;
+                        std::function<void*(void*)> lookupWriteAddress);
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;

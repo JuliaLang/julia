@@ -12,6 +12,7 @@
 /source-dist.tmp
 /source-dist.tmp1
 
+*.expmap
 *.exe
 *.dll
 *.dwo

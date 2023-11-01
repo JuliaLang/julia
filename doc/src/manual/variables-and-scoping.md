@@ -33,7 +33,7 @@ Notably missing from this table are
 which do *not* introduce new scopes.
 The three types of scopes follow somewhat different rules which will be explained below.
 
-Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping),
+Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_(computer_science)#Lexical_scope_vs._dynamic_scope),
 meaning that a function's scope does not inherit from its caller's scope, but from the scope in
 which the function was defined. For example, in the following code the `x` inside `foo` refers
 to the `x` in the global scope of its module `Bar`:

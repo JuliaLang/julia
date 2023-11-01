@@ -144,7 +144,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "@NamedTuple{a::Union{Nothing, Int8}, b::Union{Nothing, Int32}, c::Float64}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -342,6 +342,12 @@ end
     @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
 end
 
+# @Kwargs
+@testset "@Kwargs" begin
+   @test @Kwargs{a::Int,b::String}  == typeof(pairs((;a=1,b="2")))
+   @test @Kwargs{} == typeof(pairs((;)))
+end
+
 # issue #29333, implicit names
 let x = 1, y = 2
     @test (;y) === (y = 2,)
@@ -376,10 +382,22 @@ end
 
 # Test effect/inference for merge/diff of unknown NamedTuples
 for f in (Base.merge, Base.structdiff)
-    let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
-        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+    @testset let f = f
+        # test the effects of the fallback path
+        fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
+        @testset let eff = Base.infer_effects(fallback_func)
+            @test Core.Compiler.is_foldable(eff)
+            @test eff.nonoverlayed
+        end
+        @test only(Base.return_types(fallback_func)) == NamedTuple
+        # test if `max_methods = 4` setting works as expected
+        general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
+        @testset let eff = Base.infer_effects(general_func)
+            @test Core.Compiler.is_foldable(eff)
+            @test eff.nonoverlayed
+        end
+        @test only(Base.return_types(general_func)) == NamedTuple
     end
-    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
 
@@ -387,4 +405,24 @@ end
 let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)
     @test typeof(Base.merge(a, b)) == Base.NamedTuple{(:a, :b), Tuple{Any, Float64}}
     @test typeof(Base.structdiff(a, b)) == Base.NamedTuple{(:a,), Tuple{Any}}
+end
+
+function mergewith51009(combine, a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
+    names = Base.merge_names(an, bn)
+    NamedTuple{names}(ntuple(Val{nfields(names)}()) do i
+                          n = getfield(names, i)
+                          if Base.sym_in(n, an)
+                              if Base.sym_in(n, bn)
+                                  combine(getfield(a, n), getfield(b, n))
+                              else
+                                  getfield(a, n)
+                              end
+                          else
+                              getfield(b, n)
+                          end
+                      end)
+end
+let c = (a=1, b=2),
+    d = (b=3, c=(d=1,))
+    @test @inferred(mergewith51009((x,y)->y, c, d)) === (a = 1, b = 3, c = (d = 1,))
 end

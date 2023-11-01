@@ -30,7 +30,7 @@ struct RawResults
 end
 
 """
-    Profile.Allocs.@profile [sample_rate=0.0001] expr
+    Profile.Allocs.@profile [sample_rate=0.1] expr
 
 Profile allocations that happen during `expr`, returning
 both the result and and AllocResults struct.
@@ -67,7 +67,7 @@ macro profile(opts, ex)
     _prof_expr(ex, opts)
 end
 macro profile(ex)
-    _prof_expr(ex, :(sample_rate=0.0001))
+    _prof_expr(ex, :(sample_rate=0.1))
 end
 
 function _prof_expr(expr, opts)
@@ -215,10 +215,5 @@ function stacktrace_memoized(
     end
     return stack
 end
-
-# Precompile once for the package cache.
-@assert precompile(start, ())
-@assert precompile(stop, ())
-@assert precompile(fetch, ())
 
 end

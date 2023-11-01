@@ -29,6 +29,7 @@ end
 function nonnothingtype_checked(T::Type)
     R = nonnothingtype(T)
     R >: T && error("could not compute non-nothing type")
+    R <: Union{} && error("cannot convert a value to nothing for assignment")
     return R
 end
 

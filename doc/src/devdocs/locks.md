@@ -91,6 +91,8 @@ may result in pernicious and hard-to-find deadlocks. BE VERY CAREFUL!
 >
 >     > this may continue to be held after releasing the iolock, or acquired without it,
 >     > but be very careful to never attempt to acquire the iolock while holding it
+>
+>   * Libdl.LazyLibrary lock
 
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:

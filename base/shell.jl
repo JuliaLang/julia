@@ -361,12 +361,12 @@ cmdargs = Base.shell_escape_wincmd("Passing args with %cmdargs% works 100%!")
 run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 ```
 
-!warning
+!!! warning
     The argument parsing done by CMD when calling batch files (either inside
     `.bat` files or as arguments to them) is not fully compatible with the
     output of this function. In particular, the processing of `%` is different.
 
-!important
+!!! important
     Due to a peculiar behavior of the CMD parser/interpreter, each command
     after a literal `|` character (indicating a command pipeline) must have
     `shell_escape_wincmd` applied twice since it will be parsed twice by CMD.

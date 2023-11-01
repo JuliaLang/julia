@@ -112,19 +112,10 @@ function make_fastmath(expr::Expr)
         if isa(var, Symbol)
             # simple assignment
             expr = :($var = $op($var, $rhs))
-        elseif isa(var, Expr) && var.head === :ref
-            var = var::Expr
-            # array reference
-            arr = var.args[1]
-            inds = var.args[2:end]
-            arrvar = gensym()
-            indvars = Any[gensym() for _ in inds]
-            expr = quote
-                $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Base.exprarray(:tuple, indvars), Base.exprarray(:tuple, inds)))
-                $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
-            end
         end
+        # It is hard to optimize array[i += 1] += 1
+        # and array[end] += 1 without bugs. (#47241)
+        # We settle for not optimizing the op= call.
     end
     Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end

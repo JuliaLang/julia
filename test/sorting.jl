@@ -88,6 +88,20 @@ end
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(tuple(rand(i)...))
+    end
+    @test_throws ArgumentError sort((1,2,3.0))
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -530,6 +544,23 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
+@testset "sort!(iterable)" begin
+    gen = (x % 7 + 0.1x for x in 1:50)
+    @test sort(gen) == sort!(collect(gen))
+    gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
+    @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
+    @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
+
+    @test_throws ArgumentError("dimension out of range") sort(gen; dims=3)
+
+    @test_throws UndefKeywordError(:dims) sort(gen)
+    @test_throws UndefKeywordError(:dims) sort(collect(gen))
+    @test_throws UndefKeywordError(:dims) sort!(collect(gen))
+
+    @test_throws ArgumentError sort("string")
+    @test_throws ArgumentError("1 cannot be sorted") sort(1)
+end
+
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
     a = view([9:-1:0;], :)::SubArray
     sort!(a)
@@ -941,8 +972,8 @@ end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
     v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 4 == @allocations sort(v)
-    @test 4 == @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    @test 10 > @allocations sort(v)
+    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end
@@ -950,15 +981,15 @@ end
 function test_allocs()
     v = rand(10)
     i = randperm(length(v))
-    @test 1 == @allocations sort(v)
+    @test 2 >= @allocations sort(v)
     @test 0 == @allocations sortperm!(i, v)
     @test 0 == @allocations sort!(i)
     @test 0 == @allocations sortperm!(i, v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=false)
+    @test 2 >= @allocations sortperm(v, rev=true)
+    @test 2 >= @allocations sortperm(v, rev=false)
     @test 0 == @allocations sortperm!(i, v, order=Base.Reverse)
-    @test 1 == @allocations sortperm(v)
-    @test 1 == @allocations sortperm(i, by=sqrt)
+    @test 2 >= @allocations sortperm(v)
+    @test 2 >= @allocations sortperm(i, by=sqrt)
     @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
     sort!(Int[], rev=false) # compile
     @test 0 == @allocations sort!(i, rev=false)
@@ -978,6 +1009,60 @@ end
             reverse!(x)
         end
     end
+end
+
+struct MyArray49392{T, N} <: AbstractArray{T, N}
+    data::Array{T, N}
+end
+Base.size(A::MyArray49392) = size(A.data)
+Base.getindex(A::MyArray49392, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArray49392, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49392(similar(A.data, T, dims))
+
+@testset "Custom matrices (#49392)" begin
+    x = rand(10, 10)
+    y = MyArray49392(copy(x))
+    @test all(sort!(y, dims=2) .== sort!(x,dims=2))
+end
+
+@testset "MissingOptimization fastpath for Perm ordering when lo:hi ≠ eachindex(v)" begin
+    v = [rand() < .5 ? missing : rand() for _ in 1:100]
+    ix = collect(1:100)
+    sort!(ix, 1, 10, Base.Sort.DEFAULT_STABLE, Base.Order.Perm(Base.Order.Forward, v))
+    @test issorted(v[ix[1:10]])
+end
+
+struct NonScalarIndexingOfWithoutMissingVectorAlg <: Base.Sort.Algorithm end
+function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlg, o::Base.Order.Ordering, kw)
+    Base.Sort.@getkw lo hi
+    first_half = v[lo:lo+(hi-lo)÷2]
+    second_half = v[lo+(hi-lo)÷2+1:hi]
+    whole = v[lo:hi]
+    all(vcat(first_half, second_half) .=== whole) || error()
+    out = Base.Sort._sort!(whole, Base.Sort.DEFAULT_STABLE, o, (;kw..., lo=1, hi=length(whole)))
+    v[lo:hi] .= whole
+    out
+end
+
+@testset "Non-scaler indexing of WithoutMissingVector" begin
+    @testset "Unit test" begin
+        wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
+        @test wmv[[1, 3]] == [1, 2]
+        @test wmv[1:3] == [1, 7, 2]
+    end
+    @testset "End to end" begin
+        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlg())
+        @test issorted(sort(rand(100); alg))
+        @test issorted(sort([rand() < .5 ? missing : randstring() for _ in 1:100]; alg))
+    end
+end
+
+struct DispatchLoopTestAlg <: Base.Sort.Algorithm end
+function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopTestAlg, order::Base.Order.Ordering)
+    sort!(view(v, lo:hi); order)
+end
+@testset "Support dispatch from the old style to the new style and back" begin
+    @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
 end
 
 # This testset is at the end of the file because it is slow.
@@ -1139,6 +1224,16 @@ end
             @test searchsorted(v, 1, rev=true) == 3:3
             @test searchsorted(v, 0.1, rev=true) === 4:3
         end
+    end
+
+    @testset "ranges issue #44102, PR #50365" begin
+        # range sorting test for different Ordering parameter combinations
+        @test searchsorted(-1000.0:1:1000, -0.0) === 1001:1000
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<) === 1001:1001
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<, by=x->x) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, by=-) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
     end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.

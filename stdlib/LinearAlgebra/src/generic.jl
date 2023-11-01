@@ -755,8 +755,8 @@ This is equivalent to [`norm`](@ref).
 @inline opnorm(x::Number, p::Real=2) = norm(x, p)
 
 """
-    opnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
-    opnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
+    opnorm(A::Adjoint{<:Any,<:AbstractVector}, q::Real=2)
+    opnorm(A::Transpose{<:Any,<:AbstractVector}, q::Real=2)
 
 For Adjoint/Transpose-wrapped vectors, return the operator ``q``-norm of `A`, which is
 equivalent to the `p`-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
@@ -805,7 +805,7 @@ opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(co
 opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
 opnorm(v::TransposeAbsVec) = norm(v.parent)
 
-norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
+norm(v::AdjOrTrans, p::Real) = norm(v.parent, p)
 
 """
     dot(x, y)
@@ -1155,6 +1155,9 @@ function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
+# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
+# /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -1281,16 +1284,17 @@ false
 julia> istriu(a, -1)
 true
 
-julia> b = [1 im; 0 -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+1im
- 0+0im  -1+0im
+julia> c = [1 1 1; 1 1 1; 0 1 1]
+3×3 Matrix{Int64}:
+ 1  1  1
+ 1  1  1
+ 0  1  1
 
-julia> istriu(b)
-true
-
-julia> istriu(b, 1)
+julia> istriu(c)
 false
+
+julia> istriu(c, -1)
+true
 ```
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
@@ -1325,16 +1329,17 @@ false
 julia> istril(a, 1)
 true
 
-julia> b = [1 0; -im -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+0im
- 0-1im  -1+0im
+julia> c = [1 1 0; 1 1 1; 1 1 1]
+3×3 Matrix{Int64}:
+ 1  1  0
+ 1  1  1
+ 1  1  1
 
-julia> istril(b)
-true
-
-julia> istril(b, -1)
+julia> istril(c)
 false
+
+julia> istril(c, 1)
+true
 ```
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
@@ -1591,7 +1596,11 @@ end
     ξ1/ν
 end
 
-# apply reflector from left
+"""
+    reflectorApply!(x, τ, A)
+
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+"""
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)
@@ -1669,15 +1678,19 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
-
+function logabsdet(A::AbstractMatrix)
+    if istriu(A) || istril(A)
+        return logabsdet(UpperTriangular(A))
+    end
+    return logabsdet(lu(A, check=false))
+end
 logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
-increased accuracy and/or speed.
+Logarithm of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and avoids overflow/underflow.
 
 # Examples
 ```jldoctest
@@ -1804,21 +1817,18 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::Real)
+@inline function __normalize!(a::AbstractArray, nrm)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
-
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(a, invnrm)
-
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(a, εδ)
         rmul!(a, inv(nrm*εδ))
     end
-
-    a
+    return a
 end
 
 """

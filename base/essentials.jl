@@ -1,17 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
 # Define minimal array interface here to help code used in macros:
-length(a::Array) = arraylen(a)
+length(a::Array{T, 0}) where {T} = 1
+length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
+length(a::Array) = getfield(getfield(getfield(a, :ref), :mem), :length)
+length(a::GenericMemory) = getfield(a, :length)
+throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
-eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
-eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
+eval(:(getindex(A::GenericMemory{:not_atomic}, i::Int) = memoryrefget(memoryref(memoryref(A), i, $(Expr(:boundscheck))), :not_atomic, false)))
+eval(:(getindex(A::GenericMemoryRef{:not_atomic}) = memoryrefget(A, :not_atomic, $(Expr(:boundscheck)))))
+
+# multidimensional getindex will be defined later on
 
 ==(a::GlobalRef, b::GlobalRef) = a.mod === b.mod && a.name === b.name
 
@@ -85,7 +90,8 @@ f(y) = [x for x in y]
 !!! note
     `@nospecialize` affects code generation but not inference: it limits the diversity
     of the resulting native code, but it does not impose any limitations (beyond the
-    standard ones) on type-inference.
+    standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
+    `@nospecialize` to additionally suppress inference.
 
 # Example
 
@@ -207,7 +213,8 @@ macro _total_meta()
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
         #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true))
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -217,13 +224,65 @@ macro _foldable_meta()
         #=:nothrow=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true))
+end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _nothrow_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#true,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
         #=:notaskstate=#false,
-        #=:inaccessiblememonly=#true))
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
+end
+# can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
+macro _terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
+end
+# can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
+macro _terminates_globally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
+end
+# can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
+macro _effect_free_terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false))
 end
 
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
+end
+macro _nospecializeinfer_meta()
+    return Expr(:meta, :nospecializeinfer)
 end
 
 function iterate end
@@ -277,13 +336,8 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-# make convert(::Type{<:Union{}}, x::T) intentionally ambiguous for all T
-# so it will never get called or invalidated by loading packages
-# with carefully chosen types that won't have any other convert methods defined
-convert(T::Type{<:Core.IntrinsicFunction}, x) = throw(MethodError(convert, (T, x)))
-convert(T::Type{<:Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{T}, x::T) where {T<:Core.IntrinsicFunction} = x
-convert(::Type{T}, x::T) where {T<:Nothing} = x
+# ensure this is never ambiguous, and therefore fast for lookup
+convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -309,7 +363,7 @@ end
 @eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
-    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(convert(A, data)), :(convert(I, itr))))
+    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
     Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
@@ -317,7 +371,7 @@ end
 pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
@@ -346,6 +400,7 @@ tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 function unwrap_unionall(@nospecialize(a))
+    @_foldable_meta
     while isa(a,UnionAll)
         a = a.body
     end
@@ -353,6 +408,7 @@ function unwrap_unionall(@nospecialize(a))
 end
 
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
+    @_foldable_meta
     if !isa(u, UnionAll)
         return t
     end
@@ -360,6 +416,7 @@ function rewrap_unionall(@nospecialize(t), @nospecialize(u))
 end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
+    @_foldable_meta
     isdefined(t, :T) || return t
     if !isa(u, UnionAll)
         return t
@@ -387,6 +444,7 @@ function isvarargtype(@nospecialize(t))
 end
 
 function isvatuple(@nospecialize(t))
+    @_foldable_meta
     t = unwrap_unionall(t)
     if isa(t, DataType)
         n = length(t.parameters)
@@ -426,7 +484,13 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    function cvt1(n)
+        @inline
+        Tn = fieldtype(T, n)
+        xn = getfield(x, n, #=boundscheck=#false)
+        xn isa Tn && return xn
+        return convert(Tn, xn)
+    end
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -479,7 +543,7 @@ julia> oftype(y, x)
 4.0
 ```
 """
-oftype(x, y) = convert(typeof(x), y)
+oftype(x, y) = y isa typeof(x) ? y : convert(typeof(x), y)::typeof(x)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
@@ -500,28 +564,49 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
+cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 """
-    reinterpret(type, A)
+    reinterpret(::Type{Out}, x::In)
 
-Change the type-interpretation of the binary data in the primitive type `A`
-to that of the primitive type `type`.
-The size of `type` has to be the same as that of the type of `A`.
+Change the type-interpretation of the binary data in the isbits value `x`
+to that of the isbits type `Out`.
+The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 
-# Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
+
+julia> reinterpret(NTuple{2, UInt8}, 0x1234)
+(0x34, 0x12)
+
+julia> reinterpret(UInt16, (0x34, 0x12))
+0x1234
+
+julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
+(0x0301, 0x02)
 ```
+
+!!! warning
+
+    Use caution if some combinations of bits in `Out` are not considered valid and would
+    otherwise be prevented by the type's constructors and methods. Unexpected behavior
+    may result without additional validation.
 """
-reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
+function reinterpret(::Type{Out}, x) where {Out}
+    if isprimitivetype(Out) && isprimitivetype(typeof(x))
+        return bitcast(Out, x)
+    end
+    # only available when Base is fully loaded.
+    return _reinterpret(Out, x)
+end
 
 """
     sizeof(T::DataType)
@@ -584,9 +669,6 @@ julia> ifelse(1 > 2, 1, 2)
 ```
 """
 ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
-
-# simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     esc(e)
@@ -703,9 +785,25 @@ macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
+# linear indexing
+eval(:(function getindex(A::Array, i::Int)
+        @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+        memoryrefget(memoryref(getfield(A, :ref), i, false), :not_atomic, false)
+    end))
+# simple Array{Any} operations needed for bootstrap
+function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
+    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    memoryrefset!(memoryref(getfield(A, :ref), i, false), x, :not_atomic, false)
+    return A
+end
+@eval setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, $(Expr(:boundscheck))), x, :not_atomic, $(Expr(:boundscheck))); A)
+@eval setindex!(A::MemoryRef{T}, x) where {T} = memoryrefset!(A, convert(T, x), :not_atomic, $(Expr(:boundscheck)))
+@eval setindex!(A::MemoryRef{Any}, @nospecialize(x)) = memoryrefset!(A, x, :not_atomic, $(Expr(:boundscheck)))
+
+
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
+getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
     @_total_meta
     t = @_gc_preserve_begin v
@@ -821,6 +919,9 @@ e.g. long-running event loops or callback functions that may
 call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
+
+!!! compat "Julia 1.9"
+    Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     kwargs = merge(NamedTuple(), kwargs)
@@ -874,9 +975,10 @@ Determine whether a collection is empty (has no elements).
 !!! warning
 
     `isempty(itr)` may consume the next element of a stateful iterator `itr`
-    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
-    Use of `isempty` should therefore be avoided when writing generic
-    code which should support any iterator type.
+    unless an appropriate [`Base.isdone(itr)`](@ref) method is defined.
+    Stateful iterators *should* implement `isdone`, but you may want to avoid
+    using `isempty` when writing generic code which should support any iterator
+    type.
 
 # Examples
 ```jldoctest
@@ -985,17 +1087,21 @@ end
 
 # Iteration
 """
-    isdone(itr, state...) -> Union{Bool, Missing}
+    isdone(itr, [state]) -> Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
-This is useful for mutable iterators that want to avoid having elements
-consumed, if they are not going to be exposed to the user (e.g. to check
-for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature should define an isdone method that returns
-true/false depending on whether the iterator is done or not. Stateless
-iterators need not implement this function. If the result is `missing`,
-callers may go ahead and compute `iterate(x, state...) === nothing` to
-compute a definite answer.
+This is useful for stateful iterators that want to avoid having elements
+consumed if they are not going to be exposed to the user (e.g. when checking
+for done-ness in `isempty` or `zip`).
+
+Stateful iterators that want to opt into this feature should define an `isdone`
+method that returns true/false depending on whether the iterator is done or
+not. Stateless iterators need not implement this function.
+
+If the result is `missing`, callers may go ahead and compute
+`iterate(x, state) === nothing` to compute a definite answer.
+
+See also [`iterate`](@ref), [`isempty`](@ref)
 """
 isdone(itr, state...) = missing
 

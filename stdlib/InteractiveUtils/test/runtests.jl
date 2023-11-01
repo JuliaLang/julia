@@ -719,3 +719,5 @@ end
         end
     end
 end
+
+@test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)

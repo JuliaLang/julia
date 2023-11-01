@@ -30,6 +30,8 @@ size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(Argumen
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+__inbounds_getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, false)
+__inbounds_getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), false)
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -40,9 +42,9 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Creates a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples
@@ -197,41 +199,31 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
-    if @isdefined(E)
-        return E
-    else
-        # TODO: need to guard against E being miscomputed by subtyping (ref #23017)
-        # and compute the result manually in this case
-        return _compute_eltype(t)
-    end
-end
+# the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
+eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _tuple_unique_fieldtypes(@nospecialize t)
+function _compute_eltype(@nospecialize t)
     @_total_meta
-    types = IdSet()
+    has_free_typevars(t) && return Any
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
     if t´ isa Union
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
-    else
-        for ti in (t´::DataType).parameters
-            push!(types, rewrap_unionall(unwrapva(ti), t))
-        end
+        return promote_typejoin(_compute_eltype(rewrap_unionall(t´.a, t)),
+                                _compute_eltype(rewrap_unionall(t´.b, t)))
     end
-    return Core.svec(types...)
-end
-function _compute_eltype(@nospecialize t)
-    @_total_meta # TODO: the compiler shouldn't need this
-    types = _tuple_unique_fieldtypes(t)
-    return afoldl(types...) do a, b
-        # if we've already reached Any, it can't widen any more
-        a === Any && return Any
-        b === Any && return Any
-        return promote_typejoin(a, b)
+    p = (t´::DataType).parameters
+    length(p) == 0 && return Union{}
+    elt = rewrap_unionall(unwrapva(p[1]), t)
+    elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+    r = elt
+    for i in 2:length(p)
+        r === Any && return r # if we've already reached Any, it can't widen any more
+        elt = rewrap_unionall(unwrapva(p[i]), t)
+        elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+        r = promote_typejoin(elt, r)
     end
+    return r
 end
 
 # We'd like to be able to infer eltype(::Tuple), which needs to be able to
@@ -311,6 +303,8 @@ function map(f, t::Any32)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
+map(f, t::Tuple,          s::Tuple{})        = ()
+map(f, t::Tuple{},        s::Tuple)          = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@inline; (f(t[1],s[1]),))
 map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@inline; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
@@ -318,7 +312,7 @@ function map(f, t::Tuple, s::Tuple)
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any32, s::Any32)
-    n = length(t)
+    n = min(length(t), length(s))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
@@ -329,12 +323,16 @@ end
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
 map(f, ::Tuple{}...) = ()
+anyempty(x::Tuple{}, xs...) = true
+anyempty(x::Tuple, xs...) = anyempty(xs...)
+anyempty() = false
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @inline
+    anyempty(t1, t2, ts...) && return ()
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
 function map(f, t1::Any32, t2::Any32, ts::Any32...)
-    n = length(t1)
+    n = min(length(t1), length(t2), minimum(length, ts))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
@@ -375,7 +373,7 @@ function tuple_type_tail(T::Type)
     end
 end
 
-(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+(::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
 
 Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
 Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
@@ -393,7 +391,9 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @inline
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    t1 = convert(fieldtype(T, 1), y[1])
+    T1 = fieldtype(T, 1)
+    y1 = y[1]
+    t1 = y1 isa T1 ? y1 : convert(T1, y1)::T1
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
@@ -596,7 +596,7 @@ any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @noinline
     @_total_meta
     for y in itr
@@ -604,7 +604,7 @@ function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     end
     return false
 end
-in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
+in(x::Symbol, itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """
