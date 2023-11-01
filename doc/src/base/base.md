@@ -30,7 +30,7 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
@@ -285,7 +285,7 @@ Base.Fix2
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
