@@ -14,9 +14,9 @@ Use [`isopen`](@ref) to check whether it is still active.
 This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function AsyncCondition()
@@ -45,13 +45,22 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    t = @task while _trywait(async)
-        cb(async)
-        isopen(async) || return
+    t = @task begin
+        unpreserve_handle(async)
+        while _trywait(async)
+            cb(async)
+            isopen(async) || return
+        end
     end
-    lock(async.cond)
-    _wait2(async.cond, t)
-    unlock(async.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(async)
+    @lock async.cond begin
+        if async.set
+            schedule(t)
+        else
+            _wait2(async.cond, t)
+        end
+    end
     return async
 end
 
@@ -77,9 +86,9 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
 
 """
 mutable struct Timer
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
@@ -109,13 +118,18 @@ end
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
+# if this returns true, the object has been signaled
+# if this returns false, the object is closed
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
     if set
         # full barrier now for AsyncCondition
         t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
     else
-        t.handle == C_NULL && return false
+        if !isopen(t)
+            close(t) # wait for the close to complete
+            return false
+        end
         iolock_begin()
         set = t.set
         if !set
@@ -123,14 +137,12 @@ function _trywait(t::Union{Timer, AsyncCondition})
             lock(t.cond)
             try
                 set = t.set
-                if !set
-                    if t.handle != C_NULL
-                        iolock_end()
-                        set = wait(t.cond)
-                        unlock(t.cond)
-                        iolock_begin()
-                        lock(t.cond)
-                    end
+                if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
+                    iolock_end()
+                    set = wait(t.cond)
+                    unlock(t.cond)
+                    iolock_begin()
+                    lock(t.cond)
                 end
             finally
                 unlock(t.cond)
@@ -149,13 +161,31 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
 function close(t::Union{Timer, AsyncCondition})
+    t.handle == C_NULL && return # short-circuit path
     iolock_begin()
-    if t.handle != C_NULL && isopen(t)
-        t.isopen = false
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+    if t.handle != C_NULL
+        if t.isopen
+            @atomic :monotonic t.isopen = false
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+        end
+        # implement _trywait here without the auto-reset function, just waiting for the final close signal
+        preserve_handle(t)
+        lock(t.cond)
+        try
+            while t.handle != C_NULL
+                iolock_end()
+                wait(t.cond)
+                unlock(t.cond)
+                iolock_begin()
+                lock(t.cond)
+            end
+        finally
+            unlock(t.cond)
+            unpreserve_handle(t)
+        end
     end
     iolock_end()
     nothing
@@ -166,12 +196,12 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
         if t.handle != C_NULL
-            disassociate_julia_struct(t.handle) # not going to call the usual close hooks
+            disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
-                t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+                @atomic :monotonic t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
             end
-            t.handle = C_NULL
+            @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
         end
     finally
@@ -184,9 +214,9 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        t.isopen = false
-        t.handle = C_NULL
-        notify(t.cond, t.set)
+        @atomic :monotonic t.isopen = false
+        Libc.free(@atomicswap :monotonic t.handle = C_NULL)
+        notify(t.cond, false)
     finally
         unlock(t.cond)
     end
@@ -212,7 +242,10 @@ function uv_timercb(handle::Ptr{Cvoid})
         @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
-            close(t)
+            if t.isopen
+                @atomic :monotonic t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+            end
         end
         notify(t.cond, true)
     finally
@@ -242,8 +275,8 @@ Create a timer that runs the function `callback` at each timer expiration.
 Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
 seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
 callback is only run once. The function `callback` is called with a single argument, the timer
-itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
-already expired.
+itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
+has already expired.
 
 # Examples
 
@@ -264,64 +297,71 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real; interval::Real=0.0)
-    timer = Timer(timeout, interval=interval)
-    t = @task while _trywait(timer)
-        try
-            cb(timer)
-        catch err
-            write(stderr, "Error in Timer:\n")
-            showerror(stderr, err, catch_backtrace())
-            return
+function Timer(cb::Function, timeout; kwargs...)
+    timer = Timer(timeout; kwargs...)
+    t = @task begin
+        unpreserve_handle(timer)
+        while _trywait(timer)
+            try
+                cb(timer)
+            catch err
+                write(stderr, "Error in Timer:\n")
+                showerror(stderr, err, catch_backtrace())
+                return
+            end
+            isopen(timer) || return
         end
-        isopen(timer) || return
     end
-    lock(timer.cond)
-    _wait2(timer.cond, t)
-    unlock(timer.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(timer)
+    @lock timer.cond begin
+        if timer.set
+            schedule(t)
+        else
+            _wait2(timer.cond, t)
+        end
+    end
     return timer
 end
 
 """
-    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
+    timedwait(testcb, timeout::Real; pollint::Real=0.1)
 
-Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
-`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
-is `0.001`, that is, 1 millisecond.
+Wait until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
+The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
+that is, 1 millisecond.
 
-Returns :ok or :timed_out
+Return `:ok` or `:timed_out`.
+
+# Examples
+```jldoctest
+julia> cb() = (sleep(5); return);
+
+julia> t = @async cb();
+
+julia> timedwait(()->istaskdone(t), 1)
+:timed_out
+
+julia> timedwait(()->istaskdone(t), 6.5)
+:ok
+```
 """
-function timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
     start = time_ns()
     ns_timeout = 1e9 * timeout
-    done = Channel(1)
-    function timercb(aw)
-        try
-            if testcb()
-                put!(done, (:ok, nothing))
-            elseif (time_ns() - start) > ns_timeout
-                put!(done, (:timed_out, nothing))
-            end
-        catch e
-            put!(done, (:error, CapturedException(e, catch_backtrace())))
-        finally
-            isready(done) && close(aw)
+
+    testcb() && return :ok
+
+    t = Timer(pollint, interval=pollint)
+    while _trywait(t) # stop if we ever get closed
+        if testcb()
+            close(t)
+            return :ok
+        elseif (time_ns() - start) > ns_timeout
+            close(t)
+            break
         end
-        nothing
     end
-
-    try
-        testcb() && return :ok
-    catch e
-        throw(CapturedException(e, catch_backtrace()))
-    end
-
-    t = Timer(timercb, pollint, interval = pollint)
-    ret, e = fetch(done)
-    close(t)
-
-    ret === :error && throw(e)
-
-    return ret
+    return :timed_out
 end

@@ -64,6 +64,11 @@ function _foldl_impl(op::OP, init, itr) where {OP}
     return v
 end
 
+function _foldl_impl(op, init, itr::Union{Tuple,NamedTuple})
+    length(itr) <= 32 && return afoldl(op, init, itr...)
+    @invoke _foldl_impl(op, init, itr::Any)
+end
+
 struct _InitialValue end
 
 """
@@ -140,17 +145,25 @@ what is returned is `itr′` and
 
     op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
 """
-_xfadjoint(op, itr) = (op, itr)
-_xfadjoint(op, itr::Generator) =
-    if itr.f === identity
-        _xfadjoint(op, itr.iter)
-    else
-        _xfadjoint(MappingRF(itr.f, op), itr.iter)
-    end
-_xfadjoint(op, itr::Filter) =
-    _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
-_xfadjoint(op, itr::Flatten) =
-    _xfadjoint(FlatteningRF(op), itr.it)
+function _xfadjoint(op, itr)
+    itr′, wrap = _xfadjoint_unwrap(itr)
+    wrap(op), itr′
+end
+
+_xfadjoint_unwrap(itr) = itr, identity
+function _xfadjoint_unwrap(itr::Generator)
+    itr′, wrap = _xfadjoint_unwrap(itr.iter)
+    itr.f === identity && return itr′, wrap
+    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
+end
+function _xfadjoint_unwrap(itr::Filter)
+    itr′, wrap = _xfadjoint_unwrap(itr.itr)
+    return itr′, wrap ∘ Fix1(FilteringRF, itr.flt)
+end
+function _xfadjoint_unwrap(itr::Flatten)
+    itr′, wrap = _xfadjoint_unwrap(itr.it)
+    return itr′, wrap ∘ FlatteningRF
+end
 
 """
     mapfoldl(f, op, itr; [init])
@@ -188,11 +201,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse(itr′))
+    return foldl_impl(op′, nt, _reverse_iter(itr′))
 end
 
-_reverse(itr) = Iterators.reverse(itr)
-_reverse(itr::Tuple) = reverse(itr)  #33235
+_reverse_iter(itr) = Iterators.reverse(itr)
+_reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
 
 struct FlipArgs{F}
     f::F
@@ -380,7 +393,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
-`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+`x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
 
 The default is `x` for most types. The main purpose is to ensure type stability, so
@@ -403,8 +416,8 @@ reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
-single element `x`. This value may also used to initialise the recursion, so that
-`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+single element `x`. This value may also be used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.
 
 The default is `reduce_first(op, f(x))`.
 """
@@ -451,8 +464,10 @@ For empty collections, providing `init` will be necessary, except for some speci
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
-should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
- `any(itr)`, `all(itr)`.
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
+There are efficient methods for concatenating certain arrays of arrays
+by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
@@ -522,7 +537,7 @@ sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 """
     sum(itr; [init])
 
-Returns the sum of all elements in a collection.
+Return the sum of all elements in a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -554,7 +569,7 @@ sum(a::AbstractArray{Bool}; kw...) =
 """
     prod(f, itr; [init])
 
-Returns the product of `f` applied to each element of `itr`.
+Return the product of `f` applied to each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -578,7 +593,7 @@ prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 """
     prod(itr; [init])
 
-Returns the product of all elements of a collection.
+Return the product of all elements of a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -665,7 +680,7 @@ end
 """
     maximum(f, itr; [init])
 
-Returns the largest result of calling function `f` on each element of `itr`.
+Return the largest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -692,7 +707,7 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 """
     minimum(f, itr; [init])
 
-Returns the smallest result of calling function `f` on each element of `itr`.
+Return the smallest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -719,7 +734,7 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 """
     maximum(itr; [init])
 
-Returns the largest element in a collection.
+Return the largest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -751,7 +766,7 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 """
     minimum(itr; [init])
 
-Returns the smallest element in a collection.
+Return the smallest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -847,19 +862,27 @@ end
 ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
-# TODO: optimize for inputs <: AbstractFloat
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for IEEEFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
 
 ## findmax, findmin, argmax & argmin
 
 """
     findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
-`domain` must be a non-empty iterable.
+`domain` must be a non-empty iterable supporting [`keys`](@ref). Indices
+are of the same type as those returned by [`keys(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -882,7 +905,8 @@ julia> findmax(cos, 0:π/2:2π)
 (1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+findmax(f, domain) = _findmax(f, domain, :)
+_findmax(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
 _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -891,6 +915,9 @@ _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
@@ -913,11 +940,14 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -941,7 +971,8 @@ julia> findmin(cos, 0:π/2:2π)
 ```
 
 """
-findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+findmin(f, domain) = _findmin(f, domain, :)
+_findmin(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
 _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -950,6 +981,9 @@ _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
@@ -972,7 +1006,7 @@ _findmin(a, ::Colon) = findmin(identity, a)
 """
     argmax(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+Return a value `x` from `domain` for which `f(x)` is maximised.
 If there are multiple maximal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1003,6 +1037,9 @@ If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 Values are compared with `isless`.
 
 See also: [`argmin`](@ref), [`findmax`](@ref).
@@ -1024,7 +1061,7 @@ argmax(itr) = findmax(itr)[2]
 """
     argmin(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+Return a value `x` from `domain` for which `f(x)` is minimised.
 If there are multiple minimal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1057,6 +1094,9 @@ Return the index or key of the minimal element in a collection.
 If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -1190,18 +1230,44 @@ false
 """
 any(f, itr) = _any(f, itr, :)
 
-function _any(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _any(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v && return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
+
+# Specialized versions of any(f, ::Tuple)
+# We fall back to the for loop implementation all elements have the same type or
+# if the tuple is too large.
+function any(f, itr::Tuple)
+    if itr isa NTuple || length(itr) > 32
+        return _any(f, itr, :)
+    end
+    _any_tuple(f, false, itr...)
+end
+
+@inline function _any_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _any_tuple(f, anymissing, rest...)
+end
+@inline _any_tuple(f, anymissing) = anymissing ? missing : false
 
 """
     all(p, itr) -> Bool
@@ -1237,21 +1303,46 @@ true
 """
 all(f, itr) = _all(f, itr, :)
 
-function _all(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-        elseif v
-            continue
-        else
-            return false
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _all(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v || return false
+            end
         end
+        return anymissing ? missing : true
     end
-    return anymissing ? missing : true
 end
+
+# Specialized versions of all(f, ::Tuple),
+# This is similar to any(f, ::Tuple) defined above.
+function all(f, itr::Tuple)
+    if itr isa NTuple || length(itr) > 32
+        return _all(f, itr, :)
+    end
+    _all_tuple(f, false, itr...)
+end
+
+@inline function _all_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+    elseif v
+        nothing
+    else
+        return false
+    end
+    return _all_tuple(f, anymissing, rest...)
+end
+@inline _all_tuple(f, anymissing) = anymissing ? missing : true
 
 ## count
 
@@ -1286,15 +1377,7 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
-
-function _simple_count_helper(g, init::T) where {T}
-    n::T = init
-    for x in g
-        n += x::Bool
-    end
-    return n
-end
+_simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
 function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     n::T = init

@@ -26,13 +26,12 @@ Base.schedule
 
 ## [Synchronization](@id lib-task-sync)
 
-## Synchronization
-
 ```@docs
 Base.errormonitor
 Base.@sync
 Base.wait
 Base.fetch(t::Task)
+Base.fetch(x::Any)
 Base.timedwait
 
 Base.Condition
@@ -51,11 +50,13 @@ Base.unlock
 Base.trylock
 Base.islocked
 Base.ReentrantLock
+Base.@lock
 ```
 
 ## Channels
 
 ```@docs
+Base.AbstractChannel
 Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)

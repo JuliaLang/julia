@@ -48,10 +48,9 @@ end
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
-
+Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
-
-Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage
@@ -77,6 +76,12 @@ end
     val
 end
 
+function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+    @boundscheck checkbounds(Bool, A, I...) || return false
+    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
+    x
+end
+
 @inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
@@ -100,24 +105,36 @@ julia> A = reshape(Vector(1:8), (2,2,2))
  5  7
  6  8
 
-julia> permutedims(A, (3, 2, 1))
+julia> perm = (3, 1, 2); # put the last dimension first
+
+julia> B = permutedims(A, perm)
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
- 1  3
- 5  7
+ 1  2
+ 5  6
 
 [:, :, 2] =
- 2  4
- 6  8
+ 3  4
+ 7  8
 
-julia> B = randn(5, 7, 11, 13);
+julia> A == permutedims(B, invperm(perm)) # the inverse permutation
+true
+```
 
-julia> perm = [4,1,3,2];
+For each dimension `i` of `B = permutedims(A, perm)`, its corresponding dimension of `A`
+will be `perm[i]`. This means the equality `size(B, i) == size(A, perm[i])` holds.
 
-julia> size(permutedims(B, perm))
+```jldoctest
+julia> A = randn(5, 7, 11, 13);
+
+julia> perm = [4, 1, 3, 2];
+
+julia> B = permutedims(A, perm);
+
+julia> size(B)
 (13, 5, 11, 7)
 
-julia> size(B)[perm] == ans
+julia> size(A)[perm] == ans
 true
 ```
 """
@@ -263,11 +280,21 @@ end
     P
 end
 
-function Base._mapreduce_dim(f, op, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
+
+function Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+function Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, init::Base._InitialValue, A::PermutedDimsArray{<:Union{Real,Complex}}, dims::Colon)
     Base._mapreduce_dim(f, op, init, parent(A), dims)
 end
 
-function Base.mapreducedim!(f, op, B::AbstractArray{T,N}, A::PermutedDimsArray{T,N,perm,iperm}) where {T,N,perm,iperm}
+function Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{S,N,perm,iperm}) where {T,S,N,perm,iperm}
+    C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
+end
+function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, B::AbstractArray{T,N}, A::PermutedDimsArray{<:Union{Real,Complex},N,perm,iperm}) where {T,N,perm,iperm}
     C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
     Base.mapreducedim!(f, op, C, parent(A))
     B

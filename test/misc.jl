@@ -149,7 +149,7 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         # Note this warning only exists in debug builds
         @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
     end
@@ -191,7 +191,7 @@ end
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
                 return :resultvalue
-            end == :resultvalue
+            end === :resultvalue
         end
     end
     @test all(<=(sem_size), history)
@@ -237,14 +237,16 @@ end
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
-do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+const c27164 = Base.Event()
+do_something_async_27164() = @async(begin wait(c27164); x27164[] = 2; end)
 
 let t = nothing
     @sync begin
+        @async (sleep(0.1); x27164[] = 1)
         t = do_something_async_27164()
-        @async (sleep(0.05); x27164[] = 1)
     end
     @test x27164[] == 1
+    notify(c27164)
     fetch(t)
     @test x27164[] == 2
 end
@@ -334,26 +336,160 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
-before = Base.cumulative_compile_time_ns_before();
+before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
-t1 = @async @time begin
-    sleep(2)
-    @eval module M ; f(x,y) = x+y ; end
-    @eval M.f(2,3)
-end
-t2 = @async begin
-    sleep(1)
-    @time 2 + 2
+@sync begin
+    t1 = @async @time begin
+        sleep(2)
+        @eval module M ; f(x,y) = x+y ; end
+        @eval M.f(2,3)
+    end
+    t2 = @async begin
+        sleep(1)
+        @time 2 + 2
+    end
 end
 
-after = Base.cumulative_compile_time_ns_after();
-@test after >= before;
+after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
+@test after_comp >= before_comp;
+@test after_recomp >= before_recomp;
+@test after_recomp - before_recomp <= after_comp - before_comp;
 
-# wait for completion of these tasks before restoring stdout, to suppress their @time prints.
-wait(t1); wait(t2)
+# should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
+# failing this probably means an uninitialized variable somewhere
+@test after_comp - before_comp < 6_000_000_000;
 
 end # redirect_stdout
+
+# issue #48024, avoid overcounting timers
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    Base.Experimental.@force_compile;
+    local elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    local compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble([1.0]);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+
+    elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble(1.0);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+end
+
+macro capture_stdout(ex)
+    quote
+        mktemp() do fname, f
+            redirect_stdout(f) do
+                $(esc(ex))
+            end
+            seekstart(f)
+            read(f, String)
+        end
+    end
+end
+
+# issue #48024, but with the time macro itself
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    local first = @capture_stdout @time @eval calldouble([1.0])
+    local second = @capture_stdout @time @eval calldouble2(1.0)
+
+    # these functions were not recompiled
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
+
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
+end
+
+# compilation reports in @time, @timev
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
 
 # interactive utilities
 
@@ -398,6 +534,9 @@ end
 let s = Set(1:100)
     @test summarysize([s]) > summarysize(s)
 end
+
+# issue #44780
+@test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -582,7 +721,7 @@ end
 
 let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test endswith(optstring, "\n)")
     @test occursin(" = \"", optstring)
 end
@@ -590,7 +729,7 @@ let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
     @test !occursin("\n", optstring)
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test occursin(" = \"", optstring)
 end
 
@@ -720,6 +859,10 @@ let buf = IOBuffer()
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 
+    # Check that italic is turned off
+    printstyled(buf_color, "foo"; italic=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[3mfoo\e[23m\e[39m"
+
     # Check that underline is turned off
     printstyled(buf_color, "foo"; color = :red, underline = true)
     @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
@@ -737,8 +880,8 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
 
     # Check that all options can be turned on simultaneously
-    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
-    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
+    printstyled(buf_color, "foo"; color = :red, bold = true, italic = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[3m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[23m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -767,7 +910,7 @@ mutable struct Demo_20254
 end
 
 # these cause stack overflows and are a little flaky on CI, ref #20256
-if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+if Base.get_bool_env("JULIA_TESTFULL", false)
     function Demo_20254(arr::AbstractArray=Any[])
         Demo_20254(string.(arr))
     end
@@ -824,65 +967,132 @@ end
 module atinvokelatest
 f(x) = 1
 g(x, y; z=0) = x * y + z
+mutable struct X; x; end
+Base.getproperty(::X, ::Any) = error("overload me")
+Base.setproperty!(::X, ::Any, ::Any) = error("overload me")
+struct Xs
+    xs::Vector{Any}
+end
+Base.getindex(::Xs, ::Any) = error("overload me")
+Base.setindex!(::Xs, ::Any, ::Any) = error("overload me")
 end
 
-let foo() = begin
+let call_test() = begin
         @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
+        return @invokelatest atinvokelatest.f(0)
     end
-    @test foo() == 3
-end
+    @test call_test() == 3
 
-let foo() = begin
-        @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
-    end
-    @test foo() == 3
-
-    bar() = begin
+    call_with_kws_test() = begin
         @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
-        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+        return @invokelatest atinvokelatest.g(2, 3; z=1)
     end
-    @test bar() == 1
+    @test call_with_kws_test() == 1
+
+    getproperty_test() = begin
+        @eval Base.getproperty(x::atinvokelatest.X, f::Symbol) = getfield(x, f)
+        x = atinvokelatest.X(nothing)
+        return @invokelatest x.x
+    end
+    @test isnothing(getproperty_test())
+
+    setproperty!_test() = begin
+        @eval Base.setproperty!(x::atinvokelatest.X, f::Symbol, @nospecialize(v)) = setfield!(x, f, v)
+        x = atinvokelatest.X(nothing)
+        @invokelatest x.x = 1
+        return x
+    end
+    x = setproperty!_test()
+    @test getfield(x, :x) == 1
+
+    getindex_test() = begin
+        @eval Base.getindex(xs::atinvokelatest.Xs, idx::Int) = xs.xs[idx]
+        xs = atinvokelatest.Xs(Any[nothing])
+        return @invokelatest xs[1]
+    end
+    @test isnothing(getindex_test())
+
+    setindex!_test() = begin
+        @eval function Base.setindex!(xs::atinvokelatest.Xs, @nospecialize(v), idx::Int)
+            xs.xs[idx] = v
+        end
+        xs = atinvokelatest.Xs(Any[nothing])
+        @invokelatest xs[1] = 1
+        return xs
+    end
+    xs = setindex!_test()
+    @test xs.xs[1] == 1
 end
+
+abstract type InvokeX end
+Base.getproperty(::InvokeX, ::Symbol) = error("overload InvokeX")
+Base.setproperty!(::InvokeX, ::Symbol, @nospecialize(v::Any)) = error("overload InvokeX")
+mutable struct InvokeX2 <: InvokeX; x; end
+Base.getproperty(x::InvokeX2, f::Symbol) = getfield(x, f)
+Base.setproperty!(x::InvokeX2, f::Symbol, @nospecialize(v::Any)) = setfield!(x, f, v)
+
+abstract type InvokeXs end
+Base.getindex(::InvokeXs, ::Int) = error("overload InvokeXs")
+Base.setindex!(::InvokeXs, @nospecialize(v::Any), ::Int) = error("overload InvokeXs")
+struct InvokeXs2 <: InvokeXs
+    xs::Vector{Any}
+end
+Base.getindex(xs::InvokeXs2, idx::Int) = xs.xs[idx]
+Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
 
 @testset "@invoke macro" begin
     # test against `invoke` doc example
-    let
-        f(x::Real) = x^2
-        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+    let f(x::Real) = x^2
+        f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
-    let
-        f1(::Integer) = Integer
+    let f1(::Integer) = Integer
         f1(::Real) = Real;
         f2(x::Real) = _f2(x)
         _f2(::Integer) = Integer
         _f2(_) = Real
         @test f1(1) === Integer
         @test f2(1) === Integer
-        @test Base.@invoke(f1(1::Real)) === Real
-        @test Base.@invoke(f2(1::Real)) === Integer
+        @test @invoke(f1(1::Real)) === Real
+        @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Any`
-    let
-        f(_) = Any
+    # when argument's type annotation is omitted, it should be specified as `Core.Typeof(x)`
+    let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
-        @test Base.@invoke(f(1::Any)) === Any
-        @test Base.@invoke(f(1)) === Any
+        @test @invoke(f(1::Any)) === Any
+        @test @invoke(f(1)) === Integer
+
+        😎(x, y) = 1
+        😎(x, ::Type{Int}) = 2
+        # Without `Core.Typeof`, the first method would be called
+        @test @invoke(😎(1, Int)) == 2
     end
 
     # handle keyword arguments correctly
-    let
-        f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
+    let f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+        @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
+    end
+
+    # additional syntax test
+    let x = InvokeX2(nothing)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x
+        @test isnothing(@invoke x.x)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x = 42
+        @invoke x.x = 42
+        @test 42 == x.x
+
+        xs = InvokeXs2(Any[nothing])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1]
+        @test isnothing(@invoke xs[1])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1] = 42
+        @invoke xs[1] = 42
+        @test 42 == xs.xs[1]
     end
 end
 
@@ -936,19 +1146,28 @@ end
 @test_nowarn Core.eval(Main, :(import ....Main))
 
 # issue #27239
+using Base.BinaryPlatforms: HostPlatform, libc
 @testset "strftime tests issue #27239" begin
-    # change to non-Unicode Korean
+    # change to non-Unicode Korean to test that it is properly transcoded into valid UTF-8
     korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-    timestrs = String[]
-    withlocales(korloc) do
-        # system dependent formats
-        push!(timestrs, Libc.strftime(0.0))
-        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
+    at_least_one_locale_found = false
+    withlocales(korloc) do locale
+        at_least_one_locale_found = true
+        # Test both the default format and a custom formatting string
+        for s in (Libc.strftime(0.0), Libc.strftime("%a %A %b %B %p %Z", 0))
+            # Ensure that we always get valid UTF-8 back
+            @test isvalid(s)
+
+            # On `musl` it is impossible for `setlocale` to fail, it just falls back to
+            # the default system locale, which on our buildbots is en_US.UTF-8.  We'll
+            # assert that what we get does _not_ start with `Thu`, as that's what all
+            # en_US.UTF-8 encodings would start with.
+            # X-ref: https://musl.openwall.narkive.com/kO1vpTWJ/setlocale-behavior-with-missing-locales
+            @test !startswith(s, "Thu") broken=(libc(HostPlatform()) == "musl")
+        end
     end
-    # tests
-    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
-    for s in timestrs
-        @test isvalid(s)
+    if !at_least_one_locale_found
+        @warn "skipping stftime tests: no locale found for testing"
     end
 end
 
@@ -1014,6 +1233,56 @@ const outsidevar = 7
 end
 @test TestOutsideVar() == TestOutsideVar(7)
 
+@kwdef mutable struct Test_kwdef_const_atomic
+    a
+    b::Int
+    c::Int = 1
+    const d
+    const e::Int
+    const f = 1
+    const g::Int = 1
+    @atomic h::Int
+end
+
+@testset "const and @atomic fields in @kwdef" begin
+    x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
+    for f in fieldnames(Test_kwdef_const_atomic)
+        @test getfield(x, f) == 1
+    end
+    @testset "const fields" begin
+        @test_throws ErrorException x.d = 2
+        @test_throws ErrorException x.e = 2
+        @test_throws MethodError x.e = "2"
+        @test_throws ErrorException x.f = 2
+        @test_throws ErrorException x.g = 2
+    end
+    @testset "atomic fields" begin
+        @test_throws ConcurrencyViolationError x.h = 1
+        @atomic x.h = 1
+        @test @atomic(x.h) == 1
+        @atomic x.h = 2
+        @test @atomic(x.h) == 2
+    end
+end
+
+@kwdef struct Test_kwdef_lineinfo
+    a::String
+end
+@testset "@kwdef constructor line info" begin
+    for method in methods(Test_kwdef_lineinfo)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+@kwdef struct Test_kwdef_lineinfo_sparam{S<:AbstractString}
+    a::S
+end
+@testset "@kwdef constructor line info with static parameter" begin
+    for method in methods(Test_kwdef_lineinfo_sparam)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
@@ -1070,7 +1339,7 @@ end
                 GC.enable_logging(false)
             end
         end
-        @test occursin("GC: pause", read(open(tmppath), String))
+        @test occursin("GC: pause", read(tmppath, String))
     end
 end
 
@@ -1084,7 +1353,7 @@ end
 end
 
 # Test that read fault on a prot-none region does not incorrectly give
-# ReadOnlyMemoryEror, but rather crashes the program
+# ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
 let script = :(
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
@@ -1112,4 +1381,24 @@ end
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
+
+    # sanity check `@allocations` returns what we expect in some very simple cases
+    @test (@allocations "a") == 0
+    @test (@allocations "a" * "b") == 0 # constant propagation
+    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
 end

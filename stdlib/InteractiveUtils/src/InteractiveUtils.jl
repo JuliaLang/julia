@@ -11,8 +11,8 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
-    to_tuple_type, signature_type, format_bytes
-
+    signature_type, format_bytes
+using Base.Libc
 using Markdown
 
 include("editless.jl")
@@ -21,20 +21,23 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
+    varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
 
-Return a markdown table giving information about exported global variables in a module, optionally restricted
+Return a markdown table giving information about public global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `all` : also list non-public objects defined in the module, deprecated objects, and compiler-generated objects.
 - `imported` : also list objects explicitly imported from other modules.
 - `recursive` : recursively include objects in sub-modules, observing the same settings in each.
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 - `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
+
+The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
+a module, which is suitable for more general manipulations.
 """
-function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
@@ -45,7 +48,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
                 continue
             end
             value = getfield(m2, v)
-            isbuiltin = value === Base || value === Main || value === Core
+            isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
             end
@@ -60,11 +63,11 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
             end
         end
     end
-    let (col, rev) = if sortby == :name
+    let (col, rev) = if sortby === :name
             1, false
-        elseif sortby == :size
+        elseif sortby === :size
             4, true
-        elseif sortby == :summary
+        elseif sortby === :summary
             3, false
         else
             @assert "unreachable"
@@ -75,7 +78,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
 
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
+varinfo(pat::Regex; kwargs...) = varinfo(Base.active_module(), pat; kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -96,8 +99,25 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    if ccall(:jl_is_debugbuild, Cint, ())!=0
-        println(io, "DEBUG build")
+    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+    if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
+        println(io, "Build Info:")
+        if Base.isdebugbuild()
+            println(io, "  DEBUG build")
+        end
+        if !isempty(Base.TAGGED_RELEASE_BANNER)
+            println(io, "  ", Base.TAGGED_RELEASE_BANNER)
+        end
+        if Base.GIT_VERSION_INFO.tagged_commit && !official_release
+            println(io,
+                """
+
+                    Note: This is an unofficial build, please report bugs to the project
+                    responsible for this build and not to the Julia project unless you can
+                    reproduce the issue using official builds available at https://julialang.org/downloads
+                """
+            )
+        end
     end
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
@@ -139,9 +159,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
+    println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)
@@ -182,8 +201,10 @@ The optional second argument restricts the search to a particular module or func
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+See also: [`methods`](@ref).
 """
-function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
@@ -200,7 +221,7 @@ function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bo
     return meths
 end
 
-function _methodswith(t::Type, m::Module, supertypes::Bool)
+function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -213,9 +234,9 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
 
-function methodswith(t::Type; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
     meths = Method[]
     for mod in Base.loaded_modules_array()
         append!(meths, _methodswith(t, mod, supertypes))
@@ -298,7 +319,7 @@ end
 # TODO: @deprecate peakflops to LinearAlgebra
 export peakflops
 """
-    peakflops(n::Integer=2000; parallel::Bool=false)
+    peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
@@ -308,12 +329,12 @@ export peakflops
     This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
     future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
     let LinearAlgebra = Base.require(Base.PkgId(
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
-        return LinearAlgebra.peakflops(n; parallel = parallel)
+        return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
 end
 
@@ -333,7 +354,8 @@ function report_bug(kind)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
                 old_active_project = Base.ACTIVE_PROJECT[]
                 Base.ACTIVE_PROJECT[] = nothing
-                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                pkgspec = @invokelatest Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid)
+                @invokelatest Pkg.add(pkgspec)
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
@@ -342,7 +364,7 @@ function report_bug(kind)
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
+    return @invokelatest BugReporting.make_interactive_report(kind, ARGS)
 end
 
 end

@@ -244,8 +244,8 @@ ERROR: UndefRefError: access to undefined reference
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
 and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
-and immutable structs of other plain data types. The initial contents of a plain data type is
-undefined:
+and immutable structs of other plain data types (see also: [`isbits`](@ref), [`isbitstype`](@ref)).
+The initial contents of a plain data type is undefined:
 
 ```julia-repl
 julia> struct HasPlain
@@ -372,8 +372,13 @@ However, other similar calls still don't work:
 ```jldoctest parametric2
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
+
 Closest candidates are:
-  Point(::T, !Matched::T) where T<:Real at none:1
+  Point(::T, !Matched::T) where T<:Real
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
@@ -486,6 +491,7 @@ operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia'
 type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
+Note that the infix use of `⊘` works because Julia has a set of symbols that are recognized to be infix operators.
 The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
 `OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
@@ -550,8 +556,11 @@ julia> struct SummedArray{T<:Number,S<:Number}
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
+
 Closest candidates are:
-  SummedArray(::Vector{T}) where T at none:4
+  SummedArray(::Vector{T}) where T
+   @ Main none:4
+
 Stacktrace:
 [...]
 ```

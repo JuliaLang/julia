@@ -2,7 +2,7 @@
 
 module Partr
 
-using ..Threads: SpinLock, nthreads
+using ..Threads: SpinLock, maxthreadid, threadid
 
 # a task minheap
 mutable struct taskheap
@@ -16,16 +16,11 @@ end
 
 # multiqueue minheap state
 const heap_d = UInt32(8)
-global heaps::Vector{taskheap} = Vector{taskheap}(undef, 0)
-const heaps_lock = SpinLock()
-global cong_unbias::UInt32 = typemax(UInt32)
+const heaps = [Vector{taskheap}(undef, 0), Vector{taskheap}(undef, 0)]
+const heaps_lock = [SpinLock(), SpinLock()]
 
 
-cong(max::UInt32, unbias::UInt32) = ccall(:jl_rand_ptls, UInt32, (UInt32, UInt32), max, unbias) + UInt32(1)
-
-function unbias_cong(max::UInt32)
-    return typemax(UInt32) - ((typemax(UInt32) % max) + UInt32(1))
-end
+cong(max::UInt32) = iszero(max) ? UInt32(0) : ccall(:jl_rand_ptls, UInt32, (UInt32,), max) + UInt32(1)
 
 
 function multiq_sift_up(heap::taskheap, idx::Int32)
@@ -60,30 +55,31 @@ function multiq_sift_down(heap::taskheap, idx::Int32)
 end
 
 
-function multiq_size()
+function multiq_size(tpid::Int8)
+    nt = UInt32(Threads._nthreads_in_pool(tpid))
+    tp = tpid + 1
+    tpheaps = heaps[tp]
     heap_c = UInt32(2)
-    heap_p = UInt32(length(heaps))
-    nt = UInt32(nthreads())
+    heap_p = UInt32(length(tpheaps))
 
     if heap_c * nt <= heap_p
         return heap_p
     end
 
-    @lock heaps_lock begin
-        heap_p = UInt32(length(heaps))
-        nt = UInt32(nthreads())
+    @lock heaps_lock[tp] begin
+        heap_p = UInt32(length(tpheaps))
+        nt = UInt32(Threads._nthreads_in_pool(tpid))
         if heap_c * nt <= heap_p
             return heap_p
         end
 
         heap_p += heap_c * nt
         newheaps = Vector{taskheap}(undef, heap_p)
-        copyto!(newheaps, heaps)
-        for i = (1 + length(heaps)):heap_p
+        copyto!(newheaps, tpheaps)
+        for i = (1 + length(tpheaps)):heap_p
             newheaps[i] = taskheap()
         end
-        global heaps = newheaps
-        global cong_unbias = unbias_cong(heap_p)
+        heaps[tp] = newheaps
     end
 
     return heap_p
@@ -91,15 +87,20 @@ end
 
 
 function multiq_insert(task::Task, priority::UInt16)
+    tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
+    @assert tpid > -1
+    heap_p = multiq_size(tpid)
+    tp = tpid + 1
+
     task.priority = priority
 
-    heap_p = multiq_size()
-    rn = cong(heap_p, cong_unbias)
-    while !trylock(heaps[rn].lock)
-        rn = cong(heap_p, cong_unbias)
+    rn = cong(heap_p)
+    tpheaps = heaps[tp]
+    while !trylock(tpheaps[rn].lock)
+        rn = cong(heap_p)
     end
 
-    heap = heaps[rn]
+    heap = tpheaps[rn]
     if heap.ntasks >= length(heap.tasks)
         resize!(heap.tasks, length(heap.tasks) * 2)
     end
@@ -122,34 +123,40 @@ function multiq_deletemin()
     local rn1, rn2
     local prio1, prio2
 
+    tid = Threads.threadid()
+    tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return nothing
+    end
+    tpheaps = heaps[tp]
+
     @label retry
     GC.safepoint()
-    heap_p = UInt32(length(heaps))
+    heap_p = UInt32(length(tpheaps))
     for i = UInt32(0):heap_p
         if i == heap_p
             return nothing
         end
-        rn1 = cong(heap_p, cong_unbias)
-        rn2 = cong(heap_p, cong_unbias)
-        prio1 = heaps[rn1].priority
-        prio2 = heaps[rn2].priority
+        rn1 = cong(heap_p)
+        rn2 = cong(heap_p)
+        prio1 = tpheaps[rn1].priority
+        prio2 = tpheaps[rn2].priority
         if prio1 > prio2
             prio1 = prio2
             rn1 = rn2
         elseif prio1 == prio2 && prio1 == typemax(UInt16)
             continue
         end
-        if trylock(heaps[rn1].lock)
-            if prio1 == heaps[rn1].priority
+        if trylock(tpheaps[rn1].lock)
+            if prio1 == tpheaps[rn1].priority
                 break
             end
-            unlock(heaps[rn1].lock)
+            unlock(tpheaps[rn1].lock)
         end
     end
 
-    heap = heaps[rn1]
+    heap = tpheaps[rn1]
     task = heap.tasks[1]
-    tid = Threads.threadid()
     if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
         unlock(heap.lock)
         @goto retry
@@ -169,10 +176,14 @@ function multiq_deletemin()
     return task
 end
 
-
 function multiq_check_empty()
-    for i = UInt32(1):length(heaps)
-        if heaps[i].ntasks != 0
+    tid = Threads.threadid()
+    tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return true
+    end
+    for i = UInt32(1):length(heaps[tp])
+        if heaps[tp][i].ntasks != 0
             return false
         end
     end

@@ -100,6 +100,12 @@ show(io,v"4.3.2+1.a")
 # construction from AbstractString
 @test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
 
+# construct from VersionNumber
+let
+    v = VersionNumber("1.2.3")
+    @test VersionNumber(v) == v
+end
+
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
 @test typemax(VersionNumber) == v"∞"
@@ -212,12 +218,6 @@ for major=0:3, minor=0:3, patch=0:3
         @test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
     end
 end
-
-# banner
-import Base.banner
-io = IOBuffer()
-@test banner(io) === nothing
-@test length(String(take!(io))) > 50
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())

@@ -18,6 +18,7 @@ export
     AbstractMatrix,
     AbstractRange,
     AbstractSet,
+    AbstractSlices,
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
@@ -41,6 +42,7 @@ export
     ComplexF32,
     ComplexF16,
     ComposedFunction,
+    ColumnSlices,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -80,8 +82,10 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowSlices,
     Set,
     Some,
+    Slices,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -234,6 +238,7 @@ export
     bitrotate,
     bswap,
     cbrt,
+    fourthroot,
     ceil,
     cis,
     cispi,
@@ -348,6 +353,7 @@ export
     tan,
     tand,
     tanh,
+    tanpi,
     trailing_ones,
     trailing_zeros,
     trunc,
@@ -359,6 +365,7 @@ export
     zero,
     √,
     ∛,
+    ∜,
     ≈,
     ≉,
 
@@ -441,6 +448,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     step,
     stride,
     strides,
@@ -585,6 +593,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -640,6 +649,11 @@ export
     sprint,
     summary,
 
+# ScopedValue
+    with,
+    @with,
+    ScopedValue,
+
 # logging
     @debug,
     @info,
@@ -656,7 +670,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -768,6 +781,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
@@ -786,9 +800,13 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -807,6 +825,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    splat,
 
 # I/O and events
     close,
@@ -844,6 +863,8 @@ export
     readline,
     readlines,
     readuntil,
+    copyuntil,
+    copyline,
     redirect_stdio,
     redirect_stderr,
     redirect_stdin,
@@ -881,6 +902,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -930,6 +952,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
@@ -964,8 +987,11 @@ export
     reenable_sigint,
     unsafe_copyto!,
     unsafe_load,
+    unsafe_modify!,
     unsafe_pointer_to_objref,
+    unsafe_replace!,
     unsafe_store!,
+    unsafe_swap!,
 
 # implemented in Random module
     rand,
@@ -989,6 +1015,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @Kwargs,
     @lazy_str, # lazy string
 
     # documentation
@@ -1006,6 +1033,7 @@ export
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
 
     # tasks
     @sync,
@@ -1040,4 +1068,93 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main
+
+public
+# Modules
+    Checked,
+    Filesystem,
+    Order,
+    Sort,
+
+# Types
+    AbstractLock,
+    AsyncCondition,
+    CodeUnits,
+    Event,
+    Fix1,
+    Fix2,
+    Generator,
+    ImmutableDict,
+    OneTo,
+    AnnotatedString,
+    AnnotatedChar,
+    UUID,
+
+# Annotated strings
+    annotatedstring,
+    annotate!,
+    annotations,
+
+# Semaphores
+    Semaphore,
+    acquire,
+    release,
+
+# collections
+    IteratorEltype,
+    IteratorSize,
+    to_index,
+    vect,
+    isdone,
+    front,
+    rest,
+    split_rest,
+    tail,
+    checked_length,
+
+# Loading
+    DL_LOAD_PATH,
+    load_path,
+    active_project,
+
+# Reflection and introspection
+    isambiguous,
+    isexpr,
+    isidentifier,
+    issingletontype,
+    identify_package,
+    locate_package,
+    moduleroot,
+    jit_total_bytes,
+    summarysize,
+    isexported,
+    ispublic,
+
+# Opperators
+    operator_associativity,
+    operator_precedence,
+    isbinaryoperator,
+    isoperator,
+    isunaryoperator,
+
+# C interface
+    cconvert,
+    unsafe_convert,
+
+# Error handling
+    exit_on_sigint,
+    windowserror,
+
+# Macros
+    @assume_effects,
+    @constprop,
+    @locals,
+    @propagate_inbounds,
+
+# misc
+    notnothing,
+    runtests,
+    text_colors

@@ -61,8 +61,11 @@ function preserve_handle(x)
 end
 function unpreserve_handle(x)
     lock(preserve_handle_lock)
-    v = uvhandles[x]::Int
-    if v == 1
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1
@@ -99,6 +102,18 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)
 ## event loop ##
 
 eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
+
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
 
 function process_events()
     return ccall(:jl_process_events, Int32, ())

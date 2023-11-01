@@ -79,6 +79,23 @@ let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no thr
     end
 end
 
+# Timing-sensitive tests can fail on CI due to occasional unexpected delays,
+# so this test is disabled.
+#=
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_latency.jl`
+    for test_nthreads in (1, 2)
+        new_env = copy(ENV)
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",1")
+        run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+    end
+end
+=#
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_use.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+end
+
 function run_with_affinity(cpus)
     script = joinpath(@__DIR__, "print_process_affinity.jl")
     return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))
@@ -107,7 +124,7 @@ end
 
 function get_nthreads(options = ``; cpus = nothing)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
-    cmd = `$cmd -e "print(Threads.nthreads())"`
+    cmd = `$cmd -e "print(Threads.threadpoolsize())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
@@ -137,7 +154,7 @@ end
 
 # issue #34769
 function idle_callback(handle)
-    idle = @Base.handle_as handle UvTestIdle
+    idle = Base.@handle_as handle UvTestIdle
     if idle.active
         idle.count += 1
         if idle.count == 1
@@ -295,7 +312,7 @@ close(proc.in)
         if ( !success(proc) ) || ( timeout )
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows()
+        if Sys.iswindows() || Sys.isapple()
             # Known failure: https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else
@@ -309,4 +326,14 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
+end
+
+@testset "num_stack_mappings metric" begin
+    @test @ccall(jl_get_num_stack_mappings()::Cint) >= 1
+    # There must be at least two: one for the root test task and one for the async task:
+    @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
 end
