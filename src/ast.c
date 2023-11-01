@@ -164,6 +164,17 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
 }
 
+static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    // tells whether a var is defined, in the sense that accessing it is nothrow
+    argcount(fl_ctx, "nothrow-julia-global", nargs, 1);
+    (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
+    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    return b != NULL ? fl_ctx->T : fl_ctx->F;
+}
+
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
@@ -210,6 +221,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
+    { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
     { "julia-current-file", fl_julia_current_file },

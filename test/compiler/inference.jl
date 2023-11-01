@@ -2998,6 +2998,8 @@ end
 @test ig27907(Int, Int, 1, 0) == 0
 
 # issue #28279
+# ensure that lowering doesn't move these into statement position, which would require renumbering
+using Base: +, -
 function f28279(b::Bool)
     i = 1
     while i > b
