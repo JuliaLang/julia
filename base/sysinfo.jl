@@ -577,7 +577,7 @@ or is empty, this function throws an error.
 To retrieve a username that is overridable via an environment variable,
 e.g., `USER`, consider using
 ```julia
-user = get(ENV, "USER", Sys.username())
+user = get(Sys.username, ENV, "USER")
 ```
 
 !!! compat "Julia 1.11"
