@@ -1789,6 +1789,7 @@ macro struct_macro_51899()
         mutable struct Struct51899
             const const_field
             const const_field_with_type::Int
+            $(esc(Expr(:const, :(escaped_const_field::MyType))))
             @atomic atomic_field
             @atomic atomic_field_with_type::Int
         end
@@ -1796,7 +1797,7 @@ macro struct_macro_51899()
 end
 
 let ex = @macroexpand @struct_macro_51899()
-    const_field, const_field_with_type,
+    const_field, const_field_with_type, escaped_const_field,
     atomic_field, atomic_field_with_type = filter(x -> isa(x, Expr), ex.args[end].args[end].args)
     @test Meta.isexpr(const_field, :const)
     @test const_field.args[1] === :const_field
@@ -1805,6 +1806,11 @@ let ex = @macroexpand @struct_macro_51899()
     @test Meta.isexpr(const_field_with_type.args[1], :(::))
     @test const_field_with_type.args[1].args[1] === :const_field_with_type
     @test const_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+
+    @test Meta.isexpr(escaped_const_field, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test escaped_const_field.args[1].args[1] === :escaped_const_field
+    @test escaped_const_field.args[1].args[2] === :MyType
 
     @test Meta.isexpr(atomic_field, :atomic)
     @test atomic_field.args[1] === :atomic_field

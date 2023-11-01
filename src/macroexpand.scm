@@ -340,8 +340,8 @@
 
 (define (reescape ux x)
   (if (and (pair? x) (eq? (car x) 'escape))
-    (reescape '(escape ,ux) (cadr x)))
-    ux)
+    (reescape `(escape ,ux) (cadr x))
+    ux))
 
 ;; type has special behavior: identifiers inside are
 ;; field names, not expressions.
@@ -353,7 +353,7 @@
          `(|::| ,(unescape (cadr ux))
            ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
         ((and (pair? ux) (memq (car ux) '(const atomic)))
-         `(,(car ux) ,(resolve-struct-field-expansion (cadr ux) env m parent-scope inarg)))
+         `(,(car ux) ,(resolve-struct-field-expansion (reescape (cadr ux) x) env m parent-scope inarg)))
         (else
          (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
 
