@@ -180,7 +180,7 @@ end
         else
             @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
         end
-        # non-integer-multipled classified
+        # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
             @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
@@ -197,6 +197,9 @@ end
         end
         @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
+    # issue 46113
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
@@ -326,8 +329,8 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[1,2] === reinterpret(Int64, v[1,2])
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
-    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is OffsetArrays.IdOffsetRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
-    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got OffsetArrays.IdOffsetRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is $(repr(axes(v,1))). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got $(repr(axes(v,1)))) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
     v = OffsetArray(a, (0, 1))
     @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), 1),)
     r = reinterpret(UInt32, v)
@@ -347,7 +350,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is OffsetArrays.IdOffsetRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is $(repr(axes(vt,1))). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
@@ -447,10 +450,10 @@ end
         SomeSingleton(x) = new()
     end
 
-    @test_throws ErrorException reinterpret(Int, nothing)
-    @test_throws ErrorException reinterpret(Missing, 3)
-    @test_throws ErrorException reinterpret(Missing, NotASingleton())
-    @test_throws ErrorException reinterpret(NotASingleton, ())
+    @test_throws ArgumentError reinterpret(Int, nothing)
+    @test_throws ArgumentError reinterpret(Missing, 3)
+    @test_throws ArgumentError reinterpret(Missing, NotASingleton())
+    @test_throws ArgumentError reinterpret(NotASingleton, ())
 
     @test_throws ArgumentError reinterpret(NotASingleton, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(reshape, NotASingleton, fill(missing, 3))
@@ -465,9 +468,11 @@ end
     @test_throws ArgumentError reinterpret(Nothing, 1:6)
     @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
 
-    # reintepret of empty array with reshape
-    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    # reinterpret of empty array
+    @test reinterpret(reshape, Nothing, fill(missing, (1,0,3))) == fill(nothing, (1,0,3))
+    @test reinterpret(reshape, Missing, fill((), (0,))) == fill(missing, (0,))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(Missing, fill(77, (0,1)))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
 
     # reinterpret of 0-dimensional array
@@ -507,4 +512,26 @@ end
     @test x == x2
     @test setindex!(x, SomeSingleton(:), 3, 5) == x2
     @test_throws MethodError x[2,4] = nothing
+end
+
+# reinterpret of arbitrary bitstypes
+@testset "Reinterpret arbitrary bitstypes" begin
+    struct Bytes15
+        a::Int8
+        b::Int16
+        c::Int32
+        d::Int64
+    end
+
+    @test reinterpret(Float64, ComplexF32(1, 1)) === 0.007812501848093234
+    @test reinterpret(ComplexF32, 0.007812501848093234) === ComplexF32(1, 1)
+    @test reinterpret(Tuple{Float64, Float64}, ComplexF64(1, 1)) === (1.0, 1.0)
+    @test reinterpret(ComplexF64, (1.0, 1.0)) === ComplexF64(1, 1)
+    @test reinterpret(Tuple{Int8, Int16, Int32, Int64}, (Int64(1), Int32(2), Int16(3), Int8(4))) === (Int8(1), Int16(0), Int32(0), 288233674686595584)
+    @test reinterpret(Tuple{Int8, Int16, Tuple{Int32, Int64}}, (Int64(1), Int32(2), Int16(3), Int8(4))) === (Int8(1), Int16(0), (Int32(0), 288233674686595584))
+    @test reinterpret(Tuple{Int64, Int32, Int16, Int8}, (Int8(1), Int16(0), (Int32(0), 288233674686595584))) === (Int64(1), Int32(2), Int16(3), Int8(4))
+    @test reinterpret(Tuple{Int8, Int16, Int32, Int64}, Bytes15(Int8(1), Int16(2), Int32(3), Int64(4))) === (Int8(1), Int16(2), Int32(3), Int64(4))
+    @test reinterpret(Bytes15, (Int8(1), Int16(2), Int32(3), Int64(4))) == Bytes15(Int8(1), Int16(2), Int32(3), Int64(4))
+
+    @test_throws ArgumentError reinterpret(Tuple{Int32, Int64}, (Int16(1), Int64(4)))
 end

@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+An abstract type representing any sort of pattern matching expression
+(typically a regular expression). `AbstractPattern` objects can be used to
+match strings with [`match`](@ref).
+
+!!! compat "Julia 1.6"
+    This type is available in Julia 1.6 and later.
+"""
+abstract type AbstractPattern end
+
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
@@ -45,7 +55,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
     if isascii(b)
         _search(a,UInt8(b),i)
     else
-        _search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _search(a,codeunits(string(b)),i).start
     end
 end
 
@@ -88,7 +98,7 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
     if isascii(b)
         _rsearch(a,UInt8(b),i)
     else
-        _rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _rsearch(a,codeunits(string(b)),i).start
     end
 end
 
@@ -197,7 +207,7 @@ _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
-    _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
+    _searchindex(codeunits(s), codeunits(t), i)
 end
 
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
@@ -406,6 +416,67 @@ true
 """
 findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 
+"""
+    findall(
+        pattern::Union{AbstractString,AbstractPattern},
+        string::AbstractString;
+        overlap::Bool = false,
+    )
+    findall(
+        pattern::Vector{UInt8}
+        A::Vector{UInt8};
+        overlap::Bool = false,
+    )
+
+Return a `Vector{UnitRange{Int}}` of all the matches for `pattern` in `string`.
+Each element of the returned vector is a range of indices where the
+matching sequence is found, like the return value of [`findnext`](@ref).
+
+If `overlap=true`, the matching sequences are allowed to overlap indices in the
+original string, otherwise they must be from disjoint character ranges.
+
+# Examples
+```jldoctest
+julia> findall("a", "apple")
+1-element Vector{UnitRange{Int64}}:
+ 1:1
+
+julia> findall("nana", "banana")
+1-element Vector{UnitRange{Int64}}:
+ 3:6
+
+julia> findall("a", "banana")
+3-element Vector{UnitRange{Int64}}:
+ 2:2
+ 4:4
+ 6:6
+
+julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
+2-element Vector{UnitRange{Int64}}:
+ 1:2
+ 4:5
+```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+"""
+
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 ; overlap::Bool=false)
+    found = UnitRange{Int}[]
+    i, e = firstindex(s), lastindex(s)
+    while true
+        r = findnext(t, s, i)
+        isnothing(r) && break
+        push!(found, r)
+        j = overlap || isempty(r) ? first(r) : last(r)
+        j > e && break
+        @inbounds i = nextind(s, j)
+    end
+    return found
+end
+
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
@@ -450,7 +521,7 @@ function _rsearchindex(s::String, t::String, i::Integer)
         return something(findprev(isequal(t[1]), s, i), 0)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
-        return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
+        return _rsearchindex(codeunits(s), codeunits(t), j)
     elseif i > sizeof(s)
         return 0
     elseif i == 0
@@ -638,6 +709,17 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 
 !!! compat "Julia 1.6"
     This method requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> search_f = occursin("JuliaLang is a programming language");
+
+julia> search_f("JuliaLang")
+true
+
+julia> search_f("Python")
+false
+```
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 

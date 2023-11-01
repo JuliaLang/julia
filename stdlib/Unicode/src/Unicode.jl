@@ -87,7 +87,7 @@ options (which all default to `false` except for `compose`) are specified:
 * `stable=true`: enforce Unicode versioning stability (never introduce characters missing from earlier Unicode versions)
 
 You can also use the `chartransform` keyword (which defaults to `identity`) to pass an arbitrary
-*function* mapping `Integer` codepoints to codepoints, which is is called on each
+*function* mapping `Integer` codepoints to codepoints, which is called on each
 character in `s` as it is processed, in order to perform arbitrary additional normalizations.
 For example, by passing `chartransform=Unicode.julia_chartransform`, you can apply a few Julia-specific
 character normalizations that are performed by Julia when parsing identifiers (in addition to
@@ -120,7 +120,7 @@ normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
 """
     Unicode.isassigned(c) -> Bool
 
-Returns `true` if the given char or integer is an assigned Unicode code point.
+Return `true` if the given char or integer is an assigned Unicode code point.
 
 # Examples
 ```jldoctest
@@ -136,12 +136,75 @@ isassigned(c) = Base.Unicode.isassigned(c)
 """
     graphemes(s::AbstractString) -> GraphemeIterator
 
-Returns an iterator over substrings of `s` that correspond to the extended graphemes in the
+Return an iterator over substrings of `s` that correspond to the extended graphemes in the
 string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as
 single characters, even though they may contain more than one codepoint; for example a
 letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
+
+"""
+    graphemes(s::AbstractString, m:n) -> SubString
+
+Returns a [`SubString`](@ref) of `s` consisting of the `m`-th
+through `n`-th graphemes of the string `s`, where the second
+argument `m:n` is an integer-valued [`AbstractUnitRange`](@ref).
+
+Loosely speaking, this corresponds to the `m:n`-th user-perceived
+"characters" in the string.  For example:
+
+```jldoctest
+julia> s = graphemes("exposé", 3:6)
+"posé"
+
+julia> collect(s)
+5-element Vector{Char}:
+ 'p': ASCII/Unicode U+0070 (category Ll: Letter, lowercase)
+ 'o': ASCII/Unicode U+006F (category Ll: Letter, lowercase)
+ 's': ASCII/Unicode U+0073 (category Ll: Letter, lowercase)
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ '́': Unicode U+0301 (category Mn: Mark, nonspacing)
+```
+This consists of the 3rd to *7th* codepoints ([`Char`](@ref)s) in `"exposé"`,
+because the grapheme `"é"` is actually *two* Unicode codepoints
+(an `'e'` followed by an acute-accent combining character U+0301).
+
+Because finding grapheme boundaries requires iteration over the
+string contents, the `graphemes(s, m:n)` function requires time
+proportional to the length of the string (number of codepoints)
+before the end of the substring.
+
+!!! compat "Julia 1.9"
+    The `m:n` argument of `graphemes` requires Julia 1.9.
+"""
+function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
+    m, n = Int(first(r)), Int(last(r))
+    m > 0 || throw(ArgumentError("starting index $m is not ≥ 1"))
+    n < m && return @view s[1:0]
+    c0 = eltype(s)(0x00000000)
+    state = Ref{Int32}(0)
+    count = 0
+    i, iprev, ilast = 1, 1, lastindex(s)
+    # find the start of the m-th grapheme
+    while i ≤ ilast && count < m
+        @inbounds c = s[i]
+        count += Base.Unicode.isgraphemebreak!(state, c0, c)
+        c0 = c
+        i, iprev = nextind(s, i), i
+    end
+    start = iprev
+    count < m && throw(BoundsError(s, i))
+    # find the end of the n-th grapheme
+    while i ≤ ilast
+        @inbounds c = s[i]
+        count += Base.Unicode.isgraphemebreak!(state, c0, c)
+        count > n && break
+        c0 = c
+        i, iprev = nextind(s, i), i
+    end
+    count < n && throw(BoundsError(s, i))
+    return @view s[start:iprev]
+end
 
 using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
 
@@ -166,7 +229,7 @@ to perform custom normalizations, such as [`Unicode.julia_chartransform`](@ref).
 
 For example, the string `"noël"` can be constructed in two canonically equivalent ways
 in Unicode, depending on whether `"ë"` is formed from a single codepoint U+00EB or
-from the ASCII character `'o'` followed by the U+0308 combining-diaeresis character.
+from the ASCII character `'e'` followed by the U+0308 combining-diaeresis character.
 
 ```jldoctest
 julia> s1 = "no\u00EBl"

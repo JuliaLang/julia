@@ -27,6 +27,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
+
+/* See https://github.com/JuliaLang/julia/pull/44587 */
+typedef intptr_t ssize_t;
+#define SSIZE_MAX INTPTR_MAX
+#define _SSIZE_T_
+#define _SSIZE_T_DEFINED
+
+#endif /* defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED) */
+
 #if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
@@ -62,16 +72,24 @@
 
 #ifdef _OS_WINDOWS_
 #define STDCALL  __stdcall
-# ifdef LIBRARY_EXPORTS
+# ifdef JL_LIBRARY_EXPORTS_INTERNAL
 #  define JL_DLLEXPORT __declspec(dllexport)
-# else
-#  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+# ifdef JL_LIBRARY_EXPORTS_CODEGEN
+#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport)
+# endif
+#define JL_HIDDEN
 #define JL_DLLIMPORT   __declspec(dllimport)
 #else
 #define STDCALL
-# define JL_DLLEXPORT __attribute__ ((visibility("default")))
-#define JL_DLLIMPORT
+#define JL_DLLIMPORT __attribute__ ((visibility("default")))
+#define JL_HIDDEN __attribute__ ((visibility("hidden")))
+#endif
+#ifndef JL_DLLEXPORT
+# define JL_DLLEXPORT JL_DLLIMPORT
+#endif
+#ifndef JL_DLLEXPORT_CODEGEN
+# define JL_DLLEXPORT_CODEGEN JL_DLLIMPORT
 #endif
 
 #ifdef _OS_LINUX_
@@ -107,6 +125,7 @@
 #define LLT_FREE(x) free(x)
 
 #define STATIC_INLINE static inline
+#define FORCE_INLINE static inline __attribute__((always_inline))
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
@@ -116,7 +135,13 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
-#if defined(__GNUC__)
+#ifdef _COMPILER_MICROSOFT_
+# ifdef _P64
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
+# else
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
+# endif
+#elif defined(__GNUC__)
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
@@ -313,6 +338,23 @@ STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOI
 STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
 {
     memcpy(ptr, &val, 2);
+}
+
+STATIC_INLINE void *calloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = calloc(sz == 0 ? 1 : sz, 1);
+    if (p == NULL) {
+        perror("(julia) calloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
 }
 
 STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {

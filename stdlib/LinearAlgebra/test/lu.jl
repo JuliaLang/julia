@@ -224,6 +224,11 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
 @testset "Singular matrices" for T in (Float64, ComplexF64)
     A = T[1 2; 0 0]
     @test_throws SingularException lu(A)
@@ -296,7 +301,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -386,6 +391,15 @@ end
         B = randn(elty, 5, 5)
         @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
     end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
+    end
 end
 
 @testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
@@ -433,6 +447,37 @@ end
     ldiv!(u,lu(A),b)
     push!(b,4.0)
     @test length(b) == 4
+end
+
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
+end
+
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
+end
+
+@testset "generic lu!" begin
+    A = rand(3,3); B = deepcopy(A); C = A[2:3,2:3]
+    Asub1 = @view(A[2:3,2:3])
+    F1 = lu!(Asub1)
+    Asub2 = @view(B[[2,3],[2,3]])
+    F2 = lu!(Asub2)
+    @test Matrix(F1) ≈ Matrix(F2) ≈ C
+end
+
+@testset "matrix with Nonfinite" begin
+    lu(fill(NaN, 2, 2), check=false)
+    lu(fill(Inf, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
 end
 
 end # module TestLU

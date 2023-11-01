@@ -40,15 +40,8 @@ julia> supertype(Int32)
 Signed
 ```
 """
-function supertype(T::DataType)
-    @_pure_meta
-    T.super
-end
-
-function supertype(T::UnionAll)
-    @_pure_meta
-    UnionAll(T.var, supertype(T.body))
-end
+supertype(T::DataType) = (@_total_meta; T.super)
+supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -86,7 +79,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -150,7 +143,7 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a fixed total order (defined together with
-[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
+[`isequal`](@ref)). `isless` is not defined for pairs `(x, y)` of all types. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -161,13 +154,13 @@ Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
-This is the default comparison used by [`sort`](@ref).
+This is the default comparison used by [`sort!`](@ref).
 
 # Implementation
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-See the documentation on [Alternate orderings](@ref) for how to define alternate
+See the documentation on [Alternate Orderings](@ref) for how to define alternate
 ordering methods that can be used in sorting and related functions.
 
 # Examples
@@ -185,6 +178,13 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
+
 """
     isgreater(x, y)
 
@@ -192,7 +192,7 @@ Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
 a fixed total order compatible with `min`.
 
 Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
-[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+[`missing`](@ref) are ordered as smaller than any regular value with `missing`
 smaller than `NaN`.
 
 So `isless` defines an ascending total order with `NaN` and `missing` as the
@@ -247,14 +247,8 @@ isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true
 
-function ==(T::Type, S::Type)
-    @_pure_meta
-    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
-end
-function !=(T::Type, S::Type)
-    @_pure_meta
-    return !(T == S)
-end
+==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
+!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -337,9 +331,11 @@ Because of the behavior of floating-point NaN values, this operator implements
 a partial order.
 
 # Implementation
-New numeric types with a canonical partial order should implement this function for
+New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
+
+See also [`isunordered`](@ref).
 
 # Examples
 ```jldoctest
@@ -523,7 +519,7 @@ julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
 ```
 """
-identity(x) = x
+identity(@nospecialize x) = x
 
 +(x::Number) = x
 *(x::Number) = x
@@ -581,7 +577,7 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 34
+setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -671,9 +667,9 @@ end
     >>(x, n)
 
 Right bit shift operator, `x >> n`. For `n >= 0`, the result is `x` shifted
-right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
-0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
-0`, this is equivalent to `x << -n`.
+right by `n` bits, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving
+the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n < 0`, this is
+equivalent to `x << -n`.
 
 # Examples
 ```jldoctest
@@ -712,8 +708,8 @@ end
     >>>(x, n)
 
 Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
-shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
-is equivalent to `x << -n`.
+shifted right by `n` bits, filling with `0`s. For `n < 0`, this is equivalent
+to `x << -n`.
 
 For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 [`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
@@ -855,7 +851,7 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
 function fld1(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d + (!signbit(x ⊻ y) & (d * y != x))
@@ -894,22 +890,34 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 
 """
     |>(x, f)
 
-Applies a function to the preceding argument. This allows for easy function chaining.
-When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
+Infix operator which applies function `f` to the argument `x`.
+This allows `f(g(x))` to be written `x |> g |> f`.
+When used with anonymous functions, parentheses are typically required around
+the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] .|> (x -> x^2) |> sum |> inv
-0.01818181818181818
+julia> 4 |> inv
+0.25
+
+julia> [2, 3, 5] |> sum |> inv
+0.1
+
+julia> [0 1; 2 3] .|> (x -> x^2) |> sum
+14
 ```
 """
 |>(x, f) = f(x)
+
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -937,16 +945,11 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{Core.Typeof(value)}(value)
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
-(obj::Returns)(args...; kw...) = obj.value
-function show(io::IO, obj::Returns)
-    show(io, typeof(obj))
-    print(io, "(")
-    show(io, obj.value)
-    print(io, ")")
-end
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
+
 # function composition
 
 """
@@ -958,6 +961,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
+The last argument to `∘` execute first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -976,15 +980,21 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
+julia> (==(6)∘length).(["apple", "banana", "carrot"])
+3-element BitVector:
+ 0
+ 1
+ 1
+
 julia> fs = [
            x -> 2x
-           x -> x/2
            x -> x-1
+           x -> x/2
            x -> x+1
        ];
 
 julia> ∘(fs...)(3)
-3.0
+2.0
 ```
 See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
@@ -997,7 +1007,7 @@ Represents the composition of two callable objects `outer::Outer` and `inner::In
 ```julia
 ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
 ```
-The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+The preferred way to construct an instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
 julia> sin ∘ cos === ComposedFunction(sin, cos)
 true
@@ -1028,23 +1038,45 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
+(c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
+unwrap_composed(c) = (maybeconstructor(c),)
+call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
+call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
+
+struct Constructor{F} <: Function end
+(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(f) = f
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
 end
+
+#shows !f instead of (!) ∘ f when ! is the outermost function
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, '!')
+    _showcomposed(io, c.inner)
+end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
 
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1059,8 +1091,12 @@ julia> filter(isletter, str)
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)
@@ -1075,8 +1111,8 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1092,8 +1128,8 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
@@ -1188,25 +1224,53 @@ used to implement specialized methods.
 """
     splat(f)
 
-Defined as
+Equivalent to
 ```julia
-    splat(f) = args->f(args...)
+    my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
-its argument into the original function. This is useful as an adaptor to pass
-a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument.
+it into the original function. This is useful as an adaptor to pass a
+multi-argument function in a context that expects a single argument, but passes
+a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.splat(+), zip(1:3,4:6))
+julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
+
+julia> my_add = splat(+)
+splat(+)
+
+julia> my_add((1,2,3))
+6
 ```
 """
-splat(f) = args->f(args...)
+splat(f) = Splat(f)
+
+"""
+    Base.Splat{F} <: Function
+
+Represents a splatted function. That is
+```julia
+Base.Splat(f)(args) === f(args...)
+```
+The preferred way to construct an instance of `Base.Splat` is to use the [`splat`](@ref) function.
+
+!!! compat "Julia 1.9"
+    Splat requires at least Julia 1.9. In earlier versions `splat` returns an anonymous function instead.
+
+See also [`splat`](@ref).
+"""
+struct Splat{F} <: Function
+    f::F
+    Splat(f) = new{Core.Typeof(f)}(f)
+end
+(s::Splat)(args) = s.f(args...)
+print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
+show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
 
@@ -1223,17 +1287,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function in(x, itr::$ItrT)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for y in itr
+            v = (y == x)
+            if ismissing(v)
+                anymissing = true
+            elseif v
+                return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 const ∈ = in
@@ -1268,20 +1337,19 @@ a function equivalent to `y -> item in y`.
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
-Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+Return a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
 contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
-[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
-[`isequal`](@ref). To test for the presence of a key in a dictionary,
-use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
-is always a `Bool` and never `missing`.
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
+[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
+[`isequal`](@ref).
 
-To determine whether an item is not in a given collection, see [`:∉`](@ref).
-You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+To test for the presence of a key in a dictionary, use [`haskey`](@ref)
+or `k in keys(dict)`. For the collections mentioned above,
+the result is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `item` and `collection` are broadcasted over, which is often not what is intended.
@@ -1290,6 +1358,8 @@ a vector indicating whether each value in collection `items` is `in` the value a
 corresponding position in `collection`. To get a vector indicating whether each value
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
+See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1314,11 +1384,8 @@ true
 julia> missing in Set([1, 2])
 false
 
-julia> !(21 in a)
-true
-
-julia> !(19 in a)
-false
+julia> (1=>missing) in Dict(1=>10, 2=>20)
+missing
 
 julia> [1, 2] .∈ [2, 3]
 2-element BitVector:
@@ -1330,8 +1397,6 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
-
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

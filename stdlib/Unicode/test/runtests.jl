@@ -271,6 +271,16 @@ end
 
     @test Base.Unicode.isgraphemebreak('α', 'β')
     @test !Base.Unicode.isgraphemebreak('α', '\u0302')
+
+    for pre in ("","ä"), post in ("","x̂")
+        prelen = length(graphemes(pre))
+        @test graphemes(pre * "öü" * post, (1:2) .+ prelen) == "öü"
+        @test graphemes(pre * "ö" * post, (1:1) .+ prelen) == "ö"
+    end
+    @test graphemes("äöüx", 6:5)::SubString{String} == ""
+    @test_throws BoundsError graphemes("äöüx", 2:5)
+    @test_throws BoundsError graphemes("äöüx", 5:5)
+    @test_throws ArgumentError graphemes("äöüx", 0:1)
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -421,6 +431,28 @@ end
     @test one(String) == ""
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
+end
+
+@testset "Grapheme breaks and iterator" begin
+    u1 = reinterpret(Char, UInt32(0xc0) << 24)
+    u2 = reinterpret(Char, UInt32(0xc1) << 24)
+
+    overlong_uint =  UInt32(0xc0) << 24
+    overlong_char = reinterpret(Char, overlong_uint)
+
+    state = Ref(Int32(1))
+    @test Base.Unicode.isgraphemebreak(u1, u2)
+    @test Base.Unicode.isgraphemebreak!(state, u1, u2)
+    @test state[] == 0
+
+    @test_throws(
+        ErrorException("An unknown error occurred while processing UTF-8 data."),
+        Base.Unicode.utf8proc_error(2)
+    )
+    gi = Base.Unicode.graphemes("This is a string")
+    @test gi isa Base.Unicode.GraphemeIterator{String}
+    @test Base.Unicode.isvalid(Char, 'c')
+    @test !Base.Unicode.isvalid(Char, overlong_char)
 end
 
 @testset "Unicode equivalence" begin

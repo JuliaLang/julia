@@ -1,0 +1,5 @@
+## jll artifact
+LLVMUNWIND_JLL_NAME := LLVMLibUnwind
+
+## source build
+LLVMUNWIND_VER := 12.0.1

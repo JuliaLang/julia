@@ -30,7 +30,7 @@ to implement indexing (and indexed assignment) with a single `Int` index;
 all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
-recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
+recomputed to the equivalent linear index and call `A[5]` since `1 + 2*(3 - 1) = 5`.
 
 See also [`IndexCartesian`](@ref).
 """
@@ -53,7 +53,7 @@ to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
 all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with cartesian indexing, and we referenced `A[5]`, this would be
-recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
+recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 1 + 2*(3 - 1)`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
 to go the other way.  The former operation requires division — a very costly operation — whereas
@@ -92,7 +92,7 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -320,6 +320,26 @@ which they index. To support those cases, `to_indices(A, I)` calls
 `to_indices(A, axes(A), I)`, which then recursively walks through both the
 given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
+
+# Examples
+```jldoctest
+julia> A = zeros(1,2,3,4);
+
+julia> to_indices(A, (1,1,2,2))
+(1, 1, 2, 2)
+
+julia> to_indices(A, (1,1,2,20)) # no bounds checking
+(1, 1, 2, 20)
+
+julia> to_indices(A, (CartesianIndex((1,)), 2, CartesianIndex((3,4)))) # exotic index
+(1, 2, 3, 4)
+
+julia> to_indices(A, ([1,1], 1:2, 3, 4))
+([1, 1], 1:2, 3, 4)
+
+julia> to_indices(A, (1,2)) # no shape checking
+(1, 2)
+```
 """
 to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
 to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
@@ -329,11 +349,15 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
-    (@inline; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
+function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
+    @inline
+    head = _to_indices1(A, inds, I[1])
+    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
+    (head..., rest...)
+end
 
-_maybetail(::Tuple{}) = ()
-_maybetail(t::Tuple) = tail(t)
+_to_indices1(A, inds, I1) = (to_index(A, I1),)
+_cutdim(inds, I1) = safe_tail(inds)
 
 """
     Slice(indices)
@@ -452,7 +476,7 @@ struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int
     indices::R
 end
 convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
-    LinearIndices{N,R}(convert(R, inds.indices))
+    LinearIndices{N,R}(convert(R, inds.indices))::LinearIndices{N,R}
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
@@ -461,7 +485,7 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(_convert2ind, inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
-_convert2ind(i::Integer) = Base.OneTo(i)
+_convert2ind(i::Integer) = oneto(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
@@ -480,6 +504,7 @@ promote_rule(a::Type{IdentityUnitRange{T1}}, b::Type{IdentityUnitRange{T2}}) whe
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
+isassigned(iter::LinearIndices, i::Int) = checkbounds(Bool, iter, i)
 function getindex(iter::LinearIndices, i::Int)
     @inline
     @boundscheck checkbounds(iter, i)

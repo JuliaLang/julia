@@ -81,7 +81,7 @@ parentindices(V::SubArray) = V.indices
 """
     parentindices(A)
 
-Return the indices in the [`parent`](@ref) which correspond to the array view `A`.
+Return the indices in the [`parent`](@ref) which correspond to the view `A`.
 
 # Examples
 ```jldoctest
@@ -96,6 +96,8 @@ julia> parentindices(V)
 (1, Base.Slice(Base.OneTo(2)))
 ```
 """
+function parentindices end
+
 parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
@@ -171,10 +173,14 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 3:4
 ```
 """
-function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
+function view(A::AbstractArray{<:Any,N}, I::Vararg{Any,M}) where {N,M}
     @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
+    if length(J) > ndims(A) && J[N+1:end] isa Tuple{Vararg{Int}}
+        # view([1,2,3], :, 1) does not need to reshape
+        return unsafe_view(A, J[1:N]...)
+    end
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 
@@ -348,6 +354,37 @@ function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
     V
 end
 
+function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
+    @inline
+    @boundscheck checkbounds(Bool, V, I...) || return false
+    @inbounds r = isassigned(V.parent, reindex(V.indices, I)...)
+    r
+end
+function isassigned(V::FastSubArray, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
+    r
+end
+function isassigned(V::FastContiguousSubArray, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    r
+end
+function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
+    r
+end
+function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
+    @inline
+    @boundscheck checkbounds(Bool, V, i) || return false
+    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    r
+end
+
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
 IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
@@ -379,12 +416,8 @@ iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false
 iscontiguous(::Type{<:FastContiguousSubArray}) = true
 
-first_index(V::FastSubArray) = V.offset1 + V.stride1 # cached for fast linear SubArrays
-function first_index(V::SubArray)
-    P, I = parent(V), V.indices
-    s1 = compute_stride1(P, I)
-    s1 + compute_offset1(P, s1, I)
-end
+first_index(V::FastSubArray) = V.offset1 + V.stride1 * firstindex(V) # cached for fast linear SubArrays
+first_index(V::SubArray) = compute_linindex(parent(V), V.indices)
 
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
@@ -410,11 +443,6 @@ function compute_linindex(parent, I::NTuple{N,Any}) where N
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
     compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
-function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
-    @inline
-    Δi = I[1]-first(IP[1])
-    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
-end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @inline
     Δi = first(I[1])-first(IP[1])
@@ -428,10 +456,6 @@ find_extended_dims(dim) = ()
 find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
-
-function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
-    return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
-end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
@@ -454,4 +478,13 @@ _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @inline
     (axes(i1)..., _indices_sub(I...)...)
+end
+
+has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
+
+function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, reindex(S.indices, (i,j))..., s)
+end
+function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, reindex(S.indices, (i,))..., j, s)
 end

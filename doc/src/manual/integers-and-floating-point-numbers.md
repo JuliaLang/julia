@@ -185,7 +185,9 @@ determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is 
 
 That allows the user to control the size.
 
-Values which cannot be stored in `UInt128` cannot be written as such literals.
+Unsigned literals (starting with `0x`) that encode integers too large to be represented as
+`UInt128` values will construct `BigInt` values instead. This is not an unsigned type but
+it is the only built-in type big enough to represent such large integer values.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
@@ -650,6 +652,13 @@ julia> setprecision(40) do
        end
 1.1000000000004
 ```
+
+!!! warning
+    The relation between [`setprecision`](@ref) or [`setrounding`](@ref) and
+    [`@big_str`](@ref), the macro used for `big` string literals (such as
+    `big"0.3"`), might not be intuitive, as a consequence of the fact that
+    `@big_str` is a macro. See the [`@big_str`](@ref) documentation for
+    details.
 
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 

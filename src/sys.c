@@ -27,6 +27,9 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -277,15 +280,16 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             return str;
         }
         a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
+        memcpy(jl_array_data(a, uint8_t), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        char *mem = jl_array_data(a, char);
+        ios_setbuf(&dest, (char*)mem, 80, 0);
+        size_t n = ios_copyuntil(&dest, s, delim, 1);
         if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
             if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
@@ -295,13 +299,11 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             assert(truncret == 0);
             (void)truncret; // ensure the variable is used to avoid warnings
         }
-        if (dest.buf != a->data) {
+        if (dest.buf != mem) {
             a = jl_take_buffer(&dest);
         }
         else {
-            a->length = n;
-            a->nrows = n;
-            ((char*)a->data)[n] = '\0';
+            a->dimsize[0] = n;
         }
         if (str) {
             JL_GC_PUSH1(&a);
@@ -311,6 +313,50 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         }
     }
     return (jl_value_t*)a;
+}
+
+// read up to buflen bytes, including delim, into buf.  returns number of bytes read.
+JL_DLLEXPORT size_t jl_readuntil_buf(ios_t *s, uint8_t delim, uint8_t *buf, size_t buflen)
+{
+    // manually inlined common case
+    size_t avail = (size_t)(s->size - s->bpos);
+    if (avail > buflen) avail = buflen;
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, avail);
+    if (pd) {
+        size_t n = pd - (s->buf + s->bpos) + 1;
+        memcpy(buf, s->buf + s->bpos, n);
+        s->bpos += n;
+        return n;
+    }
+    else {
+        size_t total = avail;
+        memcpy(buf, s->buf + s->bpos, avail);
+        s->bpos += avail;
+        if (avail == buflen) return total;
+
+        // code derived from ios_copyuntil
+        while (!ios_eof(s)) {
+            avail = ios_readprep(s, 160); // read LINE_CHUNK_SIZE
+            if (avail == 0) break;
+            if (total+avail > buflen) avail = buflen-total;
+            char *pd = (char*)memchr(s->buf+s->bpos, delim, avail);
+            if (pd == NULL) {
+                memcpy(buf+total, s->buf+s->bpos, avail);
+                s->bpos += avail;
+                total += avail;
+                if (buflen == total) return total;
+            }
+            else {
+                size_t ntowrite = pd - (s->buf+s->bpos) + 1;
+                memcpy(buf+total, s->buf+s->bpos, ntowrite);
+                s->bpos += ntowrite;
+                total += ntowrite;
+                return total;
+            }
+        }
+        s->_eof = 1;
+        return total;
+    }
 }
 
 JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
@@ -514,6 +560,14 @@ JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
+
 // -- processor native alignment information --
 
 JL_DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
@@ -713,6 +767,39 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #else
     return (size_t)0;
 #endif
+}
+
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t max = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
+}
+
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
+
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

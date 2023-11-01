@@ -70,12 +70,6 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
  "args_tuple: (4,), element_val: 4, task: 4904288162898683522"
  "args_tuple: (5,), element_val: 5, task: 9118321258196414413"
 ```
-
-!!! note
-    Currently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently,
-    `asyncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
-    worker invocation, etc.
-
 """
 function asyncmap(f, c...; ntasks=0, batch_size=nothing)
     return async_usemap(f, c...; ntasks=ntasks, batch_size=batch_size)
@@ -400,6 +394,8 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))

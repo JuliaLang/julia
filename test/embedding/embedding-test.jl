@@ -23,10 +23,13 @@ end
     @test readline(err) == "MethodError: no method matching this_function_has_no_methods()"
     @test success(p)
     lines = fetch(out_task)
-    @test length(lines) == 10
+    @test length(lines) == 11
     @test parse(Float64, lines[1]) ≈ sqrt(2)
-    @test lines[8] == "called bar"
-    @test lines[9] == "calling new bar"
-    @test lines[10] == "      From worker 2:\tTaking over the world..."
+    @test lines[2] == "sqrt(2.0) in C: 1.414214e+00"
+    @test lines[3] == "sqrt(2.0) in C: 1.414214e+00"
+    @test lines[4] == "sqrt(2.0) in C: 1.414214e+00"
+    @test lines[9] == "called bar"
+    @test lines[10] == "calling new bar"
+    @test lines[11] == "      From worker 2:\tTaking over the world..."
     @test readline(err) == "exception caught from C"
 end
