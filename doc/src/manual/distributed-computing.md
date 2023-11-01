@@ -544,50 +544,43 @@ remote store:
 
 ```jldoctest
 julia> struct DictChannel{T} <: AbstractChannel{T}
-    d::Dict
-    cond_take::Threads.Condition    # waiting for data to become available
-
-    function DictChannel{T}() where T
-        return new(Dict(), Threads.Condition())
-    end
-    DictChannel() = DictChannel{Any}()
-end
-
+           d::Dict
+           cond_take::Threads.Condition    # waiting for data to become available
+           DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
+           DictChannel() = DictChannel{Any}()
+       end
+       
 julia> begin
-function Base.put!(D::DictChannel, k, v)
-    @lock D.cond_take begin
-        D.d[k] = v
-        notify(D.cond_take)
-    end
-    return D
-end
-
-function Base.take!(D::DictChannel, k)
-    @lock D.cond_take begin
-        v = fetch(D, k)
-        delete!(D.d, k)
-        return v
-    end
-end
-
-Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
-Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
-
-function Base.fetch(D::DictChannel, k)
-    @lock D.cond_take begin
-        wait(D, k)
-        return D.d[k]
-    end
-end
-
-function Base.wait(D::DictChannel, k)
-    @lock D.cond_take begin
-        while !isready(D, k)
-            wait(D.cond_take)
-        end
-    end
-end
-end;
+       function Base.put!(D::DictChannel, k, v)
+           @lock D.cond_take begin
+               D.d[k] = v
+               notify(D.cond_take)
+           end
+           return D
+       end
+       function Base.take!(D::DictChannel, k)
+           @lock D.cond_take begin
+               v = fetch(D, k)
+               delete!(D.d, k)
+               return v
+           end
+       end
+       Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+       Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+       function Base.fetch(D::DictChannel, k)
+           @lock D.cond_take begin
+               wait(D, k)
+               return D.d[k]
+           end
+       end
+       function Base.wait(D::DictChannel, k)
+           @lock D.cond_take begin
+               while !isready(D, k)
+                   wait(D.cond_take)
+               end
+           end
+       end
+       end;
 
 julia> d = DictChannel();
 
