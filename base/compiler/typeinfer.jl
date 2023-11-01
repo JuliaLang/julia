@@ -270,11 +270,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if is_cached(caller)
             cache_result!(caller.interp, caller.result)
         end
-        # Drop result.src here since otherwise it can waste memory.
-        # N.B. If cached locally, the inliner may request to use it later.
-        if iszero(caller.cache_mode & CACHE_MODE_LOCAL)
-            caller.result.src = nothing
-        end
     end
     empty!(frames)
     return true
@@ -800,12 +795,12 @@ struct EdgeCallResult
     rt #::Type
     edge::Union{Nothing,MethodInstance}
     effects::Effects
-    inferred_src::Union{Nothing,CodeInfo}
+    volatile_inf_result::Union{Nothing,VolatileInferenceResult}
     function EdgeCallResult(@nospecialize(rt),
                             edge::Union{Nothing,MethodInstance},
                             effects::Effects,
-                            inferred_src::Union{Nothing,CodeInfo} = nothing)
-        return new(rt, edge, effects, inferred_src)
+                            volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing)
+        return new(rt, edge, effects, volatile_inf_result)
     end
 end
 
@@ -813,23 +808,20 @@ end
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
+    force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     if code isa CodeInstance # return existing rettype if the code is already inferred
         inferred = @atomic :monotonic code.inferred
-        if inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+        if inferred === nothing && force_inline
             # we already inferred this edge before and decided to discard the inferred code,
-            # nevertheless we re-infer it here again and keep it around in the local cache
-            # since the inliner will request to use it later
-            cache_mode = CACHE_MODE_LOCAL
+            # nevertheless we re-infer it here again in order to propagate the re-inferred
+            # source to the inliner as a volatile result
+            cache_mode = CACHE_MODE_VOLATILE
         else
             rt = cached_return_type(code)
             effects = ipo_effects(code)
             update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
             return EdgeCallResult(rt, mi, effects)
         end
-    elseif is_stmt_inline(get_curr_ssaflag(caller))
-        # if this fresh is going to be inlined, we cache it locally too so that the inliner
-        # can see it later even in a case when the inferred source is discarded from the global cache
-        cache_mode = CACHE_MODE_GLOBAL | CACHE_MODE_LOCAL
     else
         cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     end
@@ -863,8 +855,12 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
         effects = isinferred ? frame.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
-        inferred_src = isinferred && is_inlineable(frame.src) ? frame.src : nothing
-        return EdgeCallResult(frame.bestguess, edge, effects, inferred_src)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, we can use this local result destructively
+        volatile_inf_result = isinferred && let inferred_src = result.src
+                isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
+            end ? VolatileInferenceResult(result) : nothing
+        return EdgeCallResult(frame.bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
