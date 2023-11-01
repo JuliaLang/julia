@@ -1314,6 +1314,9 @@ let a = Vector{Any}(undef, 10000)
 end
 @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+# issue 36495, dumping a partial NamedTupled shouldn't error
+@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
