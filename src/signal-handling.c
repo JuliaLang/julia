@@ -431,11 +431,18 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->gcstack = NULL;
         ct->eh = NULL;
         ct->world_age = 1;
-        ct->ptls->locks.len = 0;
+        // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
+        small_arraylist_t *locks = &ct->ptls->locks;
+        for (size_t i = locks->len; i > 0; i--)
+            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+        locks->len = 0;
         ct->ptls->in_pure_callback = 0;
         ct->ptls->in_finalizer = 0;
         ct->ptls->defer_signal = 0;
-        jl_atomic_store_release(&ct->ptls->gc_state, 0); // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        jl_atomic_store_release(&ct->ptls->gc_state, 0);
+        // allow continuing to use a Task that should have already died--unsafe necromancy!
+        jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     }
 }
 
