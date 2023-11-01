@@ -519,10 +519,10 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
 # `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
 # be employed, for instance, by `typeinf_ext_toplevel`.
-is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === :no
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
 function is_call_graph_uncached(sv::CC.InferenceState)
-    sv.cache_mode === :global && return false
+    sv.cache_mode === CC.CACHE_MODE_GLOBAL && return false
     parent = sv.parent
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)

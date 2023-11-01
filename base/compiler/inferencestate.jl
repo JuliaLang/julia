@@ -198,6 +198,10 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+const CACHE_MODE_NULL   = 0x00
+const CACHE_MODE_GLOBAL = 0x01 << 0
+const CACHE_MODE_LOCAL  = 0x01 << 1
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -240,7 +244,7 @@ mutable struct InferenceState
     # Whether to restrict inference of abstract call sites to avoid excessive work
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
-    cache_mode::Symbol # TODO move this to InferenceResult?
+    cache_mode::UInt8 # TODO move this to InferenceResult?
     insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
@@ -248,7 +252,7 @@ mutable struct InferenceState
     interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::Symbol,
+    function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
@@ -303,11 +307,10 @@ mutable struct InferenceState
         end
 
         restrict_abstract_call_sites = isa(def, Module)
-        @assert cache_mode === :no || cache_mode === :local || cache_mode === :global
 
         # some more setups
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-        cache_mode === :local && push!(get_inference_cache(interp), result)
+        !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
         return new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
@@ -446,13 +449,28 @@ function should_insert_coverage(mod::Module, src::CodeInfo)
     return false
 end
 
-function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     world = get_world_counter(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cache, interp)
+    return InferenceState(result, src, cache_mode, interp)
+end
+InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, convert_cache_mode(cache_mode), interp)
+InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, src, convert_cache_mode(cache_mode), interp)
+
+function convert_cache_mode(cache_mode::Symbol)
+    if cache_mode === :global
+        return CACHE_MODE_GLOBAL
+    elseif cache_mode === :local
+        return CACHE_MODE_LOCAL
+    elseif cache_mode === :no
+        return CACHE_MODE_NULL
+    end
+    error("unexpected `cache_mode` is given")
 end
 
 """
@@ -666,7 +684,7 @@ end
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)
-        sv.cache_mode === :global || print("  [uncached]")
+        is_cached(sv) || print("  [uncached]")
         println()
         for cycle in sv.callers_in_cycle
             print(' ', cycle.linfo)
@@ -764,7 +782,7 @@ frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
 is_constproped(sv::InferenceState) = any(sv.result.overridden_by_const)
 is_constproped(::IRInterpretationState) = true
 
-is_cached(sv::InferenceState) = sv.cache_mode === :global
+is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
 is_cached(::IRInterpretationState) = false
 
 method_info(sv::InferenceState) = sv.method_info
