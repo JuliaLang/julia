@@ -343,6 +343,20 @@
     (reescape '(escape ,ux) (cadr x)))
     ux)
 
+;; type has special behavior: identifiers inside are
+;; field names, not expressions.
+(define (resolve-struct-field-expansion x env m parent-scope inarg)
+  (let ((ux (unescape x)))
+    (cond
+        ((atom? ux) ux)
+        ((and (pair? ux) (eq? (car ux) '|::|))
+         `(|::| ,(unescape (cadr ux))
+           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
+        ((and (pair? ux) (memq (car ux) '(const atomic)))
+         `(,(car ux) ,(resolve-struct-field-expansion (cadr ux) env m parent-scope inarg)))
+        (else
+         (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
+
 (define (resolve-expansion-vars- e env m parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
@@ -377,16 +391,8 @@
            ((symbolicgoto) e)
            ((struct)
             `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)
-                     ;; type has special behavior: identifiers inside are
-                     ;; field names, not expressions.
                      ,(map (lambda (x)
-                             (let ((ux (unescape x)))
-                                  (cond ((atom? ux) ux)
-                                        ((and (pair? ux) (eq? (car ux) '|::|))
-                                         `(|::| ,(unescape (cadr ux))
-                                           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
-                                        (else
-                                         (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
+                            (resolve-struct-field-expansion x env m parent-scope inarg))
                            (cadddr e))))
 
            ((parameters)

@@ -1783,6 +1783,37 @@ end
 @test B28593.var.name === :S
 @test C28593.var.name === :S
 
+# issue #51899
+macro struct_macro_51899()
+    quote
+        mutable struct Struct51899
+            const const_field
+            const const_field_with_type::Int
+            @atomic atomic_field
+            @atomic atomic_field_with_type::Int
+        end
+    end
+end
+
+let ex = @macroexpand @struct_macro_51899()
+    const_field, const_field_with_type,
+    atomic_field, atomic_field_with_type = filter(x -> isa(x, Expr), ex.args[end].args[end].args)
+    @test Meta.isexpr(const_field, :const)
+    @test const_field.args[1] === :const_field
+
+    @test Meta.isexpr(const_field_with_type, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test const_field_with_type.args[1].args[1] === :const_field_with_type
+    @test const_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+
+    @test Meta.isexpr(atomic_field, :atomic)
+    @test atomic_field.args[1] === :atomic_field
+
+    @test Meta.isexpr(atomic_field_with_type, :atomic)
+    @test atomic_field_with_type.args[1].args[1] === :atomic_field_with_type
+    @test atomic_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+end
+
 # issue #25955
 macro noeffect25955(e)
     return e
