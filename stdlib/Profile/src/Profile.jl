@@ -5,6 +5,20 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
+global print
+public @profile,
+    clear,
+    print,
+    fetch,
+    retrieve,
+    add_fake_meta,
+    flatten,
+    callers,
+    init,
+    take_heap_snapshot,
+    clear_malloc_data,
+    Allocs
+
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
@@ -220,7 +234,7 @@ function print(io::IO,
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
     if groupby === :none
-        print(io, data, lidict, pf, format, threads, tasks, false)
+        print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
             error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
@@ -244,7 +258,7 @@ function print(io::IO,
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
                         printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -262,7 +276,7 @@ function print(io::IO,
                     printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -274,7 +288,7 @@ function print(io::IO,
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -284,7 +298,7 @@ function print(io::IO,
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
-                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -306,7 +320,7 @@ See `Profile.print([io], data)` for an explanation of the valid keyword argument
 print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
                 is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
