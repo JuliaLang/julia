@@ -70,6 +70,10 @@ end
 struct Named
     x::Int
 end
+
+function fmemory(nel)
+    return Memory{Int64}(undef,nel)
+end
 # CHECK-LABEL: define {{(swiftcc )?}}double @julia_f1
 # CHECK-SAME: double %"a::Float64"
 # CHECK-SAME: double %"b::Float64"
@@ -169,3 +173,8 @@ emit(Barrier, Int64)
 # CHECK: %parent_bits
 # CHECK: %parent_old_marked
 emit(Barrier, Named)
+
+# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_fmemory
+# CHECK-SAME: %"nel::Int64"
+# CHECK: %"Memory{Int64}[]"
+emit(fmemory, Int64)

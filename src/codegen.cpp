@@ -1261,10 +1261,14 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
         [](LLVMContext &C) {
             AttrBuilder FnAttrs(C);
             AttrBuilder RetAttrs(C);
-            FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
+#if JL_LLVM_VERSION >= 160000
+            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef) | argMemOnly(MemoryEffects::ModRefInfo::Ref));
+#endif
             FnAttrs.addAttribute(Attribute::WillReturn);
-            RetAttrs.addAlignmentAttr(Align(alignof(void*)));
+            RetAttrs.addAlignmentAttr(Align(16));
             RetAttrs.addAttribute(Attribute::NonNull);
+            RetAttrs.addAttribute(Attribute::NoAlias);
+            RetAttrs.addDereferenceableAttr(16);
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet::get(C, RetAttrs),

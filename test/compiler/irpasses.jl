@@ -503,7 +503,7 @@ function isdefined_elim()
     return arr
 end
 let src = code_typed1(isdefined_elim)
-    @test is_scalar_replaced(src)
+    @test count(isisdefined, src.code) == 0
 end
 @test isdefined_elim() == Any[]
 
