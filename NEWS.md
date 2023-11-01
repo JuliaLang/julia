@@ -54,6 +54,8 @@ Standard library changes
 
 #### Test
 
+* `@test_throws Union{} expr` can now be used to test that `expr` does not throw an exception ([#51982]).
+
 #### Dates
 
 #### Statistics

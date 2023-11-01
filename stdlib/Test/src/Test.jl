@@ -135,6 +135,8 @@ function Base.show(io::IO, t::Pass)
         # The correct type of exception was thrown
         if t.message_only
             print(io, "\n     Message: ", t.value)
+        elseif t.data === Union{}
+            print(io, "\n  No exception thrown")
         else
             print(io, "\n      Thrown: ", typeof(t.value))
         end
@@ -178,8 +180,11 @@ function Base.show(io::IO, t::Fail)
     printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     value, data = t.value, t.data
+    if data == "Union{}"
+        data = "No exception thrown"
+    end
     if t.test_type === :test_throws_wrong
-        # An exception was thrown, but it was of the wrong type
+        # An exception was thrown, but it was unexpected or of the wrong type
         if t.message_only
             print(io, "\n    Expected: ", data)
             print(io, "\n     Message: ", value)
@@ -735,14 +740,21 @@ end
     @test_throws exception expr
 
 Tests that the expression `expr` throws `exception`.
-The exception may specify either a type,
-a string, regular expression, or list of strings occurring in the displayed error message,
-a matching function,
-or a value (which will be tested for equality by comparing fields).
+The exception must be one of the following:
+
+- a type `T` to test that `typeof(exception) <: T`
+- a string, regular expression, or list of strings occurring in the displayed error message
+- a matching function
+- a value (which will be tested for equality by comparing fields)
+- `Union{}`, which denotes that no error should be thrown
+
 Note that `@test_throws` does not support a trailing keyword form.
 
 !!! compat "Julia 1.8"
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
+
+!!! compat "Julia 1.11"
+    Using `@test_throws Union{} expr` to test for no exception requires Julia v1.11 or later.
 
 # Examples
 ```jldoctest
@@ -849,6 +861,8 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             end
             testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
         end
+    elseif extype === Union{}
+        testres = Pass(:test_throws, orig_expr, extype, nothing, result.source, false)
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
     end

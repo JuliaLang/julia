@@ -94,6 +94,33 @@ Test Passed
       Thrown: MethodError
 ```
 
+Sometimes the output of an expression is not of interest and you only want to ensure that
+your code doesn't throw an exception of any type. This is accomplished similarly to checking
+for a particular exception type as above, but using `Union{}` as the type (since no object
+can have type `Union{}`):
+
+```jldoctest
+julia> @test_throws Union{} sqrt(-0.0)
+Test Passed
+  No exception thrown
+```
+
+Note that, when possible, it's typically better to test that the result of an expression is
+what you expect it to be rather than only checking that it doesn't error.
+
+Testing other properties of an expected exception, e.g. that it does _not_ have a particular
+type, can be achieved using `@test` rather than `@test_throws`:
+
+```jldoctest
+julia> @test try
+           sqrt("hello")
+           false  # ensure the test fails if the call does not error
+       catch ex
+           !isa(ex, DomainError)
+       end
+Test Passed
+```
+
 ## Working with Test Sets
 
 Typically a large number of tests are used to make sure functions work correctly over a range
