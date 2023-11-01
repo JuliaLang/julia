@@ -2375,7 +2375,7 @@ function construct_loopinfo(ir, domtree)
 end
 
 function invariant(ir, LI, invariant_stmts, stmt)
-    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || stmt isa Bool
+    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || is_self_quoting(stmt)
         return true
     elseif stmt isa SSAValue
         id = stmt.id
