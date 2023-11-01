@@ -1284,13 +1284,31 @@ function lex_backtick(l::Lexer)
 end
 
 const MAX_KW_LENGTH = 10
+const ascii_is_identifier_char = Bool[is_identifier_char(Char(b)) for b=0x00:0x7f]
 function lex_identifier(l::Lexer, c)
     h = simple_hash(c, UInt64(0))
     n = 1
+    ascii = isascii(c)
+    graphemestate = Ref(Int32(ascii)) # all ASCII id chars are UTF8PROC_BOUNDCLASS_OTHER
+    graphemestate_peek = Ref(zero(Int32))
     while true
         pc, ppc = dpeekchar(l)
-        if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
-            break
+        ascii = ascii && isascii(pc)
+        if ascii # fast path
+            pc_byte = pc % UInt8
+            @inbounds if (pc_byte == UInt8('!') && ppc == '=') || !ascii_is_identifier_char[pc_byte+1]
+                break
+            end
+        elseif Unicode.isgraphemebreak!(graphemestate, c, pc)
+            if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
+                break
+            end
+        elseif pc in ('\u200c','\u200d') # ZWNJ/ZWJ control characters
+            # ZWJ/ZWNJ only within grapheme sequences, not at end
+            graphemestate_peek[] = graphemestate[]
+            if Unicode.isgraphemebreak!(graphemestate_peek, pc, ppc)
+                break
+            end
         end
         c = readchar(l)
         h = simple_hash(c, h)
