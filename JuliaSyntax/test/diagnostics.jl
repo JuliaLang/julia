@@ -7,7 +7,7 @@ function diagnostic(str; only_first=false, allow_multiple=false, rule=:all, vers
         if !only_first
             @test length(stream.diagnostics) == 1
         end
-        return stream.diagnostics[1]
+        return isempty(stream.diagnostics) ? nothing : stream.diagnostics[1]
     end
 end
 
