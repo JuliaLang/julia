@@ -2404,73 +2404,75 @@ function invariant_stmt(ir, loop, invariant_stmts, stmt)
 end
 
 function find_invariant_stmts(ir, LI)
-	stmts = Int[]
-	for BB in LI.blocks
-		for stmt in ir.cfg.blocks[BB].stmts
-			# Okay to throw
-			if (ir.stmts[stmt][:flag] & IR_FLAG_EFFECT_FREE) != 0
-				# Check if stmt is invariant
-				if invariant_stmt(ir, LI, stmts, ir.stmts[stmt][:inst])
-					push!(stmts, stmt)
-				end
-			end
-		end
-	end
-	return stmts
+    stmts = Int[]
+    for BB in LI.blocks
+        for stmt in ir.cfg.blocks[BB].stmts
+            # Okay to throw
+            if (ir.stmts[stmt][:flag] & IR_FLAG_EFFECT_FREE) != 0
+                # Check if stmt is invariant
+                if invariant_stmt(ir, LI, stmts, ir.stmts[stmt][:inst])
+                    push!(stmts, stmt)
+                end
+            end
+        end
+    end
+    return stmts
 end
 
 function insert_preheader!(ir, LI)
-	header = LI.header
-	preds = ir.cfg.blocks[header].preds
-	entering = filter(BB->BB ∉ LI.blocks, preds)
-	
-	# split the header
-	split = first(ir.cfg.blocks[header].stmts)
-	info = allocate_goto_sequence!(ir, [split => 0])
+    header = LI.header
+    preds = ir.cfg.blocks[header].preds
+    entering = filter(BB->BB ∉ LI.blocks, preds)
+    
+    # split the header
+    split = first(ir.cfg.blocks[header].stmts)
+    info = allocate_goto_sequence!(ir, [split => 0])
 
-	map!(BB->info.bbchangemap[BB], entering, entering)
-	
-	preheader = header
-	header = info.bbchangemap[header]
-	
-	on_phi_label(i) = i ∈ entering ? preheader : i
+    map!(BB->info.bbchangemap[BB], entering, entering)
+    
+    preheader = header
+    header = info.bbchangemap[header]
+    
+    on_phi_label(i) = i ∈ entering ? preheader : i
 
-	for stmt in ir.cfg.blocks[header].stmts
-		inst = ir.stmts[stmt][:inst]
-		if inst isa PhiNode
+    for stmt in ir.cfg.blocks[header].stmts
+        inst = ir.stmts[stmt][:inst]
+        if inst isa PhiNode
             edges = inst.edges::Vector{Int32}
             for i in 1:length(edges)
                 edges[i] = on_phi_label(edges[i])
             end
-		else
-			continue
-		end
-	end
+        else
+            continue
+        end
+    end
 
-	# TODO: should we mutate LI instead?
-	blocks = map(BB->info.bbchangemap[BB], LI.blocks)
-	latches = map(BB->info.bbchangemap[BB], LI.latches)
+    # TODO: should we mutate LI instead?
+    blocks = map(BB->info.bbchangemap[BB], LI.blocks)
+    latches = map(BB->info.bbchangemap[BB], LI.latches)
 
-	for latch in latches
-		cfg_delete_edge!(ir.cfg, latch, preheader)
-		cfg_insert_edge!(ir.cfg, latch, header)
-		stmt = ir.stmts[last(ir.cfg.blocks[4].stmts)]
-		stmt[:inst] = GotoNode(header)
-	end
+    for latch in latches
+        cfg_delete_edge!(ir.cfg, latch, preheader)
+        cfg_insert_edge!(ir.cfg, latch, header)
+        stmt = ir.stmts[last(ir.cfg.blocks[4].stmts)]
+        stmt[:inst] = GotoNode(header)
+    end
 
-	verify_ir(ir)
-	
-	return preheader, LoopInfo(header, latches, blocks)
+    verify_ir(ir)
+    
+    return preheader, LoopInfo(header, latches, blocks)
 end
 
 function move_invariant!(ir, preheader, LI)
-	insertion_point = last(ir.cfg.blocks[preheader].stmts)
-	stmts = find_invariant_stmts(ir, LI)
-	inserter = InsertBefore(ir, SSAValue(insertion_point))
-	for stmt in stmts
-		new_stmt = inserter(NewInstruction(ir.stmts[stmt]))
-		ir.stmts[stmt] = new_stmt
-	end
+    insertion_point = last(ir.cfg.blocks[preheader].stmts)
+    stmts = find_invariant_stmts(ir, LI)
+    inserter = InsertBefore(ir, SSAValue(insertion_point))
+
+
+    for stmt in stmts
+        new_stmt = inserter(NewInstruction(ir.stmts[stmt]))
+        ir.stmts[stmt] = new_stmt
+    end
 
 end
 
