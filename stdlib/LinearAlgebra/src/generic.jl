@@ -1899,7 +1899,7 @@ normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
 
 """
-    copytotri!(uplo, A, B) -> B
+    copytotri!(B, A, uplo) -> B
 
 Copies a triangular part of a matrix `A` to another matrix `B`.
 `uplo` specifies the part of the matrix `A` to be copied to `B`.
@@ -1915,26 +1915,28 @@ julia> A = [1 2 ; 3 4];
 
 julia> B = [0 0 ; 0 0];
 
-julia> copytotri!('L', A, B)
+julia> copytotri!(B, A, 'L')
 2×2 Matrix{Int64}:
  1  0
  3  4
 ```
 """
-function copytotri!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+function copytotri!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     require_one_based_indexing(A, B)
     LinearAlgebra.BLAS.chkuplo(uplo)
-    m, n = size(A)
+    m,n = size(A)
+    m1,n1 = size(B)
+    (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
     if uplo == 'U'
-        @inbounds for j=1:n
-            @inbounds for i=1:min(j,m)
-                B[i,j] = A[i,j]
+        for j=1:n
+            for i=1:min(j,m)
+                @inbounds B[i,j] = A[i,j]
             end
         end
     else  # uplo == 'L'
-        @inbounds for j=1:n
-            @inbounds for i=j:m
-                B[i,j] = A[i,j]
+        for j=1:n
+            for i=j:m
+                @inbounds B[i,j] = A[i,j]
             end
         end
     end

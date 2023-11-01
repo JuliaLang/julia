@@ -7005,7 +7005,7 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         #     .. Array Arguments ..
         #     DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         #     ..
-        function lacpy!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
             chkstride1(A, B)
             chkuplo(uplo)
@@ -7024,7 +7024,7 @@ for (fn, elty) in ((:dlacpy_, :Float64),
 end
 
 """
-    lacpy!(uplo, A, B) -> B
+    lacpy!(B, A, uplo) -> B
 
 Copies all or part of a matrix `A` to another matrix `B`.
 uplo specifies the part of the matrix `A` to be copied to `B`.
@@ -7038,12 +7038,12 @@ julia> A = [1. 2. ; 3. 4.];
 
 julia> B = [0. 0. ; 0. 0.];
 
-julia> LAPACK.lacpy!('U', A, B)
+julia> LAPACK.lacpy!(B, A, 'U')
 2×2 Matrix{Float64}:
  1.0  2.0
  0.0  4.0
 ```
 """
-lacpy!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+lacpy!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
 
 end # module

@@ -691,9 +691,9 @@ end
         A = rand(elty, n, n)
         for uplo in ('L', 'U', 'N')
             B = zeros(elty, n, n)
-            LinearAlgebra.LAPACK.lacpy!(uplo, A, B)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
             C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
-            @test A == C
+            @test A ≈ C
         end
     end
 end

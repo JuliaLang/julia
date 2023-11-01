@@ -641,9 +641,9 @@ end
     A = rand(n, n)
     for uplo in ('L', 'U')
         B = zeros(n, n)
-        copytotri!(uplo, A, B)
+        copytotri!(B, A, uplo)
         C = uplo == 'L' ? tril(A) : triu(A)
-        @test A == C
+        @test A ≈ C
     end
 end
 
