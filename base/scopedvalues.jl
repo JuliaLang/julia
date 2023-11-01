@@ -56,7 +56,7 @@ Base.isassigned(val::ScopedValue) = val.has_default
 
 const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
 
-mutable struct Scope
+struct Scope
     values::ScopeStorage
 end
 
@@ -119,6 +119,8 @@ function get(val::ScopedValue{T}) where {T}
     end
     scope = scope::Scope
     if isassigned(val)
+        # This Some underperforms when T is abstract...
+        # Having an API for this in Base would be nice...
         return Some(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
