@@ -437,18 +437,14 @@ custom_lookup_context(x::Int) = custom_lookup_target(true, x)
 const CONST_INVOKE_INTERP_WORLD = Base.get_world_counter()
 const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
 function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
-    local matched_mi = nothing
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
             if CC.any(inf_result.overridden_by_const)
                 return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.valid_worlds)
-            elseif matched_mi === nothing
-                matched_mi = inf_result.linfo
             end
         end
     end
-    matched_mi === nothing && return nothing
-    return CONST_INVOKE_INTERP.code_cache.dict[matched_mi]
+    return CONST_INVOKE_INTERP.code_cache.dict[mi]
 end
 
 let # generate cache
