@@ -982,7 +982,7 @@ end
     destc = dest.chunks
     bcp = preprocess(dest, bc)
     length(bcp) <= 0 && return dest
-    len = Base.num_bit_chunks(length(bcp))
+    len = Base.num_bit_chunks(Int(length(bcp)))
     @inbounds for i = 0:(len - 2)
         z = UInt64(0)
         for j = 0:63
