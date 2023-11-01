@@ -585,7 +585,7 @@ user = get(Sys.username, ENV, "USER")
 """
 function username()
     pw = Libc.getpw()
-    isempty(pw.username) && throw(ErrorException("empty username"))
+    isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
 end
 
