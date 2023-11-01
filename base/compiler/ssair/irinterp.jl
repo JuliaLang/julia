@@ -1,432 +1,409 @@
-mutable struct TwoPhaseVectorView <: AbstractVector{Int}
-    const data::Vector{Int}
-    count::Int
-    const range::UnitRange{Int}
-end
-size(tpvv::TwoPhaseVectorView) = (tpvv.count,)
-function getindex(tpvv::TwoPhaseVectorView, i::Int)
-    checkbounds(tpvv, i)
-    @inbounds tpvv.data[first(tpvv.range) + i - 1]
-end
-function push!(tpvv::TwoPhaseVectorView, v::Int)
-    tpvv.count += 1
-    tpvv.data[first(tpvv.range) + tpvv.count - 1] = v
-    return nothing
-end
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-    mutable struct TwoPhaseDefUseMap
-
-This struct is intended as a memory- and GC-pressure-efficient mechanism
-for incrementally computing def-use maps. The idea is that the def-use map
-is constructed into two passes over the IR. In the first, we simply count the
-the number of uses, computing the number of uses for each def as well as the
-total number of uses. In the second pass, we actually fill in the def-use
-information.
-
-The idea is that either of these two phases can be combined with other useful
-work that needs to scan the instruction stream anyway, while avoiding the
-significant allocation pressure of e.g. allocating an array for every SSA value
-or attempting to dynamically move things around as new uses are discovered.
-
-The def-use map is presented as a vector of vectors. For every def, indexing
-into the map will return a vector of uses.
-"""
-mutable struct TwoPhaseDefUseMap <: AbstractVector{TwoPhaseVectorView}
-    ssa_uses::Vector{Int}
-    data::Vector{Int}
-    complete::Bool
-end
-
-function complete!(tpdum::TwoPhaseDefUseMap)
-    cumsum = 0
-    for i = 1:length(tpdum.ssa_uses)
-        this_val = cumsum + 1
-        cumsum += tpdum.ssa_uses[i]
-        tpdum.ssa_uses[i] = this_val
-    end
-    resize!(tpdum.data, cumsum)
-    fill!(tpdum.data, 0)
-    tpdum.complete = true
-end
-
-function TwoPhaseDefUseMap(nssas::Int)
-    ssa_uses = zeros(Int, nssas)
-    data = Int[]
-    complete = false
-    return TwoPhaseDefUseMap(ssa_uses, data, complete)
-end
-
-function count!(tpdum::TwoPhaseDefUseMap, arg::SSAValue)
-    @assert !tpdum.complete
-    tpdum.ssa_uses[arg.id] += 1
-end
-
-function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
-    if !tpdum.complete
-        tpdum.ssa_uses[def] -= 1
-    else
-        range = tpdum.ssa_uses[def]:(def == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[def + 1] - 1))
-        # TODO: Sorted
-        useidx = findfirst(idx->tpdum.data[idx] == use, range)
-        @assert useidx !== nothing
-        idx = range[useidx]
-        while idx < lastindex(range)
-            ndata = tpdum.data[idx+1]
-            ndata == 0 && break
-            tpdum.data[idx] = ndata
-        end
-        tpdum.data[idx + 1] = 0
-    end
-end
-kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
-    kill_def_use!(tpdum, def.id, use)
-
-function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
-    @assert tpdum.complete
-    range = tpdum.ssa_uses[idx]:(idx == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[idx + 1] - 1))
-    # TODO: Make logarithmic
-    nelems = 0
-    for i in range
-        tpdum.data[i] == 0 && break
-        nelems += 1
-    end
-    return TwoPhaseVectorView(tpdum.data, nelems, range)
-end
-
-struct IRInterpretationState
-    ir::IRCode
-    mi::MethodInstance
-    world::UInt
-    argtypes_refined::Vector{Bool}
-    tpdum::TwoPhaseDefUseMap
-    ssa_refined::BitSet
-    lazydomtree::LazyDomtree
-    function IRInterpretationState(interp::AbstractInterpreter,
-        ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
-        argtypes = va_process_argtypes(argtypes, mi)
-        for i = 1:length(argtypes)
-            argtypes[i] = widenslotwrapper(argtypes[i])
-        end
-        argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
-        empty!(ir.argtypes)
-        append!(ir.argtypes, argtypes)
-        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
-        ssa_refined = BitSet()
-        lazydomtree = LazyDomtree(ir)
-        return new(ir, mi, world, argtypes_refined, tpdum, ssa_refined, lazydomtree)
-    end
-end
-
-function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
-    src = code.inferred
-    mi = code.def
-    if isa(src, Vector{UInt8})
-        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
-    else
-        isa(src, CodeInfo) || return nothing
-    end
-    return inflate_ir(src, mi)
-end
-
-function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-                                  arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
-                                  sv::IRCode, max_methods::Int)
-    return CallMeta(Any, Effects(), NoCallInfo())
-end
-
-function collect_limitations!(@nospecialize(typ), ::IRCode)
-    @assert !isa(typ, LimitedAccuracy) "semi-concrete eval on recursive call graph"
+function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
+    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
     return typ
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter,
     inst::Expr, mi::MethodInstance, irsv::IRInterpretationState)
-    mi_cache = WorldView(code_cache(interp), irsv.world)
+    world = frame_world(irsv)
+    mi_cache = WorldView(code_cache(interp), world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return nothing
-    argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
-    argtypes === nothing && return Union{}
+    code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
+    argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv)
+    argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     effects = decode_effects(code.ipo_purity_bits)
-    if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
+    if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
+        (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
-        world = get_world_counter(interp)
-        value = try
-            Core._call_in_world_total(world, args...)
-        catch
-            return Union{}
+        value = let world = get_world_counter(interp)
+            try
+                Core._call_in_world_total(world, args...)
+            catch
+                return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects, false)))
+            end
         end
-        if is_inlineable_constant(value)
-            return Const(value)
-        end
+        return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
-        ir′ = codeinst_to_ir(interp, code)
-        if ir′ !== nothing
-            irsv′ = IRInterpretationState(interp, ir′, mi, irsv.world, argtypes)
-            return _ir_abstract_constant_propagation(interp, irsv′)
+        if is_constprop_edge_recursed(mi, irsv)
+            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
         end
+        newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
+        if newirsv !== nothing
+            newirsv.parent = irsv
+            return ir_abstract_constant_propagation(interp, newirsv)
+        end
+        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
     end
-    return nothing
 end
+
+abstract_eval_ssavalue(s::SSAValue, sv::IRInterpretationState) = abstract_eval_ssavalue(s, sv.ir)
 
 function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int, irsv::IRInterpretationState)
-    return abstract_eval_phi(interp, phi, nothing, irsv.ir)
+    return abstract_eval_phi(interp, phi, nothing, irsv)
 end
 
-function reprocess_instruction!(interp::AbstractInterpreter,
-    idx::Int, bb::Union{Int, Nothing}, @nospecialize(inst), @nospecialize(typ),
-    irsv::IRInterpretationState)
+function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
+    si = StmtInfo(true) # TODO better job here?
+    (; rt, effects, info) = abstract_call(interp, arginfo, si, irsv)
+    irsv.ir.stmts[irsv.curridx][:info] = info
+    return RTEffects(rt, effects)
+end
+
+function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
-    if isa(inst, GotoIfNot)
-        cond = inst.cond
+    if length(ir.cfg.blocks[to].preds) == 0
+        # Kill the entire block
+        for bidx = ir.cfg.blocks[to].stmts
+            inst = ir[SSAValue(bidx)]
+            inst[:stmt] = nothing
+            inst[:type] = Bottom
+            inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        end
+        return
+    end
+    for sidx = ir.cfg.blocks[to].stmts
+        stmt = ir[SSAValue(sidx)][:stmt]
+        isa(stmt, Nothing) && continue # allowed between `PhiNode`s
+        isa(stmt, PhiNode) || break
+        for (eidx, edge) in enumerate(stmt.edges)
+            if edge == from
+                deleteat!(stmt.edges, eidx)
+                deleteat!(stmt.values, eidx)
+                push!(irsv.ssa_refined, sidx)
+                break
+            end
+        end
+    end
+end
+update_phi!(irsv::IRInterpretationState) = (from::Int, to::Int)->update_phi!(irsv, from, to)
+
+function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::Int=block_for_inst(irsv.ir, term_idx))
+    ir = irsv.ir
+    stmt = ir[SSAValue(term_idx)][:stmt]
+    if isa(stmt, GotoIfNot)
+        kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
+        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+    elseif isa(stmt, GotoNode)
+        kill_edge!(ir, bb, stmt.label, update_phi!(irsv))
+    elseif isa(stmt, ReturnNode)
+        # Nothing to do
+    else
+        @assert !isexpr(stmt, :enter)
+        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+    end
+end
+
+function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union{Int,Nothing},
+    @nospecialize(stmt), @nospecialize(typ), irsv::IRInterpretationState)
+    ir = irsv.ir
+    inst = ir[SSAValue(idx)]
+    if isa(stmt, GotoIfNot)
+        cond = stmt.cond
         condval = maybe_extract_const_bool(argextype(cond, ir))
         if condval isa Bool
-            function update_phi!(from::Int, to::Int)
-                if length(ir.cfg.blocks[to].preds) == 0
-                    return
-                end
-                for idx in ir.cfg.blocks[to].stmts
-                    stmt = ir.stmts[idx][:inst]
-                    isa(stmt, Nothing) && continue # allowed between `PhiNode`s
-                    isa(stmt, PhiNode) || break
-                    for (i, edge) in enumerate(stmt.edges)
-                        if edge == from
-                            deleteat!(stmt.edges, i)
-                            deleteat!(stmt.values, i)
-                            push!(irsv.ssa_refined, idx)
-                            break
-                        end
-                    end
-                end
-            end
             if isa(cond, SSAValue)
                 kill_def_use!(irsv.tpdum, cond, idx)
             end
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
+            inst[:flag] |= IR_FLAG_NOTHROW
             if condval
-                ir.stmts[idx][:inst] = nothing
-                ir.stmts[idx][:type] = Any
-                kill_edge!(ir, bb, inst.dest, update_phi!)
+                inst[:stmt] = nothing
+                inst[:type] = Any
+                kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
             else
-                ir.stmts[idx][:inst] = GotoNode(inst.dest)
-                kill_edge!(ir, bb, bb+1, update_phi!)
+                inst[:stmt] = GotoNode(stmt.dest)
+                kill_edge!(ir, bb, bb+1, update_phi!(irsv))
             end
             return true
         end
         return false
     end
-
     rt = nothing
-    if isa(inst, Expr)
-        head = inst.head
-        if head === :call || head === :foreigncall || head === :new
-            (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
-            # All other effects already guaranteed effect free by construction
-            if is_nothrow(effects)
-                if isa(rt, Const) && is_inlineable_constant(rt.val)
-                    ir.stmts[idx][:inst] = quoted(rt.val)
-                else
-                    ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
-                end
-            end
+    if isa(stmt, Expr)
+        head = stmt.head
+        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
+            (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+            inst[:flag] |= flags_for_effects(effects)
         elseif head === :invoke
-            mi′ = inst.args[1]::MethodInstance
-            if mi′ !== irsv.mi # prevent infinite loop
-                rt = concrete_eval_invoke(interp, inst, mi′, irsv)
+            rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
+            if nothrow
+                inst[:flag] |= IR_FLAG_NOTHROW
             end
-        elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
-               head === :gc_preserve_begin ||
+            if noub
+                inst[:flag] |= IR_FLAG_NOUB
+            end
+        elseif head === :throw_undef_if_not
+            condval = maybe_extract_const_bool(argextype(stmt.args[2], ir))
+            condval isa Bool || return false
+            if condval
+                inst[:stmt] = nothing
+                # We simplified the IR, but we did not update the type
+                return false
+            end
+            rt = Union{}
+        elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
         else
-            ccall(:jl_, Cvoid, (Any,), inst)
             error("reprocess_instruction!: unhandled expression found")
         end
-    elseif isa(inst, PhiNode)
-        rt = abstract_eval_phi_stmt(interp, inst, idx, irsv)
-    elseif isa(inst, ReturnNode)
+    elseif isa(stmt, PhiNode)
+        rt = abstract_eval_phi_stmt(interp, stmt, idx, irsv)
+    elseif isa(stmt, ReturnNode)
         # Handled at the very end
         return false
-    elseif isa(inst, PiNode)
-        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), inst.typ)
+    elseif isa(stmt, PiNode)
+        rt = tmeet(typeinf_lattice(interp), argextype(stmt.val, ir), widenconst(stmt.typ))
+    elseif stmt === nothing
+        return false
+    elseif isa(stmt, GlobalRef)
+        # GlobalRef is not refinable
     else
-        ccall(:jl_, Cvoid, (Any,), inst)
-        error()
+        rt = argextype(stmt, irsv.ir)
     end
-    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
-        ir.stmts[idx][:type] = rt
-        return true
+    if rt !== nothing
+        if isa(rt, Const)
+            inst[:type] = rt
+            if is_inlineable_constant(rt.val) && (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                inst[:stmt] = quoted(rt.val)
+            end
+            return true
+        elseif !⊑(typeinf_lattice(interp), typ, rt)
+            inst[:type] = rt
+            return true
+        end
     end
     return false
 end
 
-# Process the terminator and add the successor to `ip`. Returns whether a backedge was seen.
-function process_terminator!(ir::IRCode, idx::Int, bb::Int,
-    all_rets::Vector{Int}, ip::BitSetBoundedMinPrioritySet)
-    inst = ir.stmts[idx][:inst]
-    if isa(inst, ReturnNode)
-        if isdefined(inst, :val)
-            push!(all_rets, idx)
-        end
+# Process the terminator and add the successor to `bb_ip`. Returns whether a backedge was seen.
+function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedMinPrioritySet)
+    if isa(stmt, ReturnNode)
         return false
-    elseif isa(inst, GotoNode)
-        backedge = inst.label <= bb
-        !backedge && push!(ip, inst.label)
+    elseif isa(stmt, GotoNode)
+        backedge = stmt.label <= bb
+        backedge || push!(bb_ip, stmt.label)
         return backedge
-    elseif isa(inst, GotoIfNot)
-        backedge = inst.dest <= bb
-        !backedge && push!(ip, inst.dest)
-        push!(ip, bb + 1)
+    elseif isa(stmt, GotoIfNot)
+        backedge = stmt.dest <= bb
+        backedge || push!(bb_ip, stmt.dest)
+        push!(bb_ip, bb+1)
         return backedge
-    elseif isexpr(inst, :enter)
-        dest = inst.args[1]::Int
+    elseif isexpr(stmt, :enter)
+        dest = stmt.args[1]::Int
         @assert dest > bb
-        push!(ip, dest)
-        push!(ip, bb + 1)
+        push!(bb_ip, dest)
+        push!(bb_ip, bb+1)
         return false
     else
-        push!(ip, bb + 1)
+        push!(bb_ip, bb+1)
         return false
     end
 end
 
+struct BBScanner
+    ir::IRCode
+    bb_ip::BitSetBoundedMinPrioritySet
+end
+
+function BBScanner(ir::IRCode)
+    bbs = ir.cfg.blocks
+    bb_ip = BitSetBoundedMinPrioritySet(length(bbs))
+    push!(bb_ip, 1)
+    return BBScanner(ir, bb_ip)
+end
+
+function scan!(callback, scanner::BBScanner, forwards_only::Bool)
+    (; bb_ip, ir) = scanner
+    bbs = ir.cfg.blocks
+    while !isempty(bb_ip)
+        bb = popfirst!(bb_ip)
+        stmts = bbs[bb].stmts
+        lstmt = last(stmts)
+        for idx = stmts
+            inst = ir[SSAValue(idx)]
+            ret = callback(inst, idx, lstmt, bb)
+            ret === nothing && return true
+            ret::Bool || break
+            idx == lstmt && process_terminator!(inst[:stmt], bb, bb_ip) && forwards_only && return false
+        end
+    end
+    return true
+end
+
+function populate_def_use_map!(tpdum::TwoPhaseDefUseMap, scanner::BBScanner)
+    scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+        for ur in userefs(inst)
+            val = ur[]
+            if isa(val, SSAValue)
+                push!(tpdum[val.id], idx)
+            end
+        end
+        return true
+    end
+end
+populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
+    populate_def_use_map!(tpdum, BBScanner(ir))
+
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
-    extra_reprocess::Union{Nothing,BitSet} = nothing)
+        externally_refined::Union{Nothing,BitSet} = nothing)
+    interp = switch_to_irinterp(interp)
+
     (; ir, tpdum, ssa_refined) = irsv
 
-    bbs = ir.cfg.blocks
-    ip = BitSetBoundedMinPrioritySet(length(bbs))
-    push!(ip, 1)
     all_rets = Int[]
+    scanner = BBScanner(ir)
+
+    check_ret!(@nospecialize(stmt), idx::Int) = isa(stmt, ReturnNode) && isdefined(stmt, :val) && push!(all_rets, idx)
 
     # Fast path: Scan both use counts and refinement in one single pass of
     #            of the instructions. In the absence of backedges, this will
     #            converge.
-    while !isempty(ip)
-        bb = popfirst!(ip)
-        stmts = bbs[bb].stmts
-        lstmt = last(stmts)
-        for idx = stmts
-            inst = ir.stmts[idx][:inst]
-            typ = ir.stmts[idx][:type]
-            any_refined = extra_reprocess === nothing ? false : (idx in extra_reprocess)
-            for ur in userefs(inst)
-                val = ur[]
-                if isa(val, Argument)
-                    any_refined |= irsv.argtypes_refined[val.n]
-                elseif isa(val, SSAValue)
-                    any_refined |= val.id in ssa_refined
-                    count!(tpdum, val)
-                end
-            end
-            if isa(inst, PhiNode) && idx in ssa_refined
-                any_refined = true
-                delete!(ssa_refined, idx)
-            end
-            if any_refined && reprocess_instruction!(interp,
-                idx, bb, inst, typ, irsv)
-                push!(ssa_refined, idx)
-            end
-            if idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
-                @goto residual_scan
-            end
-            if typ === Bottom && !isa(inst, PhiNode)
-                break
+    completed_scan = scan!(scanner, true) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+        irsv.curridx = idx
+        stmt = ir.stmts[idx][:stmt]
+        typ = ir.stmts[idx][:type]
+        flag = ir.stmts[idx][:flag]
+        any_refined = false
+        if (flag & IR_FLAG_REFINED) != 0
+            any_refined = true
+            ir.stmts[idx][:flag] &= ~IR_FLAG_REFINED
+        end
+        for ur in userefs(stmt)
+            val = ur[]
+            if isa(val, Argument)
+                any_refined |= irsv.argtypes_refined[val.n]
+            elseif isa(val, SSAValue)
+                any_refined |= val.id in ssa_refined
+                count!(tpdum, val)
             end
         end
+        if isa(stmt, PhiNode) && idx in ssa_refined
+            any_refined = true
+            delete!(ssa_refined, idx)
+        end
+        check_ret!(stmt, idx)
+        is_terminator_or_phi = (isa(stmt, PhiNode) || isa(stmt, GotoNode) ||
+            isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isexpr(stmt, :enter))
+        if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
+            return true
+        end
+        if (any_refined && reprocess_instruction!(interp, idx, bb, stmt, typ, irsv)) ||
+            (externally_refined !== nothing && idx in externally_refined)
+            push!(ssa_refined, idx)
+            stmt = ir.stmts[idx][:stmt]
+            typ = ir.stmts[idx][:type]
+        end
+        if typ === Bottom && !is_terminator_or_phi
+            kill_terminator_edges!(irsv, lstmt, bb)
+            if idx != lstmt
+                for idx2 in (idx+1:lstmt-1)
+                    ir[SSAValue(idx2)] = nothing
+                end
+                ir[SSAValue(lstmt)][:stmt] = ReturnNode()
+            end
+            return false
+        end
+        return true
     end
-    @goto compute_rt
 
-    # Slow path
-    begin @label residual_scan
+    if !completed_scan
+        # Slow path
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
 
         # Slow Path Phase 1.A: Complete use scanning
-        while !isempty(ip)
-            bb = popfirst!(ip)
-            stmts = bbs[bb].stmts
-            lstmt = last(stmts)
-            for idx = stmts
-                inst = ir.stmts[idx][:inst]
-                for ur in userefs(inst)
-                    val = ur[]
-                    if isa(val, Argument)
-                        if irsv.argtypes_refined[val.n]
-                            push!(stmt_ip, idx)
-                        end
-                    elseif isa(val, SSAValue)
-                        count!(tpdum, val)
-                    end
-                end
-                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
+        scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+            irsv.curridx = idx
+            stmt = inst[:stmt]
+            flag = inst[:flag]
+            if (flag & IR_FLAG_REFINED) != 0
+                inst[:flag] &= ~IR_FLAG_REFINED
+                push!(stmt_ip, idx)
             end
+            check_ret!(stmt, idx)
+            for ur in userefs(stmt)
+                val = ur[]
+                if isa(val, Argument)
+                    if irsv.argtypes_refined[val.n]
+                        push!(stmt_ip, idx)
+                    end
+                elseif isa(val, SSAValue)
+                    count!(tpdum, val)
+                end
+            end
+            return true
         end
 
         # Slow Path Phase 1.B: Assemble def-use map
-        complete!(tpdum)
-        push!(ip, 1)
-        while !isempty(ip)
-            bb = popfirst!(ip)
-            stmts = bbs[bb].stmts
-            lstmt = last(stmts)
-            for idx = stmts
-                inst = ir.stmts[idx][:inst]
-                for ur in userefs(inst)
-                    val = ur[]
-                    if isa(val, SSAValue)
-                        push!(tpdum[val.id], idx)
-                    end
-                end
-                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
-            end
-        end
+        complete!(tpdum); push!(scanner.bb_ip, 1)
+        populate_def_use_map!(tpdum, scanner)
 
         # Slow Path Phase 2: Use def-use map to converge cycles.
         # TODO: It would be possible to return to the fast path after converging
         #       each cycle, but that's somewhat complicated.
         for val in ssa_refined
-            append!(stmt_ip, tpdum[val])
+            for use in tpdum[val]
+                if !(use in ssa_refined)
+                    push!(stmt_ip, use)
+                end
+            end
         end
         while !isempty(stmt_ip)
             idx = popfirst!(stmt_ip)
-            inst = ir.stmts[idx][:inst]
-            typ = ir.stmts[idx][:type]
-            if reprocess_instruction!(interp,
-                idx, nothing, inst, typ, irsv)
+            irsv.curridx = idx
+            inst = ir[SSAValue(idx)]
+            stmt = inst[:stmt]
+            typ = inst[:type]
+            if reprocess_instruction!(interp, idx, nothing, stmt, typ, irsv)
                 append!(stmt_ip, tpdum[idx])
             end
         end
     end
 
-    begin @label compute_rt
-        ultimate_rt = Union{}
-        for idx in all_rets
-            bb = block_for_inst(ir.cfg, idx)
-            if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
-                # Could have discovered this block is dead after the initial scan
-                continue
-            end
-            inst = ir.stmts[idx][:inst]::ReturnNode
-            rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
+    ultimate_rt = Bottom
+    for idx in all_rets
+        bb = block_for_inst(ir.cfg, idx)
+        if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
+            # Could have discovered this block is dead after the initial scan
+            continue
         end
+        inst = ir[SSAValue(idx)][:stmt]::ReturnNode
+        rt = argextype(inst.val, ir)
+        ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
 
-    return maybe_singleton_const(ultimate_rt)
+    nothrow = noub = true
+    for idx = 1:length(ir.stmts)
+        flag = ir[SSAValue(idx)][:flag]
+        nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
+        noub &= !iszero(flag & IR_FLAG_NOUB)
+        (nothrow | noub) || break
+    end
+
+    if last(irsv.valid_worlds) >= get_world_counter()
+        # if we aren't cached, we don't need this edge
+        # but our caller might, so let's just make it anyways
+        store_backedges(frame_instance(irsv), irsv.edges)
+    end
+
+    return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
 end
 
-function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
+function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
-        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, Any[], Any[], length(irsv.ir.argtypes))
+        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
-        v = _ir_abstract_constant_propagation(interp, irsv)
+        ret = _ir_abstract_constant_propagation(interp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)
         Timings.exit_current_timer(inf_frame)
-        return v
+        return ret
     else
-        T = _ir_abstract_constant_propagation(interp, irsv)
-        return T
+        return _ir_abstract_constant_propagation(interp, irsv)
     end
 end
+ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
+    _ir_abstract_constant_propagation(interp, irsv)

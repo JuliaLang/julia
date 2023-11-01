@@ -18,7 +18,7 @@ void missingPop2() {
 } // expected-warning{{Non-popped GC frame present at end of function}}
   // expected-note@-1{{Non-popped GC frame present at end of function}}
 
-void superflousPop() {
+void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
 
@@ -36,7 +36,6 @@ void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     JL_GC_POP();
 }
 
-void safepoint(void);
 bool testfunc1() JL_NOTSAFEPOINT
 {
     struct implied_struct1 { // expected-note{{Tried to call method defined here}}

@@ -107,7 +107,7 @@ where no arguments are given. [Array literal can be typed](@ref man-array-typed-
 the syntax `T[A, B, C, ...]` where `T` is a type.
 
 ```jldoctest
-julia> [1,2,3] # An array of `Int`s
+julia> [1, 2, 3] # An array of `Int`s
 3-element Vector{Int64}:
  1
  2
@@ -326,8 +326,8 @@ These syntaxes are shorthands for function calls that themselves are convenience
 | Syntax                 | Function         | Description                                                                                                |
 |:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
 |                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
-| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                                           |
-| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                                           |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)`                                                                           |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)`                                                                           |
 | `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
 | `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
@@ -356,7 +356,7 @@ Comprehensions provide a general and powerful way to construct arrays. Comprehen
 similar to set construction notation in mathematics:
 
 ```
-A = [ F(x,y,...) for x=rx, y=ry, ... ]
+A = [ F(x, y, ...) for x=rx, y=ry, ... ]
 ```
 
 The meaning of this form is that `F(x,y,...)` is evaluated with the variables `x`, `y`, etc. taking
@@ -440,7 +440,7 @@ Ranges in generators and comprehensions can depend on previous ranges by writing
 keywords:
 
 ```jldoctest
-julia> [(i,j) for i=1:3 for j=1:i]
+julia> [(i, j) for i=1:3 for j=1:i]
 6-element Vector{Tuple{Int64, Int64}}:
  (1, 1)
  (2, 1)
@@ -455,7 +455,7 @@ In such cases, the result is always 1-d.
 Generated values can be filtered using the `if` keyword:
 
 ```jldoctest
-julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
+julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
 2-element Vector{Tuple{Int64, Int64}}:
  (2, 2)
  (3, 1)
@@ -740,17 +740,17 @@ that is sometimes referred to as pointwise indexing. For example, it enables
 accessing the diagonal elements from the first "page" of `A` from above:
 
 ```jldoctest cartesianindex
-julia> page = A[:,:,1]
+julia> page = A[:, :, 1]
 4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> page[[CartesianIndex(1,1),
-             CartesianIndex(2,2),
-             CartesianIndex(3,3),
-             CartesianIndex(4,4)]]
+julia> page[[CartesianIndex(1, 1),
+             CartesianIndex(2, 2),
+             CartesianIndex(3, 3),
+             CartesianIndex(4, 4)]]
 4-element Vector{Int64}:
   1
   6
@@ -964,7 +964,7 @@ construct, `i` will be an `Int` if `A` is an array type with fast linear indexin
 it will be a `CartesianIndex`:
 
 ```jldoctest
-julia> A = rand(4,3);
+julia> A = rand(4, 3);
 
 julia> B = view(A, 1:3, 2:3);
 
@@ -1029,9 +1029,9 @@ sizes, such as adding a vector to each column of a matrix. An inefficient way to
 be to replicate the vector to the size of the matrix:
 
 ```julia-repl
-julia> a = rand(2,1); A = rand(2,3);
+julia> a = rand(2, 1); A = rand(2, 3);
 
-julia> repeat(a,1,3)+A
+julia> repeat(a, 1, 3) + A
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
@@ -1153,9 +1153,9 @@ arranged contiguously in column major order. This means that the stride of the f
 dimension — the spacing between elements in the same column — is `1`:
 
 ```julia-repl
-julia> A = rand(5,7,2);
+julia> A = rand(5, 7, 2);
 
-julia> stride(A,1)
+julia> stride(A, 1)
 1
 ```
 

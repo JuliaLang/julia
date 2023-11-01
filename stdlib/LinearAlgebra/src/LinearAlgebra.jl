@@ -9,16 +9,16 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
-    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
-    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
-    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
+    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
+    kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
+    power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
-    vec, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    vec, view, zero
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    Splat
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
@@ -94,6 +94,8 @@ export
     eigvecs,
     factorize,
     givens,
+    hermitianpart,
+    hermitianpart!,
     hessenberg,
     hessenberg!,
     isdiag,
@@ -429,8 +431,6 @@ include("tridiag.jl")
 include("triangular.jl")
 
 include("factorization.jl")
-include("qr.jl")
-include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
 include("symmetric.jl")
@@ -441,7 +441,10 @@ include("diagonal.jl")
 include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("qr.jl")
+include("lq.jl")
 include("hessenberg.jl")
+include("abstractq.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")
@@ -453,6 +456,34 @@ include("deprecated.jl")
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+wrapper_char(::AbstractArray) = 'N'
+wrapper_char(::Adjoint) = 'C'
+wrapper_char(::Adjoint{<:Real}) = 'T'
+wrapper_char(::Transpose) = 'T'
+wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
+wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+    if tA == 'N'
+        return A
+    elseif tA == 'T'
+        return transpose(A)
+    elseif tA == 'C'
+        return adjoint(A)
+    elseif tA == 'H'
+        return Hermitian(A, :U)
+    elseif tA == 'h'
+        return Hermitian(A, :L)
+    elseif tA == 'S'
+        return Symmetric(A, :U)
+    else # tA == 's'
+        return Symmetric(A, :L)
+    end
+end
+
+_unwrap(A::AbstractVecOrMat) = A
 
 ## convenience methods
 ## return only the solution of a least squares problem while avoiding promoting
@@ -501,7 +532,7 @@ _initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
-# The definition is put here since it explicitly references all the Factorizion structs so it has
+# The definition is put here since it explicitly references all the Factorization structs so it has
 # to be located after all the files that define the structs.
 const LAPACKFactorizations{T,S} = Union{
     BunchKaufman{T,S},
@@ -512,7 +543,12 @@ const LAPACKFactorizations{T,S} = Union{
     QRCompactWY{T,S},
     QRPivoted{T,S},
     SVD{T,<:Real,S}}
-function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+
+(\)(F::LAPACKFactorizations, B::AbstractVecOrMat) = ldiv(F, B)
+(\)(F::AdjointFactorization{<:Any,<:LAPACKFactorizations}, B::AbstractVecOrMat) = ldiv(F, B)
+(\)(F::TransposeFactorization{<:Any,<:LU}, B::AbstractVecOrMat) = ldiv(F, B)
+
+function ldiv(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(F)
     if m != size(B, 1)
@@ -542,16 +578,26 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
 end
 # disambiguate
 (\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
-    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
+    @invoke \(F::Factorization{T}, B::VecOrMat{Complex{T}})
+(\)(F::AdjointFactorization{T,<:LAPACKFactorizations}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    ldiv(F, B)
+(\)(F::TransposeFactorization{T,<:LU}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    ldiv(F, B)
 
 """
-    LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
+    LinearAlgebra.peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
+multiplies two `Float64` matrices of size `n x n`, where `n = 4096`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
 [`BLAS.set_num_threads(n)`](@ref).
+
+If the keyword argument `eltype` is provided, `peakflops` will construct matrices with elements
+of type `eltype` for calculating the peak flop rate.
+
+By default, `peakflops` will use the best timing from 3 trials. If the `ntrials` keyword argument
+is provided, `peakflops` will use those many trials for picking the best timing.
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
@@ -562,19 +608,23 @@ of the problem that is solved on each processor.
     This function requires at least Julia 1.1. In Julia 1.0 it is available from
     the standard library `InteractiveUtils`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    t = zeros(Float64, ntrials)
+    for i=1:ntrials
+        a = ones(eltype,n,n)
+        t[i] = @elapsed a2 = a*a
+        @assert a2[1,1] == n
+    end
+
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
-        return 2*Float64(n)^3 / t
+        return 2*Float64(n)^3 / minimum(t)
     end
 end
 
@@ -630,7 +680,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")

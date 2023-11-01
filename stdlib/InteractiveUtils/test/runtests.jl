@@ -331,7 +331,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash
-@eval @noinline @Base.constprop :none f_broken_code() = 0
+@eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
@@ -699,7 +699,7 @@ end
 
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
-        ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+        ir = Core.Compiler.inflate_ir(ci)
         oc = Core.OpaqueClosure(ir)
         @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
         let io = IOBuffer()
@@ -719,3 +719,5 @@ end
         end
     end
 end
+
+@test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)

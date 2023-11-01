@@ -474,6 +474,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
+        lastt->eh = NULL;
         if (!lastt->copy_stack && lastt->stkbuf) {
             // early free of stkbuf back to the pool
             jl_release_task_stack(ptls, lastt);
@@ -620,7 +621,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     sanitizer_finish_switch_fiber(ptls->previous_task, jl_atomic_load_relaxed(&ptls->current_task));
 }
 
-JL_DLLEXPORT void jl_switch(void)
+JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -628,6 +629,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (t == ct) {
         return;
     }
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     if (t->started && t->stkbuf == NULL)
         jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
@@ -641,17 +643,10 @@ JL_DLLEXPORT void jl_switch(void)
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
-    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
-#ifdef ENABLE_TIMINGS
-    jl_timing_block_t *blk = ptls->timing_stack;
-    if (blk)
-        jl_timing_block_stop(blk);
-    ptls->timing_stack = NULL;
-#endif
-
+    jl_timing_block_t *blk = jl_timing_block_task_exit(ct, ptls);
     ctx_switch(ct);
 
 #ifdef MIGRATE_TASKS
@@ -671,26 +666,18 @@ JL_DLLEXPORT void jl_switch(void)
            0 != ct->ptls &&
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
+    jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
 
-#ifdef ENABLE_TIMINGS
-    assert(ptls->timing_stack == NULL);
-    ptls->timing_stack = blk;
-    if (blk)
-        jl_timing_block_start(blk);
-#else
-    (void)ct;
-#endif
-
-    jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
+    jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_NOTSAFEPOINT_ENTER // n.b. this does not actually enter a safepoint
 {
     jl_set_next_task(*pt);
     jl_switch();
@@ -718,30 +705,30 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack()                                                    \
         jl_timing_block_t *cur_block = ptls->timing_stack;                     \
         while (cur_block && eh->timing_stack != cur_block) {                   \
-            cur_block = jl_pop_timing_block(cur_block);                        \
+            cur_block = jl_timing_block_pop(cur_block);                        \
         }                                                                      \
         assert(cur_block == eh->timing_stack);
 #else
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body()                                                  \
+#define throw_internal_body(altstack)                                          \
     assert(!jl_get_safe_restore());                                            \
     jl_ptls_t ptls = ct->ptls;                                                 \
     ptls->io_wait = 0;                                                         \
-    JL_GC_PUSH1(&exception);                                                   \
     jl_gc_unsafe_enter(ptls);                                                  \
     if (exception) {                                                           \
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
            GC. This exists only for the purpose of preserving bt_data until we \
            set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(&ct->excstack, exception,                             \
+        jl_push_excstack(ct, &ct->excstack, exception,                             \
                           ptls->bt_data, ptls->bt_size);                       \
         ptls->bt_size = 0;                                                     \
     }                                                                          \
     assert(ct->excstack && ct->excstack->top);                                 \
     jl_handler_t *eh = ct->eh;                                                 \
     if (eh != NULL) {                                                          \
+        if (altstack) ptls->sig_exception = NULL;                              \
         pop_timings_stack()                                                    \
         asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
         jl_longjmp(eh->eh_ctx, 1);                                             \
@@ -754,23 +741,21 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
 CFI_NORETURN
-    throw_internal_body()
+    JL_GC_PUSH1(&exception);
+    throw_internal_body(0);
     jl_unreachable();
 }
 
-#ifdef _COMPILER_ASAN_ENABLED_
 /* On the signal stack, we don't want to create any asan frames, but we do on the
    normal, stack, so we split this function in two, depending on which context
-   we're calling it in */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
+   we're calling it in. This also lets us avoid making a GC frame on the altstack,
+   which might end up getting corrupted if we recur here through another signal. */
+JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
 {
 CFI_NORETURN
-    throw_internal_body()
+    throw_internal_body(1);
     jl_unreachable();
 }
-#else
-#define throw_internal_altstack throw_internal
-#endif
 
 // record backtrace and raise an error
 JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
@@ -812,7 +797,7 @@ CFI_NORETURN
     }
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *e = ptls->sig_exception;
-    ptls->sig_exception = NULL;
+    JL_GC_PROMISE_ROOTED(e);
     throw_internal_altstack(ct, e);
 }
 
@@ -865,34 +850,244 @@ uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
     return res;
 }
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT
+/*
+The jl_rng_split function forks a task's RNG state in a way that is essentially
+guaranteed to avoid collisions between the RNG streams of all tasks. The main
+RNG is the xoshiro256++ RNG whose state is stored in rngState[0..3]. There is
+also a small internal RNG used for task forking stored in rngState[4]. This
+state is used to iterate a linear congruential generator (LCG), which is then
+put through four different variations of the strongest PCG output function,
+referred to as PCG-RXS-M-XS-64 [1]. This output function is invertible: it maps
+a 64-bit state to 64-bit output. This is one of the reasons it's not recommended
+for general purpose RNGs unless space is at an absolute premium, but in our
+usage invertibility is actually a benefit (as is explained below) and adding as
+little additional memory overhead to each task object as possible is preferred.
+
+The goal of jl_rng_split is to perturb the state of each child task's RNG in
+such a way each that for an entire tree of tasks spawned starting with a given
+state in a root task, no two tasks have the same RNG state. Moreover, we want to
+do this in a way that is deterministic and repeatable based on (1) the root
+task's seed, (2) how many random numbers are generated, and (3) the task tree
+structure. The RNG state of a parent task is allowed to affect the initial RNG
+state of a child task, but the mere fact that a child was spawned should not
+alter the RNG output of the parent. This second requirement rules out using the
+main RNG to seed children: if we use the main RNG, we either advance it, which
+affects the parent's RNG stream or, if we don't advance it, then every child
+would have an identical RNG stream. Therefore some separate state must be
+maintained and changed upon forking a child task while leaving the main RNG
+state unchanged.
+
+The basic approach is that used by the DotMix [2] and SplitMix [3] RNG systems:
+each task is uniquely identified by a sequence of "pedigree" numbers, indicating
+where in the task tree it was spawned. This vector of pedigree coordinates is
+then reduced to a single value by computing a dot product with a shared vector
+of random weights. The weights are common but each pedigree of each task is
+distinct, so the dot product of each task is unlikely to be the same. The DotMix
+paper provides a proof that this dot product hash value (referred to as a
+"compression function") is collision resistant in the sense the the pairwise
+collision probability of two distinct tasks is 1/N where N is the number of
+possible weight values. Both DotMix and SplitMix use a prime value of N because
+the proof requires that the difference between two distinct pedigree coordinates
+have a multiplicative inverse, which is guaranteed by N being prime since all
+values are invertible then. We take a somewhat different approach: instead of
+assigning n-ary pedigree coordinates, we assign binary tree coordinates to
+tasks, which means that our pedigree vectors have only 0/1 and differences
+between them can only be -1, 0 or 1. Since the only possible non-zero coordinate
+differences are ±1 which are invertible regardless of the modulus, we can use a
+modulus of 2^64, which is far easier and more efficient then using a prime
+modulus. It also means that when accumulating the dot product incrementally, as
+described in SplitMix, we don't need to multiply weights by anything, we simply
+add the random weight for the current task tree depth to the parent's dot
+product to derive the child's dot product.
+
+we instead limit pedigree coordinates to being binary, guaranteeing
+invertibility regardless of modulus. When a task spawns a child, the parent and
+child share the parent's previous pedigree prefix and the parent appends a zero
+to its coordinates, which doesn't affect the task's dot product value, while the
+child appends a one, which does produce a new dot product. In this manner a
+binary pedigree vector uniquely identifies each task and since the coordinates
+are binary, the difference between coordinates is always invertible: 1 and -1
+are their own multiplicative inverses regardless of the modulus.
+
+How does our assignment of pedigree coordinates to tasks differ from DotMix and
+SplitMix? In DotMix and SplitMix, each task has a fixed pedigree vector that
+never changes. The root tasks's pedigree is `()`, its first child's pedigree is
+`(0,)`, its second child's pedigree is `(2,)` and so on. The length of a task's
+pedigree tuple corresponds to how many ancestors tasks it has. Our approach
+instead appends 0 to the parent's pedigree when it forks a child and appends 1
+to the child's pedigree at the same time. The root task starts with a pedigree
+of `()` as before, but when it spawns a child, we update its pedigree to `(0,)`
+and give its child a pedigree of `(1,)`. When the root task then spawns a second
+child, we update its pedigree to `(0,0)` and give it's second child a pedigree
+of `(0,1)`. If the first child spawns a grandchild, the child's pedigree is
+changed from `(1,)` to `(1,0)` and the grandchild is assigned a pedigree of
+`(1,1)`. In other words, DotMix and SplitMix build an n-ary tree where every
+node is a task: parent nodes are higher up the tree and child tasks are children
+in the pedigree tree. Our approach is to build a binary tree where only leaves
+are tasks and each task spawn replaces a leaf in the tree with two leaves: the
+parent moves to the left/zero leaf while the child is the right/one leaf. Since
+the tree is binary, the pedigree coordinates are binary.
+
+It may seem odd for a task's pedigree coordinates to change, but note that we
+only ever append zeros to a task's pedigree, which does not change its dot
+product. So while the pedigree changes, the dot product is fixed. What purpose
+does appending zeros like this serve if the task's dot product doesn't change?
+Changing the pedigree length (which is also the binary tree depth) ensures that
+the next child spawned by that task will have new and different dot product from
+the previous child since it will have a different pseudo-random weight added to
+the parent's dot product value. Whereas the pedigree length in DotMix and
+SplitMix is unchanging and corresponds to how many ancestors a task has, in our
+scheme the pedigree length corresponds to the number of ancestors *plus*
+children a task has, which increases every time it spawns another child.
+
+We use the LCG in rngState[4] to generate pseudorandom weights for the dot
+product. Each time a child is forked, we update the LCG in both parent and child
+tasks. In the parent, that's all we have to do -- the main RNG state remains
+unchanged. (Recall that spawning a child should *not* affect subsequent RNG
+draws in the parent). The next time the parent forks a child, the dot product
+weight used will be different, corresponding to being a level deeper in the
+pedigree tree. In the child, we use the LCG state to generate four pseudorandom
+64-bit weights (more below) and add each weight to one of the xoshiro256 state
+registers, rngState[0..3]. If we assume the main RNG remains unused in all
+tasks, then each register rngState[0..3] accumulates a different dot product
+hash as additional child tasks are spawned. Each one is collision resistant with
+a pairwise collision chance of only 1/2^64. Assuming that the four pseudorandom
+64-bit weight streams are sufficiently independent, the pairwise collision
+probability for distinct tasks is 1/2^256. If we somehow managed to spawn a
+trillion tasks, the probability of a collision would be on the order of 1/10^54.
+In other words, practically impossible. Put another way, this is the same as the
+probability of two SHA256 hash values accidentally colliding, which we generally
+consider so unlikely as not to be worth worrying about.
+
+What about the random "junk" that's in the xoshiro256 state registers from
+normal use of the RNG? For a tree of tasks spawned with no intervening samples
+taken from the main RNG, all tasks start with the same junk which doesn't affect
+the chance of collision. The Dot/SplitMix papers even suggest adding a random
+base value to the dot product, so we can consider whatever happens to be in the
+xoshiro256 registers to be that. What if the main RNG gets used between task
+forks? In that case, the initial state registers will be different. The DotMix
+collision resistance proof doesn't apply without modification, but we can
+generalize the setup by adding a different base constant to each compression
+function and observe that we still have a 1/N chance of the weight value
+matching that exact difference. This proves collision resistance even between
+tasks whose dot product hashes are computed with arbitrary offsets. We can
+conclude that this scheme provides collision resistance even in the face of
+different starting states of the main RNG. Does this seem too good to be true?
+Perhaps another way of thinking about it will help. Suppose we seeded each task
+completely randomly. Then there would also be a 1/2^256 chance of collision,
+just as the DotMix proof gives. Essentially what the proof is telling us is that
+if the weights are chosen uniformly and uncorrelated with the rest of the
+compression function, then the dot product construction is a good enough way to
+pseudorandomly seed each task based on its parent's RNG state and where in the
+task tree it lives. From that perspective, all we need to believe is that the
+dot product construction is random enough (assuming the weights are), and it
+becomes easier to believe that adding an arbitrary constant to each dot product
+value doesn't make its randomness any worse.
+
+This leaves us with the question of how to generate four pseudorandom weights to
+add to the rngState[0..3] registers at each depth of the task tree. The scheme
+used here is that a single 64-bit LCG state is iterated in both parent and child
+at each task fork, and four different variations of the PCG-RXS-M-XS-64 output
+function are applied to that state to generate four different pseudorandom
+weights. Another obvious way to generate four weights would be to iterate the
+LCG four times per task split. There are two main reasons we've chosen to use
+four output variants instead:
+
+1. Advancing four times per fork reduces the set of possible weights that each
+   register can be perturbed by from 2^64 to 2^60. Since collision resistance is
+   proportional to the number of possible weight values, that would reduce
+   collision resistance. While it would still be strong engough, why reduce it?
+
+2. It's easier to compute four PCG output variants in parallel. Iterating the
+   LCG is inherently sequential. PCG variants can be computed independently. All
+   four can even be computed at once with SIMD vector instructions. The C
+   compiler doesn't currently choose to do that transformation, but it could.
+
+A key question is whether the approach of using four variations of PCG-RXS-M-XS
+is sufficiently random both within and between streams to provide the collision
+resistance we expect. We obviously can't test that with 256 bits, but we have
+tested it with a reduced state analogue using four PCG-RXS-M-XS-8 output
+variations applied to a common 8-bit LCG. Test results do indicate sufficient
+independence: a single register has collisions at 2^5 while four registers only
+start having collisions at 2^20. This is actually better scaling of collision
+resistance than we theoretically expect. In theory, with one byte of resistance
+we have a 50% chance of some collision at 20 tasks, which matches what we see,
+but four bytes should give a 50% chance of collision at 2^17 tasks and our
+reduced size analogue construction remains collision free at 2^19 tasks. This
+may be due to the next observation, which is that the way we generate
+pseudorandom weights actually guarantees collision avoidance in many common
+situations rather than merely providing collision resistance and thus is better
+than true randomness.
+
+In the specific case where a parent task spawns a sequence of child tasks with
+no intervening usage of its main RNG, the parent and child tasks are actually
+_guaranteed_ to have different RNG states. This is true because the four PCG
+streams each produce every possible 2^64 bit output exactly once in the full
+2^64 period of the LCG generator. This is considered a weakness of PCG-RXS-M-XS
+when used as a general purpose RNG, but is quite beneficial in this application.
+Since each of up to 2^64 children will be perturbed by different weights, they
+cannot have hash collisions. What about parent colliding with child? That can
+only happen if all four main RNG registers are perturbed by exactly zero. This
+seems unlikely, but could it occur? Consider the core of the output function:
+
+    p ^= p >> ((p >> 59) + 5);
+    p *= m[i];
+    p ^= p >> 43
+
+It's easy to check that this maps zero to zero. An unchanged parent RNG can only
+happen if all four `p` values are zero at the end of this, which implies that
+they were all zero at the beginning. However, that is impossible since the four
+`p` values differ from `x` by different additive constants, so they cannot all
+be zero. Stated more generally, this non-collision property: assuming the main
+RNG isn't used between task forks, sibling and parent tasks cannot have RNG
+collisions. If the task tree structure is more deeply nested or if there are
+intervening uses of the main RNG, we're back to relying on "merely" 256 bits of
+collision resistance, but it's nice to know that in what is likely the most
+common case, RNG collisions are actually impossible. This fact may also explain
+better-than-theoretical collision resistance observed in our experiment with a
+reduced size analogue of our hashing system.
+
+[1]: https://www.pcg-random.org/pdf/hmc-cs-2014-0905.pdf
+
+[2]: http://supertech.csail.mit.edu/papers/dprng.pdf
+
+[3]: https://gee.cs.oswego.edu/dl/papers/oopsla14.pdf
+*/
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT
 {
-    /* TODO: consider a less ad-hoc construction
-       Ideally we could just use the output of the random stream to seed the initial
-       state of the child. Out of an overabundance of caution we multiply with
-       effectively random coefficients, to break possible self-interactions.
+    // load and advance the internal LCG state
+    uint64_t x = src[4];
+    src[4] = dst[4] = x * 0xd1342543de82ef95 + 1;
+    // high spectrum multiplier from https://arxiv.org/abs/2001.05304
 
-       It is not the goal to mix bits -- we work under the assumption that the
-       source is well-seeded, and its output looks effectively random.
-       However, xoshiro has never been studied in the mode where we seed the
-       initial state with the output of another xoshiro instance.
+    static const uint64_t a[4] = {
+        0xe5f8fa077b92a8a8, // random additive offsets...
+        0x7a0cd918958c124d,
+        0x86222f7d388588d4,
+        0xd30cbd35f2b64f52
+    };
+    static const uint64_t m[4] = {
+        0xaef17502108ef2d9, // standard PCG multiplier
+        0xf34026eeb86766af, // random odd multipliers...
+        0x38fd70ad58dd9fbb,
+        0x6677f9b93ab0c04d
+    };
 
-       Constants have nothing up their sleeve:
-       0x02011ce34bce797f == hash(UInt(1))|0x01
-       0x5a94851fb48a6e05 == hash(UInt(2))|0x01
-       0x3688cf5d48899fa7 == hash(UInt(3))|0x01
-       0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    */
-    to[0] = 0x02011ce34bce797f * jl_genrandom(from);
-    to[1] = 0x5a94851fb48a6e05 * jl_genrandom(from);
-    to[2] = 0x3688cf5d48899fa7 * jl_genrandom(from);
-    to[3] = 0x867b4bb4c42e5661 * jl_genrandom(from);
+    // PCG-RXS-M-XS-64 output with four variants
+    for (int i = 0; i < 4; i++) {
+        uint64_t p = x + a[i];
+        p ^= p >> ((p >> 59) + 5);
+        p *= m[i];
+        p ^= p >> 43;
+        dst[i] = src[i] + p; // SplitMix dot product
+    }
 }
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(t, jl_task_tag, 0);
     JL_PROBE_RT_NEW_TASK(ct, t);
     t->copy_stack = 0;
     if (ssize == 0) {
@@ -923,8 +1118,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
-    // Inherit logger state from parent task
-    t->logstate = ct->logstate;
+    // Inherit scope from parent task
+    t->scope = ct->scope;
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -938,9 +1133,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
-    t->reentrant_codegen = 0;
-    t->reentrant_inference = 0;
-    t->inference_start_time = 0;
+    t->reentrant_timing = 0;
+    jl_timing_task_init(t);
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -1053,6 +1247,7 @@ CFI_NORETURN
     sanitizer_finish_switch_fiber(ptls->previous_task, ct);
     _start_task();
 }
+
 STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
 {
 CFI_NORETURN
@@ -1076,9 +1271,10 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
+    jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&ct->excstack, ct->result,
+        jl_push_excstack(ct, &ct->excstack, ct->result,
                          ptls->bt_data, ptls->bt_size);
         res = ct->result;
     }
@@ -1088,7 +1284,7 @@ CFI_NORETURN
                 ptls->defer_signal = 0;
                 jl_sigint_safepoint(ptls);
             }
-            JL_TIMING(ROOT);
+            JL_TIMING(ROOT, ROOT);
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
@@ -1489,6 +1685,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (jl_nothing == NULL) // make a placeholder
         jl_nothing = jl_gc_permobj(0, jl_nothing_type);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;
     size_t ssize = (char*)stack_hi - (char*)stack_lo;
@@ -1508,6 +1705,12 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         ct->stkbuf = stack;
         ct->bufsz = ssize;
     }
+
+#ifdef USE_TRACY
+    char *unique_string = (char *)malloc(strlen("Root") + 1);
+    strcpy(unique_string, "Root");
+    ct->name = unique_string;
+#endif
     ct->started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
@@ -1517,7 +1720,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    ct->logstate = jl_nothing;
+    ct->scope = jl_nothing;
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;
@@ -1526,9 +1729,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
-    ct->reentrant_codegen = 0;
-    ct->reentrant_inference = 0;
-    ct->inference_start_time = 0;
+    ct->reentrant_timing = 0;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
@@ -1541,6 +1742,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #ifdef _COMPILER_ASAN_ENABLED_
     ct->ctx.asan_fake_stack = NULL;
 #endif
+
+    jl_timing_block_task_enter(ct, ptls, NULL);
 
 #ifdef COPY_STACKS
     // initialize the base_ctx from which all future copy_stacks will be copies
@@ -1555,12 +1758,15 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #endif
         if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
             start_task(); // sanitizer_finish_switch_fiber is part of start_task
-        return ct;
     }
-    ssize = JL_STACK_SIZE;
-    char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
-    ptls->stackbase = stkbuf + ssize;
-    ptls->stacksize = ssize;
+    else {
+        ssize = JL_STACK_SIZE;
+        char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
+        if (stkbuf != NULL) {
+            ptls->stackbase = stkbuf + ssize;
+            ptls->stacksize = ssize;
+        }
+    }
 #endif
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)

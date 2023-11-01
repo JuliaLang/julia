@@ -115,7 +115,10 @@ end
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
-        @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        let rc = Base.cconvert(Ptr{Int}, r), rs = Base.cconvert(Ptr{Int}, s)
+            @test rc == rs
+            @test Base.unsafe_convert(Ptr{Int}, rc) == Base.unsafe_convert(Ptr{Int}, rs)
+        end
         @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
@@ -131,6 +134,7 @@ end
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,5]
+        # @test_throws ErrorException Base.cconvert(Ptr{Int}, r) broken=true
         @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
         r[2] = -1
         @test a[3] == -1
@@ -603,6 +607,15 @@ end
 
     @testset "issue 43078" begin
         @test_throws TypeError findall([1])
+    end
+
+    @testset "issue #46425" begin
+        counter = 0
+        function pred46425(x)
+            counter += 1
+            counter < 4 && x
+        end
+        @test findall(pred46425, [false, false, true, true]) == [3]
     end
 end
 @testset "find with Matrix" begin
@@ -1705,6 +1718,39 @@ end
     @test istriu([1 2 0; 0 4 1])
 end
 
+#issue 49021
+@testset "reverse cartesian indices" begin
+    @test reverse(CartesianIndices((2, 3))) === CartesianIndices((2:-1:1, 3:-1:1))
+    @test reverse(CartesianIndices((2:5, 3:7))) === CartesianIndices((5:-1:2, 7:-1:3))
+    @test reverse(CartesianIndices((5:-1:2, 7:-1:3))) === CartesianIndices((2:1:5, 3:1:7))
+end
+
+@testset "reverse cartesian indices dim" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=1) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test reverse(A, dims=3) === CartesianIndices((2, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=0)
+    @test_throws ArgumentError reverse(A, dims=4)
+end
+
+@testset "reverse cartesian indices multiple dims" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=(1, 3)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test reverse(A, dims=(3, 1)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=(1, 2, 4))
+    @test_throws ArgumentError reverse(A, dims=(0, 1, 2))
+    @test_throws ArgumentError reverse(A, dims=(1, 1))
+end
+
+@testset "stability of const propagation" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    f1(x) = reverse(x; dims=1)
+    f2(x) = reverse(x; dims=(1, 3))
+    @test @inferred(f1(A)) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test @inferred(f2(A)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test @inferred(reverse(A; dims=())) === A
+end
+
 # issue 4228
 let A = [[i i; i i] for i=1:2]
     @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
@@ -2293,6 +2339,15 @@ end
         f2(a) = eachslice(a, dims=2)
         @test (@inferred f2(a)) == eachcol(a)
     end
+
+    @testset "eachslice bounds checking" begin
+        # https://github.com/JuliaLang/julia/pull/32310#issuecomment-1146911510
+        A = eachslice(rand(2,3), dims = 2, drop = false)
+        @test_throws BoundsError A[2, 1]
+        @test_throws BoundsError A[4]
+        @test_throws BoundsError A[2,3] = [4,5]
+        @test_throws BoundsError A[2,3] .= [4,5]
+    end
 end
 
 ###
@@ -2673,7 +2728,7 @@ end
 end
 
 @testset "accumulate, accumulate!" begin
-    @test accumulate(+, [1,2,3]) == [1, 3, 6]
+    @test accumulate(+, [1, 2, 3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], dims=1) == [1 2; 1 2]
     @test accumulate(max, [1 2; 3 0], dims=2) == [1 2; 3 3]
     @test accumulate(+, Bool[]) == Int[]
@@ -2690,12 +2745,15 @@ end
     @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
     @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
+    @test accumulate(+, [1, 2, 3], dims=1, init=1) == [2, 4, 7]
+    @test accumulate(*, [1, 4, 2], dims=1, init=2) == [2, 8, 16]
+
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
-    @test accumulate(+, [1,2]; init=1) == [2, 4]
+    @test accumulate(+, [1, 2]; init=1) == [2, 4]
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
@@ -2739,7 +2797,7 @@ end
 
     # asymmetric operation
     op(x,y) = 2x+y
-    @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
+    @test accumulate(op, [10, 20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 
     #25506

@@ -171,6 +171,9 @@
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
 
+        @test splitdir("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b", "c.ext")
+        @test splitext("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b/c", ".ext")
+
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
                 ("\\\\servername\\hello.world","\\filename.ext")

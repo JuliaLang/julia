@@ -36,7 +36,7 @@ end
 
 function check_valid(f)
     jsn = try jsn2data(@eval include($f * ".jl"))
-    # Some files cannot be reprsented with julias DateTime (timezones)
+    # Some files cannot be represented with julias DateTime (timezones)
     catch
         return false
     end

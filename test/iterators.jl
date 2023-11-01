@@ -11,6 +11,10 @@ using Dates: Date, Day
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+# issue #45085
+@test_throws ArgumentError Iterators.reverse(zip("abc", "abcd"))
+@test_throws ArgumentError Iterators.reverse(zip("abc", Iterators.cycle("ab")))
+
 let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
@@ -618,7 +622,7 @@ end
             @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
             @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
         end
-        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
 end
 @testset "empty/invalid partitions" begin
@@ -1000,4 +1004,8 @@ end
         v = z
     end
     @test v == ()
+end
+
+@testset "collect partition substring" begin
+    @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
 end

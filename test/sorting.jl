@@ -79,12 +79,27 @@ end
 end
 
 @testset "stability" begin
-    for Alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE,
-            PartialQuickSort(missing, 1729, Base.Sort.SMALL_ALGORITHM),
-            PartialQuickSort(1729, missing, Base.Sort.SMALL_ALGORITHM)]
+    for Alg in [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE,
+            Base.Sort.ScratchQuickSort(missing, 1729), Base.Sort.ScratchQuickSort(1729, missing)]
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
+    @test sort(1:2000, by=x->x÷100, rev=true) == sort(1:2000, by=x->-x÷100) ==
+        vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
+end
+
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(tuple(rand(i)...))
+    end
+    @test_throws ArgumentError sort((1,2,3.0))
 end
 
 @testset "partialsort" begin
@@ -334,7 +349,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, QuickSort, PartialQuickSort(1:n), Base.DEFAULT_STABLE]
+            for alg in [MergeSort, Base.Sort.ScratchQuickSort(), Base.Sort.ScratchQuickSort(1:n), Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -382,7 +397,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.Sort.ScratchQuickSort(1, n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -529,6 +544,23 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
+@testset "sort!(iterable)" begin
+    gen = (x % 7 + 0.1x for x in 1:50)
+    @test sort(gen) == sort!(collect(gen))
+    gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
+    @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
+    @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
+
+    @test_throws ArgumentError("dimension out of range") sort(gen; dims=3)
+
+    @test_throws UndefKeywordError(:dims) sort(gen)
+    @test_throws UndefKeywordError(:dims) sort(collect(gen))
+    @test_throws UndefKeywordError(:dims) sort!(collect(gen))
+
+    @test_throws ArgumentError sort("string")
+    @test_throws ArgumentError("1 cannot be sorted") sort(1)
+end
+
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
     a = view([9:-1:0;], :)::SubArray
     sort!(a)
@@ -561,6 +593,13 @@ end
     end
 end
 
+@testset "Offset with missing (#48862)" begin
+    v = [-1.0, missing, 1.0, 0.0, missing, -0.5, 0.5, 1.0, -0.5, missing, 0.5, -0.8, 1.5, NaN]
+    vo = OffsetArray(v, (firstindex(v):lastindex(v)).+100)
+    @test issorted(sort!(vo))
+    @test issorted(v)
+end
+
 @testset "searchsortedfirst/last with generalized indexing" begin
     o = OffsetVector(1:3, -2)
     @test searchsortedfirst(o, 4) == lastindex(o) + 1
@@ -589,7 +628,7 @@ end
 
     @testset "fallback" begin
         @test adaptive_sort_test(rand(1:typemax(Int32), len), by=x->x^2)# fallback
-        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=QuickSort)
+        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=Base.Sort.ScratchQuickSort())
     end
 
     @test adaptive_sort_test(rand(Int, 20)) # InsertionSort
@@ -691,15 +730,16 @@ end
 @testset "invalid lt (#11429)" begin
     # lt must be a total linear order (e.g. < not <=) so this usage is
     # not allowed. Consequently, none of the behavior tested in this
-    # testset is gaurunteed to work in future minor versions of Julia.
+    # testset is guaranteed to work in future minor versions of Julia.
+
+    safe_algs = [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
     v = rand(1:5, n);
     s = sort(v);
 
     # Nevertheless, it still works...
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort(v, alg=alg, lt = <=) == s
     end
     @test partialsort(v, 172, lt = <=) == s[172]
@@ -709,16 +749,14 @@ end
     # where i < j if and only if lt(o, v[j], v[i]). This invariant holds even for
     # this invalid lt order.
     perm = reverse(sortperm(v, rev=true))
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
     @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
     @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
     end
     @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
@@ -766,6 +804,18 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
+
+    # Because we define defalg(::AbstractArray{Missing})
+    @test all(fill(missing, 10) .=== sort(fill(missing, 10)))
+
+    # Unit tests for WithoutMissingVector
+    a = [1,7,missing,4]
+    @test_throws ArgumentError Base.Sort.WithoutMissingVector(a)
+    @test eltype(a[[1,2,4]]) == eltype(a)
+    @test eltype(Base.Sort.WithoutMissingVector(a[[1,2,4]])) == Int
+    am = Base.Sort.WithoutMissingVector(a, unsafe=true)
+    @test am[2] == 7
+    @test eltype(am) == Int
 end
 
 @testset "Specific algorithms" begin
@@ -899,6 +949,120 @@ end
     @test issorted(sort(rand(typemin(Int):typemin(Int)+100, 1000)))
     @test issorted(sort(rand(typemax(Int)-100:typemax(Int), 1000)))
     @test issorted(sort(rand(Int8, 600)))
+end
+
+@testset "ScratchQuickSort API" begin
+    bsqs = Base.Sort.ScratchQuickSort
+    @test bsqs(1, 2, MergeSort)             === bsqs(1, 2, MergeSort)
+    @test bsqs(missing, 2, MergeSort)       === bsqs(missing, 2, MergeSort)
+    @test bsqs(1, missing, MergeSort)       === bsqs(1, missing, MergeSort)
+    @test bsqs(missing, missing, MergeSort) === bsqs(missing, missing, MergeSort)
+    @test bsqs(1, MergeSort)                === bsqs(1, 1, MergeSort)
+    @test bsqs(missing, MergeSort)          === bsqs(missing, missing, MergeSort)
+    @test bsqs(MergeSort)                   === bsqs(missing, missing, MergeSort)
+
+    @test bsqs(1, 2)                        === bsqs(1, 2, InsertionSort)
+    @test bsqs(missing, 2)                  === bsqs(missing, 2, InsertionSort)
+    @test bsqs(1, missing)                  === bsqs(1, missing, InsertionSort)
+    @test bsqs(missing, missing)            === bsqs(missing, missing, InsertionSort)
+    @test bsqs(1)                           === bsqs(1, 1, InsertionSort)
+    @test bsqs(missing)                     === bsqs(missing, missing, InsertionSort)
+    @test bsqs()                            === bsqs(missing, missing, InsertionSort)
+end
+
+@testset "ScratchQuickSort allocations on non-concrete eltype" begin
+    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+    @test 10 > @allocations sort(v)
+    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    # it would be nice if these numbers were lower (1 or 2), but these
+    # test that we don't have O(n) allocations due to type instability
+end
+
+function test_allocs()
+    v = rand(10)
+    i = randperm(length(v))
+    @test 2 >= @allocations sort(v)
+    @test 0 == @allocations sortperm!(i, v)
+    @test 0 == @allocations sort!(i)
+    @test 0 == @allocations sortperm!(i, v, rev=true)
+    @test 2 >= @allocations sortperm(v, rev=true)
+    @test 2 >= @allocations sortperm(v, rev=false)
+    @test 0 == @allocations sortperm!(i, v, order=Base.Reverse)
+    @test 2 >= @allocations sortperm(v)
+    @test 2 >= @allocations sortperm(i, by=sqrt)
+    @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
+    sort!(Int[], rev=false) # compile
+    @test 0 == @allocations sort!(i, rev=false)
+    rand!(i)
+    @test 0 == @allocations sort!(i, order=Base.Reverse)
+end
+@testset "Small calls do not unnecessarily allocate" begin
+    test_allocs()
+end
+
+@testset "Presorted and reverse-presorted" begin
+    for len in [7, 92, 412, 780]
+        x = sort(randn(len))
+        for _ in 1:2
+            @test issorted(sort(x))
+            @test issorted(sort(x), by=x -> x+7)
+            reverse!(x)
+        end
+    end
+end
+
+struct MyArray49392{T, N} <: AbstractArray{T, N}
+    data::Array{T, N}
+end
+Base.size(A::MyArray49392) = size(A.data)
+Base.getindex(A::MyArray49392, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArray49392, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49392(similar(A.data, T, dims))
+
+@testset "Custom matrices (#49392)" begin
+    x = rand(10, 10)
+    y = MyArray49392(copy(x))
+    @test all(sort!(y, dims=2) .== sort!(x,dims=2))
+end
+
+@testset "MissingOptimization fastpath for Perm ordering when lo:hi ≠ eachindex(v)" begin
+    v = [rand() < .5 ? missing : rand() for _ in 1:100]
+    ix = collect(1:100)
+    sort!(ix, 1, 10, Base.Sort.DEFAULT_STABLE, Base.Order.Perm(Base.Order.Forward, v))
+    @test issorted(v[ix[1:10]])
+end
+
+struct NonScalarIndexingOfWithoutMissingVectorAlg <: Base.Sort.Algorithm end
+function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlg, o::Base.Order.Ordering, kw)
+    Base.Sort.@getkw lo hi
+    first_half = v[lo:lo+(hi-lo)÷2]
+    second_half = v[lo+(hi-lo)÷2+1:hi]
+    whole = v[lo:hi]
+    all(vcat(first_half, second_half) .=== whole) || error()
+    out = Base.Sort._sort!(whole, Base.Sort.DEFAULT_STABLE, o, (;kw..., lo=1, hi=length(whole)))
+    v[lo:hi] .= whole
+    out
+end
+
+@testset "Non-scaler indexing of WithoutMissingVector" begin
+    @testset "Unit test" begin
+        wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
+        @test wmv[[1, 3]] == [1, 2]
+        @test wmv[1:3] == [1, 7, 2]
+    end
+    @testset "End to end" begin
+        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlg())
+        @test issorted(sort(rand(100); alg))
+        @test issorted(sort([rand() < .5 ? missing : randstring() for _ in 1:100]; alg))
+    end
+end
+
+struct DispatchLoopTestAlg <: Base.Sort.Algorithm end
+function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopTestAlg, order::Base.Order.Ordering)
+    sort!(view(v, lo:hi); order)
+end
+@testset "Support dispatch from the old style to the new style and back" begin
+    @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
 end
 
 # This testset is at the end of the file because it is slow.
@@ -1044,7 +1208,7 @@ end
 
         @testset "issue #34408" begin
             r = 1f8-10:1f8
-            # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
+            @test collect(r) == Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
             for i in r
                 @test_broken searchsorted(collect(r), i) == searchsorted(r, i)
             end
@@ -1060,6 +1224,16 @@ end
             @test searchsorted(v, 1, rev=true) == 3:3
             @test searchsorted(v, 0.1, rev=true) === 4:3
         end
+    end
+
+    @testset "ranges issue #44102, PR #50365" begin
+        # range sorting test for different Ordering parameter combinations
+        @test searchsorted(-1000.0:1:1000, -0.0) === 1001:1000
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<) === 1001:1001
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<, by=x->x) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, by=-) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
     end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
