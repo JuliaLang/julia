@@ -124,10 +124,12 @@ namespace jl_intrinsics {
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
-    // The allocation size is set to the first argument.
     static Function *addGCAllocAttributes(Function *target)
     {
         auto FnAttrs = AttrBuilder(target->getContext());
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);

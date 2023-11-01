@@ -669,7 +669,11 @@ static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
@@ -685,7 +689,11 @@ static AttributeList get_attrs_box_sext(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addAttribute(Attribute::getWithDereferenceableBytes(C, nbytes));
@@ -702,7 +710,11 @@ static AttributeList get_attrs_box_zext(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
     FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
@@ -1039,6 +1051,9 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
 #if JL_LLVM_VERSION >= 150000
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
+#endif
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
 #endif
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
