@@ -114,17 +114,15 @@ function get(val::ScopedValue{T}) where {T}
     # Inline current_scope to avoid doing the type assertion twice.
     scope = current_task().scope
     if scope === nothing
-        isassigned(val) && return Some(val.default)
+        isassigned(val) && return Some{T}(val.default)
         return nothing
     end
     scope = scope::Scope
     if isassigned(val)
-        # This Some underperforms when T is abstract...
-        # Having an API for this in Base would be nice...
-        return Some(Base.get(scope.values, val, val.default)::T)
+        return Some{T}(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
-        v === novalue || return Some(v::T)
+        v === novalue || return Some{T}(v::T)
     end
     return nothing
 end
