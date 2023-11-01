@@ -165,6 +165,7 @@ constructor.
 Such a definition might look like this:
 
 ```julia
+import Base: convert
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
@@ -174,19 +175,6 @@ when the first argument is the type value `MyType`. Notice the syntax used for t
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
 does not need to be referenced by name.
-
-Note that implicit type conversion requires `import Base.convert`:
-
-```julia
-module Test
-  import Base.convert #necessary for implicit conversion
-  struct MyType <: Number
-    n :: Int
-  end
-  #       DESIRED      GIVEN        HOW
-  convert(::Type{Int}, x::MyType) = x.n
-end
-```
 
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
@@ -306,6 +294,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
@@ -351,6 +340,7 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
