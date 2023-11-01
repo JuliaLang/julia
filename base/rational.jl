@@ -50,7 +50,6 @@ Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
-    iszero(x) && iszero(y) && return throw(DivideError())
     g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
 end
