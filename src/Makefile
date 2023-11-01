@@ -493,8 +493,6 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
  # these need to be annotated (and possibly fixed)
-SKIP_IMPLICIT_ATOMICS := staticdata.c
- # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
@@ -540,7 +538,7 @@ $(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPOR
 $(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
-tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))
+tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
 analyze: analyzesrc analyzegc tidysrc
