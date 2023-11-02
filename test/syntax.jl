@@ -713,7 +713,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs == [4, 2]
+    @test ci.codelocs in ([4, 4, 2], [4, 2])
     @test is_return_ssavalue(m3_exprs[end])
 end
 
@@ -2511,7 +2511,14 @@ end
 function ncalls_in_lowered(ex, fname)
     lowered_exprs = Meta.lower(Main, ex).args[1].code
     return count(lowered_exprs) do ex
-        Meta.isexpr(ex, :call) && ex.args[1] == fname
+        if Meta.isexpr(ex, :call)
+            arg = ex.args[1]
+            if isa(arg, Core.SSAValue)
+                arg = lowered_exprs[arg.id]
+            end
+            return arg == fname
+        end
+        return false
     end
 end
 
