@@ -986,14 +986,14 @@ end
     @inbounds for i = 0:(len - 2)
         z = UInt64(0)
         for j = 0:63
-           z |= (bcp[i*64 + j + 1]::Bool) << (j & 63)
+           z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
         end
         destc[i + 1] = z
     end
     @inbounds let i = len - 1
         z = UInt64(0)
         for j = 0:((length(bcp) - 1) & 63)
-             z |= (bcp[i*64 + j + 1]::Bool) << (j & 63)
+             z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
         end
         destc[i + 1] = z
     end
