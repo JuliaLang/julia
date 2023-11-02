@@ -26,7 +26,6 @@ size(a::GenericMemory, d::Int) =
 size(a::GenericMemory, d::Integer) =  size(a, convert(d, Int))
 size(a::GenericMemory) = (length(a),)
 
-pointer(mem::GenericMemory, i::Int) = (@_propagate_inbounds_meta; unsafe_convert(Ptr{Cvoid}, GenericMemoryRef(mem, i))) # boundschecked, even for i==1
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(GenericMemoryRef(A, i)); A)
