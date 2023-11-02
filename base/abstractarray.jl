@@ -2015,6 +2015,8 @@ julia> cat(a, b; dims=(1, 2))
  0  0  0  4  5  6
 ```
 
+# Extended Help
+
 Concatenate 3D arrays:
 ```jldoctest
 julia> a = ones(2, 2, 3);
