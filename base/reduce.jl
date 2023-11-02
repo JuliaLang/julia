@@ -338,7 +338,8 @@ reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
-
+reduce_empty(::typeof(max), T) = typemin(T)
+reduce_empty(::typeof(min), T) = typemax(T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UInt)
@@ -362,8 +363,10 @@ mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(min), T) = typemax(abs(zero(T)))
+mapreduce_empty(::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs2),  ::typeof(min), T) = typemax(abs2(zero(T)))
 
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
