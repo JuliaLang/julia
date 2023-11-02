@@ -91,13 +91,12 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    # TODO this composition between BracketedSort and ScratchQuickSort does not bring me joy
-    # TODO for further optimization: does IEEEFloatOptimization make sense here?
+    # TODO move k from `alg` to `kw`
     _sort!(v, BoolOptimization(
-        Small{40}(
+        Small{40}( # TODO for further optimization: go ham on tuning this series of optimizations
             MissingOptimization(
                 BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
-                    IEEEFloatOptimization(
+                    IEEEFloatOptimization( # Don't IEEE optimize long inputs. The optimization takes O(n) time and so does the whole sort.
                         InsertionSortAlg()))),
             BracketedSort(k))), o, (;))
     maybeview(v, k)
@@ -1167,6 +1166,7 @@ struct BracketedSort{T, A} <: Algorithm
     target::T
     next::A
 end
+# TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
 BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
 BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> ScratchQuickSort(x))
 
@@ -1191,6 +1191,9 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
 end
 
 function move!(v, target, source)
+    # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
+    # performance improvement. And if you do, also double check behavior when `target`
+    # is out of bounds.
     @assert length(target) == length(source)
     if length(target) == 1 || isdisjoint(target, source)
         for (i, j) in zip(target, source)
@@ -1206,7 +1209,9 @@ end
 function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     @getkw lo hi scratch
 
-    lo < hi || return scratch # TODO: do we need to boundscheck target? Nah.
+    # We don't need to bounds check target because that is done higher up in the stack
+    # However, we cannot assume the target is inbounds.
+    lo < hi || return scratch
     target = a.target
     ln = hi - lo + 1
     k = round(Int, ln^(1/3))
@@ -1216,19 +1221,25 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     hi_i = ceil(Int, last(sample_target) + offset)
     sample_hi = lo+k^2-1
     expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * length(v) / k^2
-    length(v) <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw) # TODO is this target composition icky?
+    # TODO move target from alg to kw to avoid this ickyness:
+    length(v) <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw)
 
-    # sample = view(v, lo:lo+k^2)
+    # We store the random sample in
+    #     sample = view(v, lo:lo+k^2)
+    # but views are not quite as fast as using the input array directly,
+    # so we don't actually construct this view at runtime.
 
-    for attempt in 1:4
+    for attempt in 1:5 # If 5 random trials fail, the input is probably pathological: abort.
         seed = hash(attempt)
         for i in lo:lo+k^2-1
             j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
             v[i], v[j] = v[j], v[i]
         end
         number_below, lastindex_middle = if lo_i <= lo && sample_hi <= hi_i
-            # error("too small")
+            # The heuristics higher up in this function that dispatch to the `next`
+            # algorithm should prevent this from happening.
             @assert false
+            # But if it does happen, the kernel reduces to
             0, hi
         elseif lo_i <= lo
             scratch = _sort!(v, a.next(hi_i), o, (;kw..., hi=sample_hi))
@@ -1248,7 +1259,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             return scratch
         end
     end
-    # println("CRIT FAIL!")
+    # This line only runs on pathological inputs. Make sure it's covered by tests :)
     _sort!(v, a.next(target), o, (;kw..., scratch))
 end
 
