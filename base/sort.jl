@@ -93,7 +93,13 @@ issorted(itr;
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO this composition between BracketedSort and ScratchQuickSort does not bring me joy
     # TODO for further optimization: does IEEEFloatOptimization make sense here?
-    _sort!(v, InitialOptimizations(BracketedSort(k)), o, (;))
+    _sort!(v, BoolOptimization(
+        Small{40}(
+            MissingOptimization(
+                BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
+                    IEEEFloatOptimization(
+                        InsertionSortAlg()))),
+            BracketedSort(k))), o, (;))
     maybeview(v, k)
 end
 
@@ -1114,7 +1120,7 @@ end
 
 
 """
-    BracketedSort(target, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    BracketedSort(target[, next::Algorithm]) <: Algorithm
 
 Perform a partialsort for the elements that fall into the indices specified by the `target`
 using `BracketedSort`, using the `next` algorithm for subproblems.
@@ -1161,16 +1167,16 @@ struct BracketedSort{T, A} <: Algorithm
     target::T
     next::A
 end
-BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
-BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> ScratchQuickSort(x))
+BracketedSort(target::Number) = BracketedSort(target, x -> Small{30}(PartialQuickSort(x)))
+BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> Small{30}(ScratchQuickSort(x)))
 
-function bracket_kernel!(v::AbstractVector, lo_x, hi_x)
+function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
     number_below = 0
-    for j in eachindex(v)
-        x = v[j]
-        a = lo_x !== nothing && x < lo_x
-        b = hi_x === nothing || x < hi_x
+    for j in lo:hi
+        x = @inbounds v[j]
+        a = lo_x !== nothing && lt(o, x, lo_x)
+        b = hi_x === nothing || lt(o, x, hi_x)
         number_below += a
         # if a != b # This branch is almost never taken, so making it branchless is bad.
         #     v[i], v[j] = v[j], v[i]
@@ -1226,14 +1232,14 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             0, hi
         elseif lo_i <= lo
             scratch = _sort!(v, a.next(hi_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, nothing, v[hi_i])
+            bracket_kernel!(v, lo, hi, nothing, v[hi_i], o)
         elseif sample_hi <= hi_i
             scratch = _sort!(v, a.next(lo_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, v[lo_i], nothing)
+            bracket_kernel!(v, lo, hi, v[lo_i], nothing, o)
         else
             # TODO for further optimization: don't sort the middle elements
             scratch = _sort!(v, a.next(lo_i:hi_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, v[lo_i], v[hi_i])
+            bracket_kernel!(v, lo, hi, v[lo_i], v[hi_i], o)
         end
         target_in_middle = target .- number_below
         if lo <= first(target_in_middle) && last(target_in_middle) <= lastindex_middle
@@ -1243,7 +1249,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
         end
     end
     # println("CRIT FAIL!")
-    _sort!(v, next(target), o, (;kw..., scratch))
+    _sort!(v, a.next(target), o, (;kw..., scratch))
 end
 
 
