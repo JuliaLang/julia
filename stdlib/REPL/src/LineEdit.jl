@@ -5,9 +5,7 @@ module LineEdit
 import ..REPL
 using REPL: AbstractREPL, Options
 
-# TODO remove after https://github.com/JuliaLang/StyledStrings.jl/pull/17 is merged
-import StyledStrings: Face, loadface!
-import StyledStrings: @styled_str
+import StyledStrings: Face, loadface!, @styled_str
 
 using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,

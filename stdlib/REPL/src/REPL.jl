@@ -36,7 +36,6 @@ Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
-using StyledStrings
 
 export
     AbstractREPL,

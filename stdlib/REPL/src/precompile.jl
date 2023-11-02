@@ -14,7 +14,6 @@ finally
     Base._track_dependencies[] = true
 end
 using Base.Meta
-using StyledStrings
 
 import Markdown
 import StyledStrings
