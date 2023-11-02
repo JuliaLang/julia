@@ -18,7 +18,6 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-
 function kill_timer(delay)
     # Give ourselves a generous timer here, just to prevent
     # this causing e.g. a CI hang when there's something unexpected in the output.
@@ -1725,4 +1724,15 @@ fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_complet
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
     @test !occursin("vailable", String(readavailable(stdout_read)))
+end
+
+# banner
+let io = IOBuffer()
+    @test REPL.banner(io) === nothing
+    seek(io, 0)
+    @test countlines(io) == 9
+    take!(io)
+    @test REPL.banner(io; short=true) === nothing
+    seek(io, 0)
+    @test countlines(io) == 2
 end

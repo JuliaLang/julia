@@ -1119,17 +1119,21 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, file
-        path = tempdir()
-        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+    mktempdir() do path
+        unreadable = joinpath(path, "replcompletion-unreadable")
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        hidden_file = joinpath(unreadable, "hidden")
+        touch(hidden_file)
+
+        # Create symlink to a file that is in an unreadable directory
+        chmod(hidden_file, 0o755)
+        chmod(unreadable, 0o000)
+        symlink(hidden_file, joinpath(path, "replcompletions-link"))
 
         try
-            file = joinpath(path, "tmp-executable")
-            touch(file)
-            chmod(file, 0o755)
-            mkdir(unreadable)
-            chmod(unreadable, 0o000)
-
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
@@ -1137,10 +1141,13 @@ let s, c, r
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
+
+                c,r = test_scomplete("replcompletions-link")
+                @test isempty(c)
             end
         finally
-            rm(file)
-            rm(unreadable)
+            # If we don't fix the permissions here, our cleanup fails.
+            chmod(unreadable, 0o700)
         end
     end
 

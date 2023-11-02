@@ -575,17 +575,6 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
-
-STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
-{
-    // if parent is marked and buf is not
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc & 1)) {
-        jl_task_t *ct = jl_current_task;
-        gc_setmark_buf(ct->ptls, bufptr, 3, minsz);
-    }
-}
-
 void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
@@ -672,7 +661,7 @@ void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
-JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
+JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt);
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream);
@@ -1581,6 +1570,8 @@ extern JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_eval_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_include_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_all_sym;

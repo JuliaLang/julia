@@ -977,7 +977,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+    src = _uncompressed_ir(mi.def, src)
     return inflate_ir!(src, mi)
 end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)
@@ -1188,16 +1188,23 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         item = concrete_result_item(result, info, state; invokesig)
     else
         argtypes = invoke_rewrite(sig.argtypes)
-        if isa(result, ConstPropResult)
-            mi = result.result.linfo
-            validate_sparams(mi.sparam_vals) || return nothing
-            if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
-                item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
-                handle_single_case!(todo, ir, idx, stmt, item, true)
-                return nothing
-            end
+        if isa(result, SemiConcreteResult)
+            result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
         end
-        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
+        if isa(result, SemiConcreteResult)
+            item = semiconcrete_result_item(result, info, flag, state)
+        else
+            if isa(result, ConstPropResult)
+                mi = result.result.linfo
+                validate_sparams(mi.sparam_vals) || return nothing
+                if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
+                    item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
+                    handle_single_case!(todo, ir, idx, stmt, item, true)
+                    return nothing
+                end
+            end
+            item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
+        end
     end
     handle_single_case!(todo, ir, idx, stmt, item, true)
     return nothing

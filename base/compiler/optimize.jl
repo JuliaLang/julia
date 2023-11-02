@@ -54,7 +54,7 @@ is_inlineable(@nospecialize src::MaybeCompressed) =
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
-function inline_cost_clamp(x::Int)::InlineCostType
+function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
@@ -1022,6 +1022,7 @@ isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetyp
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         params::OptimizationParams, error_path::Bool = false)
+    #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -1067,8 +1068,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     return cost
                 end
             end
-            # unknown/unhandled intrinsic
-            return params.inline_nonleaf_penalty
+            # unknown/unhandled intrinsic: hopefully the caller gets a slightly better answer after the inlining
+            return UNKNOWN_CALL_COST
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1092,7 +1093,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if fidx === nothing
                 # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
-                return 20
+                return UNKNOWN_CALL_COST
             end
             return T_FFUNC_COST[fidx]
         end
@@ -1114,10 +1115,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : 20
+        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
-            cost = 20
+            cost = UNKNOWN_CALL_COST
         else
             cost = 0
         end
@@ -1156,14 +1157,15 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams,
-                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
-    bodycost::Int = 0
-    for line = 1:length(ir.stmts)
-        stmt = ir[SSAValue(line)][:stmt]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
+function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+    bodycost = 0
+    for i = 1:length(ir.stmts)
+        stmt = ir[SSAValue(i)][:stmt]
+        thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return MAX_INLINE_COST
+        if bodycost > cost_threshold
+            return MAX_INLINE_COST
+        end
     end
     return inline_cost_clamp(bodycost)
 end

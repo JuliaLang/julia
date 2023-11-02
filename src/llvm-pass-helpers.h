@@ -62,6 +62,7 @@ struct JuliaPassContext {
     llvm::Function *write_barrier_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
+    llvm::Function *call3_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.

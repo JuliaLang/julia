@@ -1989,9 +1989,11 @@ void JuliaOJIT::enableJITDebuggingSupport()
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
+#ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
     else if (TM->getTargetTriple().isOSBinFormatELF())
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper))));
+#endif
 }
 #else
 void JuliaOJIT::enableJITDebuggingSupport()

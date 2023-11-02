@@ -2477,14 +2477,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ++it;
                 continue;
             } else if ((call_func && callee == call_func) ||
-                       (call2_func && callee == call2_func)) {
+                       (call2_func && callee == call2_func) ||
+                       (call3_func && callee == call3_func)) {
                 assert(T_prjlvalue);
                 size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs-1;
-                if (callee == call_func)
-                    nframeargs -= 1;
-                else if (callee == call2_func)
+                if (callee == call2_func)
                     nframeargs -= 2;
+                else
+                    nframeargs -= 1;
                 SmallVector<Value*, 4> ReplacementArgs;
                 auto arg_it = CI->arg_begin();
                 assert(arg_it != CI->arg_end());
@@ -2517,7 +2518,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     ReplacementArgs.erase(ReplacementArgs.begin());
                     ReplacementArgs.push_back(front);
                 }
-                FunctionType *FTy = callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) : JuliaType::get_jlfunc_ty(CI->getContext());
+                FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
+                                    callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
+                                                           JuliaType::get_jlfunc_ty(CI->getContext());
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();

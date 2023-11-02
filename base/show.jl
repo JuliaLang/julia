@@ -2990,8 +2990,11 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
-            print(io, indent, "  ", fields[idx], "::")
-            print(tvar_io, fieldtypes[idx])
+            print(io, indent, "  ", fields[idx])
+            if isassigned(fieldtypes, idx)
+                print(io, "::")
+                print(tvar_io, fieldtypes[idx])
+            end
         end
     end
     nothing

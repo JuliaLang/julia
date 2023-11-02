@@ -493,6 +493,26 @@ struct Group
     mem::Vector{String}
 end
 
+# Gets password-file entry for default user, or a subset thereof
+# (e.g., uid and guid are set to -1 on Windows)
+function getpw()
+    ref_pd = Ref(Cpasswd())
+    ret = ccall(:uv_os_get_passwd, Cint, (Ref{Cpasswd},), ref_pd)
+    Base.uv_error("getpw", ret)
+
+    pd = ref_pd[]
+    pd = Passwd(
+        pd.username == C_NULL ? "" : unsafe_string(pd.username),
+        pd.uid,
+        pd.gid,
+        pd.shell == C_NULL ? "" : unsafe_string(pd.shell),
+        pd.homedir == C_NULL ? "" : unsafe_string(pd.homedir),
+        pd.gecos == C_NULL ? "" : unsafe_string(pd.gecos),
+    )
+    ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
+    return pd
+end
+
 function getpwuid(uid::Unsigned, throw_error::Bool=true)
     ref_pd = Ref(Cpasswd())
     ret = ccall(:uv_os_get_passwd2, Cint, (Ref{Cpasswd}, Culong), ref_pd, uid)
@@ -512,6 +532,7 @@ function getpwuid(uid::Unsigned, throw_error::Bool=true)
     ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
     return pd
 end
+
 function getgrgid(gid::Unsigned, throw_error::Bool=true)
     ref_gp = Ref(Cgroup())
     ret = ccall(:uv_os_get_group, Cint, (Ref{Cgroup}, Culong), ref_gp, gid)
