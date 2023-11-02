@@ -62,7 +62,7 @@ then paste the symbol.)
 Julia will even let you shadow existing exported constants and functions with local ones
 (although this is not recommended to avoid potential confusions):
 
-```jldoctest; filter = "with \d+ methods"
+```jldoctest; filter = r"with \d+ methods"
 julia> pi = 3
 3
 
