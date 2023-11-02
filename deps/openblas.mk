@@ -5,12 +5,12 @@ OPENBLAS_GIT_URL := https://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" LD="$(LD)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" LD="$(LD) $(SANITIZE_LDFLAGS)" RANLIB="$(RANLIB)" BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
-OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
+OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=400
 # Maximum number of threads for parallelism
 OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
@@ -21,8 +21,13 @@ endif
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
 # Build for all architectures - required for distribution
+ifeq ($(SANITIZE_MEMORY),1)
+OPENBLAS_BUILD_OPTS += TARGET=GENERIC
+else
+OPENBLAS_BUILD_OPTS += TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+endif
 endif
 
 # 64-bit BLAS interface

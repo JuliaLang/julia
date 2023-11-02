@@ -145,6 +145,7 @@ for (name, f) in l
 
     verbose && println("$name readuntil...")
     for (t, s, m, kept) in [
+            ("a", "", "", ""),
             ("a", "ab", "a", "a"),
             ("b", "ab", "b", "b"),
             ("α", "αγ", "α", "α"),
@@ -152,16 +153,19 @@ for (name, f) in l
             ("bc", "abc", "bc", "bc"),
             ("αβ", "αβγ", "αβ", "αβ"),
             ("aaabc", "ab", "aa", "aaab"),
+            ("aaabc", "b", "aaa", "aaab"),
             ("aaabc", "ac", "aaabc", "aaabc"),
             ("aaabc", "aab", "a", "aaab"),
             ("aaabc", "aac", "aaabc", "aaabc"),
             ("αααβγ", "αβ", "αα", "αααβ"),
+            ("αααβγ", "β", "ααα", "αααβ"),
             ("αααβγ", "ααβ", "α", "αααβ"),
             ("αααβγ", "αγ", "αααβγ", "αααβγ"),
             ("barbarbarians", "barbarian", "bar", "barbarbarian"),
             ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
             ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
             ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+            ('a'^500 * 'x' * "bbbb", "x", 'a'^500, 'a'^500 * 'x'),
            ]
         local t, s, m, kept
         @test readuntil(io(t), s) == m
@@ -174,6 +178,18 @@ for (name, f) in l
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s), keep=true) == unsafe_wrap(Vector{UInt8},kept)
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
         @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
+
+        buf = IOBuffer()
+        @test String(take!(copyuntil(buf, io(t), s))) == m
+        @test String(take!(copyuntil(buf, io(t), s, keep=true))) == kept
+        file = tempname()
+        for (k,m) in ((false, m), (true, kept))
+            open(file, "w") do f
+                @test f == copyuntil(f, io(t), s, keep=k)
+            end
+            @test read(file, String) == m
+        end
+        rm(file)
     end
     cleanup()
 
@@ -281,8 +297,45 @@ for (name, f) in l
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io(), keep=true) == readline(IOBuffer(text), keep=true)
-        @test readline(io(), keep=true) == readline(filename, keep=true)
+        file = tempname()
+        for lineending in ("\n", "\r\n", "")
+            kept = "foo bar" * lineending
+            t = isempty(lineending) ? "foo bar" : kept * "baz\n"
+            write(file, t)
+            @test readline(io(t)) == readline(file) == "foo bar"
+            @test readline(io(t), keep=true) == readline(file, keep=true) == kept
+
+            @test String(take!(copyline(IOBuffer(), file))) == "foo bar"
+            @test String(take!(copyline(IOBuffer(), file, keep=true))) == kept
+
+            cleanup()
+
+            buf = IOBuffer()
+            @test buf === copyline(buf, io(t))
+            @test String(take!(buf)) == "foo bar"
+            @test String(take!(copyline(buf, file, keep=true))) == kept
+            for keep in (true, false)
+                open(file, "w") do f
+                    @test f === copyline(f, io(t), keep=keep)
+                end
+                @test read(file, String) == (keep ? kept : "foo bar")
+            end
+
+            cleanup()
+
+            write(file, lineending)
+            @test readline(IOBuffer(lineending)) == ""
+            @test readline(IOBuffer(lineending), keep=true) == lineending
+            @test String(take!(copyline(IOBuffer(), IOBuffer(lineending)))) == ""
+            @test String(take!(copyline(IOBuffer(), IOBuffer(lineending), keep=true))) == lineending
+            @test readline(file) == ""
+            @test readline(file, keep=true) == lineending
+            @test String(take!(copyline(IOBuffer(), file))) == ""
+            @test String(take!(copyline(IOBuffer(), file, keep=true))) == lineending
+
+            cleanup()
+        end
+        rm(file)
 
         verbose && println("$name readlines...")
         @test readlines(io(), keep=true) == readlines(IOBuffer(text), keep=true)
@@ -624,6 +677,21 @@ end
     @test  isempty(itr) # now it is empty
 end
 
+@testset "readuntil/copyuntil fallbacks" begin
+    # test fallback for generic delim::T
+    buf = IOBuffer()
+    fib = [1,1,2,3,5,8,13,21]
+    write(buf, fib)
+    @test readuntil(seekstart(buf), 21) == fib[1:end-1]
+    @test readuntil(buf, 21) == Int[]
+    @test readuntil(seekstart(buf), 21; keep=true) == fib
+    out = IOBuffer()
+    @test copyuntil(out, seekstart(buf), 21) === out
+    @test reinterpret(Int, take!(out)) == fib[1:end-1]
+    @test copyuntil(out, seekstart(buf), 21; keep=true) === out
+    @test reinterpret(Int, take!(out)) == fib
+end
+
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
@@ -651,4 +719,22 @@ end
         @test Base.isdone(r)
         @test isempty(r) && isempty(collect(r))
     end
+end
+
+@testset "Ref API" begin
+    io = PipeBuffer()
+    @test write(io, Ref{Any}(0xabcd_1234)) === 4
+    @test read(io, UInt32) === 0xabcd_1234
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Cvoid}}, io, C_NULL)
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Int}}, io, Ptr{Int}(0))
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Any}}, io, Ptr{Any}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, C_NULL)
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Int}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Any}(0))
+    @test eof(io)
+    @test write(io, C_NULL) === sizeof(Int)
+    @test write(io, Ptr{Int}(4)) === sizeof(Int)
+    @test write(io, Ptr{Any}(5)) === sizeof(Int)
+    @test read!(io, Int[1, 2, 3]) == [0, 4, 5]
+    @test eof(io)
 end

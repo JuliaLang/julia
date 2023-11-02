@@ -22,11 +22,28 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
-version are the Julia `Base` and standard libraries interfaces described in
-[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
-experimental and internal).  Functions, types, and constants are not part of the public
-API if they are not included in the documentation, _even if they have docstrings_.
+Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
+documentation of public symbols from `Base` and the standard libraries. Functions,
+types, and constants are not part of the public API if they are not public, even if
+they have docstrings or are described in the documentation. Further, only the documented
+behavior of public symbols is part of the public API. Undocumented behavior of public
+symbols is internal.
+
+Public symbols are those marked with either `public foo` or `export foo`.
+
+In other words:
+
+- Documented behavior of public symbols is part of the public API.
+- Undocumented behavior of public symbols is not part of the public API.
+- Documented behavior of private symbols is not part of the public API.
+- Undocumented behavior of private symbols is not part of the public API.
+
+You can get a complete list of the public symbols from a module with `names(MyModule)`.
+
+Package authors are encouraged to define their public API similarly.
+
+Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
+will not be removed or receive meaningful breaking changes before Julia 2.0.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
@@ -36,8 +53,8 @@ a complex non-public API, especially when using it from a stable package, it is 
 to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
 into a public API.  However, we do not discourage the attempt to create packages that expose
-stable public interfaces while relying on non-public implementation details of `julia` and
-buffering the differences across different `julia` versions.
+stable public interfaces while relying on non-public implementation details of Julia and
+buffering the differences across different Julia versions.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 
@@ -94,6 +111,9 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
+However, it is recommended to not write files that double as a script and as an importable library.
+If one needs functionality both available as a library and a script, it is better to write is as a library, then import the functionality into a distinct script.
+
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
@@ -103,43 +123,25 @@ which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
 `InterruptException` in the [`try`](@ref) block.
+Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
-Passing options to `julia` in so-called shebang by, e.g.,
-`#!/usr/bin/env julia --startup-file=no` may not work in some
-platforms such as Linux.  This is because argument parsing in shebang
-is platform-dependent and not well-specified.  In a Unix-like
-environment, a reliable way to pass options to `julia` in an
-executable script would be to start the script as a `bash` script and
-use `exec` to replace the process to `julia`:
+Passing options to `julia` in a so-called shebang line, as in
+`#!/usr/bin/env julia --startup-file=no`, will not work on many
+platforms (BSD, macOS, Linux) where the kernel, unlike the shell, does
+not split arguments at space characters. The option `env -S`, which
+splits a single argument string into multiple arguments at spaces,
+similar to a shell, offers a simple workaround:
 
 ```julia
-#!/bin/bash
-#=
-exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
-=#
-
+#!/usr/bin/env -S julia --color=yes --startup-file=no
 @show ARGS  # put any Julia code here
 ```
 
-In the example above, the code between `#=` and `=#` is run as a `bash`
-script.  Julia ignores this part since it is a multi-line comment for
-Julia.  The Julia code after `=#` is ignored by `bash` since it stops
-parsing the file once it reaches to the `exec` statement.
-
 !!! note
-    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
-    ```julia
-    #!/bin/bash
-    #=
-    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-        "${BASH_SOURCE[0]}" "$@"
-    =#
-
-    @show ARGS  # put any Julia code here
-    ```
-    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+    Option `env -S` appeared in FreeBSD 6.0 (2005), macOS Sierra (2016)
+    and GNU/Linux coreutils 8.30 (2018).
 
 ### Why doesn't `run` support `*` or pipes for scripting external programs?
 
@@ -172,7 +174,7 @@ while x < 10
 end
 ```
 and notice that it works fine in an interactive environment (like the Julia REPL),
-but gives `UndefVarError: x not defined` when you try to run it in script or other
+but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
@@ -420,7 +422,7 @@ Certain operations make mathematical sense but result in errors:
 ```jldoctest
 julia> sqrt(-2.0)
 ERROR: DomainError with -2.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -723,7 +725,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: Foo not defined
+UndefVarError: `Foo` not defined
 Stacktrace:
 [...]
 ```
@@ -744,7 +746,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: gvar not defined
+UndefVarError: `gvar` not defined
 Stacktrace:
 [...]
 ```
@@ -780,7 +782,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: #bar not defined
+UndefVarError: `#bar` not defined
 [...]
 
 julia> anon_bar  = ()->1
@@ -802,8 +804,13 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+
 Closest candidates are:
-  foo(!Matched::Vector{Real}) at none:1
+  foo(!Matched::Vector{Real})
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
@@ -831,10 +838,13 @@ to strings); similarly, `repeat` can be used instead of `^` to repeat strings. T
 
 ### What is the difference between "using" and "import"?
 
-There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `import Foo.bar`,
-you only need to say `function bar(...` and it automatically extends module Foo's function bar.
+There are several differences between `using` and `import`
+(see the [Modules section](https://docs.julialang.org/en/v1/manual/modules/#modules)),
+but there is an important difference that may not seem intuitive at first glance,
+and on the surface (i.e. syntax-wise) it may seem very minor. When loading modules with `using`,
+you need to say `function Foo.bar(...` to extend module `Foo`'s function `bar` with a new method,
+but with `import Foo.bar`, you only need to say `function bar(...` and it automatically extends
+module `Foo`'s function `bar`.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
@@ -1042,17 +1052,15 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 
 ### How do I manage precompilation caches in distributed file systems?
 
-When using `julia` in high-performance computing (HPC) facilities, invoking
-_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
-precompilation cache files. If this is an issue (slow and/or small distributed
-file system), you may:
+When using Julia in high-performance computing (HPC) facilities with shared filesystems, it is recommended to use a shared
+depot (via the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
+workers and using the same depot will coordinate via pidfile locks to only spend effort precompiling on one process while the
+others wait. The precompilation process will indicate when the process is precompiling or waiting for another that is
+precompiling. If non-interactive the messages are via `@debug`.
 
-1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
-2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
-   where `private_path` is a path unique to this `julia` process.  This
-   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
-   `$private_path:$HOME/.julia`.
-3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
+[`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable appropriately to get a single cache that is usable throughout the HPC
+environment.
 
 ## Julia Releases
 
@@ -1062,7 +1070,7 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.

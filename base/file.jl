@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> AbstractString
+    pwd() -> String
 
 Get the current working directory.
 
@@ -105,7 +105,7 @@ if Sys.iswindows()
     end
 else
     function cd(f::Function, dir::AbstractString)
-        fd = ccall(:open, Int32, (Cstring, Int32), :., 0)
+        fd = ccall(:open, Int32, (Cstring, Int32, UInt32...), :., 0)
         systemerror(:open, fd == -1)
         try
             cd(dir)
@@ -294,7 +294,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                     rm(joinpath(path, p), force=force, recursive=true)
                 end
             catch err
-                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
                     rethrow(err)
                 end
             end
@@ -303,7 +303,9 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
             uv_fs_req_cleanup(req)
-            ret < 0 && uv_error("rm($(repr(path)))", ret)
+            if ret < 0 && !(force && ret == Base.UV_ENOENT)
+                uv_error("rm($(repr(path)))", ret)
+            end
             nothing
         finally
             Libc.free(req)
@@ -544,7 +546,10 @@ function temp_cleanup_purge(; force::Bool=false)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
         catch ex
-            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            @warn """
+                Failed to clean up temporary path $(repr(path))
+                $ex
+                """ _group=:file
         end
     end
 end
@@ -629,7 +634,7 @@ end # os-test
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
-the very remote posibility of two simultaneous calls to `tempname` generating
+the very remote possibility of two simultaneous calls to `tempname` generating
 the same file name. The name is guaranteed to differ from all files already
 existing at the time of the call to `tempname`.
 
@@ -642,7 +647,7 @@ The `cleanup` option controls whether the process attempts to delete the
 returned path automatically when the process exits. Note that the `tempname`
 function does not create any file or directory at the returned location, so
 there is nothing to cleanup unless you create a file or directory there. If
-you do and `clean` is `true` it will be deleted upon process termination.
+you do and `cleanup` is `true` it will be deleted upon process termination.
 
 !!! compat "Julia 1.4"
     The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
@@ -675,8 +680,9 @@ mktemp(parent)
     mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
 
 Create a temporary directory in the `parent` directory with a name
-constructed from the given prefix and a random suffix, and return its path.
-Additionally, any trailing `X` characters may be replaced with random characters.
+constructed from the given `prefix` and a random suffix, and return its path.
+Additionally, on some platforms, any trailing `'X'` characters in `prefix` may be replaced
+with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
 
@@ -840,7 +846,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"```
+ "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Array{String,1}:
@@ -1062,7 +1068,7 @@ See also: [`hardlink`](@ref).
 
 !!! compat "Julia 1.6"
     The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
-    symlinks to nonexistant paths on windows would always be file symlinks, and
+    symlinks to nonexistent paths on windows would always be file symlinks, and
     relative symlinks to directories were not supported.
 """
 function symlink(target::AbstractString, link::AbstractString;
@@ -1109,7 +1115,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> AbstractString
+    readlink(path::AbstractString) -> String
 
 Return the target location a symbolic link `path` points to.
 """

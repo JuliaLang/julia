@@ -14,16 +14,16 @@ export libgit2
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgit2_handle = C_NULL
-libgit2_path = ""
+artifact_dir::String = ""
+libgit2_handle::Ptr{Cvoid} = C_NULL
+libgit2_path::String = ""
 
 if Sys.iswindows()
     const libgit2 = "libgit2.dll"
 elseif Sys.isapple()
-    const libgit2 = "@rpath/libgit2.1.3.dylib"
+    const libgit2 = "@rpath/libgit2.1.7.dylib"
 else
-    const libgit2 = "libgit2.so.1.3"
+    const libgit2 = "libgit2.so.1.7"
 end
 
 function __init__()

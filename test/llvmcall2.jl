@@ -60,3 +60,16 @@ let err = ErrorException("llvmcall only supports intrinsic calls")
     @test_throws err (@eval ccall("llvm.floor.f64", llvmcall, Float64, (Float64, Float64...,), 0.0)) === 0.0
     @test_throws err (@eval ccall("llvm.floor", llvmcall, Float64, (Float64, Float64...,), 0.0)) === 0.0
 end
+
+@testset "JLJIT API" begin
+    function JLJITGetJuliaOJIT()
+        ccall(:JLJITGetJuliaOJIT, Ptr{Cvoid}, ())
+    end
+    function JLJITGetTripleString(JIT)
+        ccall(:JLJITGetTripleString, Cstring, (Ptr{Cvoid},), JIT)
+    end
+    jit = JLJITGetJuliaOJIT()
+    str = JLJITGetTripleString(jit)
+    jl_str = unsafe_string(str)
+    @test length(jl_str) > 4
+end

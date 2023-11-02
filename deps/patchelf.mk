@@ -1,4 +1,5 @@
 ## patchelf ##
+include $(SRCDIR)/patchelf.version
 
 $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/NixOS/patchelf/releases/download/$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.bz2

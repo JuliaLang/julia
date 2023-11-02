@@ -414,6 +414,23 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
@@ -610,15 +627,15 @@ end
     B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
     for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 800
+        @test @allocated(maximum!(R, B)) <= 400
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
-        @test @allocated(minimum!(R, B)) <= 800
+        @test @allocated(minimum!(R, B)) <= 400
     end
     for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 800
+        @test @allocated(maximum!(R, B)) <= 400
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
-        @test @allocated(minimum!(R, B)) <= 800
+        @test @allocated(minimum!(R, B)) <= 400
     end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
@@ -641,6 +658,14 @@ end
     @test last(v, 100) == v0
     @test last(v, 100) !== v
     @test last(v, 1) == [v[end]]
+
+    @testset "overflow (issue #45842)" begin
+        a = [2,3,4]
+        b = OffsetArray(a, 2:4)
+        @test first(a, typemax(Int)) == first(b, typemax(Int))
+        b = OffsetArray(a, typemin(Int))
+        @test last(a, 100) == last(b, 100)
+    end
 end
 
 @testset "Resizing OffsetVectors" begin
@@ -791,6 +816,22 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+end
+
+@testset "stack" begin
+    nought = OffsetArray([0, 0.1, 0.01], 0:2)
+    ten = OffsetArray([1,10,100,1000], 10:13)
+
+    @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
+    @test stack(x^2 for x in ten) == ten.^2
+
+    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
 
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
