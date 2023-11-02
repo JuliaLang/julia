@@ -146,7 +146,7 @@ debug information printed.
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
-    @ int.jl:87 within `+'
+    @ int.jl:87 within `+`
 1 ─ %1 = Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64
