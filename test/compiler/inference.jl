@@ -96,6 +96,16 @@ end
 @test !Core.Compiler.type_more_complex(Tuple{Vararg{Tuple{}}}, Tuple{Vararg{Tuple}}, Core.svec(), 0, 0, 0)
 @test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
+# issue #51694
+@test Core.Compiler.type_more_complex(
+       Base.Generator{Base.Iterators.Flatten{Array{Bool, 1}}, typeof(identity)},
+       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Core.svec(), 0, 0, 0)
+@test Core.Compiler.type_more_complex(
+       Base.Generator{Base.Iterators.Flatten{Base.Generator{Array{Bool, 1}, typeof(identity)}}, typeof(identity)},
+       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Core.svec(), 0, 0, 0)
+
 let # 40336
     t = Type{Type{Int}}
     c = Type{Int}
@@ -120,6 +130,11 @@ end
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
 @test Core.Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
 
+
+@test Core.Compiler.limit_type_size(Type{Any}, Union{}, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Any, Union{}, 0, 0) ==
+      Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
+      Type{Any}
 
 # issue #43296 #43296
 struct C43296{t,I} end

@@ -66,8 +66,6 @@ end
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
-sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
-
 function is_self_quoting(@nospecialize(x))
     return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
         isa(x,Char) || x === nothing || isa(x,Function)
@@ -390,6 +388,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
+            isdefined(e, :val) || continue
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond

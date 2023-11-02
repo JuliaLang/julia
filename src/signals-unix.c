@@ -994,6 +994,19 @@ static void sigint_handler(int sig)
     jl_sigint_passed = 1;
 }
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+static void sigtrap_handler(int sig, siginfo_t *info, void *context)
+{
+    uintptr_t pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc; // TODO: Do this in linux as well
+    uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
+    if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
+        signal(sig, SIG_DFL);
+        sig = SIGILL; // redefine this as as an "unreachable reached" error message
+        sigdie_handler(sig, info, context);
+    }
+}
+#endif
+
 void jl_install_default_signal_handlers(void)
 {
     struct sigaction actf;
@@ -1004,6 +1017,20 @@ void jl_install_default_signal_handlers(void)
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    struct sigaction acttrap;
+    memset(&acttrap, 0, sizeof(struct sigaction));
+    sigemptyset(&acttrap.sa_mask);
+    acttrap.sa_sigaction = sigtrap_handler;
+    acttrap.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+#else
+    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGTRAP");
+    }
+#endif
     struct sigaction actint;
     memset(&actint, 0, sizeof(struct sigaction));
     sigemptyset(&actint.sa_mask);
@@ -1014,9 +1041,6 @@ void jl_install_default_signal_handlers(void)
     }
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGPIPE");
-    }
-    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTRAP");
     }
 
 #if defined(HAVE_MACH)

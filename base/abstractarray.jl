@@ -1811,16 +1811,15 @@ function __cat_offset1!(A, shape, catdims, offsets, x)
     inds = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
-    if x isa AbstractArray
-        A[inds...] = x
-    else
-        fill!(view(A, inds...), x)
-    end
+    _copy_or_fill!(A, inds, x)
     newoffsets = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
     end
     return newoffsets
 end
+
+_copy_or_fill!(A, inds, x) = fill!(view(A, inds...), x)
+_copy_or_fill!(A, inds, x::AbstractArray) = (A[inds...] = x)
 
 """
     vcat(A...)

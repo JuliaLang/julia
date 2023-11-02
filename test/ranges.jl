@@ -1286,6 +1286,8 @@ end
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
+
+    @test sprint(show, LinRange{Float32}(1.5, 2.5, 10)) == "LinRange{Float32}(1.5, 2.5, 10)"
 end
 
 @testset "Issue 11049, and related" begin

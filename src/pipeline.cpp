@@ -402,6 +402,7 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
     FPM.addPass(BeforeLoopOptimizationMarkerPass());
     {
         LoopPassManager LPM;
+        LPM.addPass(LowerSIMDLoopPass());
         if (O.getSpeedupLevel() >= 2) {
             LPM.addPass(LoopRotatePass());
         }
@@ -560,7 +561,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     buildEarlySimplificationPipeline(MPM, PB, O, options);
     MPM.addPass(AlwaysInlinerPass());
     buildEarlyOptimizerPipeline(MPM, PB, O, options);
-    MPM.addPass(LowerSIMDLoopPass());
     {
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);

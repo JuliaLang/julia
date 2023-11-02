@@ -1954,7 +1954,7 @@ function _require(pkg::PkgId, env=nothing)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
                     finally
                         lock(require_lock)
                     end
@@ -2398,12 +2398,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
-            if cache_objects
-                # Ensure that the user can execute the `.so` we're generating
-                # Note that on windows, `filemode(path)` typically returns `0o666`, so this
-                # addition of the execute bit for the user is doubly needed.
-                chmod(tmppath_so, filemode(path) & 0o777 | 0o333)
-            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -2967,14 +2961,17 @@ global parse_pidfile_hook
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
 
+const compilecache_pidlock_stale_age = 10
+
 # Allows processes to wait if another process is precompiling a given source already.
-# The lock file mtime will be updated when held every `stale_age/2` seconds.
+# The lock file mtime will be updated when held at most every `stale_age/2` seconds, with expected
+# variance of 10 seconds or more being infrequent but not unusual.
 # After `stale_age` seconds beyond the mtime of the lock file, the lock file is deleted and
-# precompilation will proceed if
-#  - the locking process no longer exists
-#  - the lock is held by another host, since processes cannot be checked remotely
-# or after `stale_age * 25` seconds if the process does still exist.
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
+# precompilation will proceed if the locking process no longer exists or after `stale_age * 5`
+# seconds if the process does still exist.
+# If the lock is held by another host, it will conservatively wait `stale_age * 5`
+# seconds since processes cannot be checked remotely
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
@@ -2982,9 +2979,9 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=10)
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
             else
-                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another

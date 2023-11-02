@@ -369,6 +369,7 @@ function lstrip(f, s::AbstractString)
 end
 lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
+lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
     rstrip([pred=isspace,] str::AbstractString) -> SubString
@@ -402,6 +403,8 @@ function rstrip(f, s::AbstractString)
 end
 rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
+rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
+
 
 """
     strip([pred=isspace,] str::AbstractString) -> SubString
@@ -429,6 +432,7 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 
 ## string padding functions ##
@@ -567,6 +571,8 @@ end
 
 # Specialization for partition(s,n) to return a SubString
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+# SubStrings do not nest
+eltype(::Type{PartitionIterator{T}}) where {T<:SubString} = T
 
 function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
     state > ncodeunits(itr.c) && return nothing

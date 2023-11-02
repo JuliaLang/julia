@@ -28,6 +28,7 @@ const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== t
 ##
 
 CTRL_C = '\x03'
+CTRL_D = '\x04'
 CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
@@ -44,6 +45,7 @@ precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId}
 precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
 # miscellaneous
+precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
@@ -373,7 +375,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                     end
                 end
             end
-            write(ptm, "exit()\n")
+            write(ptm, "$CTRL_D")
             wait(tee)
             success(p) || Base.pipeline_error(p)
             close(ptm)

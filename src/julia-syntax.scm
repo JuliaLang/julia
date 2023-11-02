@@ -1420,7 +1420,7 @@
                 (scope-block ,finalb)))))
           ((length> e 3)
            (and (length> e 6) (error "invalid \"try\" form"))
-           (let ((elseb (if (length= e 6) (cdddddr e) '())))
+           (let ((elseb (if (length= e 6) `((scope-block ,@(cdddddr e))) '())))
              (expand-forms
                `(,(if (null? elseb) 'trycatch 'trycatchelse)
                  (scope-block ,tryb)

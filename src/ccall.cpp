@@ -1413,7 +1413,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        Value *gc_root = get_gc_root_for(arg_root);
+        Value *gc_root = get_gc_root_for(ctx, arg_root);
         if (gc_root)
             gc_uses.push_back(gc_root);
     }

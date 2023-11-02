@@ -23,6 +23,9 @@ let ex = quote
         end
         type_test = Test_x(Test_y(1))
         (::Test_y)() = "", ""
+        unicode_αβγ = Test_y(1)
+
+        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
         module CompletionFoo2
 
         end
@@ -251,6 +254,11 @@ let s = "Main.CompletionFoo.type_test.x"
     @test "xx" in c
     @test r == 30:30
     @test s[r] == "x"
+end
+
+let s = "Main.CompletionFoo.unicode_αβγ.y"
+    c, r = test_complete(s)
+    @test "yy" in c
 end
 
 let s = "Main.CompletionFoo.bar.no_val_available"
@@ -1872,4 +1880,27 @@ let s = "`abc`.e"
     c, r = test_complete(s)
     # (completions for the fields of `Cmd`)
     @test c == Any["env", "exec"]
+end
+
+Issue49892(x) = x
+let s = "Issue49892(fal"
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("false", "falses")
+        @test n in c
+    end
+end
+
+# issue #51194
+for (s, compl) in (("2*CompletionFoo.nam", "named"),
+                   (":a isa CompletionFoo.test!1", "test!12"),
+                   ("-CompletionFoo.Test_y(3).", "yy"),
+                   ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.Test_y(2).", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.Test_y(2)).", "xx"),
+                   ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
+                   ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
+                   ("foo'CompletionFoo.test!1", "test!12"))
+    c, r = test_complete(s)
+    @test only(c) == compl
 end

@@ -135,8 +135,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 ct = Union{}
             end
             Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
-            Qt === Any && return Type
             Qt === tt && return t
+            Qt === Any && return Type
             # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
             # enough, since this moves Qt outside of Type for is_derived_type_from_any
             Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
@@ -277,22 +277,9 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
             else
                 tupledepth = 0
             end
-            isgenerator = (t.name.name === :Generator && t.name.module === _topmod(t.name.module))
             for i = 1:length(tP)
                 tPi = tP[i]
                 cPi = cP[i + ntail]
-                if isgenerator
-                    let tPi = unwrap_unionall(tPi),
-                        cPi = unwrap_unionall(cPi)
-                        if isa(tPi, DataType) && isa(cPi, DataType) &&
-                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
-                                sym_isless(cPi.name.name, tPi.name.name)
-                            # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
-                            # TODO: is there a better way?
-                            continue
-                        end
-                    end
-                end
                 type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false

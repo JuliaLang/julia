@@ -3187,6 +3187,22 @@ end
     end
     @test err == 5 + 6
     @test x == 1
+
+    x = 0
+    try
+    catch
+    else
+        x = 1
+    end
+    @test x == 1
+
+    try
+    catch
+    else
+        tryelse_in_local_scope = true
+    end
+
+    @test !@isdefined(tryelse_in_local_scope)
 end
 
 @test_parseerror """
