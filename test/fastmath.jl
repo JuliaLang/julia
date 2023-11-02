@@ -60,9 +60,6 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         @test @fastmath(cmp(two,two)) == cmp(two,two)
         @test @fastmath(cmp(two,three)) == cmp(two,three)
         @test @fastmath(cmp(three,two)) == cmp(three,two)
-        @test @fastmath(one/zero) == convert(T,Inf)
-        @test @fastmath(-one/zero) == -convert(T,Inf)
-        @test isnan(@fastmath(zero/zero)) # must not throw
 
         for x in (zero, two, convert(T, Inf), convert(T, NaN))
             @test @fastmath(isfinite(x))
@@ -102,17 +99,26 @@ end
 # math functions
 
 @testset "real arithmetic" begin
-    for T in (Float32, Float64, BigFloat)
+    for T in (Float16, Float32, Float64, BigFloat)
         half = 1/convert(T,2)
         third = 1/convert(T,3)
 
         for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
                   :acos, :asin, :asinh, :atan, :atanh, :cbrt, :cos, :cosh,
-                  :exp10, :exp2, :exp, :expm1, :lgamma, :log10, :log1p,
-                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
+                  :exp10, :exp2, :exp, :log10, :log1p,
+                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
+                  :min, :max)
             @eval begin
                 @test @fastmath($f($half)) ≈ $f($half)
                 @test @fastmath($f($third)) ≈ $f($third)
+            end
+        end
+        if T != Float16
+            for f in (:expm1,)
+                @eval begin
+                    @test @fastmath($f($half)) ≈ $f($half)
+                    @test @fastmath($f($third)) ≈ $f($third)
+                end
             end
         end
         for f in (:acosh,)
@@ -121,13 +127,27 @@ end
                 @test @fastmath($f(1+$third)) ≈ $f(1+$third)
             end
         end
+        for f in (:sincos,)
+            @eval begin
+                @test all(@fastmath($f($half)) .≈ $f($half))
+                @test all(@fastmath($f($third)) .≈ $f($third))
+            end
+        end
         for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
-                  :atan2, :hypot, :max, :min)
+                  :atan, :hypot, :max, :min, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third)
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
             end
         end
+
+        # issue 31795
+        for f in (:min, :max)
+            @eval begin
+                @test @fastmath($f($half, $third, 1+$half)) ≈ $f($half, $third, 1+$half)
+            end
+        end
+
         for f in (:minmax,)
             @eval begin
                 @test @fastmath($f($half, $third)[1]) ≈ $f($half, $third)[1]
@@ -156,7 +176,7 @@ end
                 @test @fastmath($f($third)) ≈ $f($third) rtol=$rtol
             end
         end
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third) rtol=$rtol
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half) rtol=$rtol
@@ -172,7 +192,7 @@ end
         chalf = (1+1im)/CT(2)
         cthird = (1-1im)/CT(3)
 
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($chalf, $third)) ≈ $f($chalf, $third)
                 @test @fastmath($f($half, $cthird)) ≈ $f($half, $cthird)
@@ -187,6 +207,31 @@ end
         @test @fastmath(cis(third)) ≈ cis(third)
     end
 end
+
+@testset "reductions" begin
+    @test @fastmath(maximum([1,2,3])) == 3
+    @test @fastmath(minimum([1,2,3])) == 1
+    @test @fastmath(maximum(abs2, [1,2,3+0im])) == 9
+    @test @fastmath(minimum(sqrt, [1,2,3])) == 1
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9])) == 9.0f0
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9])) == 4.0f0
+
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9]; dims=1)) == Float32[7.0 8.0 9.0]
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9]; dims=2)) == Float32[4.0; 7.0;;]
+    @test @fastmath(maximum(abs, [4+im -5 6-im; -7 8 -9]; dims=1)) == [7.0 8.0 9.0]
+    @test @fastmath(minimum(cbrt, [4 -5 6; -7 8 -9]; dims=2)) == cbrt.([-5; -9;;])
+
+    x = randn(3,4,5)
+    x1 = sum(x; dims=1)
+    x23 = sum(x; dims=(2,3))
+    @test @fastmath(maximum!(x1, x)) ≈ maximum(x; dims=1)
+    @test x1 ≈ maximum(x; dims=1)
+    @test @fastmath(minimum!(x23, x)) ≈ minimum(x; dims=(2,3))
+    @test x23 ≈ minimum(x; dims=(2,3))
+    @test @fastmath(maximum!(abs, x23, x .+ im)) ≈ maximum(abs, x .+ im; dims=(2,3))
+    @test @fastmath(minimum!(abs2, x1, x .+ im)) ≈ minimum(abs2, x .+ im; dims=1)
+end
+
 @testset "issue #10544" begin
     a = fill(1.,2,2)
     b = fill(1.,2,2)
@@ -211,4 +256,45 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+end
+
+@testset "sincos fall-backs" begin
+    struct FloatWrapper
+        inner::Float64
+    end
+    Base.sin(outer::FloatWrapper) = sin(outer.inner)
+    Base.cos(outer::FloatWrapper) = cos(outer.inner)
+    for zilch in (FloatWrapper(0.0), 0, 0 + 0 * im)
+        @test (@fastmath sincos(zilch)) == (0, 1)
+    end
+end
+
+@testset "non-numeric fallbacks" begin
+    @test (@fastmath :(:sin)) == :(:sin)
+    @test (@fastmath "a" * "b") == "ab"
+    @test (@fastmath "a" ^ 2) == "aa"
+end
+
+
+@testset "exp overflow and underflow" begin
+    for T in (Float32,Float64)
+        for func in (@fastmath exp2,exp,exp10)
+            @test func(T(2000)) == T(Inf)
+            @test func(T(-2000)) == T(0)
+        end
+    end
+end
+
+@testset "+= with indexing (#47241)" begin
+    i = 0
+    x = zeros(2)
+    @fastmath x[i += 1] += 1
+    @fastmath x[end] += 1
+    @test x == [1, 1]
+    @test i == 1
+end
+
+@testset "@fastmath-related crash (#49907)" begin
+    x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
+    @test x == Float16(3)
 end

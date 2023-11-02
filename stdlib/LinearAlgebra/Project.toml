@@ -1,0 +1,15 @@
+name = "LinearAlgebra"
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+libblastrampoline_jll = "8e850b90-86db-534c-a0d3-1478176c7d93"
+OpenBLAS_jll = "4536629a-c528-5b80-bd46-f80d51c5b363"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[targets]
+test = ["Test", "Random"]

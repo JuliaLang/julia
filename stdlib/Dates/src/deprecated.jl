@@ -1,43 +1,70 @@
-# 0.7 deprecations
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.colon
-import Base.range
+using Base: @deprecate, depwarn
 
-# deprecate remaining vectorized methods from Dates
-@deprecate(
-    DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
-    DateTime.(Y, f; locale=locale) )
-@deprecate(
-    DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat),
-    DateTime.(Y, df) )
-@deprecate(
-    Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
-    Date.(Y, f; locale=locale) )
-@deprecate(
-    Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat),
-    Date.(Y, df) )
-@deprecate(
-    format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH),
-    format.(Y, f; locale=locale),
-    false )
-@deprecate(
-    format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where {T<:TimeType},
-    format.(Y, df),
-    false )
+# 1.0 deprecations
+function (+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod)
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .+ y
+end
+function (+)(x::StridedArray{<:GeneralPeriod}, y::TimeType)
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .+ y
+end
+function (+)(y::GeneralPeriod, x::AbstractArray{<:TimeType})
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .+ y
+end
+function (+)(y::TimeType, x::StridedArray{<:GeneralPeriod})
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .+ y
+end
+function (-)(x::AbstractArray{<:TimeType}, y::GeneralPeriod)
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .- y
+end
+function (-)(x::StridedArray{<:GeneralPeriod}, y::TimeType)
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .- y
+end
 
-@deprecate +(a::GeneralPeriod, b::StridedArray{<:GeneralPeriod}) broadcast(+, a, b) false
-@deprecate +(a::StridedArray{<:GeneralPeriod}, b::GeneralPeriod) broadcast(+, a, b) false
-@deprecate -(a::GeneralPeriod, b::StridedArray{<:GeneralPeriod}) broadcast(-, a, b) false
-@deprecate -(a::StridedArray{<:GeneralPeriod}, b::GeneralPeriod) broadcast(-, a, b) false
+# TimeType, AbstractArray{TimeType}
+function (-)(x::AbstractArray{T}, y::T) where {T<:TimeType}
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x .- y
+end
+function (-)(y::T, x::AbstractArray{T}) where {T<:TimeType}
+    # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    y .- x
+end
 
-# #24258
-# Physical units define an equivalence class: there is no such thing as a step of "1" (is
-# it one day or one second or one nanosecond?). So require the user to specify the step
-# (in physical units).
-@deprecate colon(start::T, stop::T) where {T<:DateTime}   start:Day(1):stop    false
-@deprecate colon(start::T, stop::T) where {T<:Date}       start:Day(1):stop    false
-@deprecate colon(start::T, stop::T) where {T<:Time}       start:Second(1):stop false
+for (op, Ty, Tz) in ((:*, Real, :P),
+                   (:/, :P, Float64), (:/, Real, :P))
+    @eval begin
+        function ($op)(X::StridedArray{P}, y::$Ty) where P<:Period
+            # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+            Z = similar(X, $Tz)
+            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
+                @inbounds Z[Idst] = ($op)(X[Isrc], y)
+            end
+            return Z
+        end
+    end
+end
 
-@deprecate range(start::DateTime, len::Integer)  range(start, Day(1), len) false
-@deprecate range(start::Date, len::Integer)      range(start, Day(1), len) false
+function (+)(x::StridedArray{<:GeneralPeriod})
+    # depwarn("non-broadcasted operations are deprecated for Dates.TimeType; use broadcasting instead", nothing)
+    x
+end
 
+for op in (:+, :-)
+    @eval begin
+        function ($op)(X::StridedArray{<:GeneralPeriod}, Y::StridedArray{<:GeneralPeriod})
+            # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
+            reshape(CompoundPeriod[($op)(x, y) for (x, y) in zip(X, Y)], promote_shape(size(X), size(Y)))
+        end
+    end
+end
+
+@deprecate argerror(msg::String) ArgumentError(msg) false
+@deprecate argerror() nothing false

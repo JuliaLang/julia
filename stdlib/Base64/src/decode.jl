@@ -43,6 +43,9 @@ struct Base64DecodePipe <: IO
     end
 end
 
+Base.isreadable(pipe::Base64DecodePipe) = !isempty(pipe.rest) || isreadable(pipe.io)
+Base.iswritable(::Base64DecodePipe) = false
+
 function Base.unsafe_read(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = read_until_end(pipe, ptr, n)
     if p < ptr + n
@@ -77,7 +80,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             end
         end
         if p < p_end
-            if i + 4 ≤ endof(buffer)
+            if i + 4 ≤ lastindex(buffer)
                 b1 = decode(buffer[i+1])
                 b2 = decode(buffer[i+2])
                 b3 = decode(buffer[i+3])
@@ -109,6 +112,7 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
 end
 
 function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
+    require_one_based_indexing(data)
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled
@@ -122,7 +126,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)
+Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
@@ -140,13 +144,12 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         else
             break
         end
-        if i + 1 ≤ endof(buffer)
+        if i + 1 ≤ lastindex(buffer)
             b4 = decode(buffer[i+=1])
         elseif !eof(input)
             b4 = decode(read(input, UInt8))
         else
             b4 = BASE64_CODE_END
-            break
         end
     end
 
@@ -154,13 +157,13 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         k = 3
-    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b4 = 0x00
         k = 2
-    elseif b1 < 0x40 && b2 < 0x40 && b3 == b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && (b3 == BASE64_CODE_PAD || b3 == BASE64_CODE_END) && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b3 = b4 = 0x00
         k = 1
-    elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
+    elseif b1 == b2 == b3 == b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
     else
         throw(ArgumentError("malformed base64 sequence"))
@@ -195,7 +198,7 @@ See also [`base64encode`](@ref).
 # Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
-6-element Array{UInt8,1}:
+6-element Vector{UInt8}:
  0x48
  0x65
  0x6c

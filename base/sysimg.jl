@@ -1,560 +1,146 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+Core.include(Main, "Base.jl")
 
-using Core.Intrinsics
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+using .Base
 
-getproperty(x, f::Symbol) = getfield(x, f)
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+# Set up Main module
+using Base.MainInclude # ans, err, and sometimes Out
 
-# Try to help prevent users from shooting them-selves in the foot
-# with ambiguities by defining a few common and critical operations
-# (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = getfield(x, f)
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
-getproperty(x::Type, f::Symbol) = getfield(x, f)
-setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
-
-function include(mod::Module, path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = _include1(mod, path)
-    elseif INCLUDE_STATE === 2
-        result = _include(mod, path)
-    elseif INCLUDE_STATE === 3
-        result = include_relative(mod, path)
-    end
-    result
-end
-function include(path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = _include1(Base, path)
-    elseif INCLUDE_STATE === 2
-        result = _include(Base, path)
-    else
-        # to help users avoid error (accidentally evaluating into Base), this is deprecated
-        depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
-        result = include_relative(_current_module(), path)
-    end
-    result
-end
-const _included_files = Array{Tuple{Module,String},1}()
-function _include1(mod::Module, path)
-    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
-    Core.include(mod, path)
-end
-let SOURCE_PATH = ""
-    # simple, race-y TLS, relative include
-    global _include
-    function _include(mod::Module, path)
-        prev = SOURCE_PATH
-        path = joinpath(dirname(prev), path)
-        push!(_included_files, (mod, abspath(path)))
-        SOURCE_PATH = path
-        result = Core.include(mod, path)
-        SOURCE_PATH = prev
-        result
-    end
-end
-INCLUDE_STATE = 1 # include = Core.include
-
-baremodule MainInclude
-export include
-include(fname::AbstractString) = Main.Base.include(Main, fname)
-end
-
-include("coreio.jl")
-
-eval(x) = Core.eval(Base, x)
-eval(m, x) = Core.eval(m, x)
-VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
-convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
-convert(::Type{T}, arg::T) where {T<:VecElement} = arg
-
-# init core docsystem
-import Core: @doc, @__doc__, @doc_str, WrappedException
-if isdefined(Core, :Compiler)
-    import Core.Compiler.CoreDocs
-    Core.atdoc!(CoreDocs.docm)
-end
-
-include("exports.jl")
-
-if false
-    # simple print definitions for debugging. enable these if something
-    # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just just eventually get (noisily) overwritten later
-    global show, print, println
-    show(io::IO, x) = Core.show(io, x)
-    print(io::IO, a...) = Core.print(io, a...)
-    println(io::IO, x...) = Core.println(io, x...)
-end
-
-## Load essential files and libraries
-include("essentials.jl")
-include("ctypes.jl")
-include("gcutils.jl")
-include("generator.jl")
-include("reflection.jl")
-include("options.jl")
-
-# core operations & types
-include("promotion.jl")
-include("tuple.jl")
-include("pair.jl")
-include("traits.jl")
-include("range.jl")
-include("expr.jl")
-include("error.jl")
-
-# core numeric operations & types
-include("bool.jl")
-include("number.jl")
-include("int.jl")
-include("operators.jl")
-include("pointer.jl")
-include("refpointer.jl")
-include("checked.jl")
-using .Checked
-
-# vararg Symbol constructor
-Symbol(x...) = Symbol(string(x...))
-
-# Define the broadcast function, which is mostly implemented in
-# broadcast.jl, so that we can overload broadcast methods for
-# specific array types etc.
-#  --Here, just define fallback routines for broadcasting with no arguments
-broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
-
-# array structures
-include("indices.jl")
-include("array.jl")
-include("abstractarray.jl")
-include("subarray.jl")
-include("reinterpretarray.jl")
-
-
-# ## dims-type-converting Array constructors for convenience
-# type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
-# type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
-Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
-Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
-Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
-# dimensionality but not type specified, accepting dims as series of Integers
-Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
-Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
-# empty vector constructor
-Vector() = Vector{Any}(uninitialized, 0)
-
-# Array constructors for nothing and missing
-# type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
-# type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
-
-include("abstractdict.jl")
-
-include("namedtuple.jl")
-
-# numeric operations
-include("hashing.jl")
-include("rounding.jl")
-using .Rounding
-include("float.jl")
-include("twiceprecision.jl")
-include("complex.jl")
-include("rational.jl")
-include("multinverses.jl")
-using .MultiplicativeInverses
-include("abstractarraymath.jl")
-include("arraymath.jl")
-
-# define MIME"foo/bar" early so that we can overload 3-arg show
-struct MIME{mime} end
-macro MIME_str(s)
-    :(MIME{$(Expr(:quote, Symbol(s)))})
-end
-
-# SIMD loops
-include("simdloop.jl")
-using .SimdLoop
-
-# map-reduce operators
-include("reduce.jl")
-
-## core structures
-include("reshapedarray.jl")
-include("bitarray.jl")
-include("bitset.jl")
-
-if !isdefined(Core, :Compiler)
-    include("docs/core.jl")
-    Core.atdoc!(CoreDocs.docm)
-end
-
-# Some type
-include("some.jl")
-
-include("dict.jl")
-include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
-
-include("char.jl")
-include("strings/basic.jl")
-include("strings/string.jl")
-
-# Definition of StridedArray
-StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N,A}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1,A}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2,A}}
-StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
-
-# For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
-
-include("osutils.jl")
-include("c.jl")
-
-# Core I/O
-include("io.jl")
-include("iostream.jl")
-include("iobuffer.jl")
-
-# strings & printing
-include("intfuncs.jl")
-include("strings/strings.jl")
-include("parse.jl")
-include("shell.jl")
-include("regex.jl")
-include("show.jl")
-include("arrayshow.jl")
-
-# Logging
-include("logging.jl")
-using .CoreLogging
-
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
-
-include("broadcast.jl")
-using .Broadcast
-
-# define the real ntuple functions
-@inline function ntuple(f::F, ::Val{N}) where {F,N}
-    N::Int
-    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
-    if @generated
-        quote
-            @nexprs $N i -> t_i = f(i)
-            @ncall $N tuple t
-        end
-    else
-        Tuple(f(i) for i = 1:N)
-    end
-end
-@inline function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
-    M = length(t)
-    M > N && throw(ArgumentError("input tuple of length $M, requested $N"))
-    if @generated
-        quote
-            (t..., $(fill(:val, N-length(t.parameters))...))
-        end
-    else
-        (t..., fill(val, N-M)...)
-    end
-end
-
-# version
-include("version.jl")
-
-# system & environment
-include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time
-
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
-    push!(DL_LOAD_PATH, "@loader_path")
-end
-
-include("env.jl")
-
-# Scheduling
-include("libuv.jl")
-include("event.jl")
-include("task.jl")
-include("lock.jl")
-include("threads.jl")
-include("weakkeydict.jl")
-
-# To limit dependency on rand functionality (implemented in the Random
-# module), Crand is used in file.jl, and could be used in error.jl
-# (but it breaks a test)
-"""
-    Crand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
-"""
-Crand() = ccall(:rand, Cuint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
-Crand(::Type{Float64}) = Crand(UInt32) / 2^32
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
 
 """
-    Csrand([seed])
+    include([mapexpr::Function,] path::AbstractString)
 
-Interface the the C `srand(seed)` function.
+Evaluate the contents of the input source file in the global scope of the containing module.
+Every module (except those defined with `baremodule`) has its own
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
-Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
-
-# functions defined in Random
-function rand end
-function randn end
-
-# I/O
-include("stream.jl")
-include("socket.jl")
-include("filesystem.jl")
-using .Filesystem
-include("process.jl")
-include("grisu/grisu.jl")
-import .Grisu.print_shortest
-include("methodshow.jl")
-
-# core math functions
-include("floatfuncs.jl")
-include("math.jl")
-using .Math
-import .Math: gamma
-const (√)=sqrt
-const (∛)=cbrt
-
-INCLUDE_STATE = 2 # include = _include (from lines above)
-
-# reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
-
-# basic data structures
-include("ordering.jl")
-using .Order
-
-# Combinatorics
-include("sort.jl")
-using .Sort
-
-# Fast math
-include("fastmath.jl")
-using .FastMath
-
-function deepcopy_internal end
-
-# BigInts and BigFloats
-include("gmp.jl")
-using .GMP
-
-for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
-    @eval flipsign(x::$T, ::Unsigned) = +x
-    @eval copysign(x::$T, ::Unsigned) = +x
+include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
+function include(fname::AbstractString)
+    isa(fname, String) || (fname = Base.convert(String, fname)::String)
+    Base._include(identity, Main, fname)
 end
 
-include("mpfr.jl")
-using .MPFR
-big(n::Integer) = convert(BigInt,n)
-big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(numerator(q))//big(denominator(q))
+"""
+    eval(expr)
 
-include("combinatorics.jl")
-
-# more hashing definitions
-include("hashing2.jl")
-
-# irrational mathematical constants
-include("irrationals.jl")
-include("mathconstants.jl")
-using .MathConstants: ℯ, π, pi
-
-# (s)printf macros
-include("printf.jl")
-# import .Printf
-
-# metaprogramming
-include("meta.jl")
-
-# enums
-include("Enums.jl")
-using .Enums
-
-# concurrency and parallelism
-include("serialize.jl")
-using .Serializer
-import .Serializer: serialize, deserialize
-include("channels.jl")
-
-# utilities - timing, help, edit
-include("deepcopy.jl")
-include("interactiveutil.jl")
-include("summarysize.jl")
-include("replutil.jl")
-include("i18n.jl")
-using .I18n
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
-
-include("initdefs.jl")
-include("client.jl")
-
-# misc useful functions & macros
-include("util.jl")
-
-# statistics
-include("statistics.jl")
-
-# missing values
-include("missing.jl")
-
-# libgit2 support
-include("libgit2/libgit2.jl")
-
-# package manager
-include("pkg/pkg.jl")
-
-# worker threads
-include("threadcall.jl")
-
-# code loading
-include("loading.jl")
-
-# set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
-
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
-
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
-include("asyncmap.jl")
-
-include("multimedia.jl")
-using .Multimedia
-
-# frontend
-include("repl/Terminals.jl")
-include("repl/LineEdit.jl")
-include("repl/REPLCompletions.jl")
-include("repl/REPL.jl")
-
-# deprecated functions
-include("deprecated.jl")
-
-# Some basic documentation
-include("docs/basedocs.jl")
-
-# Documentation -- should always be included last in sysimg.
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs, .Markdown
-isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
-
-function __init__()
-    # for the few uses of Crand in Base:
-    Csrand()
-    # Base library init
-    reinit_stdio()
-    global_logger(root_module(:Logging).ConsoleLogger(STDERR))
-    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-    early_init()
-    init_load_path()
-    init_threadcall()
-end
-
-INCLUDE_STATE = 3 # include = include_relative
-
-end # baremodule Base
-
-using Base
+Evaluate an expression in the global scope of the containing module.
+Every `Module` (except those defined with `baremodule`) has its own 1-argument
+definition of `eval`, which evaluates expressions in that module.
+"""
+eval(x) = Core.eval(Main, x)
 
 # Ensure this file is also tracked
-pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
 
+# set up depot & load paths to be able to find stdlib packages
+Base.init_depot_path()
+Base.init_load_path()
+
+if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
-Base.require(:Base64)
-Base.require(:CRC32c)
-Base.require(:Dates)
-Base.require(:DelimitedFiles)
-Base.require(:Distributed)
-Base.require(:FileWatching)
-Base.require(:Future)
-Base.require(:IterativeEigensolvers)
-Base.require(:Libdl)
-Base.require(:Logging)
-Base.require(:Mmap)
-Base.require(:Printf)
-Base.require(:Profile)
-Base.require(:Random)
-Base.require(:SharedArrays)
-Base.require(:SparseArrays)
-Base.require(:SuiteSparse)
-Base.require(:Test)
-Base.require(:Unicode)
+let
+    # Loading here does not call __init__(). This leads to uninitialized RNG
+    # state which causes rand(::UnitRange{Int}) to hang. This is a workaround:
+    task = current_task()
+    task.rngState0 = 0x5156087469e170ab
+    task.rngState1 = 0x7431eaead385992c
+    task.rngState2 = 0x503e1d32781c2608
+    task.rngState3 = 0x3a77f7189200c20b
+    task.rngState4 = 0x5502376d099035ae
 
-@eval Base begin
-    @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
-    @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
-    @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
-    @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
-    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
-    @deprecate_binding Random root_module(:Random) true ", run `using Random` instead"
+    # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
+    # Run with the `--exclude-jlls` option to filter out all JLL packages
+    stdlibs = [
+        # No dependencies
+        :FileWatching, # used by loading.jl -- implicit assumption that init runs
+        :Libdl, # Transitive through LinAlg
+        :Artifacts, # Transitive through LinAlg
+        :SHA, # transitive through Random
+        :Sockets, # used by stream.jl
 
-    # PR #25249
-    @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"
-    @deprecate_binding(AbstractSparseArray, root_module(:SparseArrays).AbstractSparseArray, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseMatrix, root_module(:SparseArrays).AbstractSparseMatrix, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseVector, root_module(:SparseArrays).AbstractSparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseMatrixCSC, root_module(:SparseArrays).SparseMatrixCSC, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
+        # Transitive through LingAlg
+        # OpenBLAS_jll
+        # libblastrampoline_jll
+
+        # 1-depth packages
+        :LinearAlgebra, # Commits type-piracy and GEMM
+        :Random, # Can't be removed due to rand being exported by Base
+    ]
+    # PackageCompiler can filter out stdlibs so it can be empty
+    maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
+
+    tot_time_stdlib = 0.0
+    # use a temp module to avoid leaving the type of this closure in Main
+    push!(empty!(LOAD_PATH), "@stdlib")
+    m = Module()
+    GC.@preserve m begin
+        print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
+                                          Base.time_print(stdout, t * 10^9); println())
+        print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
+
+        Base._track_dependencies[] = true
+        tot_time_stdlib = @elapsed for stdlib in stdlibs
+            tt = @elapsed Base.require(Base, stdlib)
+            print_time(stdlib, tt)
+        end
+        for dep in Base._require_dependencies
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
+        end
+        empty!(Base._require_dependencies)
+        Base._track_dependencies[] = false
+
+        print_time("Stdlibs total", tot_time_stdlib)
+    end
+
+    # Clear global state
+    empty!(Core.ARGS)
+    empty!(Base.ARGS)
+    empty!(LOAD_PATH)
+    Base.init_load_path() # want to be able to find external packages in userimg.jl
+
+    ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
+
+    tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+
+    tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
+    tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
+
+    println("Sysimage built. Summary:")
+    print("Base ──────── "); Base.time_print(stdout, tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
+    print("Stdlibs ───── "); Base.time_print(stdout, tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
+    if isfile("userimg.jl")
+    print("Userimg ───── "); Base.time_print(stdout, tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
+    end
+    print("Total ─────── "); Base.time_print(stdout, tot_time         * 10^9); println();
+
+    empty!(LOAD_PATH)
+    empty!(DEPOT_PATH)
 end
 
-empty!(LOAD_PATH)
-
-Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
-
-Base.include(Base, "precompile.jl")
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
+end

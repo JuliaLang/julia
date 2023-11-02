@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generate encode table.
-const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
+const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
 encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
@@ -43,6 +43,9 @@ struct Base64EncodePipe <: IO
         return pipe
     end
 end
+
+Base.isreadable(::Base64EncodePipe) = false
+Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
 
 function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::Int
     buffer = pipe.buffer
@@ -183,8 +186,8 @@ function loadtriplet!(buffer::Buffer, ptr::Ptr{UInt8}, n::UInt)
 end
 
 """
-    base64encode(writefunc, args...)
-    base64encode(args...)
+    base64encode(writefunc, args...; context=nothing)
+    base64encode(args...; context=nothing)
 
 Given a [`write`](@ref)-like function `writefunc`, which takes an I/O stream as
 its first argument, `base64encode(writefunc, args...)` calls `writefunc` to
@@ -193,13 +196,21 @@ write `args...` to a base64-encoded string, and returns the string.
 converts its arguments into bytes using the standard [`write`](@ref) functions
 and returns the base64-encoded string.
 
+The optional keyword argument `context` can be set to `:key=>value` pair
+or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
+stream passed to `writefunc` or `write`.
+
 See also [`base64decode`](@ref).
 """
-function base64encode(f::Function, args...)
+function base64encode(f::Function, args...; context=nothing)
     s = IOBuffer()
     b = Base64EncodePipe(s)
-    f(b, args...)
+    if context === nothing
+        f(b, args...)
+    else
+        f(IOContext(b, context), args...)
+    end
     close(b)
     return String(take!(s))
 end
-base64encode(args...) = base64encode(write, args...)
+base64encode(args...; context=nothing) = base64encode(write, args...; context=context)

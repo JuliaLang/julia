@@ -1,24 +1,39 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
+Core.AbstractChar
+Core.Char
+Base.codepoint
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
-Base.:^(::AbstractString, ::Integer)
+Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
+Base.:^(::Union{AbstractString, AbstractChar}, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
-Base.repeat(::Char, ::Integer)
-Base.repr
+Base.repeat(::AbstractChar, ::Integer)
+Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.LazyString
+Base.@lazy_str
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
+Base.annotations
+Base.annotate!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
 Base.ascii
+Base.Regex
 Base.@r_str
+Base.SubstitutionString
+Base.@s_str
 Base.@raw_str
+Base.@b_str
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.isvalid(::Any)
@@ -26,7 +41,8 @@ Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
 Base.eachmatch
-Base.matchall
+Base.RegexMatch
+Base.keys(::RegexMatch)
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
@@ -34,11 +50,15 @@ Base.lpad
 Base.rpad
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
+Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
+Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
-Base.contains
+Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair)
+Base.replace(::IO, s::AbstractString, ::Pair...)
+Base.eachsplit
+Base.eachrsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -46,32 +66,34 @@ Base.lstrip
 Base.rstrip
 Base.startswith
 Base.endswith
+Base.contains
 Base.first(::AbstractString, ::Integer)
 Base.last(::AbstractString, ::Integer)
 Base.uppercase
 Base.lowercase
 Base.titlecase
-Base.ucfirst
-Base.lcfirst
+Base.uppercasefirst
+Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
 Base.nextind
 Base.prevind
 Base.textwidth
-Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
-Base.islower
+Base.isletter
+Base.islowercase
 Base.isnumeric
 Base.isprint
 Base.ispunct
 Base.isspace
-Base.isupper
+Base.isuppercase
 Base.isxdigit
-Core.Symbol
 Base.escape_string
 Base.unescape_string
 ```

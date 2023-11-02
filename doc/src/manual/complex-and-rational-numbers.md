@@ -1,20 +1,19 @@
 # Complex and Rational Numbers
 
-Julia ships with predefined types representing both complex and rational numbers, and supports
-all standard [Mathematical Operations and Elementary Functions](@ref) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
+Julia includes predefined types for both complex and rational numbers, and supports
+all the standard [Mathematical Operations and Elementary Functions](@ref) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
 so that operations on any combination of predefined numeric types, whether primitive or composite,
 behave as expected.
 
 ## Complex Numbers
 
 The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
-square root of -1. It was deemed harmful to co-opt the name `i` for a global constant, since it
-is such a popular index variable name. Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
+square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant was rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 
 ```jldoctest
-julia> 1 + 2im
+julia> 1+2im
 1 + 2im
 ```
 
@@ -37,7 +36,7 @@ julia> (-1 + 2im)^2
 -3 - 4im
 
 julia> (-1 + 2im)^2.5
-2.7296244647840084 - 6.960664459571898im
+2.729624464784009 - 6.9606644595719im
 
 julia> (-1 + 2im)^(1 + 1im)
 -0.27910381075826657 + 0.08708053414102428im
@@ -49,7 +48,7 @@ julia> 3(2 - 5im)^2
 -63 - 60im
 
 julia> 3(2 - 5im)^-1.0
-0.20689655172413796 + 0.5172413793103449im
+0.20689655172413793 + 0.5172413793103449im
 ```
 
 The promotion mechanism ensures that combinations of operands of different types just work:
@@ -113,7 +112,7 @@ julia> angle(1 + 2im) # phase angle in radians
 
 As usual, the absolute value ([`abs`](@ref)) of a complex number is its distance from zero.
 [`abs2`](@ref) gives the square of the absolute value, and is of particular use for complex
-numbers where it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
+numbers since it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
 (also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
 is also defined for complex numbers:
 
@@ -125,7 +124,7 @@ julia> sqrt(1 + 2im)
 1.272019649514069 + 0.7861513777574233im
 
 julia> cos(1 + 2im)
-2.0327230070196656 - 3.0518977991518im
+2.0327230070196656 - 3.0518977991517997im
 
 julia> exp(1 + 2im)
 -1.1312043837568135 + 2.4717266720048188im
@@ -141,7 +140,7 @@ when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 
@@ -157,7 +156,7 @@ julia> a = 1; b = 2; a + b*im
 1 + 2im
 ```
 
-However, this is *not* recommended; Use the [`complex`](@ref) function instead to construct
+However, this is *not* recommended. Instead, use the more efficient [`complex`](@ref) function to construct
 a complex value directly from its real and imaginary parts:
 
 ```jldoctest
@@ -247,7 +246,7 @@ julia> 6//5 / 10//7
 21//25
 ```
 
-Rationals can be easily converted to floating-point numbers:
+Rationals can easily be converted to floating-point numbers:
 
 ```jldoctest
 julia> float(3//4)
@@ -255,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
+of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;
@@ -270,14 +269,14 @@ Constructing infinite rational values is acceptable:
 julia> 5//0
 1//0
 
-julia> -3//0
+julia> x = -3//0
 -1//0
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int64}
 ```
 
-Trying to construct a [`NaN`](@ref) rational value, however, is not:
+Trying to construct a [`NaN`](@ref) rational value, however, is invalid:
 
 ```jldoctest
 julia> 0//0

@@ -79,6 +79,12 @@ using Random
 
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), ("", 1))
 
+# parse()/tryparse()
+@test parse(VersionNumber, "1.2.3") == v"1.2.3"
+@test_throws ArgumentError parse(VersionNumber, "not a version")
+@test tryparse(VersionNumber, "3.2.1") == v"3.2.1"
+@test tryparse(VersionNumber, "not a version") === nothing
+
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
@@ -93,6 +99,12 @@ show(io,v"4.3.2+1.a")
 
 # construction from AbstractString
 @test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
+
+# construct from VersionNumber
+let
+    v = VersionNumber("1.2.3")
+    @test VersionNumber(v) == v
+end
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
@@ -134,7 +146,7 @@ import Base: lowerbound, upperbound
 
 # advanced comparison & manipulation
 import Base: thispatch, thisminor, thismajor,
-             nextpatch, nextminor, nextmajor, check_new_version
+             nextpatch, nextminor, nextmajor
 @test v"1.2.3" == thispatch(v"1.2.3-")
 @test v"1.2.3" == thispatch(v"1.2.3-pre")
 @test v"1.2.3" == thispatch(v"1.2.3")
@@ -207,30 +219,14 @@ for major=0:3, minor=0:3, patch=0:3
     end
 end
 
-# check_new_version
-import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") === nothing
-@test_throws AssertionError check_new_version([v"2", v"1"], v"3")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test check_new_version(VersionNumber[], v"0") === nothing
-@test check_new_version(VersionNumber[], v"0.0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"2")
-@test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"4")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
-@test check_new_version([v"1", v"2"], v"2.1") === nothing
-@test check_new_version([v"1", v"2"], v"3") === nothing
-
-# banner
-import Base.banner
-io = IOBuffer()
-@test banner(io) === nothing
-@test length(String(take!(io))) > 50
+# VersionNumber has the promised fields
+let v = v"4.2.1-1.x+a.9"
+    @test v.major isa Integer
+    @test v.minor isa Integer
+    @test v.patch isa Integer
+    @test v.prerelease isa Tuple{Vararg{Union{Integer, AbstractString}}}
+    @test v.build isa Tuple{Vararg{Union{Integer, AbstractString}}}
+end
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
@@ -246,56 +242,3 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
-
-# VersionSet tests
-
-import Base.Pkg.Types: VersionInterval, VersionSet
-
-function chkint(a::VersionSet)
-    ints = a.intervals
-    for k = 1:length(ints)
-        ints[k].lower < ints[k].upper || return false
-        k < length(ints) && (ints[k].upper < ints[k+1].lower || return false)
-    end
-    return true
-end
-
-const empty_versionset = VersionSet(VersionInterval[])
-@test isempty(empty_versionset)
-
-# VersionSet intersections and unions
-@test empty_versionset ∩ empty_versionset == empty_versionset
-@test empty_versionset ∪ empty_versionset == empty_versionset
-for t = 1:1_000
-    a = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
-    b = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
-    @assert chkint(a)
-    @assert chkint(b)
-    u = a ∪ b
-    @test chkint(u)
-    i = a ∩ b
-    @test chkint(i)
-    for vM = 0:9, vm = 0:5
-        v = VersionNumber(vM, vm)
-        @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
-        @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
-    end
-end
-
-# PR #23075
-@testset "versioninfo" begin
-    # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
-    mktempdir() do dir
-        withenv("JULIA_PKGDIR" => dir) do
-            buf = PipeBuffer()
-            versioninfo(buf, verbose=true)
-            ver = read(buf, String)
-            @test startswith(ver, "Julia Version $VERSION")
-            @test contains(ver, "Environment:")
-            @test contains(ver, "Package Status:")
-            @test contains(ver, "no packages installed")
-            @test isempty(readdir(dir))
-        end
-    end
-end

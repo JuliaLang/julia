@@ -18,6 +18,7 @@
         0x0000001c      '\x1c'      "\\x1c"
         0x0000001f      '\x1f'      "\\x1f"
         0x00000020      ' '         " "
+        0x00000022      '"'         "\\\""
         0x0000002f      '/'         "/"
         0x00000030      '0'         "0"
         0x00000039      '9'         "9"
@@ -26,6 +27,7 @@
         0x00000041      'A'         "A"
         0x0000005a      'Z'         "Z"
         0x0000005b      '['         "["
+        0x0000005c      '\\'         "\\\\"
         0x00000060      '`'         "`"
         0x00000061      'a'         "a"
         0x0000007a      'z'         "z"
@@ -62,6 +64,13 @@
     @test typeof(escape_string("test", "t")) == String
     @test escape_string("test", "t") == "\\tes\\t"
 
+    @test escape_string("\\cdot") == "\\\\cdot"
+    @test escape_string("\\cdot"; keep = '\\') == "\\cdot"
+    @test escape_string("\\cdot", '\\'; keep = '\\') == "\\\\cdot"
+    @test escape_string("\\cdot\n"; keep = "\\\n") == "\\cdot\n"
+    @test escape_string("\\cdot\n", '\n'; keep = "\\\n") == "\\cdot\\\n"
+    @test escape_string("\\cdot\n", "\\\n"; keep = "\\\n") == "\\\\cdot\\\n"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
@@ -73,22 +82,22 @@
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(isprint(ch) && ch != '\\' ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
                          "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
         c = Char(i)
         cp = string(c,p)
-        op = string(Char(div(i,8)), oct(i%8), p)
-        hp = string(Char(div(i,16)), hex(i%16), p)
-        @test string(unescape_string(string("\\",oct(i,1),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,2),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,3),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,4),p))) == op
-        @test string(unescape_string(string("\\x",hex(i,1),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,2),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,3),p))) == hp
+        op = string(Char(div(i,8)), string(i%8, base = 8), p)
+        hp = string(Char(div(i,16)), string(i%16, base = 16), p)
+        @test string(unescape_string(string("\\",string(i,base=8,pad=1),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=2),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=3),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=4),p))) == op
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=1),p))) == cp
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=2),p))) == cp
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=3),p))) == hp
     end
 
     @testset "unescape_string" begin
@@ -141,26 +150,25 @@
         @test "\x01" == unescape_string("\\x01")
         @test "\x0f" == unescape_string("\\x0f")
         @test "\x0F" == unescape_string("\\x0F")
+
+        str= "aaa \\g \\n"
+        @test "aaa \\g \n" == unescape_string(str, ['g'])
+        @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
 end
 @testset "join()" begin
-    @test join([]) == ""
+    @test join([]) == join([],",") == ""
+    @test join(()) == join((),",") == ""
     @test join(["a"],"?") == "a"
     @test join("HELLO",'-') == "H-E-L-L-O"
     @test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
     @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
     @test_throws MethodError join(1, 2, 3, 4)
+    @test join(()) == ""
+    @test join((), ", ") == ""
+    @test join((), ", ", ", and ") == ""
 end
-
-# issue #9178 `join` calls `done()` twice on the iterables
-mutable struct i9178
-    nnext::Int64
-    ndone::Int64
-end
-Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
-Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
-Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
-@test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
 
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
@@ -175,7 +183,46 @@ join(myio, "", "", 1)
 @testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"U110000"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
+
+@testset "sprint with context" begin
+    function f(io::IO)
+        println(io, "compact => ", get(io, :compact, false)::Bool)
+        println(io, "limit   => ", get(io, :limit,   false)::Bool)
+    end
+
+    str = sprint(f)
+    @test str == """
+        compact => false
+        limit   => false
+        """
+
+    str = sprint(f, context = :compact => true)
+    @test str == """
+        compact => true
+        limit   => false
+        """
+
+    str = sprint(f, context = (:compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+
+    str = sprint(f, context = IOContext(stdout, :compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+end
+
+@testset "sprint honoring IOContext" begin
+    @test startswith(sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing)), "Base.Dict")
+end
+
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops
     @test Base.indentation("      \t") == (8, true)
@@ -265,4 +312,12 @@ for i = 1:10
     buf = IOBuffer()
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
+end
+
+@testset "string()" begin
+    # test the Float sizehints
+    @test string(2.f0) == "2.0"
+    @test string(2.f0, 2.0) == "2.02.0"
+    # test empty args
+    @test string() == ""
 end

@@ -2,11 +2,11 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned, iscased
+using Unicode: normalize, isassigned, julia_chartransform
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
-    @test normalize("\u006e\u0303", :NFC) == "\u00f1"
+    @test normalize("\u006e\u0303", :NFC) == "\u00f1" == normalize(SubString("ab\u006e\u0303cd",3,4), :NFC)
     @test "\u006e\u0303" == normalize("\u00f1", :NFD)
     @test normalize("\ufb00", :NFC) != "ff"
     @test normalize("\ufb00", :NFKC) == "ff"
@@ -24,6 +24,12 @@ using Unicode: normalize, isassigned, iscased
     @test isempty(normalize("\u00ad", stripignore=true))
     @test normalize("\t\r", stripcc=true) == "  "
     @test normalize("\t\r", stripcc=true, newline2ls=true) == " \u2028"
+    @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
+
+    # julia_chartransform identifier normalization
+    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", chartransform=julia_chartransform) ==
+        "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+    @test julia_chartransform('\u00B5') === '\u03BC'
 end
 
 @testset "unicode sa#15" begin
@@ -92,28 +98,31 @@ end
 @testset "#5939 uft8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
-    for c in vcat(alower,ulower)
-        @test islower(c) == true
-        @test isupper(c) == false
+    for c in vcat(alower,ulower,['ª'])
+        @test islowercase(c) == true
+        @test isuppercase(c) == false
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
-    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д']
 
-    for c in vcat(aupper,uupper)
-        @test islower(c) == false
-        @test isupper(c) == true
+    for c in vcat(aupper,uupper,['Ⓐ'])
+        @test islowercase(c) == false
+        @test isuppercase(c) == true
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
 
+    @test !isuppercase('ǅ') # titlecase is not uppercase
+    @test Base.Unicode.iscased('ǅ') # but is "cased"
+
     nocase=['א','ﺵ']
-    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    alphas=vcat(alower,ulower,aupper,uupper,nocase,['ǅ'])
 
     for c in alphas
-        @test isalpha(c) == true
+        @test isletter(c) == true
         @test isnumeric(c) == false
     end
 
@@ -131,7 +140,7 @@ end
 
     alnums=vcat(alphas,anumber,unumber)
     for c in alnums
-        @test isalpha(c) || isnumeric(c)
+        @test isletter(c) || isnumeric(c)
         @test ispunct(c) == false
     end
 
@@ -143,7 +152,7 @@ end
 
     for c in vcat(apunct,upunct)
         @test ispunct(c) == true
-        @test !isalpha(c) && !isnumeric(c)
+        @test !isletter(c) && !isnumeric(c)
     end
 
     for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
@@ -179,7 +188,7 @@ end
 
     for c in vcat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
-        @test !isalpha(c) && !isnumeric(c)
+        @test !isletter(c) && !isnumeric(c)
         @test isprint(c) == false
     end
 
@@ -187,29 +196,29 @@ end
         if c!=Char(0x0085)
             @test iscntrl(c) == false
             @test isspace(c) == false
-            @test !isalpha(c) && !isnumeric(c)
+            @test !isletter(c) && !isnumeric(c)
             @test isprint(c) == false
         end
     end
 
     @test  all(isspace,"  \t   \n   \r  ")
     @test !all(isprint,"  \t   \n   \r  ")
-    @test !all(isalpha,"  \t   \n   \r  ")
+    @test !all(isletter,"  \t   \n   \r  ")
     @test !all(isnumeric,"  \t   \n   \r  ")
     @test !all(ispunct,"  \t   \n   \r  ")
 
     @test !all(isspace,"ΣβΣβ")
-    @test  all(isalpha,"ΣβΣβ")
+    @test  all(isletter,"ΣβΣβ")
     @test  all(isprint,"ΣβΣβ")
-    @test !all(isupper,"ΣβΣβ")
-    @test !all(islower,"ΣβΣβ")
+    @test !all(isuppercase,"ΣβΣβ")
+    @test !all(islowercase,"ΣβΣβ")
     @test !all(isnumeric,"ΣβΣβ")
     @test !all(iscntrl,"ΣβΣβ")
     @test !all(ispunct,"ΣβΣβ")
 
     @test  all(isnumeric,"23435")
     @test  all(isdigit,"23435")
-    @test !all(isalpha,"23435")
+    @test !all(isletter,"23435")
     @test  all(iscntrl,string(Char(0x0080)))
     @test  all(ispunct, "‡؟჻")
 
@@ -259,6 +268,19 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
+
+    for pre in ("","ä"), post in ("","x̂")
+        prelen = length(graphemes(pre))
+        @test graphemes(pre * "öü" * post, (1:2) .+ prelen) == "öü"
+        @test graphemes(pre * "ö" * post, (1:1) .+ prelen) == "ö"
+    end
+    @test graphemes("äöüx", 6:5)::SubString{String} == ""
+    @test_throws BoundsError graphemes("äöüx", 2:5)
+    @test_throws BoundsError graphemes("äöüx", 5:5)
+    @test_throws ArgumentError graphemes("äöüx", 0:1)
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -290,8 +312,15 @@ end
     @test isassigned('A')
     @test isassigned('α')
     @test isassigned('柒')
+    @test isassigned(0x00)
+    @test isassigned(0x0041)
+    @test isassigned(Int(0x03b1))
+    @test isassigned(UInt(0x67d2))
     @test !isassigned('\ufffe')
     @test !isassigned('\uffff')
+    @test !isassigned(0xfffe)
+    @test !isassigned(Int(0xffff))
+    @test !isassigned(typemax(Int64))
     @test !isassigned("\xf4\x90\x80\x80"[1])
     @test !isassigned("\xf7\xbf\xbf\xbf"[1])
     @test !isassigned("\xff"[1])
@@ -322,17 +351,23 @@ end
     @test collect(g) == ["1","2","3","α","5"]
 end
 
-@testset "ucfirst/lcfirst" begin
-    @test ucfirst("Hola")=="Hola"
-    @test ucfirst("hola")=="Hola"
-    @test ucfirst("")==""
-    @test ucfirst("*")=="*"
-    @test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
+@testset "#37680: initial graphemes" begin
+    @test collect(graphemes("🤦🏼‍♂️")) == ["🤦🏼‍♂️"]
+    @test collect(graphemes("👨🏻‍🤝‍👨🏽")) == ["👨🏻‍🤝‍👨🏽"]
+    @test collect(graphemes("🇸🇪🇸🇪")) == ["🇸🇪","🇸🇪"]
+end
 
-    @test lcfirst("Hola")=="hola"
-    @test lcfirst("hola")=="hola"
-    @test lcfirst("")==""
-    @test lcfirst("*")=="*"
+@testset "uppercasefirst/lowercasefirst" begin
+    @test uppercasefirst("Hola")=="Hola"
+    @test uppercasefirst("hola")=="Hola"
+    @test uppercasefirst("")==""
+    @test uppercasefirst("*")=="*"
+    @test uppercasefirst("Ǆxx") == uppercasefirst("ǆxx") == "ǅxx"
+
+    @test lowercasefirst("Hola")=="hola"
+    @test lowercasefirst("hola")=="hola"
+    @test lowercasefirst("")==""
+    @test lowercasefirst("*")=="*"
 end
 
 @testset "issue #11482" begin
@@ -348,17 +383,17 @@ end
         @test lowercase('\U118bf') == '\U118df'
         @test uppercase('\U1044d') == '\U10425'
     end
-    @testset "ucfirst/lcfirst" begin
-        @test ucfirst("Abc") == "Abc"
-        @test ucfirst("abc") == "Abc"
-        @test lcfirst("ABC") == "aBC"
-        @test lcfirst("aBC") == "aBC"
-        @test ucfirst(GenericString("")) == ""
-        @test lcfirst(GenericString("")) == ""
-        @test ucfirst(GenericString("a")) == "A"
-        @test lcfirst(GenericString("A")) == "a"
-        @test lcfirst(GenericString("a")) == "a"
-        @test ucfirst(GenericString("A")) == "A"
+    @testset "uppercasefirst/lowercasefirst" begin
+        @test uppercasefirst("Abc") == "Abc"
+        @test uppercasefirst("abc") == "Abc"
+        @test lowercasefirst("ABC") == "aBC"
+        @test lowercasefirst("aBC") == "aBC"
+        @test uppercasefirst(GenericString("")) == ""
+        @test lowercasefirst(GenericString("")) == ""
+        @test uppercasefirst(GenericString("a")) == "A"
+        @test lowercasefirst(GenericString("A")) == "a"
+        @test lowercasefirst(GenericString("a")) == "a"
+        @test uppercasefirst(GenericString("A")) == "A"
     end
     @testset "titlecase" begin
         @test titlecase('ǉ') == 'ǈ'
@@ -369,8 +404,9 @@ end
         @test titlecase("abcD   EFG\n\thij", strict=true)  == "Abcd   Efg\n\tHij"
         @test titlecase("abcD   EFG\n\thij", strict=false) == "AbcD   EFG\n\tHij"
         @test titlecase("abc-def")                     == "Abc-Def"
-        @test titlecase("abc-def", wordsep = !iscased) == "Abc-Def"
+        @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
+        @test titlecase("bôrked") == "Bôrked"
     end
 end
 
@@ -395,4 +431,39 @@ end
     @test one(String) == ""
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
+end
+
+@testset "Grapheme breaks and iterator" begin
+    u1 = reinterpret(Char, UInt32(0xc0) << 24)
+    u2 = reinterpret(Char, UInt32(0xc1) << 24)
+
+    overlong_uint =  UInt32(0xc0) << 24
+    overlong_char = reinterpret(Char, overlong_uint)
+
+    state = Ref(Int32(1))
+    @test Base.Unicode.isgraphemebreak(u1, u2)
+    @test Base.Unicode.isgraphemebreak!(state, u1, u2)
+    @test state[] == 0
+
+    @test_throws(
+        ErrorException("An unknown error occurred while processing UTF-8 data."),
+        Base.Unicode.utf8proc_error(2)
+    )
+    gi = Base.Unicode.graphemes("This is a string")
+    @test gi isa Base.Unicode.GraphemeIterator{String}
+    @test Base.Unicode.isvalid(Char, 'c')
+    @test !Base.Unicode.isvalid(Char, overlong_char)
+end
+
+@testset "Unicode equivalence" begin
+    @test isequal_normalized("no\u00EBl", "noe\u0308l")
+    @test !isequal_normalized("no\u00EBl", "noe\u0308l ")
+    @test isequal_normalized("", "")
+    @test !isequal_normalized("", " ")
+    @test !isequal_normalized("no\u00EBl", "NOËL")
+    @test isequal_normalized("no\u00EBl", "NOËL", casefold=true)
+    @test !isequal_normalized("no\u00EBl", "noel")
+    @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
+    @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
+    @test isequal_normalized("\u00B5\u0302m", "\u03BC\u0302m", chartransform=julia_chartransform)
 end

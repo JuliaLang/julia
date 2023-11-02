@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct GenericIterator{N} end
-Base.start(::GenericIterator{N}) where {N} = 1
-Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
-Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
+Base.iterate(::GenericIterator{N}, i=1) where {N} = i > N ? nothing : (i, i + 1)
 Base.IteratorSize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
 
 function generic_map_tests(mapf, inplace_mapf=nothing)
@@ -36,7 +34,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     end
 
     # AbstractArray map for N-arg case
-    A = Array{Int}(uninitialized, 10)
+    A = Array{Int}(undef, 10)
     f(x, y, z) = x + y + z
     D = Float64[1:10...]
 
@@ -55,13 +53,37 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
         @test A == map(x->x*x*x, Float64[1:10...])
         @test A === B
     end
+
+    # Issue #28382: inferrability of map with Union eltype
+    @test isequal(map(+, [1, 2], [3.0, missing]), [4.0, missing])
+    @test Core.Compiler.return_type(map, Tuple{typeof(+), Vector{Int},
+                                               Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
+    @test isequal(map(tuple, [1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
+    @test Core.Compiler.return_type(map, Tuple{typeof(tuple), Vector{Int},
+                                               Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Tuple{Int, Any}}
+    # Check that corner cases do not throw an error
+    @test isequal(map(x -> x === 1 ? nothing : x, [1, 2, missing]),
+                  [nothing, 2, missing])
+    @test isequal(map(x -> x === 1 ? nothing : x, Any[1, 2, 3.0, missing]),
+                  [nothing, 2, 3, missing])
+    @test map((x,y)->(x==1 ? 1.0 : x, y), [1, 2, 3], ["a", "b", "c"]) ==
+        [(1.0, "a"), (2, "b"), (3, "c")]
+    @test map(typeof, [iszero, isdigit]) == [typeof(iszero), typeof(isdigit)]
+    @test map(typeof, [iszero, iszero]) == [typeof(iszero), typeof(iszero)]
+    @test isequal(map(identity, Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
+                  [[1, 2],[missing, 1]])
+    @test map(x -> x < 0 ? false : x, Int[]) isa Vector{Integer}
+    @test map(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 function testmap_equivalence(mapf, f, c...)
     x1 = mapf(f,c...)
     x2 = map(f,c...)
 
-    if Base.IteratorSize == Base.HasShape()
+    if Base.IteratorSize isa Base.HasShape
         @test size(x1) == size(x2)
     else
         @test length(x1) == length(x2)
@@ -77,7 +99,7 @@ end
 function run_map_equivalence_tests(mapf)
     testmap_equivalence(mapf, identity, (1,2,3,4))
     testmap_equivalence(mapf, (x,y,z)->x+y+z, 1,2,3)
-    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, x->"foobar", BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(uninitialized, 10), fill(1.0, 10), "1234567890")
+    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, Returns("foobar"), BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(undef, 10), fill(1.0, 10), "1234567890")
 end

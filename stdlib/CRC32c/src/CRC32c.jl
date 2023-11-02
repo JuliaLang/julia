@@ -1,5 +1,4 @@
-
-__precompile__(true)
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
 Standard library module for computing the CRC-32c checksum.
@@ -37,7 +36,7 @@ function crc32c end
 
 
 crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) = Base._crc32c(a, crc)
-crc32c(s::String, crc::UInt32=0x00000000) = Base._crc32c(s, crc)
+crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000) = Base._crc32c(s, crc)
 
 """
     crc32c(io::IO, [nb::Integer,] crc::UInt32=0x00000000)

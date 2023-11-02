@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "platform.h"
+
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
@@ -12,9 +14,13 @@
 
 // object layout options ------------------------------------------------------
 
-// how much space we're willing to waste if an array outgrows its
-// original object
+// The data for an array this size or below will be allocated within the
+// Array object. If the array outgrows that space, it will be wasted.
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
+
+// Arrays at least this size will get larger alignment (JL_CACHE_BYTE_ALIGNMENT).
+// Must be bigger than GC_MAX_SZCLASS.
+#define ARRAY_CACHE_ALIGN_THRESHOLD 2048
 
 // codegen options ------------------------------------------------------------
 
@@ -52,16 +58,11 @@
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif
 #endif
-
-// SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
-// This is not recommended, as the memory state after such an exception should
-// be considered untrusted, but can be helpful during development
-// #define SEGV_EXCEPTION
 
 // profiling options
 
@@ -77,9 +78,6 @@
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
 
-// Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
-
 
 // method dispatch profiling --------------------------------------------------
 
@@ -89,7 +87,6 @@
 
 // print all signatures type inference is invoked on
 //#define TRACE_INFERENCE
-//#define TRACE_COMPILE
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.
@@ -101,18 +98,29 @@
 
 // task options ---------------------------------------------------------------
 
-// select an implementation of stack switching.
-// currently only COPY_STACKS is recommended.
-#ifndef COPY_STACKS
+// select whether to allow the COPY_STACKS stack switching implementation
 #define COPY_STACKS
+// select whether to use COPY_STACKS for new Tasks by default
+//#define ALWAYS_COPY_STACKS
+
+// When not using COPY_STACKS the task-system is less memory efficient so
+// you probably want to choose a smaller default stack size (factor of 8-10)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#define JL_STACK_SIZE (64*1024*1024)
+#elif defined(_P64)
+#define JL_STACK_SIZE (4*1024*1024)
+#else
+#define JL_STACK_SIZE (2*1024*1024)
 #endif
 
+// allow a suspended Task to restart on a different thread
+#define MIGRATE_TASKS
 
 // threading options ----------------------------------------------------------
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  100*1000 // nanoseconds (100us)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
@@ -120,35 +128,55 @@
 #  define JULIA_NUM_THREADS 1
 #endif
 
+// threadpools specification
+#define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
+
+// GC threads
+#define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
+
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+// partr -- parallel tasks runtime options ------------------------------------
+
+// multiq
+    // number of heaps = MULTIQ_HEAP_C * nthreads
+#define MULTIQ_HEAP_C                   4
+    // how many in each heap
+#define MULTIQ_TASKS_PER_HEAP           129
+
+// parfor
+    // tasks = niters / (GRAIN_K * nthreads)
+#define GRAIN_K                         4
+
+// synchronization
+    // narrivers = ((GRAIN_K * nthreads) ^ ARRIVERS_P) + 1
+    // limit for number of recursive parfors
+#define ARRIVERS_P                      2
+    // nreducers = narrivers * REDUCERS_FRAC
+#define REDUCERS_FRAC                   1
+
 
 // sanitizer defaults ---------------------------------------------------------
 
-// XXX: these macros are duplicated from julia_internal.h
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED
-#endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
+// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
+#if defined(_COMPILER_ASAN_ENABLED_)
+// No MEMDEBUG for msan - we just poison allocated memory directly.
+#define MEMDEBUG
 #endif
 
-// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
-#define MEMDEBUG
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define KEEP_BODIES
 #endif
 
+// TSAN doesn't like COPY_STACKS
+#if defined(_COMPILER_TSAN_ENABLED_) && defined(COPY_STACKS)
+#undef COPY_STACKS
+#endif
+
 // Memory sanitizer needs TLS, which llvm only supports for the small memory model
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
 // todo: fix the llvm MemoryManager to work with small memory model
 #endif
 

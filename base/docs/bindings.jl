@@ -9,7 +9,7 @@ struct Binding
     function Binding(m::Module, v::Symbol)
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
-        m = module_name(m) === v ? module_parent(m) : m
+        m = nameof(m) === v ? parentmodule(m) : m
         new(Base.binding_module(m, v), v)
     end
 end
@@ -25,6 +25,7 @@ function splitexpr(x::Expr)
     error("Invalid @var syntax `$x`.")
 end
 splitexpr(s::Symbol) = Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)
+splitexpr(r::GlobalRef) = r.mod, quot(r.name)
 splitexpr(other)     = error("Invalid @var syntax `$other`.")
 
 macro var(x)
@@ -32,7 +33,7 @@ macro var(x)
 end
 
 function Base.show(io::IO, b::Binding)
-    if b.mod === Main
+    if b.mod === Base.active_module()
         print(io, b.var)
     else
         print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
@@ -42,5 +43,5 @@ end
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
 aliasof(λ::Function, b) = (m = typeof(λ).name.mt; Binding(m.module, m.name))
-aliasof(m::Module,   b) = Binding(m, module_name(m))
+aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b

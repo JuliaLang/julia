@@ -2,6 +2,13 @@
 
 // Processor feature detection
 
+#include "llvm-version.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/MathExtras.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "processor.h"
 
 #include "julia.h"
@@ -10,11 +17,13 @@
 #include <map>
 #include <algorithm>
 
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/MathExtras.h>
-
 #include "julia_assert.h"
+
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
+
+#include <iostream>
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
@@ -72,7 +81,7 @@
 //
 //     Optimize only for size. Clang's `-Oz`.
 
-bool jl_processor_print_help = false;
+JL_DLLEXPORT bool jl_processor_print_help = false;
 
 namespace {
 
@@ -100,13 +109,13 @@ static inline bool test_nbit(const T1 &bits, T2 _bitidx)
 }
 
 template<typename T>
-static inline void unset_bits(T &bits)
+static inline void unset_bits(T &bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }
 
 template<typename T, typename T1, typename... Rest>
-static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest)
+static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest) JL_NOTSAFEPOINT
 {
     auto bitidx = static_cast<uint32_t>(_bitidx);
     auto u32idx = bitidx / 32;
@@ -135,7 +144,7 @@ static inline void set_bit(T &bits, T1 _bitidx, bool val)
 template<size_t n>
 struct FeatureList {
     uint32_t eles[n];
-    uint32_t &operator[](size_t pos)
+    uint32_t &operator[](size_t pos) JL_NOTSAFEPOINT
     {
         return eles[pos];
     }
@@ -248,7 +257,7 @@ static inline void mask_features(const FeatureList<n> masks, uint32_t *features)
 }
 
 // Turn feature list to a string the LLVM accept
-static inline std::string join_feature_strs(const std::vector<std::string> &strs)
+static inline std::string join_feature_strs(const llvm::ArrayRef<std::string> &strs)
 {
     size_t nstr = strs.size();
     if (!nstr)
@@ -268,7 +277,7 @@ static inline void append_ext_features(std::string &features, const std::string 
     features.append(ext_features);
 }
 
-static inline void append_ext_features(std::vector<std::string> &features,
+static inline void append_ext_features(llvm::SmallVectorImpl<std::string> &features,
                                        const std::string &ext_features)
 {
     if (ext_features.empty())
@@ -289,12 +298,6 @@ static inline void append_ext_features(std::vector<std::string> &features,
 /**
  * Target specific type/constant definitions, always enable.
  */
-
-struct FeatureName {
-    const char *name;
-    uint32_t bit; // bit index into a `uint32_t` array;
-    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
-};
 
 template<typename CPU, size_t n>
 struct CPUSpec {
@@ -392,14 +395,14 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
 // 1. CPU ID is less stable (they are not bound to hardware/OS API)
 // 2. We need to support CPU names that are not recognized by us and therefore doesn't have an ID
 // 3. CPU name is trivial to parse
-static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
-                                                         uint32_t nfeature,
-                                                         const uint32_t *features_en,
-                                                         const uint32_t *features_dis,
-                                                         llvm::StringRef ext_features)
+static inline llvm::SmallVector<uint8_t, 0>
+serialize_target_data(llvm::StringRef name, uint32_t nfeature, const uint32_t *features_en,
+                      const uint32_t *features_dis, llvm::StringRef ext_features)
 {
-    std::vector<uint8_t> res;
+    llvm::SmallVector<uint8_t, 0> res;
     auto add_data = [&] (const void *data, size_t sz) {
+        if (sz == 0)
+            return;
         size_t old_sz = res.size();
         res.resize(old_sz + sz);
         memcpy(&res[old_sz], data, sz);
@@ -417,10 +420,9 @@ static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
 }
 
 template<size_t n>
-static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
-                                                         const FeatureList<n> &features_en,
-                                                         const FeatureList<n> &features_dis,
-                                                         llvm::StringRef ext_features)
+static inline llvm::SmallVector<uint8_t, 0>
+serialize_target_data(llvm::StringRef name, const FeatureList<n> &features_en,
+                      const FeatureList<n> &features_dis, llvm::StringRef ext_features)
 {
     return serialize_target_data(name, n, &features_en[0], &features_dis[0], ext_features);
 }
@@ -439,7 +441,7 @@ struct TargetData {
 // In addition to the serialized data, the first `uint32_t` gives the number of targets saved
 // and each target has a `uint32_t` flag before the serialized target data.
 template<size_t n>
-static inline std::vector<TargetData<n>> deserialize_target_data(const uint8_t *data)
+static inline llvm::SmallVector<TargetData<n>, 0> deserialize_target_data(const uint8_t *data)
 {
     auto load_data = [&] (void *dest, size_t sz) {
         memcpy(dest, data, sz);
@@ -454,7 +456,7 @@ static inline std::vector<TargetData<n>> deserialize_target_data(const uint8_t *
     };
     uint32_t ntarget;
     load_data(&ntarget, 4);
-    std::vector<TargetData<n>> res(ntarget);
+    llvm::SmallVector<TargetData<n>, 0> res(ntarget);
     for (uint32_t i = 0; i < ntarget; i++) {
         auto &target = res[i];
         load_data(&target.en.flags, 4);
@@ -496,12 +498,12 @@ static inline int get_clone_base(const char *start, const char *end)
 // Parse cmdline string. This handles `clone_all` and `base` special features.
 // Other feature names will be passed to `feature_cb` for target dependent parsing.
 template<size_t n, typename F>
-static inline std::vector<TargetData<n>>
+static inline llvm::SmallVector<TargetData<n>, 0>
 parse_cmdline(const char *option, F &&feature_cb)
 {
     if (!option)
         option = "native";
-    std::vector<TargetData<n>> res;
+    llvm::SmallVector<TargetData<n>, 0> res;
     TargetData<n> arg{};
     auto reset_arg = [&] {
         res.push_back(arg);
@@ -608,105 +610,216 @@ parse_cmdline(const char *option, F &&feature_cb)
 
 // Cached version of command line parsing
 template<size_t n, typename F>
-static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
+static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(F &&feature_cb)
 {
-    static std::vector<TargetData<n>> targets =
+    static llvm::SmallVector<TargetData<n>, 0> targets =
         parse_cmdline<n>(jl_options.cpu_target, std::forward<F>(feature_cb));
     return targets;
+}
+
+extern "C" {
+void *image_pointers_unavailable;
+extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(image_pointers_unavailable) jl_image_pointers;
 }
 
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-    // .data base
-    auto data_base = (char*)jl_dlsym(hdl, "jl_sysimg_gvars_base");
-    // .text base
-    res.base = (const char*)jl_dlsym(hdl, "jl_sysimg_fvars_base");
-    auto offsets = ((const int32_t*)jl_dlsym(hdl, "jl_sysimg_fvars_offsets")) + 1;
-    uint32_t nfunc = ((const uint32_t*)offsets)[-1];
-    res.offsets = offsets;
+    JL_TIMING(LOAD_IMAGE, LOAD_Processor);
+    jl_image_t res{};
 
-    void *ids = jl_dlsym(hdl, "jl_dispatch_target_ids");
-    uint32_t target_idx = callback(ids);
+    const jl_image_pointers_t *pointers;
+    if (hdl == jl_exe_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
+        pointers = (const jl_image_pointers_t *)&jl_image_pointers;
+    else
+        jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
-    auto reloc_slots = ((const int32_t*)jl_dlsym(hdl, "jl_dispatch_reloc_slots")) + 1;
-    auto nreloc = ((const uint32_t*)reloc_slots)[-1];
-    auto clone_idxs = (const uint32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_idxs");
-    auto clone_offsets = (const int32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_offsets");
-    uint32_t tag_len = clone_idxs[0];
-    clone_idxs += 1;
-    assert(tag_len & jl_sysimg_tag_mask);
-    std::vector<const int32_t*> base_offsets = {res.offsets};
-    // Find target
-    for (uint32_t i = 0;i < target_idx;i++) {
-        uint32_t len = jl_sysimg_val_mask & tag_len;
-        if (jl_sysimg_tag_mask & tag_len) {
-            if (i != 0)
-                clone_offsets += nfunc;
-            clone_idxs += len + 1;
-        }
-        else {
-            clone_offsets += len;
-            clone_idxs += len + 2;
-        }
-        tag_len = clone_idxs[-1];
-        base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
+    const void *ids = pointers->target_data;
+    jl_value_t* rejection_reason = nullptr;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t target_idx = callback(ids, &rejection_reason);
+    if (target_idx == (uint32_t)-1) {
+        jl_error(jl_string_ptr(rejection_reason));
+    }
+    JL_GC_POP();
+
+    if (pointers->header->version != 1) {
+        jl_error("Image file is not compatible with this version of Julia");
     }
 
-    bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
-    // Fill in return value
-    if (clone_all) {
-        // clone_all
-        if (target_idx != 0) {
-            res.offsets = clone_offsets;
+    llvm::SmallVector<const char *, 0> fvars(pointers->header->nfvars);
+    llvm::SmallVector<const char *, 0> gvars(pointers->header->ngvars);
+
+    llvm::SmallVector<std::pair<uint32_t, const char *>, 0> clones;
+
+    for (unsigned i = 0; i < pointers->header->nshards; i++) {
+        auto shard = pointers->shards[i];
+
+        // .data base
+        char *data_base = (char *)shard.gvar_base;
+
+        // .text base
+        const char *text_base = shard.fvar_base;
+
+        const int32_t *offsets = shard.fvar_offsets;
+        uint32_t nfunc = offsets[0];
+        assert(nfunc <= pointers->header->nfvars);
+        offsets++;
+        const int32_t *reloc_slots = shard.clone_slots;
+        const uint32_t nreloc = reloc_slots[0];
+        reloc_slots += 1;
+        const uint32_t *clone_idxs = shard.clone_idxs;
+        const int32_t *clone_offsets = shard.clone_offsets;
+        uint32_t tag_len = clone_idxs[0];
+        clone_idxs += 1;
+
+        assert(tag_len & jl_sysimg_tag_mask);
+        llvm::SmallVector<const int32_t*, 0> base_offsets = {offsets};
+        // Find target
+        for (uint32_t i = 0;i < target_idx;i++) {
+            uint32_t len = jl_sysimg_val_mask & tag_len;
+            if (jl_sysimg_tag_mask & tag_len) {
+                if (i != 0)
+                    clone_offsets += nfunc;
+                clone_idxs += len + 1;
+            }
+            else {
+                clone_offsets += len;
+                clone_idxs += len + 2;
+            }
+            tag_len = clone_idxs[-1];
+            base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
         }
+
+        bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
+        // Fill in return value
+        if (clone_all) {
+            // clone_all
+            if (target_idx != 0) {
+                offsets = clone_offsets;
+            }
+        }
+        else {
+            uint32_t base_idx = clone_idxs[0];
+            assert(base_idx < target_idx);
+            if (target_idx != 0) {
+                offsets = base_offsets[base_idx];
+                assert(offsets);
+            }
+            clone_idxs++;
+            unsigned start = clones.size();
+            clones.resize(start + tag_len);
+            auto idxs = shard.fvar_idxs;
+            for (unsigned i = 0; i < tag_len; i++) {
+                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_offsets[i] + text_base};
+            }
+        }
+        // Do relocation
+        uint32_t reloc_i = 0;
+        uint32_t len = jl_sysimg_val_mask & tag_len;
+        for (uint32_t i = 0; i < len; i++) {
+            uint32_t idx = clone_idxs[i];
+            int32_t offset;
+            if (clone_all) {
+                offset = offsets[idx];
+            }
+            else if (idx & jl_sysimg_tag_mask) {
+                idx = idx & jl_sysimg_val_mask;
+                offset = clone_offsets[i];
+            }
+            else {
+                continue;
+            }
+            bool found = false;
+            for (; reloc_i < nreloc; reloc_i++) {
+                auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
+                if (reloc_idx == idx) {
+                    found = true;
+                    auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
+                    assert(slot);
+                    *slot = offset + text_base;
+                }
+                else if (reloc_idx > idx) {
+                    break;
+                }
+            }
+            assert(found && "Cannot find GOT entry for cloned function.");
+            (void)found;
+        }
+
+        auto fidxs = shard.fvar_idxs;
+        for (uint32_t i = 0; i < nfunc; i++) {
+            fvars[fidxs[i]] = text_base + offsets[i];
+        }
+
+        auto gidxs = shard.gvar_idxs;
+        unsigned ngvars = shard.gvar_offsets[0];
+        assert(ngvars <= pointers->header->ngvars);
+        for (uint32_t i = 0; i < ngvars; i++) {
+            gvars[gidxs[i]] = data_base + shard.gvar_offsets[i+1];
+        }
+    }
+
+    if (!fvars.empty()) {
+        auto offsets = (int32_t *) malloc(sizeof(int32_t) * fvars.size());
+        res.fptrs.base = fvars[0];
+        for (size_t i = 0; i < fvars.size(); i++) {
+            assert(fvars[i] && "Missing function pointer!");
+            offsets[i] = fvars[i] - res.fptrs.base;
+        }
+        res.fptrs.offsets = offsets;
+        res.fptrs.noffsets = fvars.size();
+    }
+
+    if (!gvars.empty()) {
+        auto offsets = (int32_t *) malloc(sizeof(int32_t) * gvars.size());
+        res.gvars_base = (uintptr_t *)gvars[0];
+        for (size_t i = 0; i < gvars.size(); i++) {
+            assert(gvars[i] && "Missing global variable pointer!");
+            offsets[i] = gvars[i] - (const char *)res.gvars_base;
+        }
+        res.gvars_offsets = offsets;
+        res.ngvars = gvars.size();
+    }
+
+    if (!clones.empty()) {
+        assert(!fvars.empty());
+        std::sort(clones.begin(), clones.end());
+        auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
+        auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());
+        for (size_t i = 0; i < clones.size(); i++) {
+            clone_idxs[i] = clones[i].first;
+            clone_offsets[i] = clones[i].second - res.fptrs.base;
+        }
+        res.fptrs.clone_idxs = clone_idxs;
+        res.fptrs.clone_offsets = clone_offsets;
+        res.fptrs.nclones = clones.size();
+    }
+
+#ifdef _OS_WINDOWS_
+    res.base = (intptr_t)hdl;
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)pointers, &dlinfo) != 0) {
+        res.base = (intptr_t)dlinfo.dli_fbase;
     }
     else {
-        uint32_t base_idx = clone_idxs[0];
-        assert(base_idx < target_idx);
-        if (target_idx != 0) {
-            res.offsets = base_offsets[base_idx];
-            assert(res.offsets);
-        }
-        clone_idxs++;
-        res.nclones = tag_len;
-        res.clone_offsets = clone_offsets;
-        res.clone_idxs = clone_idxs;
+        res.base = 0;
     }
-    // Do relocation
-    uint32_t reloc_i = 0;
-    uint32_t len = jl_sysimg_val_mask & tag_len;
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t idx = clone_idxs[i];
-        int32_t offset;
-        if (clone_all) {
-            offset = res.offsets[idx];
-        }
-        else if (idx & jl_sysimg_tag_mask) {
-            idx = idx & jl_sysimg_val_mask;
-            offset = clone_offsets[i];
-        }
-        else {
-            continue;
-        }
-        bool found = false;
-        for (; reloc_i < nreloc; reloc_i++) {
-            auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
-            if (reloc_idx == idx) {
-                found = true;
-                auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
-                *slot = offset + res.base;
-            }
-            else if (reloc_idx > idx) {
-                break;
-            }
-        }
-        assert(found && "Cannot find GOT entry for cloned function.");
-        (void)found;
+#endif
+
+    {
+        void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
+        void *pgcstack_key_slot = pointers->ptls->pgcstack_key_slot;
+        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+
+        size_t *tls_offset_idx = pointers->ptls->tls_offset;
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
     }
+
+    res.jl_small_typeof = pointers->jl_small_typeof;
 
     return res;
 }
@@ -719,20 +832,24 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
     // sysimg means. Make it an error for now.
     if (!imaging) {
         if (cmdline.size() > 1) {
-            jl_error("More than one command line CPU targets specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("More than one command line CPU targets specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_CLONE_ALL) {
-            jl_error("\"clone_all\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"clone_all\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_OPTSIZE) {
-            jl_error("\"opt_size\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"opt_size\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_MINSIZE) {
-            jl_error("\"min_size\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"min_size\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
     }
 }
@@ -745,17 +862,20 @@ struct SysimgMatch {
 // Find the best match in the sysimg.
 // Select the best one based on the largest vector register and largest compatible feature set.
 template<typename S, typename T, typename F>
-static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size)
+static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size, jl_value_t **rejection_reason)
 {
     SysimgMatch match;
     bool match_name = false;
     int feature_size = 0;
+    llvm::SmallVector<const char *, 0> rejection_reasons;
+    rejection_reasons.reserve(sysimg.size());
     for (uint32_t i = 0; i < sysimg.size(); i++) {
         auto &imgt = sysimg[i];
         if (!(imgt.en.features & target.dis.features).empty()) {
             // Check sysimg enabled features against runtime disabled features
             // This is valid (and all what we can do)
             // even if one or both of the targets are unknown.
+            rejection_reasons.push_back("Rejecting this target due to use of runtime-disabled features\n");
             continue;
         }
         if (imgt.name == target.name) {
@@ -766,25 +886,44 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
             }
         }
         else if (match_name) {
+            rejection_reasons.push_back("Rejecting this target since another target has a cpu name match\n");
             continue;
         }
         int new_vsz = max_vector_size(imgt.en.features);
-        if (match.vreg_size > new_vsz)
+        if (match.vreg_size > new_vsz) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger vector register size\n");
             continue;
+        }
         int new_feature_size = imgt.en.features.nbits();
         if (match.vreg_size < new_vsz) {
             match.best_idx = i;
             match.vreg_size = new_vsz;
             feature_size = new_feature_size;
+            rejection_reasons.push_back("Updating best match to this target due to larger vector register size\n");
             continue;
         }
-        if (new_feature_size < feature_size)
+        if (new_feature_size < feature_size) {
+            rejection_reasons.push_back("Rejecting this target since another target has a larger feature set\n");
             continue;
+        }
         match.best_idx = i;
         feature_size = new_feature_size;
+        rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1)
-        jl_error("Unable to find compatible target in system image.");
+    if (match.best_idx == (uint32_t)-1) {
+        // Construct a nice error message for debugging purposes
+        std::string error_msg = "Unable to find compatible target in cached code image.\n";
+        for (size_t i = 0; i < rejection_reasons.size(); i++) {
+            error_msg += "Target ";
+            error_msg += std::to_string(i);
+            error_msg += " (";
+            error_msg += sysimg[i].name;
+            error_msg += "): ";
+            error_msg += rejection_reasons[i];
+        }
+        if (rejection_reason)
+            *rejection_reason = jl_pchar_to_string(error_msg.data(), error_msg.size());
+    }
     return match;
 }
 
@@ -836,3 +975,30 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
+    auto specs = jl_get_llvm_clone_targets();
+    const uint32_t base_flags = 0;
+    llvm::SmallVector<uint8_t, 0> data;
+    auto push_i32 = [&] (uint32_t v) {
+        uint8_t buff[4];
+        memcpy(buff, &v, 4);
+        data.insert(data.end(), buff, buff + 4);
+    };
+    push_i32(specs.size());
+    for (uint32_t i = 0; i < specs.size(); i++) {
+        push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+        auto &specdata = specs[i].data;
+        data.insert(data.end(), specdata.begin(), specdata.end());
+    }
+
+    jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
+    uint8_t *out = jl_array_data(arr, uint8_t);
+    memcpy(out, data.data(), data.size());
+    return arr;
+}
+
+extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
+    *fnames = feature_names;
+    *nf = nfeature_names;
+}

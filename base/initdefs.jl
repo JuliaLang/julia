@@ -21,22 +21,12 @@ const ARGS = String[]
 """
     exit(code=0)
 
-Quit the program with an exit code. The default exit code is zero, indicating that the
-program completed successfully (see also [`quit`](@ref)). In an interactive session,
-`exit()` can be called with the keyboard shorcut `^D`.
-
+Stop the program with an exit code. The default exit code is zero, indicating that the
+program completed successfully. In an interactive session, `exit()` can be called with
+the keyboard shortcut `^D`.
 """
-exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
+exit(n) = ccall(:jl_exit, Union{}, (Int32,), n)
 exit() = exit(0)
-
-"""
-    quit()
-
-Quit the program indicating successful completion. This function is equivalent to
-`exit(0)` (see [`exit`](@ref)). In an interactive session, `quit()` can be called
-with the keyboard shorcut `^D`.
-"""
-quit() = exit()
 
 const roottask = current_task()
 
@@ -49,54 +39,450 @@ Determine whether Julia is running an interactive session.
 """
 isinteractive() = (is_interactive::Bool)
 
+## package depots (registries, packages, environments) ##
+
+"""
+    DEPOT_PATH
+
+A stack of "depot" locations where the package manager, as well as Julia's code
+loading mechanisms, look for package registries, installed packages, named
+environments, repo clones, cached compiled package images, and configuration
+files. By default it includes:
+
+1. `~/.julia` where `~` is the user home as appropriate on the system;
+2. an architecture-specific shared system directory, e.g. `/usr/local/share/julia`;
+3. an architecture-independent shared system directory, e.g. `/usr/share/julia`.
+
+So `DEPOT_PATH` might be:
+```julia
+[joinpath(homedir(), ".julia"), "/usr/local/share/julia", "/usr/share/julia"]
+```
+The first entry is the "user depot" and should be writable by and owned by the
+current user. The user depot is where: registries are cloned, new package versions
+are installed, named environments are created and updated, package repos are cloned,
+newly compiled package image files are saved, log files are written, development
+packages are checked out by default, and global configuration data is saved. Later
+entries in the depot path are treated as read-only and are appropriate for
+registries, packages, etc. installed and managed by system administrators.
+
+`DEPOT_PATH` is populated based on the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
+environment variable if set.
+
+## DEPOT_PATH contents
+
+Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
+Here is an overview of some of the subdirectories that may exist in a depot:
+
+* `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
+* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
+* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+
+See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+[Code Loading](@ref code-loading).
+"""
+const DEPOT_PATH = String[]
+
+function append_default_depot_path!(DEPOT_PATH)
+    path = joinpath(homedir(), ".julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    return DEPOT_PATH
+end
+
+function init_depot_path()
+    empty!(DEPOT_PATH)
+    if haskey(ENV, "JULIA_DEPOT_PATH")
+        str = ENV["JULIA_DEPOT_PATH"]
+        isempty(str) && return
+        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
+            if isempty(path)
+                append_default_depot_path!(DEPOT_PATH)
+            else
+                path = expanduser(path)
+                path in DEPOT_PATH || push!(DEPOT_PATH, path)
+            end
+        end
+    else
+        append_default_depot_path!(DEPOT_PATH)
+    end
+    nothing
+end
+
+## LOAD_PATH & ACTIVE_PROJECT ##
+
+# JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
+# first empty entry is replaced with DEFAULT_LOAD_PATH, the rest are skipped
+# entries starting with `@` are named environments:
+#  - the first three `#`s in a named environment are replaced with version numbers
+#  - `@stdlib` is a special name for the standard library and expands to its path
+
+# if you want a current env setup, use direnv and
+# have your .envrc do something like this:
+#
+#   export JULIA_LOAD_PATH="$(pwd):$JULIA_LOAD_PATH"
+#
+# this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
+# a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
+
+const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
+
 """
     LOAD_PATH
 
-An array of paths as strings or custom loader objects for the `require`
-function and `using` and `import` statements to consider when loading
-code.
+An array of paths for `using` and `import` statements to consider as project
+environments or package directories when loading code. It is populated based on
+the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable if set;
+otherwise it defaults to `["@", "@v#.#", "@stdlib"]`. Entries starting with `@`
+have special meanings:
+
+- `@` refers to the "current active environment", the initial value of which is
+  initially determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
+  variable or the `--project` command-line option.
+
+- `@stdlib` expands to the absolute path of the current Julia installation's
+  standard library directory.
+
+- `@name` refers to a named environment, which are stored in depots (see
+  [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)) under the `environments`
+  subdirectory. The user's named environments are stored in
+  `~/.julia/environments` so `@name` would refer to the environment in
+  `~/.julia/environments/name` if it exists and contains a `Project.toml` file.
+  If `name` contains `#` characters, then they are replaced with the major, minor
+  and patch components of the Julia version number. For example, if you are
+  running Julia 1.2 then `@v#.#` expands to `@v1.2` and will look for an
+  environment by that name, typically at `~/.julia/environments/v1.2`.
+
+The fully expanded value of `LOAD_PATH` that is searched for projects and packages
+can be seen by calling the `Base.load_path()` function.
+
+See also
+[`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
+[`JULIA_PROJECT`](@ref JULIA_PROJECT),
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+[Code Loading](@ref code-loading).
 """
-const LOAD_PATH = String[]
-const LOAD_CACHE_PATH = String[]
+const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+# HOME_PROJECT is no longer used, here just to avoid breaking things
+const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
+const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing) # Modify this only via `Base.set_active_project(proj)`
+## Watchers for when the active project changes (e.g., Revise)
+# Each should be a thunk, i.e., `f()`. To determine the current active project,
+# the thunk can query `Base.active_project()`.
+const active_project_callbacks = []
 
-function init_load_path(BINDIR = Sys.BINDIR)
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+function current_project(dir::AbstractString)
+    # look for project file in current dir and parents
+    home = homedir()
+    while true
+        for proj in project_names
+            file = joinpath(dir, proj)
+            isfile_casesensitive(file) && return file
+        end
+        # bail at home directory
+        dir == home && break
+        old, dir = dir, dirname(dir)
+        dir == old && break
+    end
+end
+
+function current_project()
+    dir = try pwd()
+    catch err
+        err isa IOError || rethrow()
+        return nothing
+    end
+    return current_project(dir)
+end
+
+function parse_load_path(str::String)
+    envs = String[]
+    isempty(str) && return envs
+    for env in eachsplit(str, Sys.iswindows() ? ';' : ':')
+        if isempty(env)
+            for env′ in DEFAULT_LOAD_PATH
+                env′ in envs || push!(envs, env′)
+            end
+        else
+            if env == "@."
+                env = current_project()
+                env === nothing && continue
+            end
+            env = expanduser(env)
+            env in envs || push!(envs, env)
+        end
+    end
+    return envs
+end
+
+function init_load_path()
     if haskey(ENV, "JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
+        paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
+    else
+        paths = filter!(env -> env !== nothing,
+            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
-    push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
-    push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
-    #push!(LOAD_CACHE_PATH, abspath(BINDIR, "..", "lib", "julia")) #TODO: add a builtin location?
+    append!(empty!(LOAD_PATH), paths)
 end
 
-function early_init()
-    Sys._early_init()
-    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
-                                    get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
-    if Sys.CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
-        # Prevent openblas from starting too many threads, unless/until specifically requested
-        ENV["OPENBLAS_NUM_THREADS"] = 8
+function init_active_project()
+    project = (JLOptions().project != C_NULL ?
+        unsafe_string(Base.JLOptions().project) :
+        get(ENV, "JULIA_PROJECT", nothing))
+    set_active_project(
+        project === nothing ? nothing :
+        project == "" ? nothing :
+        startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
+    )
+end
+
+## load path expansion: turn LOAD_PATH entries into concrete paths ##
+
+function load_path_expand(env::AbstractString)::Union{String, Nothing}
+    # named environment?
+    if startswith(env, '@')
+        # `@.` in JULIA_LOAD_PATH is expanded early (at startup time)
+        # if you put a `@.` in LOAD_PATH manually, it's expanded late
+        env == "@" && return active_project(false)
+        env == "@." && return current_project()
+        env == "@stdlib" && return Sys.STDLIB
+        if startswith(env, "@scriptdir")
+            if @isdefined(PROGRAM_FILE)
+                dir = dirname(PROGRAM_FILE)
+            else
+                cmds = unsafe_load_commands(opts.commands)
+                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                    # Usage error. The user did not pass a script.
+                    return nothing
+                end
+                dir = dirname(ARGS[1])
+            end
+            return abspath(replace(env, "@scriptdir" => dir))
+        end
+        env = replace(env, '#' => VERSION.major, count=1)
+        env = replace(env, '#' => VERSION.minor, count=1)
+        env = replace(env, '#' => VERSION.patch, count=1)
+        name = env[2:end]
+        # look for named env in each depot
+        for depot in DEPOT_PATH
+            path = joinpath(depot, "environments", name)
+            isdir(path) || continue
+            for proj in project_names
+                file = abspath(path, proj)
+                isfile_casesensitive(file) && return file
+            end
+        end
+        isempty(DEPOT_PATH) && return nothing
+        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+    end
+    # otherwise, it's a path
+    path = abspath(env)
+    if isdir(path)
+        # directory with a project file?
+        for proj in project_names
+            file = joinpath(path, proj)
+            isfile_casesensitive(file) && return file
+        end
+    end
+    # package dir or path to project file
+    return path
+end
+load_path_expand(::Nothing) = nothing
+
+"""
+    active_project()
+
+Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
+"""
+function active_project(search_load_path::Bool=true)
+    for project in (ACTIVE_PROJECT[],)
+        project == "@" && continue
+        project = load_path_expand(project)
+        project === nothing && continue
+        # while this seems well-inferred, nevertheless without the type annotation below
+        # there are backedges here from abspath(::AbstractString, ::String)
+        project = project::String
+        if !isfile_casesensitive(project) && basename(project) ∉ project_names
+            project = abspath(project, "Project.toml")
+        end
+        return project
+    end
+    search_load_path || return
+    for project in LOAD_PATH
+        project == "@" && continue
+        project = load_path_expand(project)
+        project === nothing && continue
+        isfile_casesensitive(project) && return project
+        ispath(project) && continue
+        basename(project) in project_names && return project
     end
 end
 
-const atexit_hooks = []
+"""
+    set_active_project(projfile::Union{AbstractString,Nothing})
+
+Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
+"""
+function set_active_project(projfile::Union{AbstractString,Nothing})
+    ACTIVE_PROJECT[] = projfile
+    for f in active_project_callbacks
+        try
+            Base.invokelatest(f)
+        catch
+            @error "active project callback $f failed" maxlog=1
+        end
+    end
+end
+
+
+"""
+    load_path()
+
+Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
+packages.
+
+!!! note
+    `load_path` may return a reference to a cached value so it is not safe to modify the
+    returned vector.
+"""
+function load_path()
+    cache = LOADING_CACHE[]
+    cache !== nothing && return cache.load_path
+    paths = String[]
+    for env in LOAD_PATH
+        path = load_path_expand(env)
+        path !== nothing && path ∉ paths && push!(paths, path)
+    end
+    return paths
+end
+
+## atexit: register exit hooks ##
+
+const atexit_hooks = Callable[
+    () -> Filesystem.temp_cleanup_purge(force=true)
+]
+const _atexit_hooks_lock = ReentrantLock()
+global _atexit_hooks_finished::Bool = false
 
 """
     atexit(f)
 
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
-"""
-atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
+Register a zero- or one-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before
+object finalizers.
 
-function _atexit()
-    for f in atexit_hooks
+If `f` has a method defined for one integer argument, it will be called as
+`f(n::Int32)`, where `n` is the current exit code, otherwise it will be called
+as `f()`.
+
+!!! compat "Julia 1.9"
+    The one-argument form requires Julia 1.9
+
+Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
+exit code `n` (instead of the original exit code). If more than one exit hook
+calls `exit(n)`, then Julia will exit with the exit code corresponding to the
+last called exit hook that calls `exit(n)`. (Because exit hooks are called in
+LIFO order, "last called" is equivalent to "first registered".)
+
+Note: Once all exit hooks have been called, no more exit hooks can be registered,
+and any call to `atexit(f)` after all hooks have completed will throw an exception.
+This situation may occur if you are registering exit hooks from background Tasks that
+may still be executing concurrently during shutdown.
+"""
+function atexit(f::Function)
+    Base.@lock _atexit_hooks_lock begin
+        _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
+        pushfirst!(atexit_hooks, f)
+        return nothing
+    end
+end
+
+function _atexit(exitcode::Cint)
+    # Don't hold the lock around the iteration, just in case any other thread executing in
+    # parallel tries to register a new atexit hook while this is running. We don't want to
+    # block that thread from proceeding, and we can allow it to register its hook which we
+    # will immediately run here.
+    while true
+        local f
+        Base.@lock _atexit_hooks_lock begin
+            # If this is the last iteration, atomically disable atexit hooks to prevent
+            # someone from registering a hook that will never be run.
+            # (We do this inside the loop, so that it is atomic: no one can have registered
+            #  a hook that never gets run, and we run all the hooks we know about until
+            #  the vector is empty.)
+            if isempty(atexit_hooks)
+                global _atexit_hooks_finished = true
+                break
+            end
+
+            f = popfirst!(atexit_hooks)
+        end
+        try
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
+## postoutput: register post output hooks ##
+## like atexit but runs after any requested output.
+## any hooks saved in the sysimage are cleared in Base._start
+const postoutput_hooks = Callable[]
+
+postoutput(f::Function) = (pushfirst!(postoutput_hooks, f); nothing)
+
+function _postoutput()
+    while !isempty(postoutput_hooks)
+        f = popfirst!(postoutput_hooks)
+        try
+            f()
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
+## hook for disabling threaded libraries ##
+
+library_threading_enabled = true
+const disable_library_threading_hooks = []
+
+function at_disable_library_threading(f)
+    push!(disable_library_threading_hooks, f)
+    if !library_threading_enabled
+        disable_library_threading()
+    end
+    return
+end
+
+function disable_library_threading()
+    global library_threading_enabled = false
+    while !isempty(disable_library_threading_hooks)
+        f = pop!(disable_library_threading_hooks)
         try
             f()
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            @warn("a hook from a library to disable threading failed:",
+                  exception = (err, catch_backtrace()))
         end
     end
+    return
 end

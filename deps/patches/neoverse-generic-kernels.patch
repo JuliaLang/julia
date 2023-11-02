@@ -1,0 +1,19 @@
+diff --git a/kernel/arm64/KERNEL.NEOVERSEN1 b/kernel/arm64/KERNEL.NEOVERSEN1
+index ea010db4..074d7215 100644
+--- a/kernel/arm64/KERNEL.NEOVERSEN1
++++ b/kernel/arm64/KERNEL.NEOVERSEN1
+@@ -91,10 +91,10 @@ IDAMAXKERNEL   = iamax_thunderx2t99.c
+ ICAMAXKERNEL   = izamax_thunderx2t99.c
+ IZAMAXKERNEL   = izamax_thunderx2t99.c
+ 
+-SNRM2KERNEL    = scnrm2_thunderx2t99.c
+-DNRM2KERNEL    = dznrm2_thunderx2t99.c
+-CNRM2KERNEL    = scnrm2_thunderx2t99.c
+-ZNRM2KERNEL    = dznrm2_thunderx2t99.c
++SNRM2KERNEL    = nrm2.S
++DNRM2KERNEL    = nrm2.S
++CNRM2KERNEL    = znrm2.S
++ZNRM2KERNEL    = znrm2.S
+ 
+ DDOTKERNEL     = dot_thunderx2t99.c
+ SDOTKERNEL     = dot_thunderx2t99.c

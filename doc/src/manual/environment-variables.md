@@ -1,22 +1,41 @@
 # Environment Variables
 
-Julia may be configured with a number of environment variables, either in the
-usual way of the operating system, or in a portable way from within Julia.
-Suppose you want to set the environment variable `JULIA_EDITOR` to
-`vim`, then either type `ENV["JULIA_EDITOR"] = "vim"` for instance in the REPL
-to make this change on a case by case basis, or add the same to the user
-configuration file `.juliarc.jl` in the user's home directory to have
-a permanent effect. The current value of the same environment variable is
+Julia can be configured with a number of environment variables, set either in
+the usual way for each operating system, or in a portable way from within Julia.
+Supposing that you want to set the environment variable [`JULIA_EDITOR`](@ref JULIA_EDITOR) to `vim`,
+you can type `ENV["JULIA_EDITOR"] = "vim"` (for instance, in the REPL) to make
+this change on a case by case basis, or add the same to the user configuration
+file `~/.julia/config/startup.jl` in the user's home directory to have a
+permanent effect. The current value of the same environment variable can be
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
-[`Base.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
-output will list defined environment variables relevant for Julia, including
-those for which `JULIA` appears in the name.
+[`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
+output will list any defined environment variables relevant for Julia,
+including those which include `JULIA` in their names.
+
+!!! note
+
+    It is recommended to avoid changing environment variables during runtime,
+    such as within a `~/.julia/config/startup.jl`.
+
+    One reason is that some julia language variables, such as [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS)
+    and [`JULIA_PROJECT`](@ref JULIA_PROJECT), need to be set before Julia starts.
+
+    Similarly, `__init__()` functions of user modules in the sysimage (via PackageCompiler) are
+    run before `startup.jl`, so setting environment variables in a `startup.jl` may be too late for
+    user code.
+
+    Further, changing environment variables during runtime can introduce data races into
+    otherwise benign code.
+
+    In Bash, environment variables can either be set manually by running, e.g.,
+    `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
+    `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
 
 ## File locations
 
-### `JULIA_BINDIR`
+### [`JULIA_BINDIR`](@id JULIA_BINDIR)
 
 The absolute path of the directory containing the Julia executable, which sets
 the global variable [`Sys.BINDIR`](@ref). If `$JULIA_BINDIR` is not set, then
@@ -42,18 +61,18 @@ determines the directory in which Julia initially searches for source files (via
 `Base.find_source_file()`).
 
 Likewise, the global variable `Base.SYSCONFDIR` determines a relative path to the
-configuration file directory. Then Julia searches for a `juliarc.jl` file at
+configuration file directory. Then Julia searches for a `startup.jl` file at
 
 ```
-$JULIA_BINDIR/$SYSCONFDIR/julia/juliarc.jl
-$JULIA_BINDIR/../etc/julia/juliarc.jl
+$JULIA_BINDIR/$SYSCONFDIR/julia/startup.jl
+$JULIA_BINDIR/../etc/julia/startup.jl
 ```
 
-by default (via `Base.load_juliarc()`).
+by default (via `Base.load_julia_startup()`).
 
 For example, a Linux installation with a Julia executable located at
 `/bin/julia`, a `DATAROOTDIR` of `../share`, and a `SYSCONFDIR` of `../etc` will
-have `JULIA_BINDIR` set to `/bin`, a source-file search path of
+have [`JULIA_BINDIR`](@ref JULIA_BINDIR) set to `/bin`, a source-file search path of
 
 ```
 /share/julia/base
@@ -62,85 +81,192 @@ have `JULIA_BINDIR` set to `/bin`, a source-file search path of
 and a global configuration search path of
 
 ```
-/etc/julia/juliarc.jl
+/etc/julia/startup.jl
 ```
 
-### `JULIA_LOAD_PATH`
+### [`JULIA_PROJECT`](@id JULIA_PROJECT)
 
-A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, the path separator is `:`; in Windows
-systems, the path separator is `;`.) The `LOAD_PATH` variable is where
-[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to the absolute
-paths
+A directory path that indicates which project should be the initial active project.
+Setting this environment variable has the same effect as specifying the `--project`
+start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+(note the trailing dot)
+then Julia tries to find a project directory that contains `Project.toml` or
+`JuliaProject.toml` file from the current directory and its parents. See also
+the chapter on [Code Loading](@ref code-loading).
+
+!!! note
+
+    [`JULIA_PROJECT`](@ref JULIA_PROJECT) must be defined before starting julia; defining it in `startup.jl`
+    is too late in the startup process.
+
+### [`JULIA_LOAD_PATH`](@id JULIA_LOAD_PATH)
+
+The [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable is used to populate the global Julia
+[`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
+`import` and `using` (see [Code Loading](@ref code-loading)).
+
+Unlike the shell `PATH` variable, empty entries in [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) are expanded to
+the default value of `LOAD_PATH`, `["@", "@v#.#", "@stdlib"]` when populating
+`LOAD_PATH`. This allows easy appending, prepending, etc. of the load path value in
+shell scripts regardless of whether [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) is already set or not. For
+example, to prepend the directory `/foo/bar` to `LOAD_PATH` just do
+```sh
+export JULIA_LOAD_PATH="/foo/bar:$JULIA_LOAD_PATH"
+```
+If the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) is not set, then
+it will be set to `/foo/bar:` which will expand to a `LOAD_PATH` value of
+`["/foo/bar", "@", "@v#.#", "@stdlib"]`. If [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) is set to the empty
+string, it expands to an empty `LOAD_PATH` array. In other words, the empty string
+is interpreted as a zero-element array, not a one-element array of the empty string.
+This behavior was chosen so that it would be possible to set an empty load path via
+the environment variable. If you want the default load path, either unset the
+environment variable or if it must have a value, set it to the string `:`.
+
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
+
+### [`JULIA_DEPOT_PATH`](@id JULIA_DEPOT_PATH)
+
+The [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is used to populate the global Julia
+[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+as Julia's code loading mechanisms, look for package registries, installed
+packages, named environments, repo clones, cached compiled package images,
+configuration files, and the default location of the REPL's history file.
+
+Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH), empty entries in
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) are expanded to the default value of `DEPOT_PATH`. This allows
+easy appending, prepending, etc. of the depot path value in shell scripts regardless
+of whether [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is already set or not. For example, to prepend the
+directory `/foo/bar` to `DEPOT_PATH` just do
+```sh
+export JULIA_DEPOT_PATH="/foo/bar:$JULIA_DEPOT_PATH"
+```
+If the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is not set, then
+it will be set to `/foo/bar:` which will have the effect of prepending `/foo/bar` to
+the default depot path. If [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set to the empty string, it expands
+to an empty `DEPOT_PATH` array. In other words, the empty string is interpreted as a
+zero-element array, not a one-element array of the empty string. This behavior was
+chosen so that it would be possible to set an empty depot path via the environment
+variable. If you want the default depot path, either unset the environment variable
+or if it must have a value, set it to the string `:`.
+
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
+
+!!! note
+    [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) must be defined before starting julia; defining it in
+    `startup.jl` is too late in the startup process; at that point you can instead
+    directly modify the `DEPOT_PATH` array, which is populated from the environment
+    variable.
+
+### [`JULIA_HISTORY`](@id JULIA_HISTORY)
+
+The absolute path `REPL.find_hist_file()` of the REPL's history file. If
+`$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$JULIA_HOME/../local/share/julia/site/v$(VERSION.major).$(VERSION.minor)
-$JULIA_HOME/../share/julia/site/v$(VERSION.major).$(VERSION.minor)
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
-so that, e.g., version 0.6 of Julia on a Linux system with a Julia executable at
-`/bin/julia` will have a default `LOAD_PATH` of
+### [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@id JULIA_MAX_NUM_PRECOMPILE_FILES)
 
-```
-/local/share/julia/site/v0.6
-/share/julia/site/v0.6
-```
+Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
-### `JULIA_PKGDIR`
+### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
-The path of the parent directory `Pkg.Dir._pkgroot()` for the version-specific
-Julia package repositories. If the path is relative, then it is taken with
-respect to the working directory. If `$JULIA_PKGDIR` is not set, then
-`Pkg.Dir._pkgroot()` defaults to
+If set to true, linker commands will be displayed during precompilation.
 
-```
-$HOME/.julia
-```
+## Pkg.jl
 
-Then the repository location [`Pkg.dir`](@ref) for a given Julia version is
+### [`JULIA_CI`](@id JULIA_CI)
 
-```
-$JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)
-```
+If set to `true`, this indicates to the package server that any package operations are part of a continuous integration (CI) system for the purposes of gathering package usage statistics.
 
-For example, for a Linux user whose home directory is `/home/alice`, the directory
-containing the package repositories would by default be
+### [`JULIA_NUM_PRECOMPILE_TASKS`](@id JULIA_NUM_PRECOMPILE_TASKS)
 
-```
-/home/alice/.julia
-```
+The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
 
-and the package repository for version 0.6 of Julia would be
+### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
-```
-/home/alice/.julia/v0.6
-```
+The default directory used by [`Pkg.develop`](https://pkgdocs.julialang.org/v1/api/#Pkg.develop) for downloading packages.
 
-### `JULIA_HISTORY`
+### [`JULIA_PKG_IGNORE_HASHES`](@id JULIA_PKG_IGNORE_HASHES)
 
-The absolute path `Base.REPL.find_hist_file()` of the REPL's history file. If
-`$JULIA_HISTORY` is not set, then `Base.REPL.find_hist_file()` defaults to
+If set to `1`, this will ignore incorrect hashes in artifacts. This should be used carefully, as it disables verification of downloads, but can resolve issues when moving files across different types of file systems. See [Pkg.jl issue #2317](https://github.com/JuliaLang/Pkg.jl/issues/2317) for more details.
 
-```
-$HOME/.julia_history
-```
+!!! compat "Julia 1.6"
+    This is only supported in Julia 1.6 and above.
 
-### `JULIA_PKGRESOLVE_ACCURACY`
+### [`JULIA_PKG_OFFLINE`](@id JULIA_PKG_OFFLINE)
 
-A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver [`Base.Pkg.resolve`](@ref)
-will devote to attempting satisfying constraints before giving up: this value is
-by default `1`, and larger values correspond to larger amounts of time.
+If set to `true`, this will enable offline mode: see [`Pkg.offline`](https://pkgdocs.julialang.org/v1/api/#Pkg.offline).
 
-Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
+!!! compat "Julia 1.5"
+    Pkg's offline mode requires Julia 1.5 or later.
 
-*   the number of pre-decimation iterations is `20*n`,
-*   the number of iterations between decimation steps is `10*n`, and
-*   at decimation steps, at most one in every `20*n` packages is decimated.
+### [`JULIA_PKG_PRECOMPILE_AUTO`](@id JULIA_PKG_PRECOMPILE_AUTO)
+
+If set to `0`, this will disable automatic precompilation by package actions which change the manifest. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### [`JULIA_PKG_SERVER`](@id JULIA_PKG_SERVER)
+
+Specifies the URL of the package registry to use. By default, `Pkg` uses
+`https://pkg.julialang.org` to fetch Julia packages. In addition, you can disable the use of the PkgServer
+protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.)
+by setting: ``` export JULIA_PKG_SERVER="" ```
+
+### [`JULIA_PKG_SERVER_REGISTRY_PREFERENCE`](@id JULIA_PKG_SERVER_REGISTRY_PREFERENCE)
+
+Specifies the preferred registry flavor. Currently supported values are `conservative`
+(the default), which will only publish resources that have been processed by the storage
+server (and thereby have a higher probability of being available from the PkgServers),
+whereas `eager` will publish registries whose resources have not necessarily been
+processed by the storage servers.  Users behind restrictive firewalls that do not allow
+downloading from arbitrary servers should not use the `eager` flavor.
+
+!!! compat "Julia 1.7"
+    This only affects Julia 1.7 and above.
+
+### [`JULIA_PKG_UNPACK_REGISTRY`](@id JULIA_PKG_UNPACK_REGISTRY)
+
+If set to `true`, this will unpack the registry instead of storing it as a compressed tarball.
+
+!!! compat "Julia 1.7"
+    This only affects Julia 1.7 and above. Earlier versions will always unpack the registry.
+
+### [`JULIA_PKG_USE_CLI_GIT`](@id JULIA_PKG_USE_CLI_GIT)
+
+If set to `true`, Pkg operations which use the git protocol will use an external `git` executable instead of the default libgit2 library.
+
+!!! compat "Julia 1.7"
+    Use of the `git` executable is only supported on Julia 1.7 and above.
+
+### [`JULIA_PKGRESOLVE_ACCURACY`](@id JULIA_PKGRESOLVE_ACCURACY)
+
+The accuracy of the package resolver. This should be a positive integer, the default is `1`.
+
+## Network transport
+
+### [`JULIA_NO_VERIFY_HOSTS`](@id JULIA_NO_VERIFY_HOSTS)
+### [`JULIA_SSL_NO_VERIFY_HOSTS`](@id JULIA_SSL_NO_VERIFY_HOSTS)
+### [`JULIA_SSH_NO_VERIFY_HOSTS`](@id JULIA_SSH_NO_VERIFY_HOSTS)
+### [`JULIA_ALWAYS_VERIFY_HOSTS`](@id JULIA_ALWAYS_VERIFY_HOSTS)
+
+Specify hosts whose identity should or should not be verified for specific transport layers. See [`NetworkOptions.verify_host`](https://github.com/JuliaLang/NetworkOptions.jl#verify_host)
+
+### [`JULIA_SSL_CA_ROOTS_PATH`](@id JULIA_SSL_CA_ROOTS_PATH)
+
+Specify the file or directory containing the certificate authority roots. See [`NetworkOptions.ca_roots`](https://github.com/JuliaLang/NetworkOptions.jl#ca_roots)
 
 ## External applications
 
-### `JULIA_SHELL`
+### [`JULIA_SHELL`](@id JULIA_SHELL)
 
 The absolute path of the shell with which Julia should execute external commands
 (via `Base.repl_cmd()`). Defaults to the environment variable `$SHELL`, and
@@ -151,9 +277,9 @@ falls back to `/bin/sh` if `$SHELL` is unset.
     On Windows, this environment variable is ignored, and external commands are
     executed directly.
 
-### `JULIA_EDITOR`
+### [`JULIA_EDITOR`](@id JULIA_EDITOR)
 
-The editor returned by `Base.editor()` and used in, e.g., [`Base.edit`](@ref),
+The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@ref),
 referring to the command of the preferred editor, for instance `vim`.
 
 `$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence
@@ -161,41 +287,71 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
-!!! note
-
-    `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    [`Base.Pkg.edit`](@ref): this function checks `$VISUAL` and `$EDITOR` alone.
+To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization
 
-### `JULIA_CPU_CORES`
+### [`JULIA_CPU_THREADS`](@id JULIA_CPU_THREADS)
 
-Overrides the global variable [`Base.Sys.CPU_CORES`](@ref), the number of
+Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
 logical CPU cores available.
 
-### `JULIA_WORKER_TIMEOUT`
+### [`JULIA_WORKER_TIMEOUT`](@id JULIA_WORKER_TIMEOUT)
 
-A [`Float64`](@ref) that sets the value of `Base.worker_timeout()` (default: `60.0`).
+A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (default: `60.0`).
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 
-### `JULIA_NUM_THREADS`
+### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-physical CPU cores, then the number of threads is set to the number of cores. If
-`$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-cores cannot be determined through system calls, then the number of threads is
-set to `1`.
+available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
+if the number of CPU threads cannot be determined through system calls, then the
+number of threads is set to `1`.
 
-### `JULIA_THREAD_SLEEP_THRESHOLD`
+If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
+to the number of CPU threads.
+
+!!! note
+    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `startup.jl` is too late in the startup process.
+
+!!! compat "Julia 1.5"
+    In Julia 1.5 and above the number of threads can also be specified on startup
+    using the `-t`/`--threads` command line argument.
+
+!!! compat "Julia 1.7"
+    The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
+
+### [`JULIA_THREAD_SLEEP_THRESHOLD`](@id JULIA_THREAD_SLEEP_THRESHOLD)
 
 If set to a string that starts with the case-insensitive substring `"infinite"`,
 then spinning threads never sleep. Otherwise, `$JULIA_THREAD_SLEEP_THRESHOLD` is
 interpreted as an unsigned 64-bit integer (`uint64_t`) and gives, in
 nanoseconds, the amount of time after which spinning threads should sleep.
 
-### `JULIA_EXCLUSIVE`
+### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
+
+Sets the number of threads used by Garbage Collection. If unspecified is set to
+half of the number of worker threads.
+
+!!! compat "Julia 1.10"
+    The environment variable was added in 1.10
+
+### [`JULIA_IMAGE_THREADS`](@id JULIA_IMAGE_THREADS)
+
+An unsigned 32-bit integer that sets the number of threads used by image
+compilation in this Julia process. The value of this variable may be
+ignored if the module is a small module. If left unspecified, the smaller
+of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
+number of logical CPU cores is used in its place.
+
+### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
+
+A boolean value that determines if detailed timing information is printed during
+during image compilation. Defaults to 0.
+
+### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: the master thread is on proc 0, and threads are
@@ -205,48 +361,102 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
-sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
-a high-level interface with much of the same functionality: see the section on
-[Interacting With Julia](@ref).
+sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
+a high-level interface with much of the same functionality; see the section on
+[The Julia REPL](@ref).
 
-### `JULIA_ERROR_COLOR`
+### [`JULIA_ERROR_COLOR`](@id JULIA_ERROR_COLOR)
 
 The formatting `Base.error_color()` (default: light red, `"\033[91m"`) that
 errors should have at the terminal.
 
-### `JULIA_WARN_COLOR`
+### [`JULIA_WARN_COLOR`](@id JULIA_WARN_COLOR)
 
 The formatting `Base.warn_color()` (default: yellow, `"\033[93m"`) that warnings
 should have at the terminal.
 
-### `JULIA_INFO_COLOR`
+### [`JULIA_INFO_COLOR`](@id JULIA_INFO_COLOR)
 
 The formatting `Base.info_color()` (default: cyan, `"\033[36m"`) that info
 should have at the terminal.
 
-### `JULIA_INPUT_COLOR`
+### [`JULIA_INPUT_COLOR`](@id JULIA_INPUT_COLOR)
 
 The formatting `Base.input_color()` (default: normal, `"\033[0m"`) that input
 should have at the terminal.
 
-### `JULIA_ANSWER_COLOR`
+### [`JULIA_ANSWER_COLOR`](@id JULIA_ANSWER_COLOR)
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
+## System and Package Image Building
 
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
+### [`JULIA_CPU_TARGET`](@id JULIA_CPU_TARGET)
 
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
+Modify the target machine architecture for (pre)compiling
+[system](@ref sysimg-multi-versioning) and [package images](@ref pkgimgs-multi-versioning).
+`JULIA_CPU_TARGET` only affects machine code image generation being output to a disk cache.
+Unlike the `--cpu-target`, or `-C`, [command line option](@ref cli), it does not influence
+just-in-time (JIT) code generation within a Julia session where machine code is only
+stored in memory.
 
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
+Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
+
+Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
+distinct types or features may be present. This is commonly encountered in high performance
+computing (HPC) clusters since the component nodes may be using distinct processors.
+
+The CPU target string is a list of strings separated by `;` each string starts with a CPU
+or architecture name and followed by an optional list of features separated by `,`.
+A `generic` or empty CPU name means the basic required feature set of the target ISA
+which is at least the architecture the C/C++ runtime is compiled with. Each string
+is interpreted by LLVM.
+
+A few special features are supported:
+1. `clone_all`
+
+     This forces the target to have all functions in sysimg cloned.
+     When used in negative form (i.e. `-clone_all`), this disables full clone that's
+     enabled by default for certain targets.
+
+2. `base([0-9]*)`
+
+     This specifies the (0-based) base target index. The base target is the target
+     that the current target is based on, i.e. the functions that are not being cloned
+     will use the version in the base target. This option causes the base target to be
+     fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
+     The index can only be smaller than the current index.
+
+3. `opt_size`
+
+     Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
+
+4. `min_size`
+
+     Optimize only for size. Clang's `-Oz`.
+
 
 ## Debugging and profiling
 
-### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
+### [`JULIA_DEBUG`](@id JULIA_DEBUG)
+
+Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
+
+### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
+
+Enable collecting of a heap snapshot during execution via the profiling peek mechanism.
+See [Triggered During Execution](@ref).
+
+### [`JULIA_TIMING_SUBSYSTEMS`](@id JULIA_TIMING_SUBSYSTEMS)
+
+Allows you to enable or disable zones for a specific Julia run.
+For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
+the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
+
+### [`JULIA_GC_ALLOC_POOL`](@id JULIA_GC_ALLOC_POOL)
+### [`JULIA_GC_ALLOC_OTHER`](@id JULIA_GC_ALLOC_OTHER)
+### [`JULIA_GC_ALLOC_PRINT`](@id JULIA_GC_ALLOC_PRINT)
 
 If set, these environment variables take strings that optionally start with the
 character `'r'`, followed by a string interpolation of a colon-separated list of
@@ -273,7 +483,7 @@ the interval between garbage collection events is randomized.
     garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
     in the build configuration).
 
-### `JULIA_GC_NO_GENERATIONAL`
+### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
 
 If set to anything besides `0`, then the Julia garbage collector never performs
 "quick sweeps" of memory.
@@ -284,7 +494,7 @@ If set to anything besides `0`, then the Julia garbage collector never performs
     garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
     in the build configuration).
 
-### `JULIA_GC_WAIT_FOR_DEBUGGER`
+### [`JULIA_GC_WAIT_FOR_DEBUGGER`](@id JULIA_GC_WAIT_FOR_DEBUGGER)
 
 If set to anything besides `0`, then the Julia garbage collector will wait for
 a debugger to attach instead of aborting whenever there's a critical error.
@@ -295,7 +505,7 @@ a debugger to attach instead of aborting whenever there's a critical error.
     garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
     in the build configuration).
 
-### `ENABLE_JITPROFILING`
+### [`ENABLE_JITPROFILING`](@id ENABLE_JITPROFILING)
 
 If set to anything besides `0`, then the compiler will create and register an
 event listener for just-in-time (JIT) profiling.
@@ -304,24 +514,23 @@ event listener for just-in-time (JIT) profiling.
 
     This environment variable only has an effect if Julia was compiled with JIT
     profiling support, using either
+    * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/vtune)
+      (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
+    * [OProfile](https://oprofile.sourceforge.io/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+      in the build configuration).
+    * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
+      in the build configuration). This integration is enabled by default.
 
-*   Intel's [VTune™ Amplifier](https://software.intel.com/en-us/intel-vtune-amplifier-xe)
-    (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-*   [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
-    in the build configuration).
+### [`ENABLE_GDBLISTENER`](@id ENABLE_GDBLISTENER)
 
-### `JULIA_LLVM_ARGS`
+If set to anything besides `0` enables GDB registration of Julia code on release builds.
+On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
+
+
+### [`JULIA_LLVM_ARGS`](@id JULIA_LLVM_ARGS)
 
 Arguments to be passed to the LLVM backend.
 
-!!! note
+### `JULIA_FALLBACK_REPL`
 
-    This environment variable has an effect only if Julia was compiled with
-    `JL_DEBUG_BUILD` set — in particular, the `julia-debug` executable is always
-    compiled with this build variable.
-
-### `JULIA_DEBUG_LOADING`
-
-If set, then Julia prints detailed information about the cache in the loading
-process of [`Base.require`](@ref).
-
+Forces the fallback repl instead of REPL.jl.
