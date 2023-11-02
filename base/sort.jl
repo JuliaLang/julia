@@ -1122,33 +1122,42 @@ end
     BracketedSort(target[, next::Algorithm]) <: Algorithm
 
 Perform a partialsort for the elements that fall into the indices specified by the `target`
-using `BracketedSort`, using the `next` algorithm for subproblems.
+using BracketedSort with the `next` algorithm for subproblems.
 
-BracketedSort takes a random* sample of the input, estimates the quantiles of input
-using the quantiles of the sample to find signpost that almost certainly bracket the target
-values, filters the values between signposts to the front of the input, and then, if that
-"almost certainly" turned out to be true, finds the target within the smaller chunk that
-are between the signposts. On small inputs or when target is close to the size of the input,
-BracketedSort falls back to the `next` algorithm directly.
+BracketedSort takes a random* sample of the input, estimates the quantiles of the input
+using the quantiles of the sample to find signposts that almost certainly bracket the target
+values, filters the value in the input that fall between the signpost values to the front of
+the input, and then, if that "almost certainly" turned out to be true, finds the target
+within the small chunk that are, by value, between the signposts and now by position, at the
+front of the vector. On small inputs or when target is close to the size of the input,
+BracketedSort falls back to the `next` algorithm directly. Otherwise, BracketedSort uses the
+`next` algorithm only to compute quantiles of the sample and to find the target within the
+small chunk.
 
-If the `next` algorithm has `O(n * log(n))` runtime, and the input is not pathological then the
-runtime of this algorithm is `O(n + k * log(k))` where `n` is the length of the input and
-`k` is `length(target)`. On pathological inputs the runtime is `O(n*log(n))`.
+## Performance
+
+If the `next` algorithm has `O(n * log(n))` runtime and the input is not pathological then
+the runtime of this algorithm is `O(n + k * log(k))` where `n` is the length of the input
+and `k` is `length(target)`. On pathological inputs the asymptotic runtime is the same as
+the runtime of the `next` algorithm.
 
 BracketedSort itself does not allocate. If `next` is in-place then BracketedSort is also
-in-place. If `next` is not in place, then BracketedSort's maximum space usage will still be
-no more than the space usage of `next` the input BracketedSort recieves, and for large `n`
-and targets substantially smaller than the size of the input, BracketedSort's maximum memory
-usage will be much less than `next`'s.
+in-place. If `next` is not in place, and it's space usage increases monotonically with input
+length then BracketedSort's maximum space usage will never be more than the space usage
+of `next` on the input BracketedSort receives. For large nonpathological inputs and targets
+substantially smaller than the size of the input, BracketedSort's maximum memory usage will
+be much less than `next`'s. If the maximum additional space usage of `next` scales linearly
+then for small k the average* maximum additional space usage of BracketedSort will be
+`O(n^(2.3/3))`.
 
-By default, BracketedSort uses the in place `PartialQuickSort` recursively for integer
-`target`s and the faster but not in place `ScratchQuickSort` for unit range `target`s.
-This is because the runtime of recursive calls is negligible for large inputs unless k is
-similar in size to n.
+By default, BracketedSort uses the in place `PartialQuickSort` algorithm recursively for
+integer `target`s and the faster but not in place `ScratchQuickSort` for unit range
+`target`s. This is because the runtime of recursive calls is negligible for large inputs
+unless `k` is similar in size to `n`.
 
 *Sorting is unable to depend on Random.jl because Random.jl depends on sorting.
- Consequently, we use `hash` instead of `rand`. The average runtime guarantees assume
- that `hash(x::Int)` produces a random result. However, as this randomization is
+ Consequently, we use `hash` as a source of randomness. The average runtime guarantees
+ assume that `hash(x::Int)` produces a random result. However, as this randomization is
  deterministic, if you try hard enough you can find inputs that consistently reach the
  worst case bounds. Actually constructing such inputs is an exercise left to the reader.
  Have fun :).
@@ -1159,8 +1168,8 @@ Characteristics:
   * *in-place* in memory if the `next` algorithm is in-place.
   * *estimate-and-filter*: strategy
   * *linear runtime* if `length(lo:hi)` is constant and `next` is reasonable
-  * *quadratic worst case runtime* in pathological cases
-    (vanishingly rare for non-malicious input)
+  * *n + k log k* worst case runtime if `next` has that runtime.
+  * *pathological inputs* can significantly increase constant factors.
 """
 struct BracketedSort{T, A} <: Algorithm
     target::T
