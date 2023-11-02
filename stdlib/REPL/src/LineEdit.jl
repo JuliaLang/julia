@@ -196,18 +196,9 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
     errormonitor(@async begin
         trylock(s.refresh_lock) || return
         try
-            # TODO remove after https://github.com/JuliaLang/StyledStrings.jl/pull/17 is merged
-            loadface!(:repl_prompt_beep => Face(foreground=:shadow, inherit=[:repl_prompt]))
             og_prompt = s.p.prompt
             beep_prompt = styled"{$beep_face:$(prompt_string(og_prompt))}"
             s.p.prompt = beep_prompt
-            # @timothy: do you have feedback on this approach, or
-            # guidance for a better one? the issue is that we need to
-            # override the styling of `s.p.prompt` with :repl_prompt_beep.
-            # `withfaces` could work, altough that requires overriding all
-            # of `:repl_prompt_*` faces, and hardcoding those would
-            # 1) make future modifications slightly more fragile and
-            # 2) exclude user-defined REPL modes.
             refresh_multi_line(s, beeping=true)
             while s.beeping > 0.0
                 sleep(blink)
