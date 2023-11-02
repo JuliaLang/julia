@@ -373,6 +373,7 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.username
 Base.@static
 ```
 
