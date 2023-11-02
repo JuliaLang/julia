@@ -1885,8 +1885,8 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
                 int success = memcmp((char*)v + offs, r, fsz) == 0;
                 if (success) {
                     if (isunion) {
-                        size_t fsz = jl_field_size(st, i);
-                        uint8_t *psel = &((uint8_t*)v)[offs + fsz - 1];
+                        size_t fsz_i = jl_field_size(st, i);
+                        uint8_t *psel = &((uint8_t*)v)[offs + fsz_i - 1];
                         success = (jl_typeof(r) == jl_nth_union_component(ty, *psel));
                         if (success) {
                             unsigned nth = 0;

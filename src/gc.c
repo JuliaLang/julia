@@ -558,7 +558,6 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     }
     // unlock here because `run_finalizers` locks this
     JL_UNLOCK_NOGC(&finalizers_lock);
-    gc_n_threads = 0;
     gc_all_tls_states = NULL;
     run_finalizers(ct, 1);
 }
@@ -633,7 +632,6 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
             finalize_object(&ptls2->finalizers, o, &copied_list, jl_atomic_load_relaxed(&ct->tid) != i);
     }
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
-    gc_n_threads = 0;
     gc_all_tls_states = NULL;
     if (copied_list.len > 0) {
         // This releases the finalizers lock.

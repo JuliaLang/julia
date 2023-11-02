@@ -779,7 +779,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             jl_queue_for_serialization(s, mi->def.value);
             jl_queue_for_serialization(s, mi->specTypes);
             jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
-            recursive = 0;
             goto done_fields;
         }
         else if (jl_is_method(def) && jl_object_in_image(def)) {
@@ -1360,7 +1359,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 // write data
                 if (!layout->flags.arrayelem_isboxed && layout->first_ptr < 0) {
                     // set owner to NULL
-                    headersize += sizeof(void*);
                     write_pointer(f);
                     // Non-pointer eltypes get encoded in the const_data section
                     size_t alignment_amt = JL_SMALL_BYTE_ALIGNMENT;
