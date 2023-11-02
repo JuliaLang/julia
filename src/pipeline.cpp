@@ -79,7 +79,6 @@
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
-
 #ifdef _COMPILER_GCC_
 #pragma GCC diagnostic pop
 #endif
@@ -545,6 +544,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
+        MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrsspaces)
         if (O.getSpeedupLevel() >= 1) {
             FunctionPassManager FPM;
             FPM.addPass(InstCombinePass());

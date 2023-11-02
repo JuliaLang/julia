@@ -339,6 +339,7 @@ struct jl_typecache_t {
         };
         T_jlarray = StructType::get(context, ArrayRef<Type*>(vaelts));
         T_pjlarray = PointerType::get(T_jlarray, 0);
+    }
 };
 
 struct jl_tbaacache_t {
