@@ -1167,8 +1167,8 @@ struct BracketedSort{T, A} <: Algorithm
     target::T
     next::A
 end
-BracketedSort(target::Number) = BracketedSort(target, x -> Small{30}(PartialQuickSort(x)))
-BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> Small{30}(ScratchQuickSort(x)))
+BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
+BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> ScratchQuickSort(x))
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
@@ -1187,7 +1187,7 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
         @inbounds v[j], v[k] = v[k], v[j] # TODO: ditch this @inbounds and/or verify it is safe
         i += c - 1
     end
-    number_below, i+lastindex(v)
+    number_below, i+hi
 end
 
 function move!(v, target, source)
@@ -1210,7 +1210,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     target = a.target
     ln = hi - lo + 1
     k = round(Int, ln^(1/3))
-    sample_target = (target .- lo) ./ ln .* k^2 .+ lo
+    sample_target = (target .- lo) ./ ln .* k^2 .+ lo .- 1 # IDK about that last -1...
     offset = .5k^1.15 # TODO for further optimization: tune this
     lo_i = floor(Int, first(sample_target) - offset)
     hi_i = ceil(Int, last(sample_target) + offset)
