@@ -2718,11 +2718,9 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         chi.filename ∈ srcfiles && push!(keepidx, i)
     end
     if depot === :no_depot_found
-        throw(ArgumentError("""
-              Failed to determine depot from srctext files in cache file $cachefile.
-              - Make sure you have adjusted DEPOT_PATH in case you relocated depots."""))
+        @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
     elseif depot === :missing_depot_tag
-        @debug "Missing @depot tag for include dependencies in cache file $cachefile."
+        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
     else
         for inc in includes
             inc.filename = replace(inc.filename, r"^@depot" => depot)
