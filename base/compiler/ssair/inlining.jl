@@ -977,7 +977,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+    src = _uncompressed_ir(mi.def, src)
     return inflate_ir!(src, mi)
 end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)
