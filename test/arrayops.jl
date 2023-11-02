@@ -2128,6 +2128,8 @@ R = CartesianIndices((3,0))
     @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
     @test @inferred(eachindex(a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(a, a)) == 1:4
+    @test @inferred(eachindex(a, a, a)) == 1:4
+    @test @inferred(eachindex(a, a, b)) == CartesianIndices((2,2))
     @test_throws DimensionMismatch eachindex(a, rand(3,3))
     @test_throws DimensionMismatch eachindex(b, rand(3,3))
 end

@@ -35,8 +35,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
-    any_const_result = false
-    const_results = Union{Nothing,ConstResult}[]
+    const_results = nothing # or const_results::Vector{Union{Nothing,ConstResult}} if any const results are available
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
@@ -75,8 +74,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
-                push!(const_results, const_result)
-                any_const_result |= const_result !== nothing
+                if const_result !== nothing
+                    if const_results === nothing
+                        const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, #=TODO=#napplicable), nothing)
+                    end
+                    const_results[i] = const_result
+                end
                 edge === nothing || push!(edges, edge)
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
@@ -111,8 +114,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
             all_effects = merge_effects(all_effects, effects)
-            push!(const_results, const_result)
-            any_const_result |= const_result !== nothing
+            if const_result !== nothing
+                if const_results === nothing
+                    const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, napplicable), nothing)
+                end
+                const_results[i] = const_result
+            end
             edge === nothing || push!(edges, edge)
         end
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
@@ -135,7 +142,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    if any_const_result && seen == napplicable
+    if const_results !== nothing
         @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
     end
@@ -1181,7 +1188,7 @@ function const_prop_call(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
         end
-        frame = InferenceState(inf_result, #=cache=#:local, interp)
+        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
         if frame === nothing
             add_remark!(interp, sv, "[constprop] Could not retrieve the source")
             return nothing # this is probably a bad generated function (unsound), but just ignore it
