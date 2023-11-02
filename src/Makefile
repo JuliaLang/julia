@@ -79,6 +79,10 @@ endif
 
 RT_LLVM_LIBS := support
 
+ifeq ($(LLVM_VER_MAJ),16)
+RT_LLVM_LIBS += targetparser
+endif
+
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
 endif

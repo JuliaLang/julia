@@ -22,9 +22,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
-
+#include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
+
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -98,7 +99,9 @@ struct OptimizationOptions {
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
+#if JL_LLVM_VERSION < 160000
     StandardInstrumentations SI;
+#endif
     std::unique_ptr<PassInstrumentationCallbacks> PIC;
     PassBuilder PB;
     ModulePassManager MPM;
@@ -386,7 +389,7 @@ public:
             }
             private:
             ResourcePool &pool;
-            llvm::Optional<ResourceT> resource;
+            Optional<ResourceT> resource;
         };
 
         OwningResource operator*() JL_NOTSAFEPOINT {
@@ -566,6 +569,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     }
     return *_shared_module;
 }
+void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

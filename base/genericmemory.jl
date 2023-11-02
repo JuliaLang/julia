@@ -68,7 +68,7 @@ end
 @eval isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, $(Expr(:boundscheck)))
 
 ## copy ##
-@eval function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
+function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_meta
     n == 0 && return dest
     @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
@@ -117,6 +117,13 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
 end
 
 copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
+
+function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
+    n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
+    unsafe_copyto!(dest, doffs, src, soffs, n)
+    return dest
+end
+
 
 ## Constructors ##
 

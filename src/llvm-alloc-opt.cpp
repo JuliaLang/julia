@@ -568,7 +568,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto oldfType = call->getFunctionType();
     auto newfType = FunctionType::get(
             oldfType->getReturnType(),
-            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            ArrayRef<Type*>(argTys).slice(0, oldfType->getNumParams()),
             oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic

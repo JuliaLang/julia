@@ -30,10 +30,10 @@ const unsigned int host_char_bit = 8;
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
         memcpy(data_a64, p##s, RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
-        s = APInt(numbits, makeArrayRef(data_a64, nbytes / sizeof(integerPart))); \
+        s = APInt(numbits, ArrayRef<uint64_t>(data_a64, nbytes / sizeof(integerPart))); \
     } \
     else { \
-        s = APInt(numbits, makeArrayRef(p##s, numbits / integerPartWidth)); \
+        s = APInt(numbits, ArrayRef<uint64_t>(p##s, numbits / integerPartWidth)); \
     }
 
 /* assign to "integerPart *pr" from "APInt a" */

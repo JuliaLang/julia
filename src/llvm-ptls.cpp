@@ -63,7 +63,11 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
+#if JL_LLVM_VERSION >= 160000
+    pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
+#else
     addFnAttr(pgcstack, Attribute::ReadNone);
+#endif
     addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
