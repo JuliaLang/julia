@@ -7356,23 +7356,28 @@ let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
     @test fc.e === UInt32(0x5)
 end
 @test ftype_eval[] == 1
-let code = code_lowered(FieldConvert)[1].code, fc_ssa = 2
-    @test code[1] == GlobalRef(@__MODULE__, :FieldConvert)
-    @test code[2] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(1), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
-    @test code[3] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(fc_ssa), 1)
-    @test code[8] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(3), Core.SlotNumber(10)))
-    @test code[9] == Core.SlotNumber(10)
-    @test code[10] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(fc_ssa), 2)
-    @test code[15] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(10), Core.SlotNumber(9)))
-    @test code[16] == Core.SlotNumber(9)
-    @test code[17] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(fc_ssa), 4)
-    @test code[22] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(17), Core.SlotNumber(8)))
-    @test code[23] == Core.SlotNumber(8)
-    @test code[24] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(fc_ssa), 5)
-    @test code[29] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(24), Core.SlotNumber(7)))
-    @test code[30] == Core.SlotNumber(7)
-    @test code[31] == Expr(:new, Core.SSAValue(fc_ssa), Core.SSAValue(9), Core.SSAValue(16), Core.SlotNumber(4), Core.SSAValue(23), Core.SSAValue(30))
-    @test code[32] == Core.ReturnNode(Core.SSAValue(31))
+let code = code_lowered(FieldConvert)[1].code
+    local fc_global_ssa, sp1_ssa, apply_type_ssa, field_type_ssa,
+        field_type2_ssa, field_type4_ssa, field_type5_ssa,
+        slot_read_1, slot_read_2, slot_read_3, slot_read_4,
+        new_ssa
+    @test code[(fc_global_ssa = 1;)] == GlobalRef(@__MODULE__, :FieldConvert)
+    @test code[(sp1_ssa = 2;)] == Expr(:static_parameter, 1)
+    @test code[(apply_type_ssa = 3;)] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(fc_global_ssa), GlobalRef(@__MODULE__, :FieldTypeA), Core.SSAValue(sp1_ssa))
+    @test code[(field_type_ssa = 4;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 1)
+    @test code[10] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type_ssa), Core.SlotNumber(10)))
+    @test code[(slot_read_1 = 11;)] == Core.SlotNumber(10)
+    @test code[(field_type2_ssa = 12;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 2)
+    @test code[18] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type2_ssa), Core.SlotNumber(9)))
+    @test code[(slot_read_2 = 19;)] == Core.SlotNumber(9)
+    @test code[(field_type4_ssa = 20;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 4)
+    @test code[26] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type4_ssa), Core.SlotNumber(8)))
+    @test code[(slot_read_3 = 27;)] == Core.SlotNumber(8)
+    @test code[(field_type5_ssa = 28;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 5)
+    @test code[34] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type5_ssa), Core.SlotNumber(7)))
+    @test code[(slot_read_4 = 35;)] == Core.SlotNumber(7)
+    @test code[(new_ssa = 36;)] == Expr(:new, Core.SSAValue(apply_type_ssa), Core.SSAValue(slot_read_1), Core.SSAValue(slot_read_2), Core.SlotNumber(4), Core.SSAValue(slot_read_3), Core.SSAValue(slot_read_4))
+    @test code[37] == Core.ReturnNode(Core.SSAValue(new_ssa))
 end
 
 # Issue #32820

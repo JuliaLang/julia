@@ -553,7 +553,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
+let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-2].args[3]
     @test Core.Compiler.is_declared_inline(src)
 end
 

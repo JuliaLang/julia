@@ -3001,12 +3001,13 @@ end
 # ensure that lowering doesn't move these into statement position, which would require renumbering
 using Base: +, -
 function f28279(b::Bool)
-    i = 1
-    while i > b
-        i -= 1
+    let i = 1
+        while i > b
+            i -= 1
+        end
+        if b end
+        return i + 1
     end
-    if b end
-    return i + 1
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
