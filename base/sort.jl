@@ -91,7 +91,9 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
+    # TODO this composition between BracketedSort and ScratchQuickSort does not bring me joy
+    # TODO for further optimization: does IEEEFloatOptimization make sense here?
+    _sort!(v, InitialOptimizations(BracketedSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -1112,6 +1114,140 @@ end
 
 
 """
+    BracketedSort(target, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+
+Perform a partialsort for the elements that fall into the indices specified by the `target`
+using `BracketedSort`, using the `next` algorithm for subproblems.
+
+BracketedSort takes a random* sample of the input, estimates the quantiles of input
+using the quantiles of the sample to find signpost that almost certainly bracket the target
+values, filters the values between signposts to the front of the input, and then, if that
+"almost certainly" turned out to be true, finds the target within the smaller chunk that
+are between the signposts. On small inputs or when target is close to the size of the input,
+BracketedSort falls back to the `next` algorithm directly.
+
+If the `next` algorithm has `O(n * log(n))` runtime, and the input is not pathological then the
+runtime of this algorithm is `O(n + k * log(k))` where `n` is the length of the input and
+`k` is `length(target)`. On pathological inputs the runtime is `O(n*log(n))`.
+
+BracketedSort itself does not allocate. If `next` is in-place then BracketedSort is also
+in-place. If `next` is not in place, then BracketedSort's maximum space usage will still be
+no more than the space usage of `next` the input BracketedSort recieves, and for large `n`
+and targets substantially smaller than the size of the input, BracketedSort's maximum memory
+usage will be much less than `next`'s.
+
+By default, BracketedSort uses the in place `PartialQuickSort` recursively for integer
+`target`s and the faster but not in place `ScratchQuickSort` for unit range `target`s.
+This is because the runtime of recursive calls is negligible for large inputs unless k is
+similar in size to n.
+
+*Sorting is unable to depend on Random.jl because Random.jl depends on sorting.
+ Consequently, we use `hash` instead of `rand`. The average runtime guarantees assume
+ that `hash(x::Int)` produces a random result. However, as this randomization is
+ deterministic, if you try hard enough you can find inputs that consistently reach the
+ worst case bounds. Actually constructing such inputs is an exercise left to the reader.
+ Have fun :).
+
+Characteristics:
+  * *unstable*: does not preserve the ordering of elements that compare equal
+    (e.g. "a" and "A" in a sort of letters that ignores case).
+  * *in-place* in memory if the `next` algorithm is in-place.
+  * *estimate-and-filter*: strategy
+  * *linear runtime* if `length(lo:hi)` is constant and `next` is reasonable
+  * *quadratic worst case runtime* in pathological cases
+    (vanishingly rare for non-malicious input)
+"""
+struct BracketedSort{T, A} <: Algorithm
+    target::T
+    next::A
+end
+BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
+BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> ScratchQuickSort(x))
+
+function bracket_kernel!(v::AbstractVector, lo_x, hi_x)
+    i = 0
+    number_below = 0
+    for j in eachindex(v)
+        x = v[j]
+        a = lo_x !== nothing && x < lo_x
+        b = hi_x === nothing || x < hi_x
+        number_below += a
+        # if a != b # This branch is almost never taken, so making it branchless is bad.
+        #     v[i], v[j] = v[j], v[i]
+        #     i += 1
+        # end
+        c = a != b # JK, this is faster.
+        k = i * c + j
+        @inbounds v[j], v[k] = v[k], v[j] # TODO: ditch this @inbounds and/or verify it is safe
+        i += c - 1
+    end
+    number_below, i+lastindex(v)
+end
+
+function move!(v, target, source)
+    @assert length(target) == length(source)
+    if length(target) == 1 || isdisjoint(target, source)
+        for (i, j) in zip(target, source)
+            v[i], v[j] = v[j], v[i]
+        end
+    else
+        @assert first(source) <= first(target)
+        reverse!(v, first(source), last(target))
+        reverse!(v, first(target), last(target))
+    end
+end
+
+function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
+    @getkw lo hi scratch
+
+    lo < hi || return scratch # TODO: do we need to boundscheck target? Nah.
+    target = a.target
+    ln = hi - lo + 1
+    k = round(Int, ln^(1/3))
+    sample_target = (target .- lo) ./ ln .* k^2 .+ lo
+    offset = .5k^1.15 # TODO for further optimization: tune this
+    lo_i = floor(Int, first(sample_target) - offset)
+    hi_i = ceil(Int, last(sample_target) + offset)
+    sample_hi = lo+k^2-1
+    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * length(v) / k^2
+    length(v) <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw) # TODO is this target composition icky?
+
+    # sample = view(v, lo:lo+k^2)
+
+    for attempt in 1:4
+        seed = hash(attempt)
+        for i in lo:lo+k^2-1
+            j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
+            v[i], v[j] = v[j], v[i]
+        end
+        number_below, lastindex_middle = if lo_i <= lo && sample_hi <= hi_i
+            # error("too small")
+            @assert false
+            0, hi
+        elseif lo_i <= lo
+            scratch = _sort!(v, a.next(hi_i), o, (;kw..., hi=sample_hi))
+            bracket_kernel!(v, nothing, v[hi_i])
+        elseif sample_hi <= hi_i
+            scratch = _sort!(v, a.next(lo_i), o, (;kw..., hi=sample_hi))
+            bracket_kernel!(v, v[lo_i], nothing)
+        else
+            # TODO for further optimization: don't sort the middle elements
+            scratch = _sort!(v, a.next(lo_i:hi_i), o, (;kw..., hi=sample_hi))
+            bracket_kernel!(v, v[lo_i], v[hi_i])
+        end
+        target_in_middle = target .- number_below
+        if lo <= first(target_in_middle) && last(target_in_middle) <= lastindex_middle
+            scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle, scratch))
+            move!(v, target, target_in_middle)
+            return scratch
+        end
+    end
+    # println("CRIT FAIL!")
+    _sort!(v, next(target), o, (;kw..., scratch))
+end
+
+
+"""
     StableCheckSorted(next) <: Algorithm
 
 Check if an input is sorted and/or reverse-sorted.
@@ -2008,7 +2144,6 @@ function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::I
     end
     v
 end
-
 
 
 ### Unused constructs for backward compatibility ###
