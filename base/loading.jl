@@ -3273,6 +3273,10 @@ end
             end
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
+                if startswith(f, "@depot/")
+                    @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
+                    return true
+                end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
