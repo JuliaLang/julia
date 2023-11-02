@@ -91,6 +91,10 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
+@test mapreduce(abs2, min, Float64[]) === Inf
+@test mapreduce(abs, min, Float64[]) === Inf
+@test_throws ArgumentError mapreduce(abs2, &, Float64[])
+@test_throws ArgumentError mapreduce(abs2, |, Float64[])
 @test_throws ["reducing over an empty collection is not allowed",
               "consider supplying `init`"] mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
@@ -259,6 +263,21 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(sin, []; init=-1) == -1
 @test minimum(sin, []; init=1) == 1
 @test extrema(sin, []; init=(1, -1)) == (1, -1)
+
+@test maximum(Float64[]) === -Inf
+@test minimum(Float64[]) === +Inf
+
+@test maximum(Float32[]) === -Inf32
+@test minimum(Float32[]) === +Inf32
+
+@test maximum(abs, Int[]) === 0
+@test_throws ArgumentError minimum(abs, Int[])
+
+@test maximum(abs, Float64[]) === 0.0
+@test minimum(abs, Float64[]) === +Inf
+
+@test maximum(abs, Float32[]) === 0.0f0
+@test minimum(abs, Float32[]) === +Inf32
 
 @test maximum(5) == 5
 @test minimum(5) == 5
