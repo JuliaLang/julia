@@ -4255,7 +4255,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core outerref
+           (memq (car e) '(quote inert top core globalref outerref
                                  slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
@@ -5006,15 +5006,6 @@ f(x) = yt(x)
       (set! code (cons e code))
       (set! i (+ i 1))
       (set! locs (cons current-loc locs)))
-    (define (maybe-outline-outerref e)
-      (if (and (outerref? e) (not (nothrow-julia-global (cadr e))))
-        (let ((ssav (make-ssavalue)))
-          (put! ssavtable (cadr ssav) i)
-          (emit e)
-          ssav)
-        e))
-    (define (maybe-outline-outerref-expr e)
-      (cons (car e) (map maybe-outline-outerref (cdr e))))
     (let loop ((stmts (cdr body)))
       (if (pair? stmts)
           (let ((e (car stmts)))
@@ -5054,14 +5045,11 @@ f(x) = yt(x)
                      ;; if both lhs and rhs are ssavalues, merge them
                      (if idx
                          (put! ssavtable (cadr (cadr e)) idx)
-                         (let* ((e_rhs (caddr e))
-                               (rhs (if (and (pair? e_rhs) (eq? (car e_rhs) 'call)) (maybe-outline-outerref-expr e_rhs) e_rhs)))
+                         (begin
                            (put! ssavtable (cadr (cadr e)) i)
-                           (emit rhs)))))
-                  ((eq? (car e) 'call)
-                    (emit (maybe-outline-outerref-expr e)))
+                           (emit (caddr e))))))
                   (else
-                    (emit e)))
+                   (emit e)))
             (loop (cdr stmts)))))
     (vector (reverse code) (reverse locs) (reverse linetable) ssavtable labltable)))
 
