@@ -174,6 +174,4 @@ Base.get(t::TerminalBuffer, key, default) = get(t.out_stream, key, default)
 
 Base.peek(t::TerminalBuffer, ::Type{T}) where {T} = error("Not implemented")
 
-
-
 end # module
