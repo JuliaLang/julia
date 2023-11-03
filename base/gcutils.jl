@@ -119,7 +119,7 @@ const GC_INCREMENTAL = 2
     GC.gc([full=true])
 
 Perform garbage collection. The argument `full` determines the kind of
-collection: a full collection (default) traverses all live objects (e.g. full mark)
+collection: a full collection (default) traverses all live objects (i.e. full mark)
 and should reclaim memory from all unreachable objects. An incremental collection only
 reclaims memory from young objects which are not reachable.
 
