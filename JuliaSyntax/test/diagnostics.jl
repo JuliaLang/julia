@@ -231,12 +231,11 @@ end
         \e[90m# └┘ ── \e[0;0m\e[91minvalid operator\e[0;0m"""
 
     if Sys.isunix()
-        mktempdir() do tempdirname
-            cd(tempdirname) do
-                rm(tempdirname)
-                # Test _file_url doesn't fail with nonexistant directories
-                @test isnothing(JuliaSyntax._file_url(joinpath("__nonexistant__", "test.jl")))
-            end
+        tempdirname = mktempdir()
+        cd(tempdirname) do
+            rm(tempdirname)
+            # Test _file_url doesn't fail with nonexistant directories
+            @test isnothing(JuliaSyntax._file_url(joinpath("__nonexistant__", "test.jl")))
         end
     end
 end
