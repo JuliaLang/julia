@@ -90,6 +90,8 @@ issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
+_ScratchOrParitalQuickSort(k::Integer) = PartialQuickSort(k)
+_ScratchOrParitalQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
     _sort!(v, BoolOptimization(
@@ -97,7 +99,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
             MissingOptimization(
                 BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
                     IEEEFloatOptimization( # Don't IEEE optimize long inputs. The optimization takes O(n) time and so does the whole sort.
-                        InsertionSortAlg()))),
+                        _ScratchOrParitalQuickSort(k)))),
             BracketedSort(k))), o, (;))
     maybeview(v, k)
 end
@@ -1176,8 +1178,7 @@ struct BracketedSort{T, A} <: Algorithm
     next::A
 end
 # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
-BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
-BracketedSort(target::OrdinalRange) = BracketedSort(target, x -> ScratchQuickSort(x))
+BracketedSort(target) = BracketedSort(target, x -> _ScratchOrParitalQuickSort(x))
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
@@ -1224,13 +1225,17 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     target = a.target
     ln = hi - lo + 1
     k = round(Int, ln^(1/3))
-    sample_target = (target .- lo) ./ ln .* k^2 .+ lo .- 1 # IDK about that last -1...
+    mnt = minimum(target)
+    mxt = maximum(target)
+    mn_sample_target = (mnt .- lo) ./ ln .* k^2 .+ lo .- 1 # IDK about that last -1...
+    mx_sample_target = (mxt .- lo) ./ ln .* k^2 .+ lo .- 1
     offset = .5k^1.15 # TODO for further optimization: tune this
-    lo_i = floor(Int, minimum(sample_target) - offset)
-    hi_i = ceil(Int, maximum(sample_target) + offset)
+    lo_i = floor(Int, mn_sample_target - offset)
+    hi_i = ceil(Int, mx_sample_target + offset)
     sample_hi = lo+k^2-1
     expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * length(v) / k^2
     # TODO move target from alg to kw to avoid this ickyness:
+    # TODO use a simpler, faster to compute heuristic
     length(v) <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw)
 
     # We store the random sample in
