@@ -1177,7 +1177,7 @@ struct BracketedSort{T, A} <: Algorithm
 end
 # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
 BracketedSort(target::Number) = BracketedSort(target, x -> PartialQuickSort(x))
-BracketedSort(target::AbstractUnitRange) = BracketedSort(target, x -> ScratchQuickSort(x))
+BracketedSort(target::OrdinalRange) = BracketedSort(target, x -> ScratchQuickSort(x))
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
@@ -1226,8 +1226,8 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     k = round(Int, ln^(1/3))
     sample_target = (target .- lo) ./ ln .* k^2 .+ lo .- 1 # IDK about that last -1...
     offset = .5k^1.15 # TODO for further optimization: tune this
-    lo_i = floor(Int, first(sample_target) - offset)
-    hi_i = ceil(Int, last(sample_target) + offset)
+    lo_i = floor(Int, minimum(sample_target) - offset)
+    hi_i = ceil(Int, maximum(sample_target) + offset)
     sample_hi = lo+k^2-1
     expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * length(v) / k^2
     # TODO move target from alg to kw to avoid this ickyness:
@@ -1262,7 +1262,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             bracket_kernel!(v, lo, hi, v[lo_i], v[hi_i], o)
         end
         target_in_middle = target .- number_below
-        if lo <= first(target_in_middle) && last(target_in_middle) <= lastindex_middle
+        if lo <= minium(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
             scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle, scratch))
             move!(v, target, target_in_middle)
             return scratch
