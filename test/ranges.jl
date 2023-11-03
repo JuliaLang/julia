@@ -631,10 +631,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (@inferred (3:6)[5:4]) === 1:0
+    @test (@inferred (3:6)[5:4]) === 4:3
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (@inferred (0:2:10)[7:6]) === 0:2:-1
+    @test (@inferred (0:2:10)[7:6]) === 2:2:0
     @test_throws BoundsError (0:2:10)[7:7]
 
     for start in [true, false], stop in [true, false]
@@ -650,6 +650,12 @@ end
             @test (@inferred r[1:1:0]) isa AbstractRange
             @test r[1:1:0] == empty_range
         end
+    end
+    @testset "issue #40760" begin
+        r = (false:false)[1:0]
+        @test r isa UnitRange && first(r) == true && last(r) == false
+        r = range(false, length = 0)
+        @test r isa UnitRange && first(r) == 0 && last(r) == -1
     end
 end
 # indexing with negative ranges (#8351)
@@ -1022,6 +1028,7 @@ end
         end
         a = prevfloat(a)
     end
+    @test (1:2:3)[StepRangeLen{Bool}(true,-1,2)] == [1]
 end
 
 # issue #20380

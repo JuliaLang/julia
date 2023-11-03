@@ -372,6 +372,7 @@ function steprange_last_empty(start::Integer, step, stop)::typeof(stop)
     end
     return last
 end
+steprange_last_empty(start::Bool, step, stop) = start ⊻ (step > zero(step)) # isnegative(step) ? start : !start
 # For types where x+oneunit(x) may not be well-defined use the user-given value for stop
 steprange_last_empty(start, step, stop) = stop
 
@@ -969,12 +970,17 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         return range(first(s) ? first(r) : last(r), length = last(s))
     else
         f = first(r)
-        # hardcode output for empty ranges to avoid overflow in stop for Bool
-        # this works as empty ranges are all equal
-        isempty(s) && return range(oneunit(f), zero(f))
-        start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)))
+        if !isempty(r) && iszero(len)
+            # we might accidentally underflow when the indexer range is empty
+            # so instead shift start up instead of shifting stop down
+            # still preserving the value of `start` but as `stop` instead
+            stop = f
+            start = oftype(f, stop + oneunit(len))
+        else
+            start = oftype(f, f + first(s) - firstindex(f))
+            stop = oftype(f, start + (len - oneunit(len)))
+        end
         return range(start, stop)
     end
 end
@@ -990,14 +996,19 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=last(s))
+        len = Int(last(s))
+        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
-        isempty(s) && return range(first(r), step = step(s), length = 0)
         f = first(r)
-        start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        if !isempty(r) && iszero(len)
+            stop = f
+            start = oftype(f, stop + oneunit(len) * st)
+        else
+            start = oftype(f, f + s.start - firstindex(r))
+            stop = oftype(f, start + (len - oneunit(len)) * st)
+        end
         return range(start, stop; step=st)
     end
 end
@@ -1007,16 +1018,27 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        range(first(s) ? first(r) : last(r), step = step(r), length = Int(last(s)))
+        # treat as a zero, one, or two-element vector, where at most one element is true
+        # staying inbounds on the original range (preserving either start or
+        # stop as either stop or start, depending on the length)
+        st = step(s)
+        nonempty = st > zero(st) ? last(s) : first(s)
+        # n.b. isempty(r) implies isempty(r) which means !nonempty and !first(s)
+        range((first(s) ⊻ nonempty) ⊻ isempty(r) ? last(r) : first(r), step=step(r), length=Int(nonempty))
     else
-        isempty(s) && return range(first(r), step = step(r)*step(s), length = 0)
         f = r.start
-        fs = first(s)
         st = r.step
-        start = oftype(f, f + (fs - oneunit(fs)) * st)
-        st = st * step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        if !isempty(r) && iszero(len)
+            stop = f
+            st *= step(s)
+            start = oftype(f, stop + oneunit(len) * st)
+        else
+            fs = first(s)
+            start = oftype(f, f + (fs - firstindex(fs)) * st)
+            st *= step(s)
+            stop = oftype(f, start + (len - oneunit(len)) * st)
+        end
         return range(start, stop; step=st)
     end
 end
@@ -1042,6 +1064,8 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         else # len == 2
             return StepRangeLen{T}(last(r), rstep, oneunit(L), oneunit(L))
         end
+    elseif isempty(r)
+        return r
     else
         # Find closest approach to offset by s
         ind = LinearIndices(s)
@@ -1074,6 +1098,8 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         else # length(s) == 2
             return LinRange{T}(last(r), last(r), oneunit(L))
         end
+    elseif isempty(r)
+        return r
     else
         vfirst = unsafe_getindex(r, first(s))
         vlast  = unsafe_getindex(r, last(s))
