@@ -1175,9 +1175,9 @@ Characteristics:
   * *n + k log k* worst case runtime if `next` has that runtime.
   * *pathological inputs* can significantly increase constant factors.
 """
-struct BracketedSort{T, A} <: Algorithm # TODO rename next::A => get_next::F
+struct BracketedSort{T, F} <: Algorithm
     target::T
-    next::A
+    get_next::F
 end
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
@@ -1226,7 +1226,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
 
     # This is simply a precomputed short-circuit to avoid doing scalar math for small inputs.
     # It does not change dispatch at all.
-    ln < 260 && return _sort!(v, a.next(a.target), o, kw)
+    ln < 260 && return _sort!(v, a.get_next(a.target), o, kw)
 
     target = a.target
     k = round(Int, ln^(1/3))
@@ -1241,7 +1241,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k^2
     # TODO move target from alg to kw to avoid this ickyness:
     # TODO use a simpler, faster to compute heuristic
-    ln <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw)
+    ln <= 2k^2+130 + 2expected_len && return _sort!(v, a.get_next(a.target), o, kw)
 
     # We store the random sample in
     #     sample = view(v, lo:lo+k^2)
@@ -1276,20 +1276,20 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             0, hi
         elseif lo_i <= lo
             # TODO reuse scratch between trials better (but be aware of type stability)
-            scratch = _sort!(v, a.next(hi_i), o, (;kw..., hi=sample_hi))
+            scratch = _sort!(v, a.get_next(hi_i), o, (;kw..., hi=sample_hi))
             bracket_kernel!(v, lo, hi, nothing, v[hi_i], o)
         elseif sample_hi <= hi_i
-            scratch = _sort!(v, a.next(lo_i), o, (;kw..., hi=sample_hi))
+            scratch = _sort!(v, a.get_next(lo_i), o, (;kw..., hi=sample_hi))
             bracket_kernel!(v, lo, hi, v[lo_i], nothing, o)
         else
             # TODO for further optimization: don't sort the middle elements
-            scratch = _sort!(v, a.next(lo_i:hi_i), o, (;kw..., hi=sample_hi))
+            scratch = _sort!(v, a.get_next(lo_i:hi_i), o, (;kw..., hi=sample_hi))
             bracket_kernel!(v, lo, hi, v[lo_i], v[hi_i], o)
         end
         target_in_middle = target .- number_below
         if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
             # TODO: preserve scratch space (but be aware of type stability when sorting floats)
-            scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle))
+            scratch = _sort!(v, a.get_next(target_in_middle), o, (;kw..., hi=lastindex_middle))
             move!(v, target, target_in_middle)
             return scratch
         end
@@ -1297,7 +1297,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     end
     # This line only runs on pathological inputs. Make sure it's covered by tests :)
     # TODO: preserve scratch space (but be aware of type stability when sorting floats)
-    _sort!(v, a.next(target), o, kw)
+    _sort!(v, a.get_next(target), o, kw)
 end
 
 
