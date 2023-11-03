@@ -1260,7 +1260,9 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     # it encounters. This optimization would be especially potent when `allequal(ans)` and
     # equal elements are egal.
 
-    for attempt in 1:5 # If 5 random trials fail, the input is probably pathological: abort.
+    # 3 random trials should typically give us 0.99999 reliability; we can assume
+    # the input is pathological and abort to fallback if we fail three trials.
+    for attempt in 1:3
         seed = hash(attempt)
         for i in lo:lo+k^2-1
             j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
@@ -1291,6 +1293,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             move!(v, target, target_in_middle)
             return scratch
         end
+        # This line almost never runs.
     end
     # This line only runs on pathological inputs. Make sure it's covered by tests :)
     # TODO: preserve scratch space (but be aware of type stability when sorting floats)
