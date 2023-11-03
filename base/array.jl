@@ -1467,7 +1467,7 @@ For types that support `sizehint!`,
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer; shrink = true)
+function sizehint!(a::Vector, sz::Integer; shrink::Bool = true)
     len = length(a)
     ref = a.ref
     mem = ref.mem
