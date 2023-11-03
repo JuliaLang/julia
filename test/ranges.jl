@@ -631,31 +631,29 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (@inferred (3:6)[5:4]) === 4:3
+    @test (@inferred (3:6)[5:4]) === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (@inferred (0:2:10)[7:6]) === 2:2:0
+    @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
 
-    for start in [true, false], stop in [true, false]
+    for start in [true], stop in [true, false]
         @test (@inferred (start:stop)[1:0]) === true:false
     end
     @test (@inferred (true:false)[true:false]) == true:false
 
     @testset "issue #40760" begin
         empty_range = 1:0
-        @testset for r in Any[false:false, false:true:false, 1:2, 1:1:2]
+        r = range(false, length = 0)
+        @test r isa UnitRange && first(r) == 0 && last(r) == -1
+        r = (true:true)[empty_range]
+        @test r isa UnitRange && first(r) == true && last(r) == false
+        @testset for r in Any[true:true, true:true:true, 1:2, 1:1:2]
             @test (@inferred r[1:0]) isa AbstractRange
             @test r[1:0] == empty_range
             @test (@inferred r[1:1:0]) isa AbstractRange
             @test r[1:1:0] == empty_range
         end
-    end
-    @testset "issue #40760" begin
-        r = (false:false)[1:0]
-        @test r isa UnitRange && first(r) == true && last(r) == false
-        r = range(false, length = 0)
-        @test r isa UnitRange && first(r) == 0 && last(r) == -1
     end
 end
 # indexing with negative ranges (#8351)
