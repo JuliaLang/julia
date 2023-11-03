@@ -1171,7 +1171,7 @@ Characteristics:
     (e.g. "a" and "A" in a sort of letters that ignores case).
   * *in-place* in memory if the `next` algorithm is in-place.
   * *estimate-and-filter*: strategy
-  * *linear runtime* if `length(lo:hi)` is constant and `next` is reasonable
+  * *linear runtime* if `length(target)` is constant and `next` is reasonable
   * *n + k log k* worst case runtime if `next` has that runtime.
   * *pathological inputs* can significantly increase constant factors.
 """
@@ -1222,8 +1222,13 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     # We don't need to bounds check target because that is done higher up in the stack
     # However, we cannot assume the target is inbounds.
     lo < hi || return scratch
-    target = a.target
     ln = hi - lo + 1
+
+    # This is simply a precomputed short-circuit to avoid doing scalar math for small inputs.
+    # It does not change dispatch at all.
+    ln < 260 && return _sort!(v, a.next(a.target), o, kw)
+
+    target = a.target
     k = round(Int, ln^(1/3))
     mnt = minimum(target)
     mxt = maximum(target)
@@ -1233,10 +1238,10 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     lo_i = floor(Int, mn_sample_target - offset)
     hi_i = ceil(Int, mx_sample_target + offset)
     sample_hi = lo+k^2-1
-    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * length(v) / k^2
+    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k^2
     # TODO move target from alg to kw to avoid this ickyness:
     # TODO use a simpler, faster to compute heuristic
-    length(v) <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw)
+    ln <= 2k^2+130 + 2expected_len && return _sort!(v, a.next(a.target), o, kw)
 
     # We store the random sample in
     #     sample = view(v, lo:lo+k^2)
