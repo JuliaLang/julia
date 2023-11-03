@@ -549,6 +549,7 @@ julia> struct DictChannel{T} <: AbstractChannel{T}
            DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
            DictChannel() = DictChannel{Any}()
        end
+
 julia> begin
        function Base.put!(D::DictChannel, k, v)
            @lock D.cond_take begin
