@@ -95,12 +95,13 @@ _ScratchOrParitalQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
     _sort!(v, BoolOptimization(
-        Small{40}( # TODO for further optimization: go ham on tuning this series of optimizations
-            MissingOptimization(
-                BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
-                    IEEEFloatOptimization( # Don't IEEE optimize long inputs. The optimization takes O(n) time and so does the whole sort.
-                        _ScratchOrParitalQuickSort(k)))),
-            BracketedSort(k))), o, (;))
+        Small{10}( # Very small inputs should go straight to insertion sort
+            Small{40}( # TODO for further optimization: go ham on tuning this series of optimizations
+                MissingOptimization(
+                    BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
+                        IEEEFloatOptimization( # Don't IEEE optimize long inputs. The optimization takes O(n) time and so does the whole sort.
+                            _ScratchOrParitalQuickSort(k)))),
+                BracketedSort(k)))), o, (;))
     maybeview(v, k)
 end
 
@@ -1268,7 +1269,8 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
         end
         target_in_middle = target .- number_below
         if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
-            scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle, scratch))
+            # TODO: preserve scratch space (but be aware of type stability when sorting floats)
+            scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle))
             move!(v, target, target_in_middle)
             return scratch
         end
