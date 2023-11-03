@@ -4,6 +4,12 @@ On Julia 1.10 or higher, you might see the following message:
 
 ![Screenshot of precompilation hang](./img/precompilation_hang.png)
 
+This may repeat. If it continues to repeat with no hints that it will
+resolve itself, you may have a "precompilation hang" that requires
+fixing. Even if it's transient, you might prefer to resolve it so that
+users will not be bothered by this warning.  This page walks you
+through how to analyze and fix such issues.
+
 If you follow the advice and hit `Ctrl-C`, you might see
 
 ```
@@ -16,8 +22,6 @@ If you follow the advice and hit `Ctrl-C`, you might see
 │   timer              0x55580decd1e0->0x7f94c3a4c340
 ```
 
-and, depending on how long you waited, this may repeat.
-
 This message conveys two key pieces of information:
 
 - the hang is occurring during precompilation of `Test1`, a dependency of `Test2` (the package we were trying to load with `using Test2`)
@@ -27,16 +31,21 @@ If this is enough of a hint for you to figure out how `timer = Timer(args...)` i
 
 However, there are cases that may not be that straightforward. Usually the best option is to start by determining whether the hang is due to code in Test1 or whether it is due to one of Test1's dependencies:
 
+- Option 1: `Pkg.add("Aqua")` and use [`Aqua.test_persistent_tasks`](https://juliatesting.github.io/Aqua.jl/dev/#Aqua.test_persistent_tasks-Tuple{Base.PkgId}). This should help you identify which package is causing the problem, after which the instructions [below](@ref pchang_fix) should be followed. If needed, you can create a `PkgId` as `Base.PkgId(UUID("..."), "Test1")`, where `...` comes from the `uuid` entry in `Test1/Project.toml`.
+- Option 2: manually diagnose the source of the hang.
+
+To manually diagnose:
+
 1. `Pkg.develop("Test1")`
-2. Comment out all the code `include`d or defined in `Test1`, *except* the `using/import` statements
+2. Comment out all the code `include`d or defined in `Test1`, *except* the `using/import` statements. 
 3. Try `using Test2` (or even `using Test1` assuming that hangs too) again
 
 Now we arrive at a fork in the road: either
 
-- the hang persists, indicating it is due to one of your dependencies
-- the hang disappears, indicating that it is due to something in your code
+- the hang persists, indicating it is [due to one of your dependencies](@ref pchang_deps)
+- the hang disappears, indicating that it is [due to something in your code](@ref pchang_fix).
 
-## If the hang is due to a package dependency
+## [Diagnosing and fixing hangs due to a package dependency](@id pchang_deps)
 
 Use a binary search to identify the problematic dependency: start by commenting out half your dependencies, then when you isolate which half is responsible comment out half of that half, etc. (You don't have to remove them from the project, just comment out the `using`/`import` statements.)
 
@@ -70,7 +79,7 @@ ccall(:jl_generating_output, Cint, ()) == 1 && return nothing
 
 as the first line of `ThePackageYouThinkIsCausingTheProblem.__init__`, and it will avoid doing any initialization in any Julia process whose purpose is to precompile packages.
 
-## If the hang is in your code
+## [Fixing package code to avoid hangs](@id pchang_fix)
 
 Search your package for suggestive words (here like "Timer") and see if you can identify where the problem is being created. Note that a method *definition* like
 
