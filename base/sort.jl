@@ -90,8 +90,8 @@ issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-_ScratchOrParitalQuickSort(k::Integer) = PartialQuickSort(k)
-_ScratchOrParitalQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
+_ScratchOrPartialQuickSort(k::Integer) = PartialQuickSort(k)
+_ScratchOrPartialQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
     # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
@@ -101,7 +101,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
     _sort!(v, BoolOptimization(
         Small{12}( # Very small inputs should go straight to insertion sort
             BracketedSort(k, k -> # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
-                InitialOptimizations(_ScratchOrParitalQuickSort(k))))),
+                InitialOptimizations(_ScratchOrPartialQuickSort(k))))),
         o, (;))
     maybeview(v, k)
 end
