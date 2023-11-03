@@ -422,3 +422,51 @@ function parse_sexpr(code)
 end
 
 
+#-------------------------------------------------------------------------------
+# Tools copied from Base.Meta which call core_parser_hook as if called by
+# Meta.parse(), but without installing the global hook.
+
+function _Meta_parse_string(text::AbstractString, filename::AbstractString,
+                            lineno::Integer, index::Integer, options)
+    if index < 1 || index > ncodeunits(text) + 1
+        throw(BoundsError(text, index))
+    end
+    ex, offset::Int = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    ex, offset+1
+end
+
+function Meta_parse(str::AbstractString, pos::Integer;
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
+    ex, pos = _Meta_parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+    if raise && Meta.isexpr(ex, :error)
+        err = ex.args[1]
+        if err isa String
+            err = Meta.ParseError(err) # For flisp parser
+        end
+        throw(err)
+    end
+    return ex, pos
+end
+
+function Meta_parse(str::AbstractString;
+                    filename="none", raise::Bool=true, depwarn::Bool=true)
+    ex, pos = Meta_parse(str, 1; filename=filename, greedy=true, raise=raise, depwarn=depwarn)
+    if Meta.isexpr(ex, :error)
+        return ex
+    end
+    if pos <= ncodeunits(str)
+        raise && throw(Meta.ParseError("extra token after end of expression"))
+        return Expr(:error, "extra token after end of expression")
+    end
+    return ex
+end
+
+function Meta_parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
+    return _Meta_parse_string(text, String(filename), lineno, pos, :atom)
+end
+
+function Meta_parseall(text::AbstractString; filename="none", lineno=1)
+    ex,_ = _Meta_parse_string(text, String(filename), lineno, 1, :all)
+    return ex
+end
+

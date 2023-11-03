@@ -1,5 +1,7 @@
 using JuliaSyntax
 using JuliaSyntax: tokenize
+import Logging
+import Test
 
 # Parser fuzz testing tools.
 
@@ -758,6 +760,7 @@ const cutdown_tokens = [
     "\t"
     "\n"
     "x"
+    "β"
     "@"
     ","
     ";"
@@ -884,33 +887,36 @@ const cutdown_tokens = [
 ]
 
 #-------------------------------------------------------------------------------
+# Parsing functions for use with fuzz_test
 
-# The parser should never throw an exception. To test whether this is true,
-# try passing randomly generated bad input data into it.
-function _fuzz_test(bad_input_iter)
-    error_strings = []
-    for str in bad_input_iter
-        try
-            JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, str, ignore_errors=true);
-        catch exc
-            !(exc isa InterruptException) || rethrow()
-            rstr = reduce_text(str, parser_throws_exception)
-            @error "Parser threw exception" rstr exception=current_exceptions()
-            push!(error_strings, rstr)
-        end
+function try_parseall_failure(str)
+    try
+        JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, str, ignore_errors=true);
+        return nothing
+    catch exc
+        !(exc isa InterruptException) || rethrow()
+        rstr = reduce_text(str, parser_throws_exception)
+        @error "Parser threw exception" rstr exception=current_exceptions()
+        return rstr
     end
-    return error_strings
 end
 
-"""
-Fuzz test parser against all tuples of length `N` with elements taken from
-`tokens`.
-"""
-function fuzz_tokens(tokens, N)
-    iter = (join(ts) for ts in Iterators.product([tokens for _ in 1:N]...))
-    _fuzz_test(iter)
+function try_hook_failure(str)
+    try
+        test_logger = Test.TestLogger()
+        Logging.with_logger(test_logger) do
+            Meta_parseall(str)
+        end
+        if !isempty(test_logger.logs)
+            return str
+        end
+    catch exc
+        return str
+    end
+    return nothing
 end
 
+#-------------------------------------------------------------------------------
 """Delete `nlines` adjacent lines from code, at `niters` randomly chosen positions"""
 function delete_lines(lines, nlines, niters)
     selection = trues(length(lines))
@@ -953,29 +959,59 @@ function delete_tokens(code, tokens, ntokens, niters)
 end
 
 #-------------------------------------------------------------------------------
-# Fuzzer functions
+# Generators for "potentially bad input"
+
+"""
+Fuzz test parser against all tuples of length `N` with elements taken from
+`tokens`.
+"""
+function product_token_fuzz(tokens, N)
+    (join(ts) for ts in Iterators.product([tokens for _ in 1:N]...))
+end
 
 """
 Fuzz test parser against randomly generated binary strings
 """
-function fuzz_binary(nbytes, N)
-    bad_strs = _fuzz_test(String(rand(UInt8, nbytes)) for _ in 1:N)
-    reduce_text.(bad_strs, parser_throws_exception)
+function random_binary_fuzz(nbytes, N)
+    (String(rand(UInt8, nbytes)) for _ in 1:N)
 end
 
 """
 Fuzz test by deleting random lines of some given source `code`
 """
-function fuzz_lines(code, N; nlines=10, niters=10)
+function deleted_line_fuzz(code, N; nlines=10, niters=10)
     lines = split(code, '\n')
-    _fuzz_test(delete_lines(lines, nlines, niters) for _=1:N)
+    (delete_lines(lines, nlines, niters) for _=1:N)
 end
 
 """
 Fuzz test by deleting random tokens from given source `code`
 """
-function fuzz_tokens(code, N; ntokens=10, niters=10)
+function deleted_token_fuzz(code, N; ntokens=10, niters=10)
     ts = tokenize(code)
-    _fuzz_test(delete_tokens(code, ts, ntokens, niters) for _=1:N)
+    (delete_tokens(code, ts, ntokens, niters) for _=1:N)
 end
+
+"""
+Fuzz test a parsing function by trying it with many "bad" input strings.
+
+`try_parsefail` should return `nothing` when the parser succeeds, and return a
+string (or reduced string) when parsing succeeds.
+"""
+function fuzz_test(try_parsefail::Function, bad_input_iter)
+    error_strings = []
+    for str in bad_input_iter
+        res = try_parsefail(str)
+        if !isnothing(res)
+            push!(error_strings, res)
+        end
+    end
+    return error_strings
+end
+
+
+# Examples
+#
+# fuzz_test(try_hook_failure, product_token_fuzz(cutdown_tokens, 2))
+# fuzz_test(try_parseall_failure, product_token_fuzz(cutdown_tokens, 2))
 
