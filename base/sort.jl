@@ -1186,7 +1186,7 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     for j in lo:hi
         x = @inbounds v[j]
         a = lo_x !== nothing && lt(o, x, lo_x)
-        b = hi_x === nothing || lt(o, x, hi_x)
+        b = hi_x === nothing || !lt(o, hi_x, x)
         number_below += a
         # if a != b # This branch is almost never taken, so making it branchless is bad.
         #     v[i], v[j] = v[j], v[i]
@@ -1243,9 +1243,17 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     # but views are not quite as fast as using the input array directly,
     # so we don't actually construct this view at runtime.
 
-    # TODO: handle lots of duplicates better.
-    # Right now lots of duplicates is pathological when it could be even more efficient.
-    # e.g. partialsort!(rand(UInt8, 100_000_000), 1) is hella slow
+    # TODO for further optimization: handle lots of duplicates better.
+    # Right now lots of duplicates rounds up when it could use some super fast optimizations
+    # in some cases.
+    # e.g.
+    #
+    # Target:                      |----|
+    # Sorted input: 000000000000000000011111112222223333333333
+    #
+    # Will filter all zeros and ones to the front when it could just take the first few
+    # it encounters. This optimization would be especially potent when `allequal(ans)` and
+    # equal elements are egal.
 
     for attempt in 1:5 # If 5 random trials fail, the input is probably pathological: abort.
         seed = hash(attempt)
