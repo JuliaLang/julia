@@ -100,7 +100,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
     # dominated by k log k and the optimizations runs in O(k) time.
     _sort!(v, BoolOptimization(
         Small{12}( # Very small inputs should go straight to insertion sort
-            BracketedSort(k, k ->
+            BracketedSort(k, k -> # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
                 InitialOptimizations(_ScratchOrParitalQuickSort(k))))),
         o, (;))
     maybeview(v, k)
@@ -1175,12 +1175,10 @@ Characteristics:
   * *n + k log k* worst case runtime if `next` has that runtime.
   * *pathological inputs* can significantly increase constant factors.
 """
-struct BracketedSort{T, A} <: Algorithm
+struct BracketedSort{T, A} <: Algorithm # TODO rename next::A => get_next::F
     target::T
     next::A
 end
-# TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
-BracketedSort(target) = BracketedSort(target, x -> _ScratchOrParitalQuickSort(x))
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
@@ -1245,6 +1243,10 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     # but views are not quite as fast as using the input array directly,
     # so we don't actually construct this view at runtime.
 
+    # TODO: handle lots of duplicates better.
+    # Right now lots of duplicates is pathological when it could be even more efficient.
+    # e.g. partialsort!(rand(UInt8, 100_000_000), 1) is hella slow
+
     for attempt in 1:5 # If 5 random trials fail, the input is probably pathological: abort.
         seed = hash(attempt)
         for i in lo:lo+k^2-1
@@ -1277,7 +1279,8 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
         end
     end
     # This line only runs on pathological inputs. Make sure it's covered by tests :)
-    _sort!(v, a.next(target), o, (;kw..., scratch))
+    # TODO: preserve scratch space (but be aware of type stability when sorting floats)
+    _sort!(v, a.next(target), o, kw)
 end
 
 
