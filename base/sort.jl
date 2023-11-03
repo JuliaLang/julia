@@ -1234,7 +1234,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     mxt = maximum(target)
     mn_sample_target = (mnt .- lo) ./ ln .* k^2 .+ lo .- 1 # IDK about that last -1...
     mx_sample_target = (mxt .- lo) ./ ln .* k^2 .+ lo .- 1
-    offset = .5k^1.15 # TODO for further optimization: tune this
+    offset = .7k^1.15 # TODO for further optimization: tune this
     lo_i = floor(Int, mn_sample_target - offset)
     hi_i = ceil(Int, mx_sample_target + offset)
     sample_hi = lo+k^2-1
@@ -1273,6 +1273,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             # But if it does happen, the kernel reduces to
             0, hi
         elseif lo_i <= lo
+            # TODO reuse scratch between trials better (but be aware of type stability)
             scratch = _sort!(v, a.next(hi_i), o, (;kw..., hi=sample_hi))
             bracket_kernel!(v, lo, hi, nothing, v[hi_i], o)
         elseif sample_hi <= hi_i
