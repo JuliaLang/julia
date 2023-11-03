@@ -1441,7 +1441,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n; shrink = true) -> s
+    sizehint!(s, n; shrink::Bool = true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
@@ -1467,7 +1467,7 @@ For types that support `sizehint!`,
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer; shrink = true)
+function sizehint!(a::Vector, sz::Integer; shrink::Bool = true)
     len = length(a)
     ref = a.ref
     mem = ref.mem
@@ -1496,7 +1496,7 @@ function sizehint!(a::Vector, sz::Integer; shrink = true)
 end
 
 # Fall-back implementation for non-shrinkable collections
-sizehint!(a, sz; shrink) = sizehint!(a, sz)
+sizehint!(a, sz; shrink::Bool) = sizehint!(a, sz)
 
 """
     pop!(collection) -> item
