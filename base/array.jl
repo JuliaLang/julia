@@ -1464,6 +1464,9 @@ For types that support `sizehint!`,
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
 
 4. `shrink` controls if the collection can be shrunk.
+
+!!! compat "Julia 1.11"
+    The `shrink` argument was added in Julia 1.11.
 """
 function sizehint! end
 
