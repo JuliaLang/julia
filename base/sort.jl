@@ -94,14 +94,15 @@ _ScratchOrParitalQuickSort(k::Integer) = PartialQuickSort(k)
 _ScratchOrParitalQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
+    # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
+    # time and so does the whole sort. But do perform them before recursive calls because
+    # that can cause significant speedups when the target range is large so the runtime is
+    # dominated by k log k and the optimizations runs in O(k) time.
     _sort!(v, BoolOptimization(
-        Small{10}( # Very small inputs should go straight to insertion sort
-            Small{40}( # TODO for further optimization: go ham on tuning this series of optimizations
-                MissingOptimization(
-                    BoolOptimization( # this one is for arrays of length < 40 and eltype Union{Bool Missing}
-                        IEEEFloatOptimization( # Don't IEEE optimize long inputs. The optimization takes O(n) time and so does the whole sort.
-                            _ScratchOrParitalQuickSort(k)))),
-                BracketedSort(k)))), o, (;))
+        Small{12}( # Very small inputs should go straight to insertion sort
+            BracketedSort(k, k ->
+                InitialOptimizations(_ScratchOrParitalQuickSort(k))))),
+        o, (;))
     maybeview(v, k)
 end
 
