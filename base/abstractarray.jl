@@ -1424,7 +1424,7 @@ error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
 _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
-throw(ArgumentError("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported"))
+    throw(ArgumentError("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported"))
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
