@@ -1209,9 +1209,9 @@ function move!(v, target, source)
             v[i], v[j] = v[j], v[i]
         end
     else
-        @assert first(source) <= first(target)
-        reverse!(v, first(source), last(target))
-        reverse!(v, first(target), last(target))
+        @assert minimum(source) <= minimum(target)
+        reverse!(v, minimum(source), maximum(target))
+        reverse!(v, minimum(target), maximum(target))
     end
 end
 
