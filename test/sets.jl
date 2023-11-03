@@ -124,6 +124,14 @@ end
     @test isempty(s)
     @test_throws ArgumentError pop!(s)
     @test length(Set(['x',120])) == 2
+
+    # Test that pop! returns the element in the set, not the query
+    s = Set{Any}(Any[0x01, UInt(2), 3, 4.0])
+    @test pop!(s, 1) === 0x01
+    @test pop!(s, 2) === UInt(2)
+    @test pop!(s, 3) === 3
+    @test pop!(s, 4) === 4.0
+    @test_throws KeyError pop!(s, 5)
 end
 @testset "copy" begin
     data_in = (1,2,9,8,4)

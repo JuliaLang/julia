@@ -101,8 +101,15 @@ function in!(x, s::Set)
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
+
 pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+function pop!(s::Set, x)
+    index = ht_keyindex(s.dict, x)
+    index < 1 && throw(KeyError(x))
+    result = @inbounds s.dict.keys[index]
+    _delete!(s.dict, index)
+    result
+end
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
