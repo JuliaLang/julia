@@ -693,7 +693,7 @@ end
             B = zeros(elty, n, n)
             LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
             C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
-            @test A ≈ C
+            @test B ≈ C
         end
     end
 end

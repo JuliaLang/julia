@@ -643,7 +643,7 @@ end
         B = zeros(n, n)
         copytotri!(B, A, uplo)
         C = uplo == 'L' ? tril(A) : triu(A)
-        @test A ≈ C
+        @test B ≈ C
     end
 end
 
