@@ -2722,11 +2722,9 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         chi.filename ∈ srcfiles && push!(keepidx, i)
     end
     if depot === :no_depot_found
-        throw(ArgumentError("""
-              Failed to determine depot from srctext files in cache file $cachefile.
-              - Make sure you have adjusted DEPOT_PATH in case you relocated depots."""))
+        @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
     elseif depot === :missing_depot_tag
-        @debug "Missing @depot tag for include dependencies in cache file $cachefile."
+        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
     else
         for inc in includes
             inc.filename = restore_depot_path(inc.filename, depot)
@@ -3279,6 +3277,10 @@ end
             end
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
+                if startswith(f, "@depot/")
+                    @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
+                    return true
+                end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)

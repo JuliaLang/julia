@@ -566,6 +566,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
+        else
+            me.result.src = me.src # for reflection etc.
         end
     end
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")

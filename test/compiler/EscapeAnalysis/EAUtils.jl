@@ -136,38 +136,12 @@ CC.get(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance, default) = g
 CC.getindex(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = getindex(wvc.cache.code_cache.cache, mi)
 function CC.setindex!(wvc::WorldView{EscapeAnalyzerCacheView}, ci::CodeInstance, mi::MethodInstance)
     wvc.cache.code_cache.cache[mi] = ci
-    add_invalidation_callback!(wvc.cache.code_cache, wvc.cache.escape_cache, mi) # register the callback on invalidation
-    return nothing
-end
-function add_invalidation_callback!(code_cache::CodeCache, escape_cache::EscapeCache, mi)
-    callback = InvalidationCallback(code_cache, escape_cache)
-    if !isdefined(mi, :callbacks)
-        mi.callbacks = Any[callback]
-    else
-        if !any(@nospecialize(cb)->cb===callback, mi.callbacks)
-            push!(mi.callbacks, callback)
-        end
+    # register the callback on invalidation
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.code_cache.cache, replaced)
+        delete!(wvc.cache.escape_cache.cache, replaced)
     end
-    return nothing
-end
-struct InvalidationCallback
-    code_cache::CodeCache
-    escape_cache::EscapeCache
-end
-function (callback::InvalidationCallback)(replaced::MethodInstance, max_world,
-                                          seen::IdSet{MethodInstance}=IdSet{MethodInstance}())
-    (; code_cache, escape_cache) = callback
-    push!(seen, replaced)
-    delete!(code_cache.cache, replaced)
-    delete!(escape_cache.cache, replaced)
-    if isdefined(replaced, :backedges)
-        for mi in replaced.backedges
-            isa(mi, MethodInstance) || continue # might be `Type` object representing an `invoke` signature
-            mi in seen && continue # otherwise fall into infinite loop
-            callback(mi, max_world, seen)
-        end
-    end
-    return nothing
+    return wvc
 end
 
 function CC.optimize(interp::EscapeAnalyzer, opt::OptimizationState, caller::InferenceResult)

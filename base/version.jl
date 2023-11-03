@@ -16,6 +16,13 @@ alphanumeric annotations.
 `VersionNumber` objects can be compared with all of the standard comparison
 operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
 
+`VersionNumber` has the the following public fields:
+- `v.major::Integer`
+- `v.minor::Integer`
+- `v.patch::Integer`
+- `v.prerelease::Tuple{Vararg{Union{Integer, AbstractString}}}`
+- `v.build::Tuple{Vararg{Union{Integer, AbstractString}}}`
+
 See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
 from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
 of Julia itself, and [Version Number Literals](@ref man-version-number-literals)
