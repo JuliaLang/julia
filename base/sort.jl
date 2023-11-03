@@ -1262,7 +1262,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             bracket_kernel!(v, lo, hi, v[lo_i], v[hi_i], o)
         end
         target_in_middle = target .- number_below
-        if lo <= minium(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
+        if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
             scratch = _sort!(v, a.next(target_in_middle), o, (;kw..., hi=lastindex_middle, scratch))
             move!(v, target, target_in_middle)
             return scratch
