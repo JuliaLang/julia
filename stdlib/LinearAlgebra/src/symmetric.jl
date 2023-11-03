@@ -574,7 +574,7 @@ function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     end
 end
 
-logabsdet(A::RealHermSymComplexHerm) = logabsdet(_factorize(A; check=false))
+logabsdet(A::RealHermSymComplexHerm) = ((l, s) = logabsdet(_factorize(A; check=false)); return real(l), s)
 logabsdet(A::Symmetric{<:Real}) = logabsdet(_factorize(A; check=false))
 logabsdet(A::Symmetric) = logabsdet(_factorize(A; check=false))
 logdet(A::RealHermSymComplexHerm) = real(logdet(_factorize(A; check=false)))
