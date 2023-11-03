@@ -201,7 +201,6 @@ void jl_safepoint_wait_thread_resume(void)
     // will observe the change to the safepoint, even though the other thread
     // might have already observed our gc_state.
     // if (!jl_atomic_load_relaxed(&ct->ptls->suspend_count)) return;
-    JL_TIMING_SUSPEND_TASK(USER, ct);
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     uv_mutex_lock(&ct->ptls->sleep_lock);
