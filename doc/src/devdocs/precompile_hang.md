@@ -37,7 +37,7 @@ However, there are cases that may not be that straightforward. Usually the best 
 To manually diagnose:
 
 1. `Pkg.develop("Test1")`
-2. Comment out all the code `include`d or defined in `Test1`, *except* the `using/import` statements. 
+2. Comment out all the code `include`d or defined in `Test1`, *except* the `using/import` statements.
 3. Try `using Test2` (or even `using Test1` assuming that hangs too) again
 
 Now we arrive at a fork in the road: either
