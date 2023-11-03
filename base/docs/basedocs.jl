@@ -2746,7 +2746,7 @@ julia> 4.5/2
 """
     ArgumentError(msg)
 
-The arguments passed to a function are invalid.
+The number, types, or values of arguments passed to a function are invalid.
 `msg` is a descriptive error message.
 """
 ArgumentError
