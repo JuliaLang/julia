@@ -1151,10 +1151,8 @@ be much less than `next`'s. If the maximum additional space usage of `next` scal
 then for small k the average* maximum additional space usage of BracketedSort will be
 `O(n^(2.3/3))`.
 
-By default, BracketedSort uses the in place `PartialQuickSort` algorithm recursively for
-integer `target`s and the faster but not in place `ScratchQuickSort` for unit range
-`target`s. This is because the runtime of recursive calls is negligible for large inputs
-unless `k` is similar in size to `n`.
+By default, BracketedSort uses the `O(n)` space and `O(n + k log k)` runtime
+`ScratchQuickSort` algorithm recursively.
 
 *Sorting is unable to depend on Random.jl because Random.jl depends on sorting.
  Consequently, we use `hash` as a source of randomness. The average runtime guarantees
@@ -1178,8 +1176,7 @@ struct BracketedSort{T, F} <: Algorithm
 end
 
 # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
-BracketedSort(k::Integer) = BracketedSort(k, k -> InitialOptimizations(PartialQuickSort(k)))
-BracketedSort(k::OrdinalRange) = BracketedSort(k, k -> InitialOptimizations(ScratchQuickSort(k)))
+BracketedSort(k) = BracketedSort(k, k -> InitialOptimizations(ScratchQuickSort(k)))
 
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
     i = 0

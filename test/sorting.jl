@@ -742,8 +742,7 @@ end
     for alg in safe_algs
         @test sort(v, alg=alg, lt = <=) == s
     end
-    # Broken by the introduction of BracketedSort in #52006 which...
-    @test_broken partialsort(v, 172, lt = <=) == s[172] # ...uses PartialQuickSort which can segfault on invalid lt
+    @test partialsort(v, 172, lt = <=) == s[172]
     @test partialsort(v, 315:415, lt = <=) == s[315:415]
 
     # ...and it is consistently reverse stable. All these algorithms swap v[i] and v[j]
@@ -753,16 +752,15 @@ end
     for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
-    # Broken by the introduction of BracketedSort in #52006 which...
-    @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172] # ...uses PartialQuickSort which can segfault on invalid lt
-    @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415] # ...and is unstable
+    # Broken by the introduction of BracketedSort in #52006 which is unstable
+    @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
+    @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
     for alg in safe_algs
         @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
     end
-    # Sometimes throws a bounds error, sometimes segfaults, works. Broken by #52006 & PartialQuickSort.
-    # @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
+    @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
     @test all(partialsort(v, 315:415, lt = (x,y) -> rand([false, true])) .∈ (1:5,))
 
     # issue #32675
@@ -1094,6 +1092,10 @@ end
     # construct an invalid pathological input.
     # This test is kind of sketchy because it passes invalid inputs to the function
     for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
+        x = rand(1:5, 1000)
+        @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    end
+    for i in [1, 7, 8, 490, 495, 852, 993, 996, 1000]
         x = rand(1:5, 1000)
         @test partialsort(x, i, lt=(<=)) == sort(x)[i]
     end
