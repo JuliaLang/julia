@@ -1232,13 +1232,9 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
 
     target = a.target
     k2 = round(Int, ln^(2/3))
-    mnt = minimum(target)
-    mxt = maximum(target)
-    mn_sample_target = (mnt .- lo) ./ ln .* k2 .+ lo
-    mx_sample_target = (mxt .- lo) ./ ln .* k2 .+ lo
     offset = .7k2^0.575 # TODO for further optimization: tune this
-    lo_i = floor(Int, mn_sample_target - offset)
-    hi_i = floor(Int, mx_sample_target + offset)
+    lo_i, hi_i = (floor(Int, (tar - lo) / ln * k2 + lo + off) for (tar, off) in
+                 ((minimum(target), -offset), (maximum(target), offset)))
     sample_hi = lo+k2-1
     expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k2
     # TODO move target from alg to kw to avoid this ickyness:
