@@ -54,7 +54,7 @@ is_inlineable(@nospecialize src::MaybeCompressed) =
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
-function inline_cost_clamp(x::Int)::InlineCostType
+function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
@@ -1157,14 +1157,15 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams,
-                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
-    bodycost::Int = 0
-    for line = 1:length(ir.stmts)
-        stmt = ir[SSAValue(line)][:stmt]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
+function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+    bodycost = 0
+    for i = 1:length(ir.stmts)
+        stmt = ir[SSAValue(i)][:stmt]
+        thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return MAX_INLINE_COST
+        if bodycost > cost_threshold
+            return MAX_INLINE_COST
+        end
     end
     return inline_cost_clamp(bodycost)
 end

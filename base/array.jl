@@ -276,8 +276,6 @@ source and `do` in the destination (1-indexed).
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
 that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
-
-$(_DOCS_ALIASING_WARNING)
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
     n == 0 && return dest
@@ -291,23 +289,25 @@ end
 Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
 the index `do`. Return `dest`.
 """
-function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
-    return _copyto_impl!(dest, doffs, src, soffs, n)
-end
+copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
 
 # this is only needed to avoid possible ambiguities with methods added in some packages
-function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
-    return _copyto_impl!(dest, doffs, src, soffs, n)
-end
+copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} = _copyto_impl!(dest, doffs, src, soffs, n)
 
-function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    unsafe_copyto!(dest, doffs, src, soffs, n)
+    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs)
+                  src = GenericMemoryRef(src isa Array ? getfield(src, :ref) : src, soffs)
+        unsafe_copyto!(dest, src, n)
+    end
     return dest
 end
+
 
 # Outlining this because otherwise a catastrophic inference slowdown
 # occurs, see discussion in #27874.

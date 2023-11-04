@@ -165,7 +165,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Main.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -217,7 +217,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+Macros are a way to run generated code without calling [`eval`](@ref Main.eval),
 since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
@@ -2857,23 +2857,33 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
+This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
+
+Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+abstract.
 
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 isa IntOrString
+julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
-julia> "Hello!" isa IntOrString
+julia> "Hello!" isa IntOrString # String is also included
 true
 
-julia> 1.0 isa IntOrString
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
 false
 ```
+
+# Extended Help
+
+Unlike most other parametric types, unions are covariant in their parameters. For example,
+`Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
+
+The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 

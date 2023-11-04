@@ -176,7 +176,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool
+            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool && !(mod === Main && s === :MainInclude)
         end
         # Looking for a binding in a module
         if mod == context_module
@@ -519,10 +519,10 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
 # `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
 # be employed, for instance, by `typeinf_ext_toplevel`.
-is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && !sv.cached
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === :no
 
 function is_call_graph_uncached(sv::CC.InferenceState)
-    sv.cached && return false
+    sv.cache_mode === :global && return false
     parent = sv.parent
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)

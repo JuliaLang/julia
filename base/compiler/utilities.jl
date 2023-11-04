@@ -140,7 +140,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
+            c = _uncompressed_ir(m, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -319,6 +319,25 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
     isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
+end
+
+"""
+    add_invalidation_callback!(callback, mi::MethodInstance)
+
+Register `callback` to be triggered upon the invalidation of `mi`.
+`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
+and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
+"""
+function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
+    if !isdefined(mi, :callbacks)
+        callbacks = mi.callbacks = Any[callback]
+    else
+        callbacks = mi.callbacks::Vector{Any}
+        if !any(@nospecialize(cb)->cb===callback, callbacks)
+            push!(callbacks, callback)
+        end
+    end
+    return callbacks
 end
 
 #########

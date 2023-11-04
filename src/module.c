@@ -951,9 +951,10 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
+        int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
         if ((b->publicp ||
              (imported && b->imported) ||
-             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
+             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
             (all || (!b->deprecated && !hidden))) {
             jl_array_grow_end(a, 1);
             // n.b. change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:

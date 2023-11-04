@@ -19,6 +19,51 @@ end
 
 if !test_relocated_depot
 
+    @testset "insert @depot tag in path" begin
+
+        test_harness() do
+            mktempdir() do dir
+                pushfirst!(DEPOT_PATH, dir)
+                path = dir*dir
+                @test Base.replace_depot_path(path) == "@depot"*dir
+            end
+        end
+
+        test_harness() do
+            mktempdir() do dir
+                pushfirst!(DEPOT_PATH, dir)
+                path = joinpath(dir, "foo")
+                if isdirpath(DEPOT_PATH[1])
+                    DEPOT_PATH[1] = dirname(DEPOT_PATH[1]) # strip trailing pathsep
+                end
+                tag = joinpath("@depot", "") # append a pathsep
+                @test startswith(Base.replace_depot_path(path), tag)
+                DEPOT_PATH[1] = joinpath(DEPOT_PATH[1], "") # append a pathsep
+                @test startswith(Base.replace_depot_path(path), tag)
+                popfirst!(DEPOT_PATH)
+                @test !startswith(Base.replace_depot_path(path), tag)
+            end
+        end
+
+    end
+
+    @testset "restore path from @depot tag" begin
+
+        tmp = tempdir()
+
+        path = joinpath("@depot", "foo", "bar")
+        tmppath = joinpath(tmp, "foo", "bar")
+        @test Base.restore_depot_path(path, tmp) == tmppath
+
+        path = joinpath("no@depot", "foo", "bar")
+        @test Base.restore_depot_path(path, tmp) == path
+
+        path = joinpath("@depot", "foo", "bar\n", "@depot", "foo")
+        tmppath = joinpath(tmp, "foo", "bar\n", "@depot", "foo")
+        @test Base.restore_depot_path(path, tmp) == tmppath
+
+    end
+
     @testset "precompile RelocationTestPkg1" begin
         pkgname = "RelocationTestPkg1"
         test_harness() do
@@ -44,7 +89,6 @@ if !test_relocated_depot
             @test Base.isprecompiled(pkg) == false
             touch(joinpath(@__DIR__, pkgname, "src", "foo.txt"))
             Base.require(pkg) # precompile
-            @info "SERS OIDA"
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
         end
     end
@@ -59,7 +103,6 @@ else
             for pkgname in ("RelocationTestPkg1", "RelocationTestPkg2")
                 pkg = Base.identify_package(pkgname)
                 cachefile = only(Base.find_all_in_cache_path(pkg))
-                @info cachefile
                 @test_throws ArgumentError("""
                   Failed to determine depot from srctext files in cache file $cachefile.
                   - Make sure you have adjusted DEPOT_PATH in case you relocated depots.""") Base.isprecompiled(pkg)

@@ -41,3 +41,14 @@ if Sys.isunix()
         end
     end
 end
+
+@testset "username()" begin
+    if Sys.isunix()
+        passwd = Libc.getpwuid(Libc.getuid())
+        @test Sys.username() == passwd.username
+    elseif Sys.iswindows()
+        @test Sys.username() == ENV["USERNAME"]
+    else
+        @test !isempty(Sys.username())
+    end
+end

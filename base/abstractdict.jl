@@ -12,6 +12,8 @@ struct KeyError <: Exception
     key
 end
 
+KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
