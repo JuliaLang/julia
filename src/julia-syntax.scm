@@ -3481,7 +3481,7 @@ f(x) = yt(x)
 
 
 (define (vinfo:not-capt vi)
-  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 5))))
+  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 1))))
 
 (define (clear-capture-bits vinfos)
   (map vinfo:not-capt vinfos))

@@ -804,12 +804,12 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC,
 #endif
                         int TagType, void *TagBuf)
 {
-    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    // SymbolTable *SymTab = (SymbolTable*)DisInfo;
     LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
     memset(info, 0, sizeof(*info));
     if (TagType != 1)
         return 0;               // Unknown data format
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    // PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
     // TODO: see if we knew of a relocation applied at PC
     // info->AddSymbol.Present = 1;
     // info->AddSymbol.Name = name;

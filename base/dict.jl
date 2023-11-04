@@ -380,7 +380,7 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
     else
         key = convert(K, key0)::K
         if !(isequal(key, key0)::Bool)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     setindex!(h, v0, key)
@@ -478,7 +478,7 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     else
         key = convert(K, key0)::K
         if !isequal(key, key0)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     return get!(default, h, key)
@@ -786,7 +786,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
             if !(k isa K)
                 k1 = convert(K, k)::K
                 if !isequal(k, k1)
-                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                    throw(KeyTypeError(K, k))
                 end
                 k = k1
             end

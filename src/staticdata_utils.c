@@ -159,7 +159,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
+    if (jl_atomic_load_relaxed(&mi->precompiled) || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -234,7 +234,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
             continue;
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
-        if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+        if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
@@ -1119,7 +1119,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         else {
             assert(ci->max_world == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
-            if (ci->inferred && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
+            if (jl_atomic_load_relaxed(&ci->inferred)  && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
             }
             //jl_static_show((jl_stream*)ios_stderr, (jl_value_t*)caller);
@@ -1162,7 +1162,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             // have some new external code to use
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            assert(codeinst->min_world == minworld && codeinst->inferred);
+            assert(codeinst->min_world == minworld && jl_atomic_load_relaxed(&codeinst->inferred) );
             codeinst->max_world = maxvalid;
             if (jl_rettype_inferred(caller, minworld, maxvalid) == jl_nothing) {
                 jl_mi_cache_insert(caller, codeinst);

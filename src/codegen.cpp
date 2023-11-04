@@ -6534,6 +6534,7 @@ static Function* gen_cfun_wrapper(
     jl_cgval_t retval;
     if (calltype == 2) {
         nargs = 0; // arguments not needed -- TODO: not really true, should emit an age_ok test and jlcall
+        (void)nargs; // silence unused variable warning
         jlfunc_sret = false;
         retval = mark_julia_const(ctx, (jl_value_t*)callptr);
     }
@@ -6893,11 +6894,11 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         if (closure_types) {
             assert(ctx.spvals_ptr);
             size_t n = jl_array_nrows(closure_types);
-            jl_svec_t *fill = jl_alloc_svec_uninit(n);
+            jl_svec_t *fill_i = jl_alloc_svec_uninit(n);
             for (size_t i = 0; i < n; i++) {
-                jl_svecset(fill, i, jl_array_ptr_ref(closure_types, i));
+                jl_svecset(fill_i, i, jl_array_ptr_ref(closure_types, i));
             }
-            fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill);
+            fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill_i);
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,

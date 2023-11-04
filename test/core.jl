@@ -1445,6 +1445,9 @@ let
     @test unsafe_load(p2) == 101
     unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,909]
+    # test for issue 51954
+    @test pointer(a.ref.mem)===pointer(a)
+    @test pointer(a.ref.mem,2)===pointer(a,2)
 end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
