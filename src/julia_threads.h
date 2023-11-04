@@ -130,6 +130,7 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
+    _Atomic(int64_t) pool_live_bytes;
     _Atomic(int64_t) freed;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
