@@ -1180,15 +1180,15 @@ struct BracketedSort{T, F} <: Algorithm
     get_next::F
 end
 
-function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
+function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
     i = 0
-    number_below = 0
+    count_below = 0
     checkbounds(v, lo:hi)
     for j in lo:hi
         x = @inbounds v[j]
-        a = lo_x !== nothing && lt(o, x, lo_x)
-        b = hi_x === nothing || !lt(o, hi_x, x)
-        number_below += a
+        a = lo_signpost !== nothing && lt(o, x, lo_signpost)
+        b = hi_signpost === nothing || !lt(o, hi_signpost, x)
+        count_below += a
         # if a != b # This branch is almost never taken, so making it branchless is bad.
         #     @inbounds v[i], v[j] = v[j], v[i]
         #     i += 1
@@ -1199,7 +1199,7 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
         @inbounds v[j], v[k] = v[k], v[j]
         i += c - 1
     end
-    number_below, i+hi
+    count_below, i+hi
 end
 
 function move!(v, target, source)
@@ -1220,6 +1220,9 @@ end
 
 function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     @getkw lo hi scratch
+    # TODO for further optimization: reuse scratch between trials better, from signpost
+    # selection to recursive calls, and from the fallback (but be aware of type stability,
+    # especially when sorting IEEE floats.
 
     # We don't need to bounds check target because that is done higher up in the stack
     # However, we cannot assume the target is inbounds.
@@ -1232,14 +1235,20 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
 
     target = a.target
     k2 = round(Int, ln^(2/3))
+    k2ln = k2/ln
     offset = .7k2^0.575 # TODO for further optimization: tune this
-    lo_i, hi_i = (floor(Int, (tar - lo) / ln * k2 + lo + off) for (tar, off) in
-                 ((minimum(target), -offset), (maximum(target), offset)))
-    sample_hi = lo+k2-1
-    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k2
+    lo_signpost_i, hi_signpost_i =
+        (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
+            ((minimum(target), -offset), (maximum(target), offset)))
+    lastindex_sample = lo+k2-1
+    expected_middle_ln = (min(lastindex_sample, hi_signpost_i) - max(lo, lo_signpost_i) + 1) / k2ln
+    # This heuristic is complicated because it fairly accurately reflects the runtime of
+    # this algorithm which is necessary to get good dispatch when both the target is large
+    # and the input are large.
+    # expected_middle_ln is a float and k2 is significantly below typemax(Int), so this will
+    # not overflow:
     # TODO move target from alg to kw to avoid this ickyness:
-    # TODO use a simpler, faster to compute heuristic
-    ln <= 2k2+130 + 2expected_len && return _sort!(v, a.get_next(a.target), o, kw)
+    ln <= 130 + 2k2 + 2expected_middle_ln && return _sort!(v, a.get_next(a.target), o, kw)
 
     # We store the random sample in
     #     sample = view(v, lo:lo+k2)
@@ -1266,27 +1275,28 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
             v[i], v[j] = v[j], v[i]
         end
-        number_below, lastindex_middle = if lo_i <= lo && sample_hi <= hi_i
+        count_below, lastindex_middle = if lo_signpost_i <= lo && lastindex_sample <= hi_signpost_i
             # The heuristics higher up in this function that dispatch to the `next`
             # algorithm should prevent this from happening.
+            # Specifically, this means that expected_middle_ln == ln, so
+            # ln <= ... + 2.0expected_middle_ln && return ...
+            # will trigger.
             @assert false
             # But if it does happen, the kernel reduces to
             0, hi
-        elseif lo_i <= lo
-            # TODO reuse scratch between trials better (but be aware of type stability)
-            scratch = _sort!(v, a.get_next(hi_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, lo, hi, nothing, v[hi_i], o)
-        elseif sample_hi <= hi_i
-            scratch = _sort!(v, a.get_next(lo_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, lo, hi, v[lo_i], nothing, o)
+        elseif lo_signpost_i <= lo
+            _sort!(v, a.get_next(hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, nothing, v[hi_signpost_i], o)
+        elseif lastindex_sample <= hi_signpost_i
+            _sort!(v, a.get_next(lo_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], nothing, o)
         else
             # TODO for further optimization: don't sort the middle elements
-            scratch = _sort!(v, a.get_next(lo_i:hi_i), o, (;kw..., hi=sample_hi))
-            bracket_kernel!(v, lo, hi, v[lo_i], v[hi_i], o)
+            _sort!(v, a.get_next(lo_signpost_i:hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], v[hi_signpost_i], o)
         end
-        target_in_middle = target .- number_below
+        target_in_middle = target .- count_below
         if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
-            # TODO: preserve scratch space (but be aware of type stability when sorting floats)
             scratch = _sort!(v, a.get_next(target_in_middle), o, (;kw..., hi=lastindex_middle))
             move!(v, target, target_in_middle)
             return scratch
@@ -1294,7 +1304,6 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
         # This line almost never runs.
     end
     # This line only runs on pathological inputs. Make sure it's covered by tests :)
-    # TODO: preserve scratch space (but be aware of type stability when sorting floats)
     _sort!(v, a.get_next(target), o, kw)
 end
 
