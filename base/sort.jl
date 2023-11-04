@@ -1183,18 +1183,20 @@ end
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_x, hi_x, o)
     i = 0
     number_below = 0
+    checkbounds(v, lo:hi)
     for j in lo:hi
         x = @inbounds v[j]
         a = lo_x !== nothing && lt(o, x, lo_x)
         b = hi_x === nothing || !lt(o, hi_x, x)
         number_below += a
         # if a != b # This branch is almost never taken, so making it branchless is bad.
-        #     v[i], v[j] = v[j], v[i]
+        #     @inbounds v[i], v[j] = v[j], v[i]
         #     i += 1
         # end
         c = a != b # JK, this is faster.
         k = i * c + j
-        @inbounds v[j], v[k] = v[k], v[j] # TODO: ditch this @inbounds and/or verify it is safe
+        # Invariant: @assert firstindex(v) ≤ lo ≤ i + j ≤ k ≤ j ≤ hi ≤ lastindex(v)
+        @inbounds v[j], v[k] = v[k], v[j]
         i += c - 1
     end
     number_below, i+hi
