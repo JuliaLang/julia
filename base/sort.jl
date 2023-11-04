@@ -1231,22 +1231,22 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     ln < 260 && return _sort!(v, a.get_next(a.target), o, kw)
 
     target = a.target
-    k = round(Int, ln^(1/3))
+    k2 = round(Int, ln^(2/3))
     mnt = minimum(target)
     mxt = maximum(target)
-    mn_sample_target = (mnt .- lo) ./ ln .* k^2 .+ lo
-    mx_sample_target = (mxt .- lo) ./ ln .* k^2 .+ lo
-    offset = .7k^1.15 # TODO for further optimization: tune this
+    mn_sample_target = (mnt .- lo) ./ ln .* k2 .+ lo
+    mx_sample_target = (mxt .- lo) ./ ln .* k2 .+ lo
+    offset = .7k2^0.575 # TODO for further optimization: tune this
     lo_i = floor(Int, mn_sample_target - offset)
     hi_i = floor(Int, mx_sample_target + offset)
-    sample_hi = lo+k^2-1
-    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k^2
+    sample_hi = lo+k2-1
+    expected_len = (min(sample_hi, hi_i) - max(lo, lo_i) + 1) * ln / k2
     # TODO move target from alg to kw to avoid this ickyness:
     # TODO use a simpler, faster to compute heuristic
-    ln <= 2k^2+130 + 2expected_len && return _sort!(v, a.get_next(a.target), o, kw)
+    ln <= 2k2+130 + 2expected_len && return _sort!(v, a.get_next(a.target), o, kw)
 
     # We store the random sample in
-    #     sample = view(v, lo:lo+k^2)
+    #     sample = view(v, lo:lo+k2)
     # but views are not quite as fast as using the input array directly,
     # so we don't actually construct this view at runtime.
 
@@ -1266,7 +1266,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     # the input is pathological and abort to fallback if we fail three trials.
     for attempt in 1:3
         seed = hash(attempt)
-        for i in lo:lo+k^2-1
+        for i in lo:lo+k2-1
             j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
             v[i], v[j] = v[j], v[i]
         end
