@@ -90,8 +90,6 @@ issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-_ScratchOrPartialQuickSort(k::Integer) = PartialQuickSort(k)
-_ScratchOrPartialQuickSort(k::OrdinalRange) = ScratchQuickSort(k)
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
     # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
@@ -100,8 +98,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
     # dominated by k log k and the optimizations runs in O(k) time.
     _sort!(v, BoolOptimization(
         Small{12}( # Very small inputs should go straight to insertion sort
-            BracketedSort(k, k -> # TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
-                InitialOptimizations(_ScratchOrPartialQuickSort(k))))),
+            BracketedSort(k))),
         o, (;))
     maybeview(v, k)
 end
@@ -1180,6 +1177,10 @@ struct BracketedSort{T, F} <: Algorithm
     get_next::F
 end
 
+# TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
+BracketedSort(k::Integer) = BracketedSort(k, k -> InitialOptimizations(PartialQuickSort(k)))
+BracketedSort(k::OrdinalRange) = BracketedSort(k, k -> InitialOptimizations(ScratchQuickSort(k)))
+
 function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
     i = 0
     count_below = 0
@@ -1269,8 +1270,9 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
 
     # 3 random trials should typically give us 0.99999 reliability; we can assume
     # the input is pathological and abort to fallback if we fail three trials.
+    seed = hash(ln, Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
     for attempt in 1:3
-        seed = hash(attempt)
+        seed = hash(attempt, seed)
         for i in lo:lo+k2-1
             j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
             v[i], v[j] = v[j], v[i]
