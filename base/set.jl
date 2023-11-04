@@ -102,7 +102,11 @@ end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+
+function pop!(s::Set, x, default)
+    index = ht_keyindex(s.dict, x)
+    return index > 0 ? _pop!(s.dict, index) : default
+end
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
