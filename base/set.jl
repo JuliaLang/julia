@@ -104,8 +104,15 @@ push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 
 function pop!(s::Set, x, default)
-    index = ht_keyindex(s.dict, x)
-    return index > 0 ? _pop!(s.dict, index) : default
+    dict = s.dict
+    index = ht_keyindex(dict, x)
+    if index > 0
+        @inbounds key = dict.keys[index]
+        _delete!(dict, index)
+        return key
+    else
+        return default
+    end
 end
 
 function pop!(s::Set)
