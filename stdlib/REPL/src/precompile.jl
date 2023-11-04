@@ -40,7 +40,7 @@ foo(x) = 1
 @time @eval foo(1)
 ; pwd
 $CTRL_C
-$CTRL_R$CTRL_C
+$CTRL_R$CTRL_C#
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -51,7 +51,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
-cd("complet_path\t\t$CTRL_C
+cd("complete_path\t\t$CTRL_C
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -93,6 +93,7 @@ generate_precompile_statements() = try
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
+            write(debug_output, "\n#### EOF ####\n")
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
@@ -117,7 +118,10 @@ generate_precompile_statements() = try
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(ptm, l, "\n")
+                # If the line ends with a CTRL_C, don't write an extra newline, which would
+                # cause a second empty prompt. Our code below expects one new prompt per
+                # input line and can race out of sync with the unexpected second line.
+                endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
                 readuntil(output_copy, "\n")
@@ -131,6 +135,7 @@ generate_precompile_statements() = try
                     sleep(0.1)
                 end
             end
+            write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
             wait(tee)
             success(p) || Base.pipeline_error(p)
@@ -148,7 +153,7 @@ generate_precompile_statements() = try
 
         open(precompile_file, "r") do io
             while true
-                # We need to allways call eof(io) for bytesavailable(io) to work
+                # We need to always call eof(io) for bytesavailable(io) to work
                 eof(io) && istaskdone(repl_inputter) && eof(io) && break
                 if bytesavailable(io) == 0
                     sleep(0.1)

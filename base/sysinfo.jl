@@ -33,6 +33,7 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       username,
        which
 
 import ..Base: show
@@ -566,5 +567,26 @@ function which(program_name::String)
     nothing
 end
 which(program_name::AbstractString) = which(String(program_name))
+
+"""
+    Sys.username() -> String
+
+Return the username for the current user. If the username cannot be determined
+or is empty, this function throws an error.
+
+To retrieve a username that is overridable via an environment variable,
+e.g., `USER`, consider using
+```julia
+user = get(Sys.username, ENV, "USER")
+```
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+function username()
+    pw = Libc.getpw()
+    isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
+    return pw.username
+end
 
 end # module Sys

@@ -106,7 +106,7 @@ modules. We will see how to manage name clashes below.
 
 To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
 one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
-but does not have any namespace implications. The `public` keyword is only availiable in Julia 1.11
+but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
 and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
 [Compat](https://github.com/JuliaLang/Compat.jl) package.
 
@@ -447,10 +447,12 @@ recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (`mtime`)
-of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
-to the modification time truncated to the nearest second (to accommodate systems that can't copy
-mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
+For file dependencies loaded by `include`, a change is determined by examining whether the
+file size (`fsize`) or content (condensed into a hash) is unchanged.
+For file dependencies loaded by `include_dependency` a change is determined by examining whether the modification time (`mtime`)
+is unchanged, or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen
 by the search logic in `require` matches the path that had created the precompile file. It also takes
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between

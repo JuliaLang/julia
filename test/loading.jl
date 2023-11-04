@@ -1223,8 +1223,18 @@ end
         @test Base.check_src_module_wrap(p, fpath)
 
         write(fpath, """
-        # using foo
-        module Foo
+        \"\"\"
+        Foo
+        \"\"\" module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        @doc let x = 1
+            x
+        end module Foo
         using Bar
         end
         """)
@@ -1262,5 +1272,62 @@ end
         x = 1
         """)
         @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
+end
+
+@testset "relocatable upgrades #51989" begin
+    mktempdir() do depot
+        # Create fake `Foo.jl` package with two files:
+        foo_path = joinpath(depot, "dev", "Foo")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            println(io, """
+            module Foo
+            include("internal.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
+            println(io, "const a = \"asd\"")
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        # In our depot, `dev` and then `precompile` this `Foo` package.
+        @test success(addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Get the size of the generated `.ji` file so that we can ensure that it gets altered
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        cache_size = filesize(cache_path)
+
+        # Next, remove the dependence on `internal.jl` and delete it:
+        rm(joinpath(foo_path, "src", "internal.jl"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            truncate(io, 0)
+            println(io, """
+            module Foo
+            end
+            """)
+        end
+
+        # Try to load `Foo`; this should trigger recompilation, not an error!
+        @test success(addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e 'using Foo; exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Ensure that there is still only one `.ji` file (it got replaced
+        # and the file size changed).
+        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
+        @test filesize(cache_path) != cache_size
     end
 end

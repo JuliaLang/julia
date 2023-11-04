@@ -1119,17 +1119,21 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, file
-        path = tempdir()
-        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+    mktempdir() do path
+        unreadable = joinpath(path, "replcompletion-unreadable")
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        hidden_file = joinpath(unreadable, "hidden")
+        touch(hidden_file)
+
+        # Create symlink to a file that is in an unreadable directory
+        chmod(hidden_file, 0o755)
+        chmod(unreadable, 0o000)
+        symlink(hidden_file, joinpath(path, "replcompletions-link"))
 
         try
-            file = joinpath(path, "tmp-executable")
-            touch(file)
-            chmod(file, 0o755)
-            mkdir(unreadable)
-            chmod(unreadable, 0o000)
-
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
@@ -1137,10 +1141,13 @@ let s, c, r
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
+
+                c,r = test_scomplete("replcompletions-link")
+                @test isempty(c)
             end
         finally
-            rm(file)
-            rm(unreadable)
+            # If we don't fix the permissions here, our cleanup fails.
+            chmod(unreadable, 0o700)
         end
     end
 
@@ -1457,22 +1464,22 @@ end
     c, r = test_complete("CompletionFoo.kwtest3(a;foob")
     @test c == ["foobar="]
     c, r = test_complete("CompletionFoo.kwtest3(a; le")
-    @test "length" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete("CompletionFoo.kwtest3.(a;\nlength")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a, length=4, l")
     @test "length" ∈ c
     @test "length=" ∉ c # since it was already used, do not suggest it again
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; kwargs..., fo")
-    @test "foreach" ∈ c # provide this kind of completion in case the user wants to splat a variable
+    @test "foreach" ∉ c
     @test "foobar=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!kwarg=0, le")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c # the first method could be called and `anotherkwarg` slurped
     @test "len2=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest3(a; another!")
@@ -1486,7 +1493,7 @@ end
     c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
     @test c == ["namedarg="]
     c, r = test_complete_foo("kwtest3(blabla; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     @test "namedarg=" ∈ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(blabla; named.")
@@ -1494,11 +1501,11 @@ end
     c, r = test_complete_foo("kwtest3(blabla; named..., another!")
     @test c == ["another!kwarg="]
     c, r = test_complete_foo("kwtest3(blabla; named..., len")
-    @test "length" ∈ c
+    @test "length" ∉ c
     @test "length=" ∈ c
     @test "len2=" ∈ c
     c, r = test_complete_foo("kwtest3(1+3im; named")
-    @test "named" ∈ c
+    @test "named" ∉ c
     # TODO: @test "namedarg=" ∉ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(1+3im; named.")
@@ -1980,7 +1987,7 @@ let (c, r, res) = test_complete_context("getkeyelem(mutable_const_prop).value.")
 end
 
 # JuliaLang/julia/#51548
-# don't return wrong result due to mutable inconsistentcy
+# don't return wrong result due to mutable inconsistency
 function issue51548(T, a)
     # if we fold `xs = getindex(T)` to `xs::Const(Vector{T}())`, then we may wrongly
     # constant-fold `isempty(xs)::Const(true)` and return wrong result
@@ -2085,7 +2092,22 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
     @test only(c) == compl
 end
 
+# allows symbol completion within incomplete :macrocall
+# https://github.com/JuliaLang/julia/issues/51827
+macro issue51827(args...)
+    length(args) ≥ 2 || error("@issue51827: incomplete arguments")
+    return args
+end
+let s = "@issue51827 Base.ac"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "acquire" in c
+end
+
 let t = REPLCompletions.repl_eval_ex(:(`a b`), @__MODULE__; limit_aggressive_inference=true)
     @test t isa Core.Const
     @test t.val == `a b`
 end
+
+# issue #51823
+@test "include" in test_complete_context("inc", Main)[1]

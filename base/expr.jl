@@ -716,7 +716,8 @@ macro assume_effects(args...)
     end
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub) =
         (false, false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
+    for i in 1:idx
+        org_setting = args[i]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -1029,7 +1030,6 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,

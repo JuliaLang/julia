@@ -98,6 +98,8 @@ JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
+JL_DLLEXPORT jl_sym_t *jl_eval_sym;
+JL_DLLEXPORT jl_sym_t *jl_include_sym;
 JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 JL_DLLEXPORT jl_sym_t *jl_all_sym;
@@ -365,6 +367,8 @@ void jl_init_common_symbols(void)
     jl_aliasscope_sym = jl_symbol("aliasscope");
     jl_popaliasscope_sym = jl_symbol("popaliasscope");
     jl_thismodule_sym = jl_symbol("thismodule");
+    jl_eval_sym = jl_symbol("eval");
+    jl_include_sym = jl_symbol("include");
     jl_block_sym = jl_symbol("block");
     jl_atom_sym = jl_symbol("atom");
     jl_statement_sym = jl_symbol("statement");
@@ -650,9 +654,9 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int check_valid)
 {
     value_t temp;
-    for(long i=jl_array_len(a)-1; i >= 0; i--) {
+    for (long i = jl_array_nrows(a) - 1; i >= 0; i--) {
         *pv = fl_cons(fl_ctx, fl_ctx->NIL, *pv);
-        temp = julia_to_scm_(fl_ctx, jl_array_ptr_ref(a,i), check_valid);
+        temp = julia_to_scm_(fl_ctx, jl_array_ptr_ref(a, i), check_valid);
         // note: must be separate statement
         car_(*pv) = temp;
     }
@@ -880,7 +884,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         JL_GC_PUSH2(&new_ci, &new_code);
         new_ci = jl_copy_code_info(new_ci);
         new_code = jl_array_copy(new_ci->code);
-        size_t clen = jl_array_len(new_code);
+        size_t clen = jl_array_nrows(new_code);
         for (int i = 0; i < clen; ++i) {
             jl_array_ptr_set(new_code, i, jl_copy_ast(
                 jl_array_ptr_ref(new_code, i)
@@ -913,7 +917,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     }
     if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
-        size_t i, l = jl_array_len(e->args);
+        size_t i, l = jl_array_nrows(e->args);
         jl_expr_t *ne = jl_exprn(e->head, l);
         JL_GC_PUSH2(&ne, &expr);
         for (i = 0; i < l; i++) {
@@ -991,11 +995,11 @@ JL_DLLEXPORT int jl_operator_precedence(char *sym)
 
 int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 {
-    size_t i, l = jl_array_len(body);
+    size_t i, l = jl_array_nrows(body);
     for (i = 0; i < l; i++) {
         jl_expr_t *stmt = (jl_expr_t*)jl_array_ptr_ref(body, i);
         if (jl_is_expr((jl_value_t*)stmt) && stmt->head == jl_meta_sym) {
-            size_t i, l = jl_array_len(stmt->args);
+            size_t i, l = jl_array_nrows(stmt->args);
             for (i = 0; i < l; i++)
                 if (jl_array_ptr_ref(stmt->args, i) == (jl_value_t*)sym)
                     return 1;
@@ -1060,7 +1064,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
 {
     jl_task_t *ct = jl_current_task;
     JL_TIMING(MACRO_INVOCATION, MACRO_INVOCATION);
-    size_t nargs = jl_array_len(args) + 1;
+    size_t nargs = jl_array_nrows(args) + 1;
     JL_NARGSV("macrocall", 3); // macro name, location, and module
     jl_value_t **margs;
     JL_GC_PUSHARGS(margs, nargs);
@@ -1199,7 +1203,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     }
 
     size_t i;
-    for (i = 0; i < jl_array_len(e->args); i++) {
+    for (i = 0; i < jl_array_nrows(e->args); i++) {
         jl_value_t *a = jl_array_ptr_ref(e->args, i);
         jl_value_t *a2 = jl_expand_macros(a, inmodule, macroctx, onelevel, world, throw_load_error);
         if (a != a2)

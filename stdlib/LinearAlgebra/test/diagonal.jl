@@ -108,6 +108,12 @@ Random.seed!(1)
         for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
+
+        if eltype(D) <: Real
+            @test minimum(D) ≈ minimum(DM)
+            @test maximum(D) ≈ maximum(DM)
+        end
+
         if relty <: BlasFloat
             for func in (exp, cis, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
@@ -792,7 +798,7 @@ end
     evecs = [ [[ 1/sqrt(2)+0im, 1/sqrt(2)*im ]]  [[ 1/sqrt(2)+0im, -1/sqrt(2)*im ]]  [[ 0.0, 0.0 ]]       [[ 0.0, 0.0 ]]      [[ 0.0, 0.0]];
               [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
     @test eigD.values == evals
-    @test eigD.vectors == evecs
+    @test eigD.vectors ≈ evecs
     @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 end
 

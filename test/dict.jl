@@ -639,13 +639,13 @@ end
     @test d == IdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Int,Int}
     @test_throws KeyError d[:a]
-    @test_throws ArgumentError d[:a] = 1
+    @test_throws TypeError d[:a] = 1
     @test_throws MethodError d[1] = :a
 
     # copy constructor
     d = IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test collect(values(IdDict{Int,Float64}(d))) == collect(values(d))
-    @test_throws ArgumentError IdDict{Float64,Int}(d)
+    @test_throws TypeError IdDict{Float64,Int}(d)
 
     # misc constructors
     @test typeof(IdDict(1=>1, :a=>2)) == IdDict{Any,Int}
@@ -672,7 +672,7 @@ end
     @test_throws MethodError get!(d, "b", "b")
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
-    @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
+    @test_throws TypeError get!(IdDict{Symbol,Any}(), 2, "b")
     @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
     @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 

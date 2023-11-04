@@ -1314,6 +1314,9 @@ let a = Vector{Any}(undef, 10000)
 end
 @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+# issue 36495, dumping a partial NamedTupled shouldn't error
+@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
@@ -1969,12 +1972,12 @@ end
 end
 
 @testset "Intrinsic printing" begin
-    @test sprint(show, Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
-    @test repr(Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
+    @test sprint(show, Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
+    @test repr(Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
     let io = IOBuffer()
-        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        show(io, MIME"text/plain"(), Core.Intrinsics.cglobal)
         str = String(take!(io))
-        @test occursin("arraylen", str)
+        @test occursin("cglobal", str)
         @test occursin("(intrinsic function", str)
     end
     @test string(Core.Intrinsics.add_int) == "add_int"

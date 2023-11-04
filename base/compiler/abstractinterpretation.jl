@@ -35,8 +35,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
-    any_const_result = false
-    const_results = Union{Nothing,ConstResult}[]
+    const_results = nothing # or const_results::Vector{Union{Nothing,ConstResult}} if any const results are available
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
@@ -75,8 +74,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
-                push!(const_results, const_result)
-                any_const_result |= const_result !== nothing
+                if const_result !== nothing
+                    if const_results === nothing
+                        const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, #=TODO=#napplicable), nothing)
+                    end
+                    const_results[i] = const_result
+                end
                 edge === nothing || push!(edges, edge)
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
@@ -111,8 +114,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
             all_effects = merge_effects(all_effects, effects)
-            push!(const_results, const_result)
-            any_const_result |= const_result !== nothing
+            if const_result !== nothing
+                if const_results === nothing
+                    const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, napplicable), nothing)
+                end
+                const_results[i] = const_result
+            end
             edge === nothing || push!(edges, edge)
         end
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
@@ -135,7 +142,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    if any_const_result && seen == napplicable
+    if const_results !== nothing
         @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
     end
@@ -1150,7 +1157,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
             if !(isa(rt, Type) && hasintersect(rt, Bool))
                 ir = irsv.ir
                 # TODO (#48913) enable double inlining pass when there are any calls
-                # that are newly resovled by irinterp
+                # that are newly resolved by irinterp
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
                 effects = result.effects
@@ -1181,7 +1188,7 @@ function const_prop_call(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
         end
-        frame = InferenceState(inf_result, #=cache=#:local, interp)
+        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
         if frame === nothing
             add_remark!(interp, sv, "[constprop] Could not retrieve the source")
             return nothing # this is probably a bad generated function (unsound), but just ignore it
@@ -1219,7 +1226,7 @@ end
                             conditional_argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `conditional_argtypes`,
-as well as the other general extended lattice inforamtion.
+as well as the other general extended lattice information.
 """
 function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
                                  conditional_argtypes::ConditionalArgtypes)
@@ -1419,7 +1426,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         return AbstractIterationResult(Any[Vararg{Any}], nothing)
     elseif tti0 === Any
         return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
-    elseif tti0 <: Array
+    elseif tti0 <: Array || tti0 <: GenericMemory
         if eltype(tti0) === Union{}
             return AbstractIterationResult(Any[], nothing)
         end
@@ -1686,7 +1693,7 @@ end
         thentype = Bottom
     elseif rt === Const(true)
         elsetype = Bottom
-    elseif elsetype isa Type && isdefined(typeof(c.val), :instance) # can only widen a if it is a singleton
+    elseif elsetype isa Type && issingletontype(typeof(c.val)) # can only widen a if it is a singleton
         elsetype = typesubtract(elsetype, typeof(c.val), max_union_splitting)
     end
     return ConditionalTypes(thentype, elsetype)
@@ -2309,7 +2316,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::Infere
     si = StmtInfo(!call_result_unused(sv, sv.currpc))
     (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
     sv.stmt_info[sv.currpc] = info
-    # mark this call statement as DCE-elgible
+    # mark this call statement as DCE-eligible
     # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
     return RTEffects(rt, effects)
 end

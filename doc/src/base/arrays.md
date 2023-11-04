@@ -30,6 +30,8 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.Memory
+Base.MemoryRef
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
