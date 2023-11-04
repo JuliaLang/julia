@@ -872,7 +872,6 @@ int under_pressure = 0;
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
 // Full collection heuristics
-static int64_t pool_live_bytes = 0;
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
@@ -1503,6 +1502,8 @@ static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     maybe_collect(ptls);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + osize);
+    jl_atomic_store_relaxed(&ptls->gc_num.pool_live_bytes,
+        jl_atomic_load_relaxed(&ptls->gc_num.pool_live_bytes) + osize);
     jl_atomic_store_relaxed(&ptls->gc_num.poolalloc,
         jl_atomic_load_relaxed(&ptls->gc_num.poolalloc) + 1);
     // first try to use the freelist
@@ -1691,8 +1692,9 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
 
 done:
     gc_time_count_page(freedall, pg_skpd);
-    gc_num.freed += (nfree - old_nfree) * osize;
-    pool_live_bytes += GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize;
+    jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
+    jl_atomic_fetch_add(&ptls->gc_num.pool_live_bytes, GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
+    jl_atomic_fetch_add((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
     return pfl;
 }
 
@@ -1831,6 +1833,7 @@ static void gc_sweep_pool(int sweep_full)
             }
             continue;
         }
+        jl_atomic_store_relaxed(&ptls2->gc_num.pool_live_bytes, 0);
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
             jl_taggedvalue_t *last = p->freelist;
@@ -3339,6 +3342,13 @@ JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int64_t jl_gc_pool_live_bytes(void)
 {
+    int64_t pool_live_bytes = 0;
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 != NULL) {
+            pool_live_bytes += jl_atomic_load_relaxed(&ptls2->gc_num.pool_live_bytes);
+        }
+    }
     return pool_live_bytes;
 }
 
@@ -3594,7 +3604,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         promoted_bytes = 0;
     }
     scanned_bytes = 0;
-    pool_live_bytes = 0;
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
