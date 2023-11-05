@@ -599,7 +599,8 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
     // OOICCDDP
     uint8_t flags = 0;
-    flags |= (jl_options.use_pkgimages & 1); // 0-bit
+    // don't use use_pkgimages here because no outputo overrides it
+    flags |= ((jl_options.outputo == NULL || jl_options.outputo[0] == '\0') | 1); // 0-bit
     flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
     flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
     flags |= (jl_options.can_inline & 1) << 5; // 5-bit
@@ -607,12 +608,11 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
     return flags;
 }
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t cache_flags, uint8_t current_flags)
 {
     // 1. Check which flags are relevant
-    uint8_t current_flags = jl_cache_flags();
     uint8_t supports_pkgimage = (current_flags & 1);
-    uint8_t is_pkgimage = (flags & 1);
+    uint8_t is_pkgimage = (cache_flags & 1);
 
     // For .ji packages ignore other flags
     if (!supports_pkgimage && !is_pkgimage) {
@@ -621,12 +621,12 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
 
     // 2. Check all flags, execept opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
-    if ((flags & mask) != (current_flags & mask))
+    if ((cache_flags & mask) != (current_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
-    flags >>= OPT_LEVEL;
+    cache_flags >>= OPT_LEVEL;
     current_flags >>= OPT_LEVEL;
-    return flags >= current_flags;
+    return cache_flags >= current_flags;
 }
 
 // "magic" string and version header of .ji file

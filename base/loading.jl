@@ -2444,7 +2444,21 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimages != 0
+    if JLOptions().use_pkgimages == 0
+        cache_objects = false
+    else
+        if JLOptions().tracked_path == C_NULL
+            cache_objects = true
+        else
+            tracked_path = unsafe_string(JLOptions().tracked_path)
+            # disable pkgimages if srcpath falls within a code-coverage or allocation-tracking path 
+            # TODO: disable if any includes fall within tracked_path, not just the srcpath
+            # harder because includes aren't currently known before cache generation
+            # or implement https://github.com/JuliaLang/julia/issues/51412
+            cache_objects = !startswith(path, tracked_path)
+        end
+    end
+
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects
@@ -3159,6 +3173,7 @@ end
     return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
+    tracked_path = JLOptions().tracked_path == C_NULL ? "" : unsafe_string(JLOptions().tracked_path)
     io = open(cachefile, "r")
     try
         checksum = isvalid_cache_header(io)
@@ -3170,10 +3185,19 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
+        current_flags = ccall(:jl_cache_flags, UInt8, ())
+        if !isempty(tracked_path) 
+            for chi in includes
+                startswith(chi.filename, tracked_path) || continue
+                @debug "Allowing pkgimages=no for $modkey because it falls in coverage/allocation tracking path $tracked_path"
+                current_flags &= 0b11111110 # disable pkgimages flag
+                break
+            end
+        end
+        if ccall(:jl_match_cache_flags, UInt8, (UInt8, UInt8), flags, current_flags) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              current session: $(CacheFlags())
+              current session: $(CacheFlags(current_flags))
               cache file:      $(CacheFlags(flags))
             """
             return true
@@ -3275,7 +3299,6 @@ end
                     return true
                 end
             end
-            tracked_path = JLOptions().tracked_path == C_NULL ? "" : unsafe_string(JLOptions().tracked_path)
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
                 if startswith(f, "@depot/")

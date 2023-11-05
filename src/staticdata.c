@@ -3494,7 +3494,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
                 "Precompile file header verification checks failed.");
     }
     uint8_t flags = read_uint8(f);
-    if (pkgimage && !jl_match_cache_flags(flags)) {
+    if (pkgimage && !jl_match_cache_flags(flags, jl_cache_flags())) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
     if (!pkgimage) {
