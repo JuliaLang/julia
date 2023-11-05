@@ -30,7 +30,7 @@ checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
-    if T <: Unsigned
+    if T <: Union{Unsigned, Bool}
         # Throw InexactError if the result is negative.
         if !iszero(num) && (signbit(den) ⊻ signbit(num))
             throw(InexactError(:Rational, Rational{T}, num, den))

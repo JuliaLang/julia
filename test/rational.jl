@@ -62,16 +62,44 @@ using Test
     @test iszero(Rational{Int}(UInt(0), 1))
     @test Rational{BigInt}(UInt(1), Int(-1)) == -1
     @test Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
-    @test Rational{Int64}(0x01, Int8(-1)) == -1
-    @test Rational{Int64}(Int8(-1), 0x01) == -1
-    @test Rational{Int64}(0x02, Int8(-128)) == -1 // 64
-    @test_throws InexactError Rational{UInt64}(UInt32(1), typemin(Int32))
-    @test_throws InexactError Rational{UInt64}(Int64(1), typemin(Int64))
-    @test_throws InexactError Rational{UInt64}(Int64(-1), Int64(1))
-    @test Rational{UInt64}(typemin(Int32), typemin(Int32)) == 1
-    @test Rational{UInt64}(zero(Int32), typemin(Int32)) == 0
-    @test Rational{UInt64}(zero(Int32), Int32(-1)) == 0
-    @test Rational{Int64}(typemin(Int32), typemin(Int32)) == 1
+
+    @testset "Rational{T} constructor with concrete T" begin
+        test_types = [Bool, Int8, Int64, Int128, UInt8, UInt64, UInt128, BigInt]
+        test_values = Any[
+            Any[zero(T) for T in test_types];
+            Any[one(T) for T in test_types];
+            big(-1);
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128)) for j in [-3:-1; -128:-126;]
+            ));
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128, UInt8, UInt64, UInt128)) for j in [2:3; 126:127;]
+            ));
+            Any[typemax(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemax(T)-one(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemin(T) for T in (Int64, Int128)];
+            Any[typemin(T)+one(T) for T in (Int64, Int128)];
+        ]
+        for x in test_values, y in test_values
+            local big_r = iszero(x) && iszero(y) ? nothing : big(x) // big(y)
+            for T in test_types
+                if iszero(x) && iszero(y)
+                    @test_throws Exception Rational{T}(x, y)
+                elseif Base.hastypemax(T)
+                    local T_range = typemin(T):typemax(T)
+                    if numerator(big_r) ∈ T_range && denominator(big_r) ∈ T_range
+                        @test big_r == Rational{T}(x, y)
+                        @test Rational{T} == typeof(Rational{T}(x, y))
+                    else
+                        @test_throws Exception Rational{T}(x, y)
+                    end
+                else
+                    @test big_r == Rational{T}(x, y)
+                    @test Rational{T} == typeof(Rational{T}(x, y))
+                end
+            end
+        end
+    end
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
