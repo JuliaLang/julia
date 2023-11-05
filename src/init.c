@@ -804,7 +804,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 
     if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
-        (jl_options.code_coverage || jl_options.malloc_log)) {
+        (jl_options.code_coverage == 1 || jl_options.code_coverage == 2 || 
+         jl_options.malloc_log == 1 || jl_options.malloc_log == 2)) {
         jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 

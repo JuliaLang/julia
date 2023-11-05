@@ -860,10 +860,17 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
-    if (codecov || malloclog) {
+    if (codecov == 1 || codecov == 2) {
         if (pkgimage_explicit && jl_options.use_pkgimages) {
             jl_errorf("julia: Can't use --pkgimages=yes together "
-                      "with --track-allocation or --code-coverage.");
+                      "with --code-coverage=user|all");
+        }
+        jl_options.use_pkgimages = 0;
+    }
+    if (malloclog == 1 || malloclog == 2) {
+        if (pkgimage_explicit && jl_options.use_pkgimages) {
+            jl_errorf("julia: Can't use --pkgimages=yes together "
+                      "with --track-allocation=user|all");
         }
         jl_options.use_pkgimages = 0;
     }
