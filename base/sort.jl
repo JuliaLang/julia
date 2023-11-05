@@ -1232,9 +1232,10 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     ln < 260 && return _sort!(v, a.get_next(a.target), o, kw)
 
     target = a.target
-    k2 = round(Int, ln^(2/3))
+    k = cbrt(ln)
+    k2 = round(Int, k^2)
     k2ln = k2/ln
-    offset = .7k2^0.575 # TODO for further optimization: tune this
+    offset = .15k2*top_set_bit(k2) # TODO for further optimization: tune this
     lo_signpost_i, hi_signpost_i =
         (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
             ((minimum(target), -offset), (maximum(target), offset)))
