@@ -1647,10 +1647,10 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
     }
 }
 
-static void do_nothing_with_codeinst(jl_code_instance_t *ci) {}
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth);
 
 // recursively invalidate cached methods that had an edge to a replaced method
-static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced, size_t max_world, int depth)
+static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
     jl_timing_counter_inc(JL_TIMING_COUNTER_Invalidations, 1);
     if (_jl_debug_method_invalidation) {
@@ -1672,33 +1672,18 @@ static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method
             codeinst->max_world = max_world;
         }
         assert(codeinst->max_world <= max_world);
-        JL_GC_PUSH1(&codeinst);
-        (*f)(codeinst);
-        JL_GC_POP();
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
+    JL_GC_PUSH1(&replaced);
+    invalidate_external(replaced, max_world);
     // recurse to all backedges to update their valid range also
-    jl_array_t *backedges = replaced->backedges;
-    if (backedges) {
-        JL_GC_PUSH1(&backedges);
-        replaced->backedges = NULL;
-        size_t i = 0, l = jl_array_nrows(backedges);
-        jl_method_instance_t *replaced;
-        while (i < l) {
-            i = get_next_edge(backedges, i, NULL, &replaced);
-            invalidate_method_instance(f, replaced, max_world, depth + 1);
-        }
-        JL_GC_POP();
-    }
+    _invalidate_backedges(replaced, max_world, depth + 1);
+    JL_GC_POP();
     JL_UNLOCK(&replaced->def.method->writelock);
 }
 
-// invalidate cached methods that overlap this definition
-static void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
-{
-    JL_LOCK(&replaced_mi->def.method->writelock);
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth) {
     jl_array_t *backedges = replaced_mi->backedges;
-    //jl_static_show(JL_STDERR, (jl_value_t*)replaced_mi);
     if (backedges) {
         // invalidate callers (if any)
         replaced_mi->backedges = NULL;
@@ -1707,10 +1692,17 @@ static void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_insta
         jl_method_instance_t *replaced;
         while (i < l) {
             i = get_next_edge(backedges, i, NULL, &replaced);
-            invalidate_method_instance(f, replaced, max_world, 1);
+            invalidate_method_instance(replaced, max_world, depth);
         }
         JL_GC_POP();
     }
+}
+
+// invalidate cached methods that overlap this definition
+static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
+{
+    JL_LOCK(&replaced_mi->def.method->writelock);
+    _invalidate_backedges(replaced_mi, max_world, 1);
     JL_UNLOCK(&replaced_mi->def.method->writelock);
     if (why && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced_mi);
@@ -1824,6 +1816,7 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
             }
         }
         if (intersects) {
+            // TODO call invalidate_external here?
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
                 jl_value_t *loctag = jl_cstr_to_string("invalidate_mt_cache");
@@ -1906,7 +1899,7 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
         if ((jl_value_t*)mi != jl_nothing) {
             invalidated = 1;
             invalidate_external(mi, max_world);
-            invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_disable");
+            invalidate_backedges(mi, max_world, "jl_method_table_disable");
         }
     }
     JL_GC_POP();
@@ -2070,8 +2063,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 }
                 if (missing) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
-                    invalidate_external(backedge, max_world);
-                    invalidate_method_instance(&do_nothing_with_codeinst, backedge, max_world, 0);
+                    invalidate_method_instance(backedge, max_world, 0);
                     invalidated = 1;
                     if (_jl_debug_method_invalidation)
                         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
@@ -2128,7 +2120,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                         // over the intersection (not ambiguous) and the new method will be selected now (morespec_is)
                         int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
                         // found that this specialization dispatch got replaced by m
-                        // call invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_insert");
+                        // call invalidate_backedges(mi, max_world, "jl_method_table_insert");
                         // but ignore invoke-type edges
                         jl_array_t *backedges = mi->backedges;
                         if (backedges) {
@@ -2149,7 +2141,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                     replaced_edge = replaced_dispatch;
                                 }
                                 if (replaced_edge) {
-                                    invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
+                                    invalidate_method_instance(caller, max_world, 1);
                                     invalidated = 1;
                                 }
                                 else {

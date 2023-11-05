@@ -116,7 +116,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                     PointerType::get(T_ppjlvalue, 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateAlignedStore(
+    builder.CreateAlignedStore(
             gcframe,
             builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
             Align(sizeof(void*)));

@@ -176,7 +176,7 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool
+            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool && !(mod === Main && s === :MainInclude)
         end
         # Looking for a binding in a module
         if mod == context_module
@@ -519,10 +519,10 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
 # `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
 # be employed, for instance, by `typeinf_ext_toplevel`.
-is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === :no
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
 function is_call_graph_uncached(sv::CC.InferenceState)
-    sv.cache_mode === :global && return false
+    sv.cache_mode === CC.CACHE_MODE_GLOBAL && return false
     parent = sv.parent
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)
@@ -533,9 +533,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if CC.isdefined_globalref(g)
-            return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
+            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), CC.EFFECTS_TOTAL)
         end
-        return Union{}
+        return CC.RTEffects(Union{}, CC.EFFECTS_THROWS)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)

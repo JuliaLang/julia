@@ -60,6 +60,16 @@ To run julia from anywhere you can:
 
 - write `prefix=/path/to/install/folder` into `Make.user` and then run `make install`. If there is a version of Julia already installed in this folder, you should delete it before running `make install`.
 
+Some of the options you can set to control the build of Julia are listed and documented at the beginning of the file `Make.inc`, but you should never edit it for this purpose, use `Make.user` instead.
+
+Julia's Makefiles define convenient automatic rules called `print-<VARNAME>` for printing the value of variables, replacing `<VARNAME>` with the name of the variable to print the value of.
+For example
+```console
+$ make print-JULIA_PRECOMPILE
+JULIA_PRECOMPILE=1
+```
+These rules are useful for debugging purposes.
+
 Now you should be able to run Julia like this:
 
     julia
@@ -239,10 +249,48 @@ For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
    * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/15.x` branch.
-   * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
+   * The only Julia-specific patch is the lib renaming (`llvm7-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
-Using an unpatched or different version of LLVM will result in errors and/or poor performance. Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
+Using an unpatched or different version of LLVM will result in errors and/or poor performance.
+You can build a different version of LLVM from a remote Git repository with the following options in the `Make.user` file:
+
+```make
+# Force source build of LLVM
+USE_BINARYBUILDER_LLVM = 0
+# Use Git for fetching LLVM source code
+# this is either `1` to get all of them
+DEPS_GIT = 1
+# or a space-separated list of specific dependencies to download with git
+DEPS_GIT = llvm
+
+# Other useful options:
+#URL of the Git repository you want to obtain LLVM from:
+#  LLVM_GIT_URL = ...
+#Name of the alternate branch to clone from git
+#  LLVM_BRANCH = julia-16.0.6-0
+#SHA hash of the alterate commit to check out automatically
+#  LLVM_SHA1 = $(LLVM_BRANCH)
+#List of LLVM targets to build.  It is strongly recommended to keep at least all the
+#default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
+#  LLVM_TARGETS = ...
+#Use ccache for faster recompilation in case you need to restart a build.
+#  USECCACHE = 1
+#  CMAKE_GENERATOR=Ninja
+#  LLVM_ASSERTIONS=1
+#  LLVM_DEBUG=Symbols
+```
+
+The various build phases are controlled by specific files:
+ * `deps/llvm.version` : touch or change to checkout a new version, `make get-llvm check-llvm`
+ * `deps/srccache/llvm/source-extracted` : result of `make extract-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make configure-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make compile-llvm`
+ * `usr-staging/llvm/build_Release*.tgz` : result of `make stage-llvm` (regenerate with `make reinstall-llvm`)
+ * `usr/manifest/llvm` : result of `make install-llvm` (regenerate with `make uninstall-llvm`)
+ * `make version-check-llvm` : runs every time to warn the user if there are local modifications
+
+Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
 
 ### libuv
 

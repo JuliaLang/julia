@@ -2561,7 +2561,7 @@ function h25579(g)
     return t ? typeof(h) : typeof(h)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
-        Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+        Any[Type{Float64}]
 
 f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
@@ -4424,7 +4424,7 @@ end
             nothing
         end
         return x
-    end) === Union{Int, Float64, Char}
+    end) === Union{Int, Char}
 
 # issue #42097
 struct Foo42097{F} end
@@ -5371,6 +5371,123 @@ function phic_type3()
 end
 @test Base.return_types(phic_type3) |> only === Union{Int, Float64}
 @test phic_type3() === 2
+
+# Issue #51852
+function phic_type4()
+    a = (;progress = "a")
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type4) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type4() === (;progress = 1.0)
+
+function phic_type5()
+    a = (;progress = "a")
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type5) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type5() === (;progress = 1.0)
+
+function phic_type6()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type6) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type6() === (;progress = 1.0)
+
+function phic_type7()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type7) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type7() === (;progress = 1.0)
+
+function phic_type8()
+    local a
+    try
+        may_error(true)
+        a = Base.inferencebarrier(1)
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type8) |> only === Int
+@test phic_type8() === 2
+
+
+function phic_type9()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(false) ? 1 : nothing
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type9) |> only === Int
+@test phic_type9() === 2
+
+function phic_type10()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(true) ? missing : nothing
+    catch
+    end
+
+    try
+        Base.inferencebarrier(true) && (a = 2)
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a::Int
+end
+@test Base.return_types(phic_type10) |> only === Int
+@test phic_type10() === 2
 
 # Test that `exit` returns `Union{}` (issue #51856)
 function test_exit_bottom(s)
