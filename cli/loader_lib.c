@@ -281,6 +281,7 @@ static char *libstdcxxprobe(void)
         // See if the version is compatible
         char *dlerr = dlerror(); // clear out dlerror
         void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
+        (void)sym;
         dlerr = dlerror();
         if (dlerr) {
             // We can't use the library that was found, so don't write anything.
@@ -375,7 +376,6 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(&dep_libs[1]);
     char *curr_dep = &dep_libs[1];
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
@@ -451,6 +451,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                     char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
+                        (void)cxx_handle;
                         const char *dlr = dlerror();
                         if (dlr) {
                             jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");

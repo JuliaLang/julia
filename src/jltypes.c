@@ -1166,7 +1166,6 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
         jl_atomic_store_release(&type->name->linearcache, nc);
         jl_gc_wb(type->name, nc);
         cache = nc;
-        n = jl_svec_len(nc);
     }
     assert(jl_svecref(cache, insert_at) == jl_nothing);
     jl_svecset(cache, insert_at, (jl_value_t*)type); // todo: make this an atomic-store

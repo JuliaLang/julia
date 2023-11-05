@@ -70,6 +70,8 @@ function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
+    elseif ex.func === :var"dict key"
+        print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
         if isvarargtype(ex.got)
             targs = (ex.got,)
@@ -80,7 +82,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif ex.func === Symbol("keyword argument")
+        elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
@@ -787,7 +789,7 @@ function show_backtrace(io::IO, t::Vector)
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === Symbol("")
+        if f.line == 0 && f.file === :var""
             # don't show a single top-level frame with no location info
             return
         end

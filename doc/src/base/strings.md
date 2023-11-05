@@ -95,5 +95,6 @@ Base.isspace
 Base.isuppercase
 Base.isxdigit
 Base.escape_string
+Base.escape_raw_string
 Base.unescape_string
 ```

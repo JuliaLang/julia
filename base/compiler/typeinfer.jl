@@ -267,12 +267,12 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         finish!(caller.interp, caller)
-        if caller.cache_mode === :global
+        if is_cached(caller)
             cache_result!(caller.interp, caller.result)
         end
         # Drop result.src here since otherwise it can waste memory.
-        # N.B. If the `cache_mode === :local`, the inliner may request to use it later.
-        if caller.cache_mode !== :local
+        # N.B. If cached locally, the inliner may request to use it later.
+        if iszero(caller.cache_mode & CACHE_MODE_LOCAL)
             caller.result.src = nothing
         end
     end
@@ -546,7 +546,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.cache_mode = :no
+        me.cache_mode = CACHE_MODE_NULL
         set_inlineable!(me.src, false)
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
@@ -558,7 +558,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         type_annotate!(interp, me)
-        doopt = (me.cache_mode !== :no || me.parent !== nothing)
+        doopt = (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing)
         # Disable the optimizer if we've already determined that there's nothing for
         # it to do.
         if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
@@ -817,15 +817,19 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again and keep it around in the local cache
             # since the inliner will request to use it later
-            cache_mode = :local
+            cache_mode = CACHE_MODE_LOCAL
         else
             rt = cached_return_type(code)
             effects = ipo_effects(code)
             update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
             return EdgeCallResult(rt, mi, effects)
         end
+    elseif is_stmt_inline(get_curr_ssaflag(caller))
+        # if this fresh is going to be inlined, we cache it locally too so that the inliner
+        # can see it later even in a case when the inferred source is discarded from the global cache
+        cache_mode = CACHE_MODE_GLOBAL | CACHE_MODE_LOCAL
     else
-        cache_mode = :global # cache edge targets by default
+        cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")

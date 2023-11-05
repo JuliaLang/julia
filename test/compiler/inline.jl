@@ -570,6 +570,18 @@ end
     end
 end
 
+@noinline fresh_edge_noinlined(a::Integer) = unresolvable(a)
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0
+end
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0 # should be idempotent
+end
+
 # force constant-prop' for `setproperty!`
 # https://github.com/JuliaLang/julia/pull/41882
 let code = @eval Module() begin
