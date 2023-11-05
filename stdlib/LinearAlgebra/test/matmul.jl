@@ -227,7 +227,7 @@ end
     @test C == AB
     mul!(C, A, B, 2, -1)
     @test C == AB
-    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
     @test C == AB
 end
 
@@ -871,7 +871,7 @@ end
     # Just in case dispatching on the surface API `mul!` is changed in the future,
     # let's test the function where the tiled multiplication is defined.
     fill!(C, 0)
-    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
     @test D ≈ C
 end
 
