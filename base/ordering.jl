@@ -114,17 +114,96 @@ ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
     lt(o::Ordering, a, b)
 
 Test whether `a` is less than `b` according to the ordering `o`.
-"""
-lt(o::ForwardOrdering,       a, b) = isless(a,b)
-lt(o::ReverseOrdering,       a, b) = lt(o.fwd,b,a)
-lt(o::By,                    a, b) = lt(o.order,o.by(a),o.by(b))
-lt(o::Lt,                    a, b) = o.lt(a,b)
+""" # No see-also because the prepared ordering system is experimental.
+function lt end
 
-@propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
-    da = p.data[a]
-    db = p.data[b]
-    (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
-end
+"""
+    lt_prepared(o::Ordering, a, b)
+
+Test whether `a` is less than `b` according to the ordering `o`, assuming both `a` and `b`
+have been prepared with `prepare`.
+
+`lt_prepared(o, prepare(o, a), prepare(o, b))` is equivalent to `lt(o, a, b)`.
+
+!!! warning
+    Comparing a prepared element `prepare(o1, x)` under a different ordering `o2`
+    is undefined behavior and may, for example, result in segfaults.
+
+See also `lt_prepared_1`, `lt_prepared_2`.
+"""
+function lt_prepared end
+
+"""
+    lt_prepared_1(o::Ordering, a, b)
+
+Test whether `a` is less than `b` according to the ordering `o`, assuming `a` has been
+prepared with `prepare`.
+
+`lt_prepared_1(o, prepare(o, a), b)` is equivalent to `lt(o, a, b)`.
+
+!!! warning
+    Comparing a prepared element `prepare(o1, x)` under a different ordering `o2`
+    is undefined behavior and may, for example, result in segfaults.
+
+See also `lt`, `lt_prepared`.
+"""
+@propagate_inbounds lt_prepared_1(o::Ordering, a, b) = lt_prepared(o, a, prepare(o, b))
+
+"""
+    lt_prepared_2(o::Ordering, a, b)
+
+Test whether `a` is less than `b` according to the ordering `o`, assuming `b` has been
+prepared with `prepare`.
+
+!!! warning
+    Comparing a prepared element `prepare(o1, x)` under a different ordering `o2`
+    is undefined behavior and may, for example, result in segfaults.
+
+See also `lt`, `lt_prepared`.
+"""
+@propagate_inbounds lt_prepared_2(o::Ordering, a, b) = lt_prepared(o, prepare(o, a), b)
+
+"""
+    prepare(o::Ordering, x)
+
+Prepare an element `x` for efficient comparison with `lt_prepared`.
+
+`lt(o::MyOrdering, a, b)` and `lt_prepared(o, prepare(o, a), prepare(o, b))` are
+equivalent. They must have indistinguishable behavior and have the same performance
+characteristics.
+
+If you define `prepare` on a custom `Ordering`, you should also define `lt_prepared` and
+should not define `lt` for that order.
+
+!!! warning
+    Comparing a prepared element `prepare(o1, x)` under a different ordering `o2`
+    is undefined behavior and may, for example, result in segfaults.
+"""
+function prepare end
+
+# Fallbacks
+@propagate_inbounds lt(o::Ordering, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
+@propagate_inbounds lt_prepared(o::Ordering, a, b) = lt(o, a, b) # TODO: remove this in Julia 2.0
+prepare(o::Ordering, x) = x
+
+# Forward
+lt(o::ForwardOrdering, a, b) = isless(a, b)
+
+# Reverse
+prepare(o::ReverseOrdering, x) = prepare(o.fwd, x)
+lt_prepared(o::ReverseOrdering, a, b) = lt_prepared(o.fwd, b, a)
+
+# By
+prepare(o::By, x) = prepare(o.order, o.by(x))
+lt_prepared(o::By, a, b) = lt_prepared(o.order, a, b)
+
+# Perm
+@propagate_inbounds prepare(o::Perm, i) = (prepare(o.order, o.data[i]), i)
+lt_prepared(p::Perm, (da, a), (db, b)) =
+    (lt_prepared(p.order, da, db)::Bool) | (!(lt_prepared(p.order, db, da)::Bool) & (a < b))
+
+## Lt
+lt(o::Lt, a, b) = o.lt(a, b)
 
 
 _ord(lt::typeof(isless), by, order::Ordering)                         = _by(by, order)
