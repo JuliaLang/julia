@@ -533,9 +533,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if CC.isdefined_globalref(g)
-            return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
+            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), CC.EFFECTS_TOTAL)
         end
-        return Union{}
+        return CC.RTEffects(Union{}, CC.EFFECTS_THROWS)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)
