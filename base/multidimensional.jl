@@ -1885,7 +1885,7 @@ julia> sortslices(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
 function sortslices(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
     if A isa Matrix && dims isa Integer && dims == 1
         # TODO: remove once the generic version becomes as fast or faster
-        perm = sortperm(eachslice(A, dims); kws...)
+        perm = sortperm(eachslice(A; dims); kws...)
         return A[perm, :]
     end
 
