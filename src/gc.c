@@ -1362,9 +1362,15 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls = gc_all_tls_states[i];
-        if (ptls) {
-            memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
+        if (ptls != NULL) {
+            // don't reset `pool_live_bytes` here
             jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+            jl_atomic_store_relaxed(&ptls->gc_num.malloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.realloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.poolalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.bigalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
         }
     }
 }
