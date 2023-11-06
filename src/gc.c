@@ -2048,6 +2048,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
         }
     }
+    gc_mark_push_remset(ptls, (jl_value_t *)obj32_parent, nptr);
     return new_obj;
 }
 
