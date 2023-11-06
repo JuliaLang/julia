@@ -793,7 +793,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
         z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
         Ctmp = convert(promote_type(R, typeof(z2)), z2)
         for k in AxK
-            Ctmp += A[i, k]*B[k, j]
+            Ctmp = muladd(A[i, k], B[k, j], Ctmp)
         end
         _modify!(_add, Ctmp, C, (i,j))
     end
