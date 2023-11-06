@@ -664,20 +664,65 @@ static AttributeList get_attrs_basic(LLVMContext &C)
                 None);
 }
 
-static AttributeList get_attrs_sext(LLVMContext &C)
+static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
 {
+    auto FnAttrs = AttrBuilder(C);
+    FnAttrs.addAttribute(Attribute::WillReturn);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
+    FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
+    auto RetAttrs = AttrBuilder(C);
+    RetAttrs.addAttribute(Attribute::NonNull);
+    RetAttrs.addDereferenceableAttr(nbytes);
+    RetAttrs.addAlignmentAttr(Align(alignof(void*)));
     return AttributeList::get(C,
-                AttributeSet(),
-                Attributes(C, {Attribute::NonNull}),
-                {Attributes(C, {Attribute::SExt})});
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet::get(C, RetAttrs),
+                None);
 }
 
-static AttributeList get_attrs_zext(LLVMContext &C)
+static AttributeList get_attrs_box_sext(LLVMContext &C, unsigned nbytes)
 {
+    auto FnAttrs = AttrBuilder(C);
+    FnAttrs.addAttribute(Attribute::WillReturn);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
+    FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
+    auto RetAttrs = AttrBuilder(C);
+    RetAttrs.addAttribute(Attribute::NonNull);
+    RetAttrs.addAttribute(Attribute::getWithDereferenceableBytes(C, nbytes));
+    RetAttrs.addDereferenceableAttr(nbytes);
+    RetAttrs.addAlignmentAttr(Align(alignof(void*)));
     return AttributeList::get(C,
-                AttributeSet(),
-                Attributes(C, {Attribute::NonNull}),
-                {Attributes(C, {Attribute::ZExt})});
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet::get(C, RetAttrs),
+                AttributeSet::get(C, {Attribute::get(C, Attribute::SExt)}));
+}
+
+static AttributeList get_attrs_box_zext(LLVMContext &C, unsigned nbytes)
+{
+    auto FnAttrs = AttrBuilder(C);
+    FnAttrs.addAttribute(Attribute::WillReturn);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+#if JL_LLVM_VERSION >= 160000
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+#else
+    FnAttrs.addAttribute(Attribute::InaccessibleMemOnly);
+#endif
+    auto RetAttrs = AttrBuilder(C);
+    RetAttrs.addAttribute(Attribute::NonNull);
+    RetAttrs.addDereferenceableAttr(nbytes);
+    RetAttrs.addAlignmentAttr(Align(alignof(void*)));
+    return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet::get(C, RetAttrs),
+                AttributeSet::get(C, {Attribute::get(C, Attribute::ZExt)}));
 }
 
 
@@ -1005,8 +1050,13 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
 #if JL_LLVM_VERSION >= 150000
-        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
 #endif
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
         auto RetAttrs = AttrBuilder(C);
         RetAttrs.addAttribute(Attribute::NoAlias);
         RetAttrs.addAttribute(Attribute::NonNull);
@@ -1250,22 +1300,34 @@ static const auto sync_gc_total_bytes_func = new JuliaFunction<>{
             {getInt64Ty(C)}, false); },
     nullptr,
 };
-#define BOX_FUNC(ct,at,attrs)                                                    \
+static const auto jlarray_data_owner_func = new JuliaFunction<>{
+    XSTR(jl_array_data_owner),
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue,
+            {T_prjlvalue}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind}),
+            Attributes(C, {Attribute::NonNull}),
+            None); },
+};
+#define BOX_FUNC(ct,at,attrs,nbytes)                                                    \
 static const auto box_##ct##_func = new JuliaFunction<>{                           \
     XSTR(jl_box_##ct),                                                           \
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C),\
             {at}, false); },                                                     \
-    attrs,                                                                       \
+    [](LLVMContext &C) { return attrs(C,nbytes); },                                                                \
 }
-BOX_FUNC(int16, getInt16Ty(C), get_attrs_sext);
-BOX_FUNC(uint16, getInt16Ty(C), get_attrs_zext);
-BOX_FUNC(int32, getInt32Ty(C), get_attrs_sext);
-BOX_FUNC(uint32, getInt32Ty(C), get_attrs_zext);
-BOX_FUNC(int64, getInt64Ty(C), get_attrs_sext);
-BOX_FUNC(uint64, getInt64Ty(C), get_attrs_zext);
-BOX_FUNC(char, getCharTy(C), get_attrs_zext);
-BOX_FUNC(float32, getFloatTy(C), get_attrs_basic);
-BOX_FUNC(float64, getDoubleTy(C), get_attrs_basic);
+BOX_FUNC(int16, getInt16Ty(C), get_attrs_box_sext, 2);
+BOX_FUNC(uint16, getInt16Ty(C), get_attrs_box_zext, 2);
+BOX_FUNC(int32, getInt32Ty(C), get_attrs_box_sext, 4);
+BOX_FUNC(uint32, getInt32Ty(C), get_attrs_box_zext, 4);
+BOX_FUNC(int64, getInt64Ty(C), get_attrs_box_sext, 8);
+BOX_FUNC(uint64, getInt64Ty(C), get_attrs_box_zext, 8);
+BOX_FUNC(char, getCharTy(C), get_attrs_box_zext, 1);
+BOX_FUNC(float32, getFloatTy(C), get_attrs_box_float, 4);
+BOX_FUNC(float64, getDoubleTy(C), get_attrs_box_float, 8);
 #undef BOX_FUNC
 
 static const auto box_ssavalue_func = new JuliaFunction<TypeFnContextAndSizeT>{

@@ -3480,7 +3480,8 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twi
 
 // allocation for known size object
 // returns a prjlvalue
-static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
+static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
+                             unsigned align=sizeof(void*)) // Allocations are at least pointer alingned
 {
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
@@ -3489,12 +3490,14 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     call->setAttributes(F->getAttributes());
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(ctx.builder.getContext(), static_size));
+    call->addRetAttr(Attribute::getWithAlignment(ctx.builder.getContext(), Align(align)));
     return call;
 }
 
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt)
 {
-    return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue));
+    return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
+                        julia_alignment((jl_value_t*)jt));
 }
 
 // allocation for unknown object from an untracked pointer
