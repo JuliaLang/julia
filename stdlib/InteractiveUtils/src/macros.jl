@@ -36,6 +36,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if Meta.isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
