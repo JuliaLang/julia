@@ -999,6 +999,8 @@ parsestmt_test_specs = [
     # shouldn't crash
     "@(x y)" => "(macrocall (parens @x (error-t y)))"
     "|(&\nfunction" => "(call | (& (function (error (error)) (block (error)) (error-t))) (error-t))"
+    "@(" => "(macrocall (parens (error-t)))"
+    "x = @(" => "(= x (macrocall (parens (error-t))))"
 
     # The following is currently broken but at least the parser shouldn't
     # crash.
