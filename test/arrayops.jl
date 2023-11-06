@@ -1446,6 +1446,15 @@ end
     @test sortslices(B, dims=(1,3)) == B
 end
 
+@testset "sortslices inference (#52019)" begin
+    x = rand(3, 2)
+    @inferred sortslices(x, dims=1)
+    @inferred sortslices(x, dims=(2,))
+    x = rand(1, 2, 3)
+    @inferred sortslices(x, dims=(1,2))
+    @inferred sortslices(x, dims=3, by=sum)
+end
+
 @testset "fill" begin
     @test fill!(Float64[1.0], -0.0)[1] === -0.0
     A = fill(1.,3,3)
