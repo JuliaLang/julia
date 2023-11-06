@@ -3143,9 +3143,6 @@ end
     @test wrap(Array, mem, (5,)) == ones(Int, 5)
     @test wrap(Array, mem, 2) == ones(Int, 2)
     @test wrap(Array, memref, 10) == ones(Int, 10)
-
-    # This is broken because length(a::Array{T, N>1}) is currently doing length(a.ref.mem) !!!
-    @test_broken wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
-    # This works because 5 * 2 happens to equal 10 (the length of mem)
+    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
 end
