@@ -3026,3 +3026,31 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
         _getindex(v, i)
     end
 end
+
+"""
+    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
+
+Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
+of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
+"""
+@propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    len = length(m.mem)
+    @boundscheck len >= prod(dims) || invalid_wrap_err(len, dims)
+    _wrap(Array, m, convert(Tuple{Vararg{Int}}, dims))
+end
+@noinline invalid_wrap_err(len, dims) = throw(DimensionMismatch(
+    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $(prod(dims)) > $len, so that the array would have more elements than the underlying memory can store."))
+
+function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    wrap(Array, MemoryRef(m), dims)
+end
+function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    wrap(Array, m, (l,))
+end
+function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    wrap(Array, MemoryRef(m), (l,))
+end
+
+@eval @inline function _wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
+    $(Expr(:new, :(Array{T, N}), :m, :dims))
+end
