@@ -2316,6 +2316,9 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
     elseif k == K"parens"
         # @(A) x  ==>  (macrocall (parens @A) x)
         macro_name_position = first_child_position(ps, macro_name_position)
+        if macro_name_position == NO_POSITION
+            return
+        end
         k = peek_behind(ps, macro_name_position).kind
     elseif k == K"error"
         # Error already reported in parse_macro_name
