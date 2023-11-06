@@ -3268,9 +3268,11 @@ JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int64_t jl_gc_pool_live_bytes(void)
 {
+    int n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
     int64_t pool_live_bytes = 0;
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
+    for (int i = 0; i < n_threads; i++) {
+        jl_ptls_t ptls2 = all_tls_states[i];
         if (ptls2 != NULL) {
             pool_live_bytes += jl_atomic_load_relaxed(&ptls2->gc_num.pool_live_bytes);
         }
