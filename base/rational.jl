@@ -46,7 +46,7 @@ end
 """
     //(num, den)
 
-Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
+Divide two numbers, giving a result with [`Rational`](@ref).
 
 # Examples
 ```jldoctest
@@ -55,6 +55,9 @@ julia> 3 // 5
 
 julia> (3 // 5) // (2 // 1)
 3//10
+
+julia> (2+im) // (1-2im)
+0//1 + 1//1*im
 ```
 """
 //(n::Integer,  d::Integer) = Rational(n,d)
