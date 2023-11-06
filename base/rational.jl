@@ -47,6 +47,7 @@ end
     //(num, den)
 
 Divide two numbers, giving a result with [`Rational`](@ref).
+Note that [`AbstractFloat`](@ref) arguments are not accepted.
 
 # Examples
 ```jldoctest
@@ -58,6 +59,10 @@ julia> (3 // 5) // (2 // 1)
 
 julia> (2+im) // (1-2im)
 0//1 + 1//1*im
+
+julia> 1.0 // 2
+ERROR: MethodError: no method matching //(::Float64, ::Int64)
+[...]
 ```
 """
 //(n::Integer,  d::Integer) = Rational(n,d)
