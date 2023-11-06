@@ -335,7 +335,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GlobalVariable *NGV = cast<GlobalVariable>(VMap[GV]);
         if (GV->hasInitializer())
-            NGV->setInitializer(MapValue(GV->getInitializer(), VMap));
+            NGV->setInitializer(MapValue(GV->getInitializer(), VMap, RF_None, &TypeRemapper, &Materializer));
 
         SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
         GV->getAllMetadata(MDs);
@@ -400,7 +400,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
     for (GlobalAlias *GA : Aliases) {
         GlobalAlias *NGA = cast<GlobalAlias>(VMap[GA]);
         if (const Constant *C = GA->getAliasee())
-            NGA->setAliasee(MapValue(C, VMap));
+            NGA->setAliasee(MapValue(C, VMap, RF_None, &TypeRemapper, &Materializer));
 
         GA->setAliasee(nullptr);
     }
@@ -423,7 +423,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
     for (Module::iterator FI = M.begin(), FE = M.end(); FI != FE;) {
         Function *F = &*FI++;
         if (auto Remangled = Intrinsic::remangleIntrinsicFunction(F)) {
-            F->replaceAllUsesWith(Remangled.getValue());
+            F->replaceAllUsesWith(*Remangled);
             F->eraseFromParent();
         }
     }

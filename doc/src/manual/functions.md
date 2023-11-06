@@ -102,6 +102,9 @@ As a common convention in Julia (not a syntactic requirement), such a function w
 [typically be named `f!(x, y)`](@ref man-punctuation) rather than `f(x, y)`, as a visual reminder at
 the call site that at least one of the arguments (often the first one) is being mutated.
 
+!!! warning "Shared memory between arguments"
+    The behavior of a mutating function can be unexpected when a mutated argument shares memory with another argument, a situation known as aliasing (e.g. when one is a view of the other).
+    Unless the function docstring explicitly indicates that aliasing produces the expected result, it is the responsibility of the caller to ensure proper behavior on such inputs.
 
 ## Argument-type declarations
 
@@ -186,7 +189,7 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
-### Return type
+### [Return type](@id man-functions-return-type)
 
 A return type can be specified in the function declaration using the `::` operator. This converts
 the return value to the specified type.
@@ -327,31 +330,17 @@ julia> map(x -> x^2 + 2x - 1, [1, 3, -1])
 ```
 
 An anonymous function accepting multiple arguments can be written using the syntax `(x,y,z)->2x+y-z`.
+
 Argument-type declarations for anonymous functions work as for named functions, for example `x::Integer->2x`.
 The return type of an anonymous function cannot be specified.
 
-A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
-may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
-wrapped in a zero-argument function, which is later invoked by calling it as `f`.
-
-As an example, consider this call to [`get`](@ref):
-
-```julia
-get(dict, key) do
-    # default value calculated here
-    time()
-end
-```
-
-The code above is equivalent to calling `get` with an anonymous function containing the code
-enclosed between `do` and `end`, like so:
-
-```julia
-get(()->time(), dict, key)
-```
-
-The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
-that is called only if the requested key is absent from `dict`.
+A zero-argument anonymous function can be written as `()->2+2`. The idea of a function with
+no arguments may seem strange, but is useful in cases where a result cannot (or should not)
+be precomputed. For example, Julia has a zero-argument [`time`](@ref) function that returns
+the current time in seconds, and thus `seconds = ()->round(Int, time())` is an anonymous
+function that returns this time rounded to the nearest integer assigned to the variable
+`seconds`. Each time this anonymous function is called as `seconds()` the current time will
+be calculated and returned.
 
 ## Tuples
 

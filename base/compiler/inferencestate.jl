@@ -198,6 +198,10 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+const CACHE_MODE_NULL   = 0x00
+const CACHE_MODE_GLOBAL = 0x01 << 0
+const CACHE_MODE_LOCAL  = 0x01 << 1
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -240,7 +244,7 @@ mutable struct InferenceState
     # Whether to restrict inference of abstract call sites to avoid excessive work
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
-    cached::Bool # TODO move this to InferenceResult?
+    cache_mode::UInt8 # TODO move this to InferenceResult?
     insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
@@ -248,7 +252,7 @@ mutable struct InferenceState
     interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo, cache::Symbol,
+    function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
@@ -303,19 +307,17 @@ mutable struct InferenceState
         end
 
         restrict_abstract_call_sites = isa(def, Module)
-        @assert cache === :no || cache === :local || cache === :global
-        cached = cache === :global
 
         # some more setups
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-        cache !== :no && push!(get_inference_cache(interp), result)
+        !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
         return new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, ipo_effects,
-            restrict_abstract_call_sites, cached, insert_coverage,
+            restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
     end
 end
@@ -336,10 +338,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
-    # 3: (leave 1) # == 1
+    # 3: (leave %1) # == 1
     # 4: (expr)    # == 0
-    # then we can find all trys by walking backwards from :enter statements,
-    # and all catches by looking at the statement after the :enter
+    # then we can find all `try`s by walking backwards from :enter statements,
+    # and all `catch`es by looking at the statement after the :enter
     n = length(code)
     empty!(ip)
     ip.offset = 0 # for _bits_findnext
@@ -386,7 +388,20 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 if head === :enter
                     cur_hand = pc
                 elseif head === :leave
-                    l = stmt.args[1]::Int
+                    l = 0
+                    for j = 1:length(stmt.args)
+                        arg = stmt.args[j]
+                        if arg === nothing
+                            continue
+                        else
+                            enter_stmt = code[(arg::SSAValue).id]
+                            if enter_stmt === nothing
+                                continue
+                            end
+                            @assert isexpr(enter_stmt, :enter) "malformed :leave"
+                        end
+                        l += 1
+                    end
                     for i = 1:l
                         cur_hand = handler_at[cur_hand]
                     end
@@ -396,7 +411,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             if handler_at[pc´] != cur_hand
-                @assert handler_at[pc´] == 0 "unbalanced try/catch"
+                if handler_at[pc´] != 0
+                    @assert false "unbalanced try/catch"
+                end
                 handler_at[pc´] = cur_hand
             elseif !in(pc´, ip)
                 break  # already visited
@@ -432,13 +449,28 @@ function should_insert_coverage(mod::Module, src::CodeInfo)
     return false
 end
 
-function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     world = get_world_counter(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cache, interp)
+    return InferenceState(result, src, cache_mode, interp)
+end
+InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, convert_cache_mode(cache_mode), interp)
+InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, src, convert_cache_mode(cache_mode), interp)
+
+function convert_cache_mode(cache_mode::Symbol)
+    if cache_mode === :global
+        return CACHE_MODE_GLOBAL
+    elseif cache_mode === :local
+        return CACHE_MODE_LOCAL
+    elseif cache_mode === :no
+        return CACHE_MODE_NULL
+    end
+    error("unexpected `cache_mode` is given")
 end
 
 """
@@ -652,7 +684,7 @@ end
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)
-        !sv.cached && print("  [uncached]")
+        is_cached(sv) || print("  [uncached]")
         println()
         for cycle in sv.callers_in_cycle
             print(' ', cycle.linfo)
@@ -719,7 +751,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     @assert code.def === mi
     src = @atomic :monotonic code.inferred
     if isa(src, String)
-        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+        src = _uncompressed_ir(mi.def, src)
     else
         isa(src, CodeInfo) || return nothing
     end
@@ -750,7 +782,7 @@ frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
 is_constproped(sv::InferenceState) = any(sv.result.overridden_by_const)
 is_constproped(::IRInterpretationState) = true
 
-is_cached(sv::InferenceState) = sv.cached
+is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
 is_cached(::IRInterpretationState) = false
 
 method_info(sv::InferenceState) = sv.method_info

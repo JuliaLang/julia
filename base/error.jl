@@ -37,7 +37,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
@@ -197,15 +197,17 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the preferred syntax for
+writing assertions, which are conditions that are assumed to be true, but that the user
+might decide to check anyways, as an aid to debugging if they fail.
+The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at various optimization levels.
+    An assert might be disabled at some optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords),
-    nor should side effects needed for the function to work correctly
-    be used inside of asserts.
+    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
+    The code must not rely on the side effects of running `cond` for the correct behavior
+    of a function.
 
 # Examples
 ```jldoctest

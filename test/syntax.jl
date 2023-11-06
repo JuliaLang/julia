@@ -1783,6 +1783,43 @@ end
 @test B28593.var.name === :S
 @test C28593.var.name === :S
 
+# issue #51899
+macro struct_macro_51899()
+    quote
+        mutable struct Struct51899
+            const const_field
+            const const_field_with_type::Int
+            $(esc(Expr(:const, :(escaped_const_field::MyType))))
+            @atomic atomic_field
+            @atomic atomic_field_with_type::Int
+        end
+    end
+end
+
+let ex = @macroexpand @struct_macro_51899()
+    const_field, const_field_with_type, escaped_const_field,
+    atomic_field, atomic_field_with_type = filter(x -> isa(x, Expr), ex.args[end].args[end].args)
+    @test Meta.isexpr(const_field, :const)
+    @test const_field.args[1] === :const_field
+
+    @test Meta.isexpr(const_field_with_type, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test const_field_with_type.args[1].args[1] === :const_field_with_type
+    @test const_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+
+    @test Meta.isexpr(escaped_const_field, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test escaped_const_field.args[1].args[1] === :escaped_const_field
+    @test escaped_const_field.args[1].args[2] === :MyType
+
+    @test Meta.isexpr(atomic_field, :atomic)
+    @test atomic_field.args[1] === :atomic_field
+
+    @test Meta.isexpr(atomic_field_with_type, :atomic)
+    @test atomic_field_with_type.args[1].args[1] === :atomic_field_with_type
+    @test atomic_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+end
+
 # issue #25955
 macro noeffect25955(e)
     return e
@@ -3187,6 +3224,22 @@ end
     end
     @test err == 5 + 6
     @test x == 1
+
+    x = 0
+    try
+    catch
+    else
+        x = 1
+    end
+    @test x == 1
+
+    try
+    catch
+    else
+        tryelse_in_local_scope = true
+    end
+
+    @test !@isdefined(tryelse_in_local_scope)
 end
 
 @test_parseerror """
@@ -3535,4 +3588,27 @@ end
 # Test that bad lowering does not segfault (ref #50518)
 @test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
     $(Symbol("#unused#"))
+end
+
+@testset "public keyword" begin
+    p(str) = Base.remove_linenums!(Meta.parse(str))
+    # tests ported from JuliaSyntax.jl
+    @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
+    @test p("public A, B") == Expr(:public, :A, :B)
+    @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
+    @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
+    @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
+    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
+    @test_throws Meta.ParseError p("begin \n public A, B \n end")
+    @test_throws Meta.ParseError p("if true \n public A, B \n end")
+    @test_throws Meta.ParseError p("public export=true foo, bar")
+    @test_throws Meta.ParseError p("public experimental=true foo, bar")
+    @test p("public(x::String) = false") == Expr(:(=), Expr(:call, :public, Expr(:(::), :x, :String)), Expr(:block, false))
+    @test p("module M; export @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :var"@a")))
+    @test p("module M; public @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :var"@a")))
+    @test p("module M; export ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :⤈)))
+    @test p("module M; public ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :⤈)))
+    @test p("public = 4") == Expr(:(=), :public, 4)
+    @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
+    @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end

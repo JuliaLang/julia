@@ -250,7 +250,7 @@ We get:
   └──      return %3                      │
 ```
 
-Even though we were in the `f` scope since the first statement, it tooks us two statements
+Even though we were in the `f` scope since the first statement, it took us two statements
 to catch up and print the intermediate scopes. Which scope is printed is indicated both
 by the indentation of the method name and by an increased thickness of the appropriate
 line for the scope.

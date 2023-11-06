@@ -367,11 +367,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
-        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size);
+        jl_atomic_store_relaxed(&ptls->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size));
     }
     else {
-        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
-                                    sizeof(size_t));
+        jl_atomic_store_relaxed(&ptls->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
+                                sizeof(size_t)));
     }
     jl_bt_element_t *bt_data = (jl_bt_element_t*)
         malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
@@ -693,7 +693,7 @@ void jl_init_threading(void)
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
     jl_n_threads_per_pool[0] = nthreadsi;
     jl_n_threads_per_pool[1] = nthreads;
-
+    assert(jl_all_tls_states_size > 0);
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;

@@ -70,8 +70,8 @@ end
 @noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
-            xx = -ziggurat_nor_inv_r*log(rand(rng))
-            yy = -log(rand(rng))
+            xx = -ziggurat_nor_inv_r*log1p(-rand(rng))
+            yy = -log1p(-rand(rng))
             yy+yy > xx*xx &&
                 return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
         end
@@ -138,7 +138,7 @@ end
 
 @noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
-        return ziggurat_exp_r - log(rand(rng))
+        return ziggurat_exp_r - log1p(-rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
         return x # return from the triangular area
     else

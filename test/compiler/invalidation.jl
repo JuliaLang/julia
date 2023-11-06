@@ -18,30 +18,22 @@ InvalidationTesterCache() = InvalidationTesterCache(IdDict{MethodInstance,CodeIn
 const INVALIDATION_TESTER_CACHE = InvalidationTesterCache()
 
 struct InvalidationTester <: CC.AbstractInterpreter
-    callback!
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
     code_cache::InvalidationTesterCache
-    function InvalidationTester(callback! = nothing;
+    function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::CC.InferenceParams = CC.InferenceParams(),
                                 opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                                 inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                                 code_cache::InvalidationTesterCache = INVALIDATION_TESTER_CACHE)
-        if callback! === nothing
-            callback! = function (replaced::MethodInstance)
-                # Core.println(replaced) # debug
-                delete!(code_cache.dict, replaced)
-            end
-        end
-        return new(callback!, world, inf_params, opt_params, inf_cache, code_cache)
+        return new(world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 
 struct InvalidationTesterCacheView
-    interp::InvalidationTester
     dict::IdDict{MethodInstance,CodeInstance}
 end
 
@@ -49,42 +41,17 @@ CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
 CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
 CC.get_world_counter(interp::InvalidationTester) = interp.world
 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
-CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp, interp.code_cache.dict), WorldRange(interp.world))
+CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp.code_cache.dict), WorldRange(interp.world))
 CC.get(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
 function CC.setindex!(wvc::WorldView{InvalidationTesterCacheView}, ci::CodeInstance, mi::MethodInstance)
-    add_callback!(wvc.cache.interp.callback!, mi)
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.dict, replaced)
+        # Core.println("[InvalidationTester] ", replaced) # debug
+    end
     setindex!(wvc.cache.dict, ci, mi)
 end
-
-function add_callback!(@nospecialize(callback!), mi::MethodInstance)
-    callback = function (replaced::MethodInstance, max_world,
-                         seen::Base.IdSet{MethodInstance} = Base.IdSet{MethodInstance}())
-        push!(seen, replaced)
-        callback!(replaced)
-        if isdefined(replaced, :backedges)
-            for item in replaced.backedges
-                isa(item, MethodInstance) || continue # might be `Type` object representing an `invoke` signature
-                mi = item
-                mi in seen && continue # otherwise fail into an infinite loop
-                var"#self#"(mi, max_world, seen)
-            end
-        end
-        return nothing
-    end
-
-    if !isdefined(mi, :callbacks)
-        mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return nothing
-end
-
 
 # basic functionality test
 # ------------------------
@@ -173,13 +140,13 @@ end
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)
-    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
-    pr48932_caller_unuse(x) = (pr48932_callee_inferrable(Base.inferencebarrier(x)); nothing)
+    pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
+    pr48932_caller_unuse(x) = (pr48932_callee_inferable(Base.inferencebarrier(x)); nothing)
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
-    let rt = only(Base.return_types(pr48932_callee_inferrable, (Any,)))
+    let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
         @test rt === Int
-        effects = Base.infer_effects(pr48932_callee_inferrable, (Any,))
+        effects = Base.infer_effects(pr48932_callee_inferable, (Any,))
         @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
     end
 
@@ -190,10 +157,10 @@ begin take!(GLOBAL_BUFFER)
             @inline pr48932_caller_unuse(x)
         end |> only
         @test rt === Nothing
-        @test any(iscall((src, pr48932_callee_inferrable)), src.code)
+        @test any(iscall((src, pr48932_callee_inferable)), src.code)
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferrable
+        mi.def.name === :pr48932_callee_inferable
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
         mi.def.name === :pr48932_caller_unuse
@@ -201,11 +168,11 @@ begin take!(GLOBAL_BUFFER)
     @test isnothing(pr48932_caller_unuse(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 
-    # test that we didn't add the backedge from `pr48932_callee_inferrable` to `pr48932_caller_unuse`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inferrable` but not that of `pr48932_caller_unuse`
-    pr48932_callee_inferrable(x) = (print(GLOBAL_BUFFER, "foo"); x)
+    # test that we didn't add the backedge from `pr48932_callee_inferable` to `pr48932_caller_unuse`:
+    # this redefinition below should invalidate the cache of `pr48932_callee_inferable` but not that of `pr48932_caller_unuse`
+    pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, "foo"); x)
     @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferrable
+        mi.def.name === :pr48932_callee_inferable
     end
     @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
         mi.def.name === :pr48932_caller_unuse

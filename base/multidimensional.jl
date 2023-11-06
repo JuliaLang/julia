@@ -424,27 +424,17 @@ module IteratorsMD
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] + step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != last(rng)
-        return valid, (I, )
+        valid = state[1] != last(rng)
+        return valid, (I,)
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] + step(rng)
-        if __is_valid_range(I, rng) && state[1] != last(rng)
+        if state[1] != last(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __inc(tail(state), tail(indices))
         return valid, (first(rng), I...)
-    end
-
-    @inline __is_valid_range(I, rng::AbstractUnitRange) = I in rng
-    @inline function __is_valid_range(I, rng::OrdinalRange)
-        if step(rng) > 0
-            lo, hi = first(rng), last(rng)
-        else
-            lo, hi = last(rng), first(rng)
-        end
-        lo <= I <= hi
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -556,13 +546,13 @@ module IteratorsMD
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] - step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != first(rng)
+        valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] - step(rng)
-        if __is_valid_range(I, rng) && state[1] != first(rng)
+        if state[1] != first(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __dec(tail(state), tail(indices))
@@ -1179,8 +1169,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
-The `dest` array must be distinct from the `src` array (they cannot
-alias each other).
+$(_DOCS_ALIASING_WARNING)
 
 See also [`circshift`](@ref).
 """
@@ -1237,6 +1226,8 @@ Copy `src` to `dest`, indexing each dimension modulo its length.
 their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`circshift`](@ref).
 

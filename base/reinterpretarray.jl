@@ -350,7 +350,7 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
-unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
+cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 
 @inline @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if isprimitivetype(T) && isprimitivetype(S)
@@ -672,7 +672,7 @@ end
 """
     CyclePadding(padding, total_size)
 
-Cylces an iterator of `Padding` structs, restarting the padding at `total_size`.
+Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
 E.g. if `padding` is all the padding in a struct and `total_size` is the total
 aligned size of that array, `CyclePadding` will correspond to the padding in an
 infinite vector of such structs.

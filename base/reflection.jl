@@ -430,13 +430,16 @@ struct DataTypeLayout
     flags::UInt16
     # haspadding : 1;
     # fielddesc_type : 2;
+    # arrayelem_isboxed : 1;
+    # arrayelem_isunion : 1;
 end
 
 """
     Base.datatype_alignment(dt::DataType) -> Int
 
 Memory allocation minimum alignment for instances of this type.
-Can be called on any `isconcretetype`.
+Can be called on any `isconcretetype`, although for Memory it will give the
+alignment of the elements, not the whole object.
 """
 function datatype_alignment(dt::DataType)
     @_foldable_meta
@@ -478,7 +481,8 @@ gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
     Base.datatype_haspadding(dt::DataType) -> Bool
 
 Return whether the fields of instances of this type are packed in memory,
-with no intervening padding bytes.
+with no intervening padding bits (defined as bits whose value does not uniquely
+impact the egal test when applied to the struct fields).
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
@@ -489,9 +493,10 @@ function datatype_haspadding(dt::DataType)
 end
 
 """
-    Base.datatype_nfields(dt::DataType) -> Bool
+    Base.datatype_nfields(dt::DataType) -> UInt32
 
-Return the number of fields known to this datatype's layout.
+Return the number of fields known to this datatype's layout. This may be
+different from the number of actual fields of the type for opaque types.
 Can be called on any `isconcretetype`.
 """
 function datatype_nfields(dt::DataType)
@@ -529,6 +534,31 @@ function datatype_fielddesc_type(dt::DataType)
     return (flags >> 1) & 3
 end
 
+"""
+    Base.datatype_arrayelem(dt::DataType) -> Int
+
+Return the behavior of the trailing array types allocations.
+Can be called on any `isconcretetype`, but only meaningful on `Memory`.
+
+0 = inlinealloc
+1 = isboxed
+2 = isbitsunion
+"""
+function datatype_arrayelem(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags >> 3) & 3
+end
+
+function datatype_layoutsize(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    size = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).size
+    return size % Int
+end
+
+
 # For type stability, we only expose a single struct that describes everything
 struct FieldDesc
     isforeign::Bool
@@ -555,7 +585,7 @@ end
 
 function getindex(dtfd::DataTypeFieldDesc, i::Int)
     layout_ptr = convert(Ptr{DataTypeLayout}, dtfd.dt.layout)
-    fd_ptr = layout_ptr + sizeof(DataTypeLayout)
+    fd_ptr = layout_ptr + Core.sizeof(DataTypeLayout)
     layout = unsafe_load(layout_ptr)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
@@ -830,10 +860,10 @@ end
     Base.issingletontype(T)
 
 Determine whether type `T` has exactly one possible instance; for example, a
-struct type with no fields.
-If `T` is not a type, then return `false`.
+struct type with no fields except other singleton values.
+If `T` is not a concrete type, then return `false`.
 """
-issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance))
+issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance) && datatype_layoutsize(t) == 0 && datatype_pointerfree(t))
 
 """
     typeintersect(T::Type, S::Type)
@@ -1157,7 +1187,7 @@ A list of modules can also be specified as an array.
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also: [`which`](@ref) and `@which`.
+See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
@@ -1194,11 +1224,11 @@ function visit(f, mt::Core.MethodTable)
     nothing
 end
 function visit(f, mc::Core.TypeMapLevel)
-    function avisit(f, e::Array{Any,1})
+    function avisit(f, e::Memory{Any})
         for i in 2:2:length(e)
             isassigned(e, i) || continue
             ei = e[i]
-            if ei isa Vector{Any}
+            if ei isa Memory{Any}
                 for j in 2:2:length(ei)
                     isassigned(ei, j) || continue
                     visit(f, ei[j])
@@ -1209,16 +1239,16 @@ function visit(f, mc::Core.TypeMapLevel)
         end
     end
     if mc.targ !== nothing
-        avisit(f, mc.targ::Vector{Any})
+        avisit(f, mc.targ::Memory{Any})
     end
     if mc.arg1 !== nothing
-        avisit(f, mc.arg1::Vector{Any})
+        avisit(f, mc.arg1::Memory{Any})
     end
     if mc.tname !== nothing
-        avisit(f, mc.tname::Vector{Any})
+        avisit(f, mc.tname::Memory{Any})
     end
     if mc.name1 !== nothing
-        avisit(f, mc.name1::Vector{Any})
+        avisit(f, mc.name1::Memory{Any})
     end
     mc.list !== nothing && visit(f, mc.list)
     mc.any !== nothing && visit(f, mc.any)
@@ -1336,6 +1366,11 @@ struct CodegenParams
     debug_info_kind::Cint
 
     """
+    Controls the debug_info_level parameter, equivalent to the -g command line option.
+    """
+    debug_info_level::Cint
+
+    """
     If enabled, generate a GC safepoint at the entry to every function. Emitting
     these extra safepoints can reduce the amount of time that other threads are
     waiting for the currently running thread to reach a safepoint. The cost for
@@ -1349,7 +1384,7 @@ struct CodegenParams
     using the `swiftself` convention, which in the ordinary case means that the
     pointer is kept in a register and accesses are thus very fast. If this option
     is disabled, the task local state pointer must be loaded from thread local
-    stroage, which incurs a small amount of additional overhead. The option is enabled by
+    storage, which incurs a small amount of additional overhead. The option is enabled by
     default.
     """
     gcstack_arg::Cint
@@ -1376,15 +1411,15 @@ struct CodegenParams
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
-                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   safepoint_on_entry::Bool=true,
+                   gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
-            Cint(safepoint_on_entry),
+            debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt),
             lookup)
     end
@@ -1863,7 +1898,7 @@ Returns the method of `f` (a `Method` object) that would be called for arguments
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
-See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
+See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), and [`@edit`](@ref Main.InteractiveUtils.@edit).
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -2229,6 +2264,7 @@ See also: [`hasproperty`](@ref), [`hasfield`](@ref).
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
 propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
+propertynames(x::Array) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
 
 """
     hasproperty(x, s::Symbol)
