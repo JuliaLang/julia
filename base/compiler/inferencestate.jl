@@ -198,9 +198,10 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
-const CACHE_MODE_NULL   = 0x00
-const CACHE_MODE_GLOBAL = 0x01 << 0
-const CACHE_MODE_LOCAL  = 0x01 << 1
+const CACHE_MODE_NULL     = 0x00      # not cached, without optimization
+const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization allowed
+const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization allowed
+const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 
 mutable struct InferenceState
     #= information about this method instance =#
@@ -467,6 +468,8 @@ function convert_cache_mode(cache_mode::Symbol)
         return CACHE_MODE_GLOBAL
     elseif cache_mode === :local
         return CACHE_MODE_LOCAL
+    elseif cache_mode === :volatile
+        return CACHE_MODE_VOLATILE
     elseif cache_mode === :no
         return CACHE_MODE_NULL
     end

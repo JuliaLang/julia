@@ -59,12 +59,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
                 result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, si, sv)
-                (; rt, edge, effects) = result
+                (; rt, edge, effects, volatile_inf_result) = result
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp,
                     result, f, this_arginfo, si, match, sv)
-                const_result = nothing
+                const_result = volatile_inf_result
                 if const_call_result !== nothing
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
@@ -90,7 +90,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_rt = widenwrappedconditional(this_rt)
         else
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
-            (; rt, edge, effects) = result
+            (; rt, edge, effects, volatile_inf_result) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
             # try constant propagation with argtypes for this match
@@ -99,7 +99,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_arginfo = ArgInfo(fargs, this_argtypes)
             const_call_result = abstract_call_method_with_const_args(interp,
                 result, f, this_arginfo, si, match, sv)
-            const_result = nothing
+            const_result = volatile_inf_result
             if const_call_result !== nothing
                 this_const_conditional = ignorelimited(const_call_result.rt)
                 this_const_rt = widenwrappedconditional(const_call_result.rt)
@@ -621,7 +621,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         sparams = recomputed[2]::SimpleVector
     end
 
-    (; rt, edge, effects) = typeinf_edge(interp, method, sig, sparams, sv)
+    (; rt, edge, effects, volatile_inf_result) = typeinf_edge(interp, method, sig, sparams, sv)
 
     if edge === nothing
         edgecycle = edgelimited = true
@@ -645,7 +645,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         end
     end
 
-    return MethodCallResult(rt, edgecycle, edgelimited, edge, effects)
+    return MethodCallResult(rt, edgecycle, edgelimited, edge, effects, volatile_inf_result)
 end
 
 function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
@@ -748,12 +748,14 @@ struct MethodCallResult
     edgelimited::Bool
     edge::Union{Nothing,MethodInstance}
     effects::Effects
+    volatile_inf_result::Union{Nothing,VolatileInferenceResult}
     function MethodCallResult(@nospecialize(rt),
                               edgecycle::Bool,
                               edgelimited::Bool,
                               edge::Union{Nothing,MethodInstance},
-                              effects::Effects)
-        return new(rt, edgecycle, edgelimited, edge, effects)
+                              effects::Effects,
+                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
+        return new(rt, edgecycle, edgelimited, edge, effects, volatile_inf_result)
     end
 end
 
@@ -1945,7 +1947,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, si, sv)
-    (; rt, edge, effects) = result
+    (; rt, edge, effects, volatile_inf_result) = result
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -1962,7 +1964,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     invokecall = InvokeCall(types, lookupsig)
     const_call_result = abstract_call_method_with_const_args(interp,
         result, f, arginfo, si, match, sv, invokecall)
-    const_result = nothing
+    const_result = volatile_inf_result
     if const_call_result !== nothing
         if ⊑(𝕃ₚ, const_call_result.rt, rt)
             (; rt, effects, const_result, edge) = const_call_result
@@ -2091,13 +2093,13 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
-    (; rt, edge, effects) = result
+    (; rt, edge, effects, volatile_inf_result) = result
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
     𝕃ₚ = ipo_lattice(interp)
     ⊑ₚ = ⊑(𝕃ₚ)
-    const_result = nothing
+    const_result = volatile_inf_result
     if !result.edgecycle
         const_call_result = abstract_call_method_with_const_args(interp, result,
             nothing, arginfo, si, match, sv)

@@ -507,6 +507,17 @@ end
         Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit() = @inline noinlined_constprop_implicit(0)
 
+        function force_inline_constprop_cached1()
+            r1 =         noinlined_constprop_implicit(0)
+            r2 = @inline noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+        function force_inline_constprop_cached2()
+            r1 = @inline noinlined_constprop_implicit(0)
+            r2 =         noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+
         @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit() = @noinline inlined_constprop_explicit(0)
         @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
@@ -556,6 +567,12 @@ end
     end
     let code = get_code(M.force_inline_constprop_implicit)
         @test all(!isinvoke(:noinlined_constprop_implicit), code)
+    end
+    let code = get_code(M.force_inline_constprop_cached1)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
+    let code = get_code(M.force_inline_constprop_cached2)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
     end
 
     let code = get_code(M.force_noinline_constprop_explicit)

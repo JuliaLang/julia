@@ -75,25 +75,11 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
 
 function inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    _::Vector{Any})
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
