@@ -10,6 +10,7 @@
 #include "support/utils.h"
 #include "support/hashing.h"
 #include "support/ptrhash.h"
+#include "egalhash.h"
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
