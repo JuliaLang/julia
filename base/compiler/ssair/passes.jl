@@ -2191,13 +2191,13 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
         if !isassigned(stmt.values, ordered_i) || (val isa SSAValue && ssa_to_ssa[val.id] == 0)
             deleteat!(key, key_edge_idx(i, deletions))
             deletions += 1
-            deleteat!(key, key_value_idx(deletions, i))
+            deleteat!(key, key_value_idx(i, deletions))
             deletions += 1
         else
             key[key_edge_idx(i, deletions)] = stmt.edges[ordered_i]
 
             if val isa SSAValue
-                key[key_value_idx(deletions, i)] = ssa_to_ssa[val.id]
+                key[key_value_idx(i, deletions)] = ssa_to_ssa[val.id]
                 if firstval === nothing
                     firstval = val
                     firstedge = stmt.edges[key_edge_idx(i, deletions)]
@@ -2205,7 +2205,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
                     allthesame &= val === firstval
                 end
             else
-                key[key_value_idx(deletions, i)] = val
+                key[key_value_idx(i, deletions)] = val
                 allthesame = false
             end
         end
