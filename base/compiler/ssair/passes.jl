@@ -2186,28 +2186,30 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for (i, ordered_i) in enumerate(ordered_indices)
-        val = isassigned(stmt.values, ordered_i) ? stmt.values[ordered_i] : SSAValue(0)
+        !isassigned(stmt.values, ordered_i) && return nothing
+        val = stmt.values[ordered_i]
 
-        if !isassigned(stmt.values, ordered_i) || (val isa SSAValue && ssa_to_ssa[val.id] == 0)
+        if val isa SSAValue && ssa_to_ssa[val.id] == 0
             deleteat!(key, key_edge_idx(i, deletions))
             deletions += 1
             deleteat!(key, key_value_idx(i, deletions))
             deletions += 1
-        else
-            key[key_edge_idx(i, deletions)] = stmt.edges[ordered_i]
+            continue
+        end
 
-            if val isa SSAValue
-                key[key_value_idx(i, deletions)] = ssa_to_ssa[val.id]
-                if firstval === nothing
-                    firstval = val
-                    firstedge = stmt.edges[key_edge_idx(i, deletions)]
-                else
-                    allthesame &= val === firstval
-                end
+        key[key_edge_idx(i, deletions)] = stmt.edges[ordered_i]
+
+        if val isa SSAValue
+            key[key_value_idx(i, deletions)] = ssa_to_ssa[val.id]
+            if firstval === nothing
+                firstval = val
+                firstedge = stmt.edges[key_edge_idx(i, deletions)]
             else
-                key[key_value_idx(i, deletions)] = val
-                allthesame = false
+                allthesame &= val === firstval
             end
+        else
+            key[key_value_idx(i, deletions)] = val
+            allthesame = false
         end
     end
     if allthesame && firstval !== nothing && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
