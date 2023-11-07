@@ -1267,7 +1267,6 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
             FnAttrs.addAttribute(Attribute::WillReturn);
             RetAttrs.addAlignmentAttr(Align(16));
             RetAttrs.addAttribute(Attribute::NonNull);
-            RetAttrs.addAttribute(Attribute::NoAlias);
             RetAttrs.addDereferenceableAttr(16);
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
