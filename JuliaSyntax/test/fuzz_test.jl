@@ -969,6 +969,10 @@ function product_token_fuzz(tokens, N)
     (join(ts) for ts in Iterators.product([tokens for _ in 1:N]...))
 end
 
+function random_token_fuzz(tokens, ntokens, ntries)
+    (join(rand(tokens, ntokens)) for _ in 1:ntries)
+end
+
 """
 Fuzz test parser against randomly generated binary strings
 """
