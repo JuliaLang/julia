@@ -2222,7 +2222,7 @@ This is based on the NewGVN pass in LLVM.
 GVN partitions all the statements in the IR into congruence classes. All elements in a congruence class are guaranteed to be the same.
 
 It implements the RPO value numbering algorithm based on the paper "SCC based value numbering" by L. Taylor Simpson.
-The elimination step is based on the implemenation in LLVM's NewGVN pass.
+The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
     changed = true
