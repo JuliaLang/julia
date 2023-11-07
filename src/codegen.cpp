@@ -1322,7 +1322,7 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet::get(C, RetAttrs),
                 None); },
-};                                               
+};
 static const auto jlarray_data_owner_func = new JuliaFunction<>{
     XSTR(jl_array_data_owner),
     [](LLVMContext &C) {
