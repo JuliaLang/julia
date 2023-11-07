@@ -66,6 +66,10 @@ end
             LineNumberNode(4, "somefile"),
         ]
         @test Meta.isexpr(ex.args[6], :error)
+
+        ex = JuliaSyntax.core_parser_hook("x.", "somefile", 0, 0, :all)[1]
+        @test ex.head == :toplevel
+        @test ex.args[2].head == :incomplete
     end
 
     @testset "enable_in_core!" begin

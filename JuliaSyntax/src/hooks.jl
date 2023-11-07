@@ -127,6 +127,8 @@ function _has_nested_error(ex)
         else
             return any(_has_nested_error(e) for e in ex.args)
         end
+    elseif ex isa QuoteNode
+        return _has_nested_error(ex.value)
     else
         return false
     end
