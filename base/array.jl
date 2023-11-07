@@ -3033,6 +3033,8 @@ end
 Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
 of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
 """
+function wrap end
+
 @eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
     mem = ref.mem
     mem_len = length(mem)
