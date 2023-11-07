@@ -529,6 +529,41 @@ internal or recursive calls.
 """
 function _sort! end
 
+# TODO: delete this optimization when views have no overhead.
+const UnwrappableSubArray = SubArray{T, 1, <:AbstractArray{T}, <:Tuple{AbstractUnitRange, Vararg{Number}}, true} where T
+const EagerlyUnwrappableSubArray = SubArray{T, 1, <:AbstractVector{T}, <:Tuple{AbstractUnitRange}, true} where T
+"""
+    SubArrayOptimization(next) <: Algorithm
+
+Unwrap certain known SubArrays because views have a performance overhead 😢
+
+Specifically, unwraps all instances of the type
+
+    $EagerlyUnwrappableSubArray
+
+And, for large (`hi-lo > 100`) inputs, also unwraps instances of the type
+
+    $UnwrappableSubArray
+"""
+struct SubArrayOptimization{T <: Algorithm} <: Algorithm
+    next::T
+end
+
+_sort!(v::AbstractVector, a::SubArrayOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
+function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
+    @getkw lo hi
+    # @assert v.stride1 == 1
+    if hi-lo > 100 # vec has a cost
+        _sort!(vec(v.parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+    else
+        _sort!(v, a.next, o, kw)
+    end
+end
+function _sort!(v::EagerlyUnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
+    @getkw lo hi
+    # @assert v.stride1 == 1
+    _sort!(v.parent, a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+end
 
 """
     MissingOptimization(next) <: Algorithm
@@ -1224,14 +1259,16 @@ future versions of Julia.
 If `next` is stable, then `InitialOptimizations(next)` is also stable.
 
 The specific optimizations attempted by `InitialOptimizations` are
-[`MissingOptimization`](@ref), [`BoolOptimization`](@ref), dispatch to
-[`InsertionSort`](@ref) for inputs with `length <= 10`, and [`IEEEFloatOptimization`](@ref).
+[`SubArrayOptimization`](@ref), [`MissingOptimization`](@ref), [`BoolOptimization`](@ref),
+dispatch to [`InsertionSort`](@ref) for inputs with `length <= 10`, and
+[`IEEEFloatOptimization`](@ref).
 """
-InitialOptimizations(next) = MissingOptimization(
-    BoolOptimization(
-        Small{10}(
-            IEEEFloatOptimization(
-                next))))
+InitialOptimizations(next) = SubArrayOptimization(
+    MissingOptimization(
+        BoolOptimization(
+            Small{10}(
+                IEEEFloatOptimization(
+                    next)))))
 """
     DEFAULT_STABLE
 
