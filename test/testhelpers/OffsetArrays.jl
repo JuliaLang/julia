@@ -142,7 +142,7 @@ end
 @inline function Base.getindex(r::IdOffsetRange, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
-    @inbounds eltype(r)(r.parent[i - r.offset] + r.offset)
+    @inbounds eltype(r)(r.parent[oftype(r.offset, i) - r.offset] + r.offset)
 end
 
 # Logical indexing following https://github.com/JuliaLang/julia/pull/31829
@@ -592,7 +592,7 @@ Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 #   Δi = i - first(r)
 #   i′ = first(r.parent) + Δi
 # and one obtains the result below.
-parentindex(r::IdOffsetRange, i) = i - r.offset
+parentindex(r::IdOffsetRange, i) = oftype(r.offset, i) - r.offset
 
 @propagate_inbounds Base.getindex(A::OffsetArray{<:Any,0})  = A.parent[]
 

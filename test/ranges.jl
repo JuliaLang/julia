@@ -2425,3 +2425,10 @@ end
     @test collect(r) isa Vector{Int}
     @test collect(r) == r
 end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
+end

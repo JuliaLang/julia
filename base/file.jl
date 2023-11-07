@@ -303,7 +303,9 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
             uv_fs_req_cleanup(req)
-            ret < 0 && uv_error("rm($(repr(path)))", ret)
+            if ret < 0 && !(force && ret == Base.UV_ENOENT)
+                uv_error("rm($(repr(path)))", ret)
+            end
             nothing
         finally
             Libc.free(req)

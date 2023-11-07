@@ -1247,5 +1247,6 @@ function f2(inc)
         x -> x - 1
     end
 end
+```
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
