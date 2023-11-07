@@ -884,7 +884,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
     elseif isa(result, VolatileInferenceResult)
         inferred_result = get_local_result(result.inf_result)
         # volatile inference result can be inlined destructively
-        preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
+        preserve_local_sources = !result.inf_result.is_src_volatile | OptimizationParams(state.interp).preserve_local_sources
     else
         inferred_result = get_cached_result(state, mi)
     end
