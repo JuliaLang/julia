@@ -285,7 +285,7 @@ adjoint(A::Transpose{<:Any,<:Adjoint}) = transpose(A.parent.parent)
 transpose(A::Adjoint{<:Any,<:Transpose}) = adjoint(A.parent.parent)
 # disambiguation
 adjoint(A::Transpose{<:Real,<:Adjoint}) = transpose(A.parent.parent)
-transpose(A::Adjoint{<:Real,<:Transpose}) = adjoint(A.parent.parent)
+transpose(A::Adjoint{<:Real,<:Transpose}) = A.parent
 
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
