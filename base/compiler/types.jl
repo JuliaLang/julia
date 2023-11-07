@@ -76,13 +76,12 @@ mutable struct InferenceResult
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
-    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
         return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
-            WorldRange(), Effects(), Effects(), nothing, true)
+            WorldRange(), Effects(), Effects(), nothing)
     end
 end
 InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
