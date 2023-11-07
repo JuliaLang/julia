@@ -351,6 +351,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     size_t from = s->ip;
     size_t ip = to;
     unsigned nphiblockstmts = 0;
+    unsigned last_phi = 0;
     for (ip = to; ip < ns; ip++) {
         jl_value_t *e = jl_array_ptr_ref(stmts, ip);
         if (!jl_is_phinode(e)) {
@@ -361,9 +362,16 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             }
             // Everything else is allowed in the phi-block for implementation
             // convenience - fall through.
+        } else {
+            last_phi = nphiblockstmts + 1;
         }
         nphiblockstmts += 1;
     }
+    // Cut off the phi block at the last phi node. For global refs that are not
+    // actually in the phi block, we want to evaluate them in the regular interpreter
+    // loop instead to make sure exception state is set up properly in case they throw.
+    nphiblockstmts = last_phi;
+    ip = to + last_phi;
     if (nphiblockstmts) {
         jl_value_t **dest = &s->locals[jl_source_nslots(s->src) + to];
         jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphiblockstmts);

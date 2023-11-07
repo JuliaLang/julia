@@ -507,6 +507,17 @@ end
         Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit() = @inline noinlined_constprop_implicit(0)
 
+        function force_inline_constprop_cached1()
+            r1 =         noinlined_constprop_implicit(0)
+            r2 = @inline noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+        function force_inline_constprop_cached2()
+            r1 = @inline noinlined_constprop_implicit(0)
+            r2 =         noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+
         @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit() = @noinline inlined_constprop_explicit(0)
         @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
@@ -557,6 +568,12 @@ end
     let code = get_code(M.force_inline_constprop_implicit)
         @test all(!isinvoke(:noinlined_constprop_implicit), code)
     end
+    let code = get_code(M.force_inline_constprop_cached1)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
+    let code = get_code(M.force_inline_constprop_cached2)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
 
     let code = get_code(M.force_noinline_constprop_explicit)
         @test any(isinvoke(:inlined_constprop_explicit), code)
@@ -568,6 +585,18 @@ end
     let code = get_code(M.nested, (Int,Int))
         @test count(isinvoke(:notinlined), code) == 1
     end
+end
+
+@noinline fresh_edge_noinlined(a::Integer) = unresolvable(a)
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0
+end
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0 # should be idempotent
 end
 
 # force constant-prop' for `setproperty!`
@@ -1840,26 +1869,16 @@ end
 # Test that inlining can still use nothrow information from concrete-eval
 # even if the result itself is too big to be inlined, and nothrow is not
 # known without concrete-eval
-const THE_BIG_TUPLE = ntuple(identity, 1024)
+const THE_BIG_TUPLE = ntuple(identity, 1024);
 function return_the_big_tuple(err::Bool)
     err && error("BAD")
     return THE_BIG_TUPLE
 end
-@noinline function return_the_big_tuple_noinline(err::Bool)
-    err && error("BAD")
-    return THE_BIG_TUPLE
+@test fully_eliminated() do
+    return_the_big_tuple(false)[1]
 end
-big_tuple_test1() = return_the_big_tuple(false)[1]
-big_tuple_test2() = return_the_big_tuple_noinline(false)[1]
-
-@test fully_eliminated(big_tuple_test2, Tuple{})
-# Currently we don't run these cleanup passes, but let's make sure that
-# if we did, inlining would be able to remove this
-let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
-    ir = Core.Compiler.compact!(ir, true)
-    ir = Core.Compiler.cfg_simplify!(ir)
-    ir = Core.Compiler.compact!(ir, true)
-    @test length(ir.stmts) == 1
+@test fully_eliminated() do
+    @inline return_the_big_tuple(false)[1]
 end
 
 # inlineable but removable call should be eligible for DCE

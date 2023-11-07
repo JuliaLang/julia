@@ -1250,7 +1250,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             BasicBlock *dynloadBB = BasicBlock::Create(ctx.builder.getContext(), "dyn_sizeof", ctx.f);
             BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_sizeof", ctx.f);
             Value *isboxed = ctx.builder.CreateICmpNE(
-                    ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80)),
+                    ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
             ctx.builder.CreateCondBr(isboxed, dynloadBB, postBB);
             ctx.builder.SetInsertPoint(dynloadBB);
@@ -1406,6 +1406,9 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck = 
 template<typename Func>
 static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, Func &&func)
 {
+    if (!ifnot) {
+        return func();
+    }
     if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
         if (Cond->isZero())
             return defval;
@@ -1544,21 +1547,25 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 }
 
 // a simple case of emit_isa that is obvious not to include a safe-point
-static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt)
+static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null=false)
 {
     assert(jl_is_concrete_type((jl_value_t*)dt));
     if (arg.TIndex) {
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
             // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
+            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
             auto isa = ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
             setName(ctx.emission_context, isa, "exactly_isa");
             return isa;
         }
         else if (arg.Vboxed) {
-            // test for (arg.TIndex == 0x80 && typeof(arg.V) == type)
-            Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
+            // test for (arg.TIndex == UNION_BOX_MARKER && typeof(arg.V) == type)
+            Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
+            if (could_be_null) {
+                isboxed = ctx.builder.CreateAnd(isboxed,
+                    ctx.builder.CreateNot(null_pointer_cmp(ctx, arg.Vboxed)));
+            }
             setName(ctx.emission_context, isboxed, "isboxed");
             BasicBlock *currBB = ctx.builder.GetInsertBlock();
             BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "isa", ctx.f);
@@ -1579,9 +1586,16 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         }
     }
-    auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
-    setName(ctx.emission_context, isa, "exactly_isa");
-    return isa;
+    Value *isnull = NULL;
+    if (could_be_null && arg.isboxed) {
+        isnull = null_pointer_cmp(ctx, arg.Vboxed);
+    }
+    Constant *Vfalse = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
+    return emit_guarded_test(ctx, isnull, Vfalse, [&]{
+        auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
+        setName(ctx.emission_context, isa, "exactly_isa");
+        return isa;
+    });
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
@@ -3152,7 +3166,7 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
  * returning `Constant::getNullValue(ctx.types().T_pjlvalue)` in one of the skipped cases. If `skip` is not empty,
  * skip[0] (corresponding to unknown boxed) must always be set. In that
  * case, the calling code must separately deal with the case where
- * `vinfo` is already an unknown boxed union (union tag 0x80).
+ * `vinfo` is already an unknown boxed union (union tag UNION_BOX_MARKER).
  */
 // Returns ctx.types().T_prjlvalue
 static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip)
@@ -3466,7 +3480,8 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twi
 
 // allocation for known size object
 // returns a prjlvalue
-static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
+static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
+                             unsigned align=sizeof(void*)) // Allocations are at least pointer alingned
 {
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
@@ -3475,12 +3490,14 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     call->setAttributes(F->getAttributes());
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(ctx.builder.getContext(), static_size));
+    call->addRetAttr(Attribute::getWithAlignment(ctx.builder.getContext(), Align(align)));
     return call;
 }
 
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt)
 {
-    return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue));
+    return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
+                        julia_alignment((jl_value_t*)jt));
 }
 
 // allocation for unknown object from an untracked pointer

@@ -877,11 +877,12 @@ end
 """
     findmax(f, domain) -> (f(x), index)
 
-Return a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
-`domain` must be a non-empty iterable.
+`domain` must be a non-empty iterable supporting [`keys`](@ref). Indices
+are of the same type as those returned by [`keys(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -915,6 +916,9 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
 # Examples
@@ -936,11 +940,14 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Return a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -974,6 +981,9 @@ _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
@@ -1026,6 +1036,9 @@ Return the index or key of the maximal element in a collection.
 If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 Values are compared with `isless`.
 
@@ -1081,6 +1094,9 @@ Return the index or key of the minimal element in a collection.
 If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 

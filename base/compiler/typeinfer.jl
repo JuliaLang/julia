@@ -267,13 +267,8 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         finish!(caller.interp, caller)
-        if caller.cache_mode === :global
+        if is_cached(caller)
             cache_result!(caller.interp, caller.result)
-        end
-        # Drop result.src here since otherwise it can waste memory.
-        # N.B. If the `cache_mode === :local`, the inliner may request to use it later.
-        if caller.cache_mode !== :local
-            caller.result.src = nothing
         end
     end
     empty!(frames)
@@ -546,7 +541,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.cache_mode = :no
+        me.cache_mode = CACHE_MODE_NULL
         set_inlineable!(me.src, false)
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
@@ -558,7 +553,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         type_annotate!(interp, me)
-        doopt = (me.cache_mode !== :no || me.parent !== nothing)
+        doopt = (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing)
         # Disable the optimizer if we've already determined that there's nothing for
         # it to do.
         if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
@@ -566,6 +561,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, interp)
+        else
+            me.result.src = me.src # for reflection etc.
         end
     end
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
@@ -798,10 +795,12 @@ struct EdgeCallResult
     rt #::Type
     edge::Union{Nothing,MethodInstance}
     effects::Effects
+    volatile_inf_result::Union{Nothing,VolatileInferenceResult}
     function EdgeCallResult(@nospecialize(rt),
                             edge::Union{Nothing,MethodInstance},
-                            effects::Effects)
-        return new(rt, edge, effects)
+                            effects::Effects,
+                            volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing)
+        return new(rt, edge, effects, volatile_inf_result)
     end
 end
 
@@ -809,13 +808,14 @@ end
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
+    force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     if code isa CodeInstance # return existing rettype if the code is already inferred
         inferred = @atomic :monotonic code.inferred
-        if inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+        if inferred === nothing && force_inline
             # we already inferred this edge before and decided to discard the inferred code,
-            # nevertheless we re-infer it here again and keep it around in the local cache
-            # since the inliner will request to use it later
-            cache_mode = :local
+            # nevertheless we re-infer it here again in order to propagate the re-inferred
+            # source to the inliner as a volatile result
+            cache_mode = CACHE_MODE_VOLATILE
         else
             rt = cached_return_type(code)
             effects = ipo_effects(code)
@@ -823,7 +823,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             return EdgeCallResult(rt, mi, effects)
         end
     else
-        cache_mode = :global # cache edge targets by default
+        cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
@@ -855,7 +855,12 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
         effects = isinferred ? frame.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
-        return EdgeCallResult(frame.bestguess, edge, effects)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, we can use this local result destructively
+        volatile_inf_result = isinferred && let inferred_src = result.src
+                isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
+            end ? VolatileInferenceResult(result) : nothing
+        return EdgeCallResult(frame.bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())

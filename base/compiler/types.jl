@@ -253,6 +253,11 @@ Parameters that control optimizer operation.
   optimizer license to move side effects (that are proven not observed within a particular
   code path) across a throwing call. Defaults to `false`.
 ---
+- `opt_params.preserve_local_sources::Bool = false`\\
+  If `true`, the inliner is restricted from modifying locally-cached sources that are
+  retained in `CallInfo` objects and always makes their copies before inlining them into
+  caller context. Defaults to `false`.
+---
 """
 struct OptimizationParams
     inlining::Bool
@@ -263,6 +268,7 @@ struct OptimizationParams
     max_tuple_splat::Int
     compilesig_invokes::Bool
     assume_fatal_throw::Bool
+    preserve_local_sources::Bool
 
     function OptimizationParams(
         inlining::Bool,
@@ -272,7 +278,8 @@ struct OptimizationParams
         inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
-        assume_fatal_throw::Bool)
+        assume_fatal_throw::Bool,
+        preserve_local_sources::Bool)
         return new(
             inlining,
             inline_cost_threshold,
@@ -281,7 +288,8 @@ struct OptimizationParams
             inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
-            assume_fatal_throw)
+            assume_fatal_throw,
+            preserve_local_sources)
     end
 end
 function OptimizationParams(
@@ -293,7 +301,8 @@ function OptimizationParams(
         #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
-        #=assume_fatal_throw::Bool=# false);
+        #=assume_fatal_throw::Bool=# false,
+        #=preserve_local_sources::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
     inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
@@ -301,7 +310,8 @@ function OptimizationParams(
     inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
-    assume_fatal_throw::Bool = params.assume_fatal_throw)
+    assume_fatal_throw::Bool = params.assume_fatal_throw,
+    preserve_local_sources::Bool = params.preserve_local_sources)
     return OptimizationParams(
         inlining,
         inline_cost_threshold,
@@ -310,7 +320,8 @@ function OptimizationParams(
         inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
-        assume_fatal_throw)
+        assume_fatal_throw,
+        preserve_local_sources)
 end
 
 """

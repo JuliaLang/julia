@@ -649,6 +649,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), 0);
+                        (void)fptr; // silence unused variable warning
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -1989,11 +1990,11 @@ void JuliaOJIT::enableJITDebuggingSupport()
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
-/*
+#ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
     else if (TM->getTargetTriple().isOSBinFormatELF())
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper))));
-*/
+#endif
 }
 #else
 void JuliaOJIT::enableJITDebuggingSupport()

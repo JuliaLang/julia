@@ -1036,7 +1036,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
     # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
     # and would mutate the global RNG in sorting.
-    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+    pivot_index = mod(hash(lo), lo:hi)
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
