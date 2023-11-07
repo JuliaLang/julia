@@ -692,8 +692,8 @@ end
 
 function test_mul(C, A, B)
     mul!(C, A, B)
-    @test Array(A) * Array(B) ≈ C
-    @test A * B ≈ C
+    @test Array{Float64}(A) * Array{Float64}(B) ≈ C
+    @test Float64.(A) * Float64.(B) ≈ C
 
     # This is similar to how `isapprox` choose `rtol` (when `atol=0`)
     # but consider all number types involved:
@@ -706,8 +706,8 @@ function test_mul(C, A, B)
     βArrayC = β * Array(C)
     βC = β * C
     mul!(C, A, B, α, β)
-    @test α * Array(A) * Array(B) .+ βArrayC ≈ C rtol = rtol
-    @test α * A * B .+ βC ≈ C rtol = rtol
+    @test α * Float64.(Array(A)) * Float64.(Array(B)) .+ βArrayC ≈ C rtol = rtol
+    @test α * Float64.(A) * Float64.(B) .+ βC ≈ C rtol = rtol
 end
 
 @testset "mul! vs * for special types" begin
