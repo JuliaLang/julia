@@ -491,6 +491,10 @@ solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
 
+!!! note
+    The subdiagonal `dl` and the superdiagonal `du` must not be aliased to each other.
+    If aliasing is detected, the constructor will use a copy of `du` as its argument.
+
 # Examples
 ```jldoctest
 julia> dl = [1, 2, 3];
