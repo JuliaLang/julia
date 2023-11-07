@@ -986,6 +986,9 @@ end
 parsestmt_test_specs = [
     # whitespace before keywords in space-insensitive mode
     "(y::\nif x z end)" => "(parens (::-i y (if x (block z))))"
+    # Contextual keyword pairs inside parentheses
+    "(abstract type X end)" => "(parens (abstract X))"
+    "(mutable struct X end)" => "(parens (struct-mut X (block)))"
     # parsing of tricky primes
     "x in'c'"   => "(call-i x in (char 'c'))"
     "1where'c'" => "(where 1 (char 'c'))"
@@ -1001,6 +1004,9 @@ parsestmt_test_specs = [
     "|(&\nfunction" => "(call | (& (function (error (error)) (block (error)) (error-t))) (error-t))"
     "@(" => "(macrocall (parens (error-t)))"
     "x = @(" => "(= x (macrocall (parens (error-t))))"
+    # Contextual keyword pairs must not be separated by newlines even within parens
+    "(abstract\ntype X end)" => "(wrapper (parens abstract (error-t type X)) (error-t end ✘))"
+    "(mutable\nstruct X end)" => "(wrapper (parens mutable (error-t struct X)) (error-t end ✘))"
 
     # The following is currently broken but at least the parser shouldn't
     # crash.
