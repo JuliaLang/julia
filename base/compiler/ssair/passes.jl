@@ -2173,8 +2173,8 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     no_of_edges = length(stmt.edges)
 
     key = Vector{Any}(undef, no_of_edges*2 + 1)
-    key_edge_idx(i, deletions) = i-deletions
-    key_value_idx(i, deletions) = no_of_edges-deletions+i
+    key_edge_idx(i, deletions) = i - deletions ÷ 2
+    key_value_idx(i, deletions) = no_of_edges - deletions + i
     key[end] = blockidx
 
     firstval = nothing
@@ -2186,7 +2186,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for (i, ordered_i) in enumerate(ordered_indices)
-        val = isassigned(stmt.values, perm) ? stmt.values[ordered_i] : SSAValue(0)
+        val = isassigned(stmt.values, ordered_i) ? stmt.values[ordered_i] : SSAValue(0)
 
         if !isassigned(stmt.values, ordered_i) || (val isa SSAValue && ssa_to_ssa[val.id] == 0)
             deleteat!(key, key_edge_idx(i, deletions))
