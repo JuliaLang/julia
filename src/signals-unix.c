@@ -657,9 +657,9 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
         signal_stack = malloc(ssize);
         ssize = 0;
         if (signal_stack == NULL)
-            jl_safe_printf("warning: julia signal alt stack could not be allocated (StackOverflowError will be fatal on this thread)");
+            jl_safe_printf("\nwarning: julia signal alt stack could not be allocated (StackOverflowError will be fatal on this thread).\n");
         else
-            jl_safe_printf("warning: julia signal stack allocated without guard page (launch foreign threads earlier to avoid this warning)");
+            jl_safe_printf("\nwarning: julia signal stack allocated without guard page (launch foreign threads earlier to avoid this warning).\n");
     }
     if (signal_stack != NULL) {
         ss.ss_sp = signal_stack;
