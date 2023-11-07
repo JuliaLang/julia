@@ -253,7 +253,7 @@ function peek_initial_reserved_words(ps::ParseState)
     if is_initial_reserved_word(ps, k)
         return true
     elseif is_contextual_keyword(k)
-        k2 = peek(ps,2)
+        k2 = peek(ps, 2, skip_newlines=false)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
                (k == K"abstract"  && k2 == K"type")
