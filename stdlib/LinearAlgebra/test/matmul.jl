@@ -690,28 +690,28 @@ Transpose(x::RootInt) = x
     @test A * a == [56]
 end
 
-function test_mul(C, A, B)
+function test_mul(C, A, B, S)
     mul!(C, A, B)
-    @test Array{Float64}(A) * Array{Float64}(B) ≈ C
-    @test Float64.(A) * Float64.(B) ≈ C
+    @test Array(A) * Array(B) ≈ C
+    @test A * B ≈ C
 
     # This is similar to how `isapprox` choose `rtol` (when `atol=0`)
     # but consider all number types involved:
     rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...)
 
-    rand!(C)
+    rand!(C, S)
     T = promote_type(eltype.((A, B))...)
-    α = rand(T)
-    β = rand(T)
+    α = T <: AbstractFloat ? rand(T) : rand(T(-10):T(10))
+    β = T <: AbstractFloat ? rand(T) : rand(T(-10):T(10))
     βArrayC = β * Array(C)
     βC = β * C
     mul!(C, A, B, α, β)
-    @test α * Float64.(Array(A)) * Float64.(Array(B)) .+ βArrayC ≈ C rtol = rtol
-    @test α * Float64.(A) * Float64.(B) .+ βC ≈ C rtol = rtol
+    @test α * Array(A) * Array(B) .+ βArrayC ≈ C rtol = rtol
+    @test α * A * B .+ βC ≈ C rtol = rtol
 end
 
 @testset "mul! vs * for special types" begin
-    eltypes = [Float32, Float64, Int64]
+    eltypes = [Float32, Float64, Int64(-100):Int64(100)]
     for k in [3, 4, 10]
         T = rand(eltypes)
         bi1 = Bidiagonal(rand(T, k), rand(T, k - 1), rand([:U, :L]))
@@ -724,26 +724,26 @@ end
         specialmatrices = (bi1, bi2, tri1, tri2, stri1, stri2)
         for A in specialmatrices
             B = specialmatrices[rand(1:length(specialmatrices))]
-            test_mul(C, A, B)
+            test_mul(C, A, B, T)
         end
         for S in specialmatrices
             l = rand(1:6)
             B = randn(k, l)
             C = randn(k, l)
-            test_mul(C, S, B)
+            test_mul(C, S, B, T)
             A = randn(l, k)
             C = randn(l, k)
-            test_mul(C, A, S)
+            test_mul(C, A, S, T)
         end
     end
     for T in eltypes
         A = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
         B = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
         C = randn(2, 2)
-        test_mul(C, A, B)
+        test_mul(C, A, B, T)
         B = randn(2, 9)
         C = randn(2, 9)
-        test_mul(C, A, B)
+        test_mul(C, A, B, T)
     end
     let
         tri44 = Tridiagonal(randn(3), randn(4), randn(3))
