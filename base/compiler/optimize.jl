@@ -797,7 +797,7 @@ function run_passes_ipo_safe(
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
-    @pass "GVN"       ir = gvn!(ir)
+    @pass "GVN"       ir = gvn!(ir) # needs to be placed immediately after compact!
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @pass "compact 3" ir = compact!(ir, true)
