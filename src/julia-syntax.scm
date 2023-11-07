@@ -4413,15 +4413,15 @@ f(x) = yt(x)
           (error (string (head-to-text (car e)) " not at top level"))))
     (define (valid-body-ir-argument? aval)
       (or (valid-ir-argument? aval)
-        (and (symbol? aval) ; Arguments are always defined slots
-          (or (memq aval (lam:args lam))
-              (let ((vi (get vinfo-table aval #f)))
-                (and vi (vinfo:never-undef vi)))))))
+          (and (symbol? aval) ; Arguments are always defined slots
+               (or (memq aval (lam:args lam))
+                   (let ((vi (get vinfo-table aval #f)))
+                     (and vi (vinfo:never-undef vi)))))))
     (define (single-assign-var? aval)
       (and (symbol? aval) ; Arguments are always sa
-        (or (memq aval (lam:args lam))
-            (let ((vi (get vinfo-table aval #f)))
-              (and vi (vinfo:sa vi))))))
+           (or (memq aval (lam:args lam))
+               (let ((vi (get vinfo-table aval #f)))
+                 (and vi (vinfo:sa vi))))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
     (define (compile-args lst break-labels)
       (if (null? lst) '()
@@ -4429,28 +4429,28 @@ f(x) = yt(x)
         ;; Otherwise, we need to use ssa values for all arguments to ensure proper
         ;; left-to-right evaluation semantics.
         (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
-                                        (and (pair? x)
-                                              (memq (car x) '(quote inert top core globalref outerref)))))
-                        lst)))
+                                              (and (pair? x)
+                                                   (memq (car x) '(quote inert top core globalref outerref)))))
+                              lst)))
           (let loop ((lst  lst)
-                      (vals '()))
+                     (vals '()))
             (if (null? lst)
                 (reverse! vals)
                 (let* ((arg (car lst))
-                        (aval (or (compile arg break-labels #t #f)
-                                  ;; TODO: argument exprs that don't yield a value?
-                                  '(null))))
+                       (aval (or (compile arg break-labels #t #f)
+                                 ;; TODO: argument exprs that don't yield a value?
+                                 '(null))))
                   (loop (cdr lst)
                         (cons (if (and
-                          ;; Even if we have side effects, we know that singly-assigned
-                          ;; locals cannot be affected them, so we can inline them anyway.
-                          (or simple? (single-assign-var? aval))
-                          (valid-body-ir-argument? aval))
-                            aval
-                            (let ((tmp (make-ssavalue)))
-                              (emit `(= ,tmp ,aval))
-                              tmp))
-                            vals))))))))
+                                   ;; Even if we have side effects, we know that singly-assigned
+                                   ;; locals cannot be affected them, so we can inline them anyway.
+                                   (or simple? (single-assign-var? aval))
+                                   (valid-body-ir-argument? aval))
+                                  aval
+                                  (let ((tmp (make-ssavalue)))
+                                    (emit `(= ,tmp ,aval))
+                                    tmp))
+                              vals))))))))
     (define (compile-cond ex break-labels)
       (let ((cnd (or (compile ex break-labels #t #f)
                      ;; TODO: condition exprs that don't yield a value?
