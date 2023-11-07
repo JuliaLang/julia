@@ -240,7 +240,7 @@ function exec_options(opts)
         if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
-        elseif cmd == 'L'
+        elseif cmd == 'L' || cmd == 'm'
             # nothing
         elseif cmd == 'B' # --bug-report
             # If we're doing a bug report, don't load anything else. We will
@@ -292,6 +292,13 @@ function exec_options(opts)
         elseif cmd == 'E'
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
+        elseif cmd == 'm'
+            @eval Main import $(Symbol(arg)).main
+            if !should_use_main_entrypoint()
+                error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
+            end
+            return false
+
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
