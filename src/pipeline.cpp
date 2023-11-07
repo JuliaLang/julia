@@ -766,7 +766,7 @@ void NewPM::run(Module &M) {
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
     SI.registerCallbacks(PIC, &FAM);
-
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
