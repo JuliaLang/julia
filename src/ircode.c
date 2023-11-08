@@ -76,7 +76,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
 
     // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
     // But should really find the source of the issue.
-    if (rs != NULL && !rt) {
+    if (!rt) {
         int l = jl_array_nrows(rs);
         s->method->roots_table = rt = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l); // does this need freeing?
         for (i = 0; i < l; i++) {
@@ -84,7 +84,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
         }
     }
 
-    if (rt != NULL && egalhash_has(rt, v)) {
+    if (egalhash_has(rt, v)) {
         i = (uintptr_t)egalhash_get(rt, v) - (uintptr_t)HT_NOTFOUND - 1;
     }
     else {
