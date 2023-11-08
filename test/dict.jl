@@ -1492,9 +1492,9 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
     sizehint!(d, 1000)
-    Base._sizehint!(d, 1; shrink = false)
+    sizehint!(d, 1; shrink = false)
     @test length(d.slots) >= 1000
-    Base._sizehint!(d, 1; shrink = true)
+    sizehint!(d, 1; shrink = true)
     @test length(d.slots) < 1000
 end
 

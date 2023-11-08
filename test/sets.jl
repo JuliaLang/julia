@@ -164,6 +164,19 @@ end
     sizehint!(s2, 10)
     @test s2 == GenericSet(s)
 end
+
+@testset "shrinking" begin # Similar test as for the underlying Dict
+    d = Set(i for i = 1:1000)
+    filter!(x -> x < 10, d)
+    sizehint!(d, 10)
+    @test length(d.dict.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.dict.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.dict.slots) < 1000
+end
+
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
     # array element
@@ -966,4 +979,6 @@ end
     end
     set = TestSet{Any}()
     @test sizehint!(set, 1) === set
+    @test sizehint!(set, 1; shrink = true) === set
+    @test sizehint!(set, 1; shrink = false) === set
 end
