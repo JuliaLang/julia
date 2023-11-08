@@ -258,6 +258,7 @@ typedef struct _jl_tls_states_t {
     int needs_resetstkoflw;
 #else
     void *signal_stack;
+    size_t signal_stack_size;
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;

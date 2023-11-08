@@ -4,7 +4,7 @@
 // Note that this file is `#include`d by "signal-handling.c"
 #include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
-#define sig_stack_size 131072 // 128k reserved for SEGV handling
+static const size_t sig_stack_size = 131072; // 128k reserved for backtrace_fiber for stack overflow handling
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
