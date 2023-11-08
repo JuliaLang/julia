@@ -497,6 +497,25 @@ end |> Core.Compiler.is_nothrow
     getfield(t, i, false) # invalid name type
 end |> !Core.Compiler.is_nothrow
 
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :not_atomic)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :invalid_atomic_spec)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :invalid_atomic_spec, boundscheck)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Any)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
+end |> !Core.Compiler.is_nothrow
+
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
 # :inaccessiblememonly effect
