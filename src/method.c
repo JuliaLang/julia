@@ -1197,12 +1197,13 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
         m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
         jl_gc_wb(m, m->roots);
     }
-    else {
+    else if (!m->roots_table) {
         // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
         // But should really find the source of the issue.
-        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), i); // does this need freeing?
-        for (int j = 0; j < i; j++) {
-            egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(m->roots, i), (void*)(j + (uintptr_t)HT_NOTFOUND + 1));
+        int l = jl_array_nrows(m->roots);
+        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l); // does this need freeing?
+        for (int i = 0; i < l; i++) {
+            egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(m->roots, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
         }
     }
     if (!m->root_blocks && modid != 0) {
