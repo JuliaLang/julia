@@ -531,17 +531,12 @@ function _sort! end
 
 # TODO: delete this optimization when views have no overhead.
 const UnwrappableSubArray = SubArray{T, 1, <:AbstractArray{T}, <:Tuple{AbstractUnitRange, Vararg{Number}}, true} where T
-const EagerlyUnwrappableSubArray = SubArray{T, 1, <:AbstractVector{T}, <:Tuple{AbstractUnitRange}, true} where T
 """
     SubArrayOptimization(next) <: Algorithm
 
 Unwrap certain known SubArrays because views have a performance overhead 😢
 
-Specifically, unwraps all instances of the type
-
-    $EagerlyUnwrappableSubArray
-
-And, for large (`hi-lo > 100`) inputs, also unwraps instances of the type
+Specifically, unwraps some instances of the type
 
     $UnwrappableSubArray
 """
@@ -553,16 +548,14 @@ _sort!(v::AbstractVector, a::SubArrayOptimization, o::Ordering, kw) = _sort!(v, 
 function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
     @getkw lo hi
     # @assert v.stride1 == 1
-    if hi-lo > 100 # vec has a cost
-        _sort!(vec(v.parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
-    else
+    parent = v.parent
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+        # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
+        # We don't want that for small inputs.
         _sort!(v, a.next, o, kw)
+    else
+        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
     end
-end
-function _sort!(v::EagerlyUnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
-    @getkw lo hi
-    # @assert v.stride1 == 1
-    _sort!(v.parent, a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
 end
 
 """
