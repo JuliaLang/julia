@@ -784,18 +784,26 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     if BxN != CxN
         throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
-    if iszero(_add.alpha) || isempty(A) || isempty(B)
-        return _rmul_or_fill!(C, _add.beta)
-    end
-    a1 = first(AxK)
-    b1 = first(BxK)
-    @inbounds for i in AxM, j in BxN
-        z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
-        Ctmp = convert(promote_type(R, typeof(z2)), z2)
-        for k in AxK
-            Ctmp = muladd(A[i, k], B[k, j], Ctmp)
+    if sizeof(R) ≤ 16
+        _rmul_or_fill!(C, _add.beta)
+        (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
+        @inbounds for n in BxN, k in BxK, m in AxM
+            C[m,n] = muladd(A[m,k], B[k,n]*_add.alpha, C[m,n])
         end
-        _modify!(_add, Ctmp, C, (i,j))
+    else
+        if iszero(_add.alpha) || isempty(A) || isempty(B)
+            return _rmul_or_fill!(C, _add.beta)
+        end
+        a1 = first(AxK)
+        b1 = first(BxK)
+        @inbounds for i in AxM, j in BxN
+            z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
+            Ctmp = convert(promote_type(R, typeof(z2)), z2)
+            for k in AxK
+                Ctmp = muladd(A[i, k], B[k, j], Ctmp)
+            end
+            _modify!(_add, Ctmp, C, (i,j))
+        end
     end
     return C
 end
