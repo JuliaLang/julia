@@ -3064,7 +3064,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
         }
         JL_UNLOCK(&m->writelock);
     }
-    return jl_as_global_root(val);
+    return jl_as_global_root(val, 1);
 }
 
 // --- generating function calls ---
@@ -4241,7 +4241,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // don't bother codegen constant-folding for toplevel.
             jl_value_t *ty = static_apply_type(ctx, argv, nargs + 1);
             if (ty != NULL) {
+                JL_GC_PUSH1(&ty);
                 ty = jl_ensure_rooted(ctx, ty);
+                JL_GC_POP();
                 *ret = mark_julia_const(ctx, ty);
                 return true;
             }
@@ -5848,7 +5850,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 JL_CATCH {
                     jl_value_t *e = jl_current_exception();
                     // errors. boo. :(
-                    e = jl_as_global_root(e);
+                    JL_GC_PUSH1(&e);
+                    e = jl_as_global_root(e, 1);
+                    JL_GC_POP();
                     raise_exception(ctx, literal_pointer_val(ctx, e));
                     return ghostValue(ctx, jl_nothing_type);
                 }
@@ -6994,7 +6998,9 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             for (size_t i = 0; i < n; i++) {
                 jl_svecset(fill_i, i, jl_array_ptr_ref(closure_types, i));
             }
+            JL_GC_PUSH1(&fill_i);
             fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill_i);
+            JL_GC_POP();
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
