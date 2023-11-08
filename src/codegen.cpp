@@ -1300,6 +1300,29 @@ static const auto sync_gc_total_bytes_func = new JuliaFunction<>{
             {getInt64Ty(C)}, false); },
     nullptr,
 };
+static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_alloc_genericmemory),
+    [](LLVMContext &C, Type *T_Size) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue, // new Memory
+                                {T_prjlvalue, // type
+                                T_Size        // nelements
+                                }, false); },
+        [](LLVMContext &C) {
+            AttrBuilder FnAttrs(C);
+            AttrBuilder RetAttrs(C);
+#if JL_LLVM_VERSION >= 160000
+            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef) | argMemOnly(MemoryEffects::ModRefInfo::Ref));
+#endif
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            RetAttrs.addAlignmentAttr(Align(16));
+            RetAttrs.addAttribute(Attribute::NonNull);
+            RetAttrs.addDereferenceableAttr(16);
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet::get(C, RetAttrs),
+                None); },
+};
 static const auto jlarray_data_owner_func = new JuliaFunction<>{
     XSTR(jl_array_data_owner),
     [](LLVMContext &C) {
@@ -9407,6 +9430,7 @@ static void init_jit_functions(void)
     add_named_global(jlfieldindex_func, &jl_field_index);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
+    add_named_global(jl_allocgenericmemory, &jl_alloc_genericmemory);
     add_named_global(gcroot_flush_func, (void*)NULL);
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);
