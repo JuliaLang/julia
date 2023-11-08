@@ -787,8 +787,11 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     if sizeof(R) ≤ 16
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
-        @inbounds for n in BxN, k in BxK, m in AxM
-            C[m,n] = muladd(A[m,k], B[k,n]*_add.alpha, C[m,n])
+        @inbounds for n in BxN, k in BxK
+            Balpha = B[k,n]*_add.alpha
+            for m in AxM
+                C[m,n] = muladd(A[m,k], Balpha, C[m,n])
+            end
         end
     else
         if iszero(_add.alpha) || isempty(A) || isempty(B)
