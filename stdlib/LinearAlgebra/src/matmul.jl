@@ -784,12 +784,12 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     if BxN != CxN
         throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
-    if sizeof(R) ≤ 16
+    if sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
         @inbounds for n in BxN, k in BxK
             Balpha = B[k,n]*_add.alpha
-            for m in AxM
+            @simd for m in AxM
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
         end
@@ -802,7 +802,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
         @inbounds for i in AxM, j in BxN
             z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
             Ctmp = convert(promote_type(R, typeof(z2)), z2)
-            for k in AxK
+            @simd for k in AxK
                 Ctmp = muladd(A[i, k], B[k, j], Ctmp)
             end
             _modify!(_add, Ctmp, C, (i,j))
