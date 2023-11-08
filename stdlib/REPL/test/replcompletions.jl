@@ -2003,6 +2003,16 @@ let inferred = REPL.REPLCompletions.repl_eval_ex(
     RT = Core.Compiler.widenconst(inferred)
     @test Val{false} <: RT
 end
+module TestLimitAggressiveInferenceGetProp
+global global_var = 1
+end
+function test_limit_aggressive_inference_getprop()
+    return getproperty(TestLimitAggressiveInferenceGetProp, :global_var)
+end
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(test_limit_aggressive_inference_getprop()), @__MODULE__; limit_aggressive_inference=true)
+    @test inferred == Core.Const(1)
+end
 
 # Test completion of var"" identifiers (#49280)
 let s = "var\"complicated "

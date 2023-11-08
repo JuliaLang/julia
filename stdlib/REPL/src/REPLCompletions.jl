@@ -522,7 +522,7 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
 function is_call_graph_uncached(sv::CC.InferenceState)
-    sv.cache_mode === CC.CACHE_MODE_GLOBAL && return false
+    CC.is_cached(sv) && return false
     parent = sv.parent
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)
@@ -545,7 +545,7 @@ function is_repl_frame_getproperty(sv::CC.InferenceState)
     def = sv.linfo.def
     def isa Method || return false
     def.name === :getproperty || return false
-    sv.cached && return false
+    CC.is_cached(sv) && return false
     return is_repl_frame(sv.parent)
 end
 
