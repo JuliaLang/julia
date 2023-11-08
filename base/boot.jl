@@ -268,11 +268,12 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
+Expr(@nospecialize args...) = _expr(args...)
 
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
-    return _is_internal(__module__) && _expr(:meta, _expr(:purity,
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
         #=:nothrow=#false,
@@ -282,6 +283,11 @@ macro _foldable_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true))
 end
+
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
+
+macro _boundscheck() Expr(:boundscheck) end
 
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
@@ -309,15 +315,10 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
-Expr(@nospecialize args...) = _expr(args...)
-
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
 end
-
-macro inline()   Expr(:meta, :inline)   end
-macro noinline() Expr(:meta, :noinline) end
 
 struct BoundsError <: Exception
     a::Any
@@ -509,14 +510,14 @@ const undef = UndefInitializer()
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-eval(Core, :(GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
 MemoryRef(mem::Memory) = memoryref(mem)
-eval(Core, :(MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
+MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
 MemoryRef{T}(mem::Memory{T}) where {T} = memoryref(mem)
-eval(Core, :(MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), @_boundscheck)
+MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), @_boundscheck)
 
 # construction helpers for Array
 new_as_memoryref(self::Type{GenericMemoryRef{isatomic,T,addrspace}}, m::Int) where {T,isatomic,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
