@@ -1677,6 +1677,7 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
                 push!(_require_dependencies,
                       (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
             else
+                @assert ispath(path) "'$path': No such file or directory"
                 push!(_require_dependencies,
                       (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
