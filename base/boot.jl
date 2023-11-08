@@ -335,6 +335,9 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
+    UndefVarError(var::Symbol) = new(var)
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
