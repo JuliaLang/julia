@@ -793,6 +793,22 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
         end
+    elseif sizeof(R) ≤ 16 && (A isa Adjoint && B isa Adjoint) || (A isa Transpose & B isa Transpose)
+        _rmul_or_fill!(C, _add.beta)
+        (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
+        t = wrapperop(A)
+        _rmul_or_fill!(C, _add.beta)
+        (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
+        pB = parent(B)
+        pA = parent(A)
+        tmp = similar(C, CxN)
+        ci = first(CxM)
+        ta = t(_add.alpha)
+        for i in AxM
+            mul!(tmp, pB, view(pA, :, i))
+            C[ci,:] .+= t.(ta .* tmp)
+            ci += 1
+        end
     else
         if iszero(_add.alpha) || isempty(A) || isempty(B)
             return _rmul_or_fill!(C, _add.beta)
