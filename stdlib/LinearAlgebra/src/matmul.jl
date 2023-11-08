@@ -793,7 +793,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
         end
-    elseif sizeof(R) ≤ 16 && (A isa Adjoint && B isa Adjoint) || (A isa Transpose & B isa Transpose)
+    elseif sizeof(R) ≤ 16 && (A isa Adjoint && B isa Adjoint) || (A isa Transpose && B isa Transpose)
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
         t = wrapperop(A)
