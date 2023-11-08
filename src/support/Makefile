@@ -8,7 +8,7 @@ JCXXFLAGS += $(CXXFLAGS)
 JCPPFLAGS += $(CPPFLAGS)
 JLDFLAGS += $(LDFLAGS)
 
-SRCS := hashing timefuncs ptrhash egalhash operators utf8 ios htable bitvector \
+SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle
 ifeq ($(OS),WINNT)
 SRCS += asprintf strptime

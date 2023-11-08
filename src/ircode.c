@@ -77,53 +77,12 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     // assemble a hash table of the roots
     htable_t *h = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l);
     for (i = 0; i < l; i++) {
-        ptrhash_put(h, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+        egalhash_put(h, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
     }
 
-    htable_t *h2 = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l);
-    for (i = 0; i < l; i++) {
-        egalhash_put(h2, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
-    }
+    if (egalhash_has(h, v))
+        return tagged_root(rr, s, (uintptr_t)egalhash_get(h, v) - (uintptr_t)HT_NOTFOUND - 1);
 
-    if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
-        if (ptrhash_has(h, v) != egalhash_has(h2, v))
-            jl_safe_printf("%s: ptrhash_has and egalhash_has disagree for symbols/concrete\n", jl_symbol_name(s->method->name));
-        if (ptrhash_has(h, v))
-            return tagged_root(rr, s, (uintptr_t)ptrhash_get(h, v) - (uintptr_t)HT_NOTFOUND - 1);
-    }
-    else {
-        int has_match = 0;
-        i = -1;
-        for (int ii = 0; ii < l; ii++) {
-            if(jl_egal(jl_array_ptr_ref(rs, ii), v))
-            {
-                has_match = 1;
-                i = ii;
-            }
-        }
-        if (has_match != egalhash_has(h2, v)) {
-            jl_safe_printf("\n");
-            jl_safe_printf("found match at %d\n", i);
-            jl_safe_printf("%s: jl_egal and egalhash_has h2 disagree; %d vs. %d\n", jl_symbol_name(s->method->name), has_match, egalhash_has(h2, v));
-            jl_value_t *a = jl_array_ptr_ref(rs, i);
-            jl_value_t *b = v;
-            jl_safe_printf("%d\n", jl_egal(a, b));
-            jl_safe_printf("==: %d, has a: %d, has b: %d\n", a == b, egalhash_has(h2, a), egalhash_has(h2, b));
-            jl_safe_printf("%ld vs. %ld\n", (uintptr_t)a, (uintptr_t)b);
-            uintptr_t dtag = jl_typetagof(a);
-            jl_safe_printf("type tags: %lu vs. %lu\n", dtag, jl_typetagof(b));
-            if (dtag < jl_max_tags << 4)
-                if (dtag == jl_symbol_tag << 4 || dtag == jl_bool_tag << 4) {
-                    jl_safe_printf("type tag check: %d vs. %d\n", dtag == jl_symbol_tag << 4, dtag == jl_bool_tag << 4);
-                }
-            //if (((jl_datatype_t*)dtag)->name->mutabl)
-            //    jl_safe_printf("is mutable\n");
-            jl_safe_printf("object_ids: %ld vs. %ld\n", jl_object_id(a), jl_object_id(b));
-        }
-        if (egalhash_has(h2, v))
-            return tagged_root(rr, s, (uintptr_t)egalhash_get(h2, v) - (uintptr_t)HT_NOTFOUND - 1);
-    }
-    htable_free(h2);
     htable_free(h);
     jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
     return tagged_root(rr, s, jl_array_nrows(rs) - 1);

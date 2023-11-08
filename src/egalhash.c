@@ -11,19 +11,22 @@
 #include <assert.h>
 #include <limits.h>
 
-#include "dtypes.h"
-#include "hashing.h"
+#include "support/dtypes.h"
+#include "support/hashing.h"
 #include "egalhash.h"
 #include "julia.h"
-   
 
-#include "htable.inc"
+#include "support/htable.inc"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-HTIMPL(egalhash, jl_object_id, jl_egal)
+#define OP_EQ(x, y) jl_egal((jl_value_t*)(x), (jl_value_t*)(y))
+
+#define OP_HASH(x) jl_object_id((jl_value_t*)(x))
+
+HTIMPL(egalhash, OP_HASH, OP_EQ)
 
 #ifdef __cplusplus
 }
