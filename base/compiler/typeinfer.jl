@@ -361,7 +361,9 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
     if inferred_result isa CodeInfo
+        uncompressed = inferred_result
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+        result.is_src_volatile |= uncompressed !== inferred_result
     end
     # The global cache can only handle objects that codegen understands
     if !isa(inferred_result, MaybeCompressed)
