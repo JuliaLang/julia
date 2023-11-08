@@ -366,6 +366,9 @@ typedef struct _jl_method_t {
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
+
+    // root -> index into `roots` (offset by HT_NOTFOUND)
+    htable_t *roots_table;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method

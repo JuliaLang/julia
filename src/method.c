@@ -825,6 +825,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
+    m->roots_table = NULL;
     return m;
 }
 
@@ -1193,7 +1194,16 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
         m->roots = jl_alloc_vec_any(0);
+        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
         jl_gc_wb(m, m->roots);
+    }
+    else {
+        // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
+        // But should really find the source of the issue.
+        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), i); // does this need freeing?
+        for (int j = 0; j < i; j++) {
+            egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(m->roots, i), (void*)(j + (uintptr_t)HT_NOTFOUND + 1));
+        }
     }
     if (!m->root_blocks && modid != 0) {
         m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
@@ -1212,9 +1222,11 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);
+    int i = jl_array_nrows(m->roots);
     if (current_root_id(m->root_blocks) != modid)
-        add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
+        add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_push(m->roots, root);
+    egalhash_put(m->roots_table, (void*)root, (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
     JL_GC_POP();
 }
 
@@ -1225,8 +1237,11 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     assert(jl_is_method(m));
     assert(jl_is_array(roots));
     prepare_method_for_roots(m, modid);
-    add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
+    int i = jl_array_nrows(m->roots);
+    add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_append(m->roots, roots);
+    for(int j = 0; j < jl_array_nrows(roots); j++)
+        egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(roots, j), (void*)(i + j + (uintptr_t)HT_NOTFOUND + 1));
     JL_GC_POP();
 }
 

@@ -71,21 +71,28 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
 static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
+    htable_t *rt = s->method->roots_table;
+    int i;
 
-    int i, l = jl_array_nrows(rs);
-
-    // assemble a hash table of the roots
-    htable_t *h = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l);
-    for (i = 0; i < l; i++) {
-        egalhash_put(h, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+    // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
+    // But should really find the source of the issue.
+    if (rs != NULL && !rt) {
+        int l = jl_array_nrows(rs);
+        s->method->roots_table = rt = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l); // does this need freeing?
+        for (i = 0; i < l; i++) {
+            egalhash_put(rt, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+        }
     }
 
-    if (egalhash_has(h, v))
-        return tagged_root(rr, s, (uintptr_t)egalhash_get(h, v) - (uintptr_t)HT_NOTFOUND - 1);
+    if (rt != NULL && egalhash_has(rt, v)) {
+        i = (uintptr_t)egalhash_get(rt, v) - (uintptr_t)HT_NOTFOUND - 1;
+    }
+    else {
+        i = jl_array_nrows(rs);
+        jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
+    }
 
-    htable_free(h);
-    jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-    return tagged_root(rr, s, jl_array_nrows(rs) - 1);
+    return tagged_root(rr, s, i);
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -813,6 +820,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 
     if (m->roots == NULL) {
         m->roots = jl_alloc_vec_any(0);
+        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
         jl_gc_wb(m, m->roots);
     }
     jl_ircode_state s = {
@@ -888,6 +896,10 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_close(s.s);
     if (jl_array_nrows(m->roots) == 0) {
         m->roots = NULL;
+        if (m->roots_table != NULL) {
+            htable_free(m->roots_table);
+            m->roots_table = NULL;
+        }
     }
     JL_GC_PUSH1(&v);
     jl_gc_enable(en);
