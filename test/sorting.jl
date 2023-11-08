@@ -822,9 +822,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
