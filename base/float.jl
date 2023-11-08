@@ -1023,13 +1023,13 @@ end
 eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
 
 function eps(x::T) where T<:IEEEFloat
-	# For isfinite(x), toggling the LSB will produce either prevfloat(x) or
-	# nextfloat(x) but will never change the sign or exponent.
-	# For !isfinite(x), this will map Inf to NaN and NaN to NaN or Inf.
-	y = reinterpret(T, reinterpret(Unsigned, x) ⊻ true)
-	# The absolute difference between these values is eps(x). This is true even
-	# for Inf/NaN values.
-	return abs(x - y)
+    # For isfinite(x), toggling the LSB will produce either prevfloat(x) or
+    # nextfloat(x) but will never change the sign or exponent.
+    # For !isfinite(x), this will map Inf to NaN and NaN to NaN or Inf.
+    y = reinterpret(T, reinterpret(Unsigned, x) ⊻ true)
+    # The absolute difference between these values is eps(x). This is true even
+    # for Inf/NaN values.
+    return abs(x - y)
 end
 
 """
