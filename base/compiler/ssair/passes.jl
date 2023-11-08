@@ -2170,6 +2170,10 @@ end
 function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree)
     isempty(stmt.values) && return nothing
 
+    for i in eachindex(stmt.values)
+        !isassigned(stmt.values, i) && return nothing
+    end
+
     no_of_edges = length(stmt.edges)
 
     key = Vector{Any}(undef, no_of_edges*2 + 1)
@@ -2186,7 +2190,6 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for (i, ordered_i) in enumerate(ordered_indices)
-        !isassigned(stmt.values, ordered_i) && return nothing
         val = stmt.values[ordered_i]
 
         if val isa SSAValue && ssa_to_ssa[val.id] == 0
