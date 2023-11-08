@@ -64,7 +64,7 @@ function isassigned(a::Memory, i::Int)
     return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), :not_atomic, false)
 end
 
-@eval isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, $(Expr(:boundscheck)))
+isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, @_boundscheck)
 
 ## copy ##
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
@@ -182,13 +182,11 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-@eval begin
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
     val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, $(Expr(:boundscheck)))
-    memoryrefset!(ref, val, :not_atomic, $(Expr(:boundscheck)))
+    ref = memoryref(memoryref(A), i1, @_boundscheck)
+    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
     return A
-end
 end
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
