@@ -227,7 +227,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         store_backedges(result, caller.stmt_edges[1])
     end
     opt = result.src
-    if opt isa OptimizationState && result.must_be_codeinf
+    if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
     end
     if opt isa CodeInfo
@@ -235,9 +235,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         opt.max_world = last(valid_worlds)
         caller.src = opt
     else
-        # In this case caller.src is invalid for clients (such as typeinf_ext) to use
-        # but that is what !must_be_codeinf permits
-        # This is hopefully unreachable when must_be_codeinf is true
+        # In this case `caller.src` is invalid for clients (such as `typeinf_ext`) to use
+        # but that is what's permitted by `caller.cache_mode`.
+        # This is hopefully unreachable from such clients using `NativeInterpreter`.
     end
     return nothing
 end
