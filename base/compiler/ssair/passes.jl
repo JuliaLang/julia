@@ -2151,7 +2151,7 @@ struct CongruenceClassElement
 end
 
 # Rename SSA values in stmt to equivalent SSA values using ssa_to_ssa map.
-function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, args...)
+function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
         key = similar(stmt.args, length(stmt.args)+1)
