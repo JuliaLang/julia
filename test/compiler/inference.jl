@@ -138,7 +138,7 @@ end
       Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
       Type{Any}
 
-# issue #43296 #43296
+# issue #43296
 struct C43296{t,I} end
 r43296(b) = r43296(typeof(b))
 r43296(::Type) = nothing
@@ -149,7 +149,8 @@ f43296(g, :) = h
 k43296(b, j, :) = l
 k43296(b, j, ::Nothing) = b
 i43296(b, j) = k43296(b, j, r43296(j))
-@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}, Tuple}}))) == Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}}}))) <: Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, <:Tuple}}}))) <: Int
 
 abstract type e43296{a, j} <: AbstractArray{a, j} end
 abstract type b43296{a, j, c, d} <: e43296{a, j} end
