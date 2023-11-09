@@ -174,7 +174,7 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.args,)
+    print(io, "InexactError: ", ex.func,ex.args[2:end])
     Experimental.show_error_hints(io, ex)
 end
 
