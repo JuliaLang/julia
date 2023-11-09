@@ -287,7 +287,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
     zero(::Type)
 
-Get the additive identity element for, `x`. If the additive element can be known based
+Get the additive identity element for `x`. If the additive element can be known based
 on the type alone, then a type may be given as an argument to `zero`.
 
 For example, `zero(Int)` will work because the additive identity is the same for all
