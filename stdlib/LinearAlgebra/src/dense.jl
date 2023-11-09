@@ -198,8 +198,16 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-diagind(m::Integer, n::Integer, k::Integer=0) =
+diagind(m::Integer, n::Integer, k::Integer=0) = diagind(IndexLinear(), m, n, k)
+diagind(::IndexLinear, m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
+
+function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0,-k), 1 + max(0,k))
+    Cstep = CartesianIndex(1, 1)
+    length = max(0, k <= 0 ? min(m+k, n) : min(m, n-k))
+    StepRangeLen(Cstart, Cstep, length)
+end
 
 """
     diagind(M, k::Integer=0)
@@ -222,7 +230,7 @@ julia> diagind(A,-1)
 """
 function diagind(A::AbstractMatrix, k::Integer=0)
     require_one_based_indexing(A)
-    diagind(size(A,1), size(A,2), k)
+    diagind(IndexStyle(A), size(A,1), size(A,2), k)
 end
 
 """
