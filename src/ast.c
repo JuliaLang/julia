@@ -153,13 +153,26 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, size_t world, int throw_load_error);
 
+static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
+{
+    assert(issymbol(s));
+    if (fl_isgensym(fl_ctx, s)) {
+        char gsname[16];
+        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
+                           ((gensym_t*)ptr(s))->id, 10);
+        *(--n) = '#';
+        return jl_symbol(n);
+    }
+    return jl_symbol(symbol_name(fl_ctx, s));
+}
+
 static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
+    jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
     return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
 }
@@ -167,11 +180,29 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
 static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     // tells whether a var is defined, in the sense that accessing it is nothrow
-    argcount(fl_ctx, "nothrow-julia-global", nargs, 1);
-    (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
+    // can take either a symbol or a module and a symbol
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    jl_module_t *mod = ctx->module;
+    jl_sym_t *var = NULL;
+    if (nargs == 1) {
+        (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
+        var = scmsym_to_julia(fl_ctx, args[0]);
+    }
+    else {
+        argcount(fl_ctx, "nothrow-julia-global", nargs, 2);
+        value_t argmod = args[0];
+        if (iscvalue(argmod) && cv_class((cvalue_t*)ptr(argmod)) == jl_ast_ctx(fl_ctx)->jvtype) {
+            mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
+        } else {
+            (void)tosymbol(fl_ctx, argmod, "nothrow-julia-global");
+            if (scmsym_to_julia(fl_ctx, argmod) != jl_thismodule_sym) {
+                lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
+            }
+        }
+        (void)tosymbol(fl_ctx, args[1], "nothrow-julia-global");
+        var = scmsym_to_julia(fl_ctx, args[1]);
+    }
+    jl_binding_t *b = jl_get_module_binding(mod, var, 0);
     b = b ? jl_atomic_load_relaxed(&b->owner) : NULL;
     return b != NULL && jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
 }
@@ -432,20 +463,6 @@ JL_DLLEXPORT void fl_profile(const char *fname)
     fl_context_t *fl_ctx = &ctx->fl;
     fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "profile-e")), symbol(fl_ctx, fname));
     jl_ast_ctx_leave(ctx);
-}
-
-
-static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
-{
-    assert(issymbol(s));
-    if (fl_isgensym(fl_ctx, s)) {
-        char gsname[16];
-        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
-                           ((gensym_t*)ptr(s))->id, 10);
-        *(--n) = '#';
-        return jl_symbol(n);
-    }
-    return jl_symbol(symbol_name(fl_ctx, s));
 }
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)

@@ -4257,6 +4257,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (outerref? e) (nothrow-julia-global (cadr e)))
+      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
            (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
@@ -4265,7 +4266,7 @@ f(x) = yt(x)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -4422,6 +4423,13 @@ f(x) = yt(x)
            (or (memq aval (lam:args lam))
                (let ((vi (get vinfo-table aval #f)))
                  (and vi (vinfo:sa vi))))))
+    ;; TODO: We could also allow const globals here
+    (define (const-read-arg? x)
+      ;; Even if we have side effects, we know that singly-assigned
+      ;; locals cannot be affected them, so we can inline them anyway.
+      (or (simple-atom? x) (single-assign-var? x)
+        (and (pair? x)
+          (memq (car x) '(quote inert top core)))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
     (define (compile-args lst break-labels)
       (if (null? lst) '()
@@ -4442,9 +4450,7 @@ f(x) = yt(x)
                                  '(null))))
                   (loop (cdr lst)
                         (cons (if (and
-                                   ;; Even if we have side effects, we know that singly-assigned
-                                   ;; locals cannot be affected them, so we can inline them anyway.
-                                   (or simple? (single-assign-var? aval))
+                                   (or simple? (const-read-arg? aval))
                                    (valid-body-ir-argument? aval))
                                   aval
                                   (let ((tmp (make-ssavalue)))

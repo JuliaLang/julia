@@ -5491,6 +5491,11 @@ end
 @test Base.return_types(phic_type10) |> only === Int
 @test phic_type10() === 2
 
+undef_trycatch() = try (a_undef_trycatch = a_undef_trycatch, b = 2); return 1 catch end
+# `global a_undef_trycatch` could be defined dynamically, so both paths must be allowed
+@test Base.return_types(undef_trycatch) |> only === Union{Nothing, Int}
+@test undef_trycatch() === nothing
+
 # Test that `exit` returns `Union{}` (issue #51856)
 function test_exit_bottom(s)
     n = tryparse(Int, s)

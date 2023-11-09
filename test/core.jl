@@ -8048,3 +8048,15 @@ end
 let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
     @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
 end
+
+# Test that a nothrow-globalref doesn't get outlined during lowering
+module WellKnownGlobal
+    global well_known = 1
+end
+macro insert_global()
+    Expr(:call, GlobalRef(Base, :println), GlobalRef(WellKnownGlobal, :well_known))
+end
+check_globalref_lowering() = @insert_global
+let src = code_lowered(check_globalref_lowering)[1]
+    @test length(src.code) == 2
+end
