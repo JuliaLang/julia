@@ -193,6 +193,7 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
         value_t argmod = args[0];
         if (iscvalue(argmod) && cv_class((cvalue_t*)ptr(argmod)) == jl_ast_ctx(fl_ctx)->jvtype) {
             mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
+            JL_GC_PROMISE_ROOTED(mod);
         } else {
             (void)tosymbol(fl_ctx, argmod, "nothrow-julia-global");
             if (scmsym_to_julia(fl_ctx, argmod) != jl_thismodule_sym) {
