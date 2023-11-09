@@ -1,4 +1,4 @@
-# **5.** Creating Packages
+# [Creating Packages](@id creating-packages-tutorial)
 
 ## Generating files for a package
 
@@ -351,7 +351,8 @@ julia> write("test/runtests.jl",
 ## Compatibility on dependencies
 
 Every dependency should in general have a compatibility constraint on it.
-This is an important topic so there is a separate chapter about it: [Compatibility](@ref Compatibility).
+This is an important topic so there is a chapter in the package docs about it:
+[Compatibility](https://pkgdocs.julialang.org/v1/compatibility).
 
 ## Weak dependencies
 
@@ -475,7 +476,7 @@ function plot end
 
 !!! note
     If one considers `PlottingContourExt` as a completely separate package, it could be argued that defining `Plotting.plot(c::Contour.ContourCollection)` is
-    [type piracy](https://docs.julialang.org/en/v1/manual/style-guide/#Avoid-type-piracy) since `PlottingContourExt` _owns_ neither the function `Plotting.plot` nor the type `Contour.ContourCollection`.
+    [type piracy](@ref avoid-type-piracy) since `PlottingContourExt` _owns_ neither the function `Plotting.plot` nor the type `Contour.ContourCollection`.
     However, for extensions, it is ok to assume that the extension owns the functions in its parent package.
 
 In other situations, one may need to define new symbols in the extension (types, structs, functions, etc.) instead of reusing those from the parent package.
