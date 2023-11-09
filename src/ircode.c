@@ -71,26 +71,20 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
 static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
-    htable_t *rt = s->method->roots_table;
+    jl_genericmemory_t *rt = s->method->roots_table;
     int i;
+    int l = jl_array_nrows(rs);
 
-    // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
-    // But should really find the source of the issue.
     if (!rt) {
-        int l = jl_array_nrows(rs);
-        s->method->roots_table = rt = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l); // does this need freeing?
+        h = jl_alloc_memory_any(0);
         for (i = 0; i < l; i++) {
-            egalhash_put(rt, (void*)jl_array_ptr_ref(rs, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+            s->method->roots_table = rt = jl_eqtable_put(rt, jl_array_ptr_ref(rs, i), jl_box_long(i), NULL);
         }
     }
 
-    if (egalhash_has(rt, v)) {
-        i = (uintptr_t)egalhash_get(rt, v) - (uintptr_t)HT_NOTFOUND - 1;
-    }
-    else {
-        i = jl_array_nrows(rs);
+    i = jl_unbox_long(jl_eqtable_get(rt, v, jl_box_long(l)));
+    if (i == l)
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-    }
 
     return tagged_root(rr, s, i);
 }
@@ -820,7 +814,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 
     if (m->roots == NULL) {
         m->roots = jl_alloc_vec_any(0);
-        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
+        //m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
+        m->h = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots);
     }
     jl_ircode_state s = {
@@ -896,10 +891,11 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_close(s.s);
     if (jl_array_nrows(m->roots) == 0) {
         m->roots = NULL;
-        if (m->roots_table != NULL) {
-            htable_free(m->roots_table);
-            m->roots_table = NULL;
-        }
+        m->h = NULL;
+        // if (m->roots_table != NULL) {
+        //     htable_free(m->roots_table);
+        //     m->roots_table = NULL;
+        // }
     }
     JL_GC_PUSH1(&v);
     jl_gc_enable(en);

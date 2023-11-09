@@ -1194,16 +1194,13 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
         m->roots = jl_alloc_vec_any(0);
-        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
         jl_gc_wb(m, m->roots);
     }
-    else if (!m->roots_table) {
-        // Not sure why, but sometimes roots is not null but roots_table is. If so, regenerate.
-        // But should really find the source of the issue.
+    if (!m->roots_table) {
         int l = jl_array_nrows(m->roots);
-        m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), l); // does this need freeing?
+        m->roots_table = jl_alloc_memory_any(0);
         for (int i = 0; i < l; i++) {
-            egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(m->roots, i), (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+            m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, i), jl_box_long(i), NULL);
         }
     }
     if (!m->root_blocks && modid != 0) {
@@ -1227,7 +1224,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_push(m->roots, root);
-    egalhash_put(m->roots_table, (void*)root, (void*)(i + (uintptr_t)HT_NOTFOUND + 1));
+    m->roots_table = jl_eqtable_put(m->roots_table, root, jl_box_long(i), NULL);
     JL_GC_POP();
 }
 
@@ -1241,8 +1238,8 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     int i = jl_array_nrows(m->roots);
     add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_append(m->roots, roots);
-    for(int j = 0; j < jl_array_nrows(roots); j++)
-        egalhash_put(m->roots_table, (void*)jl_array_ptr_ref(roots, j), (void*)(i + j + (uintptr_t)HT_NOTFOUND + 1));
+    for (int j = 0; j < jl_array_nrows(roots); j++)
+        m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(roots, j), jl_box_long(i + j), NULL);
     JL_GC_POP();
 }
 
