@@ -861,7 +861,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_memory_any(0);
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
 
     jl_init_flisp();

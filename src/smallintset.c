@@ -100,7 +100,7 @@ static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len)
     return a;
 }
 
-ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv)
+ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv)
 {
     size_t sz = cache->length;
     if (sz == 0)
@@ -148,15 +148,15 @@ static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1)
     return 0;
 }
 
-static void smallintset_rehash(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
-
-void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
+void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data)
 {
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
-    if (val + 1 >  jl_max_int(a))
-        smallintset_rehash(pcache, parent, hash, data, a->length, val + 1);
+    if (val + 1 >  jl_max_int(a)) {
+        a = smallintset_rehash(a, hash, data, a->length, val + 1);
+        jl_atomic_store_release(pcache, a);
+        if (parent) jl_gc_wb(parent, a);
+    }
     while (1) {
-        a = jl_atomic_load_relaxed(pcache);
         if (smallintset_insert_(a, hash(val, data), val + 1))
             return;
 
@@ -173,13 +173,14 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
             newsz = sz << 1;
         else
             newsz = sz << 2;
-        smallintset_rehash(pcache, parent, hash, data, newsz, 0);
+        a = smallintset_rehash(a, hash, data, newsz, 0);
+        jl_atomic_store_release(pcache, a);
+        if (parent) jl_gc_wb(parent, a);
     }
 }
 
-static void smallintset_rehash(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
+jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np)
 {
-    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     size_t sz = a->length;
     size_t i;
     for (i = 0; i < sz; i += 1) {
@@ -199,11 +200,8 @@ static void smallintset_rehash(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t 
             }
         }
         JL_GC_POP();
-        if (i == sz) {
-            jl_atomic_store_release(pcache, newa);
-            jl_gc_wb(parent, newa);
-            return;
-        }
+        if (i == sz)
+            return newa;
         newsz <<= 1;
     }
 }

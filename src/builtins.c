@@ -490,6 +490,7 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 // eq hash table --------------------------------------------------------------
 
 #include "iddict.c"
+#include "idset.c"
 
 // object model and type primitives -------------------------------------------
 

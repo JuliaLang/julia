@@ -2422,7 +2422,8 @@ static void jl_strip_all_codeinfos(void)
 
 // --- entry points ---
 
-jl_genericmemory_t *jl_global_roots_table;
+jl_genericmemory_t *jl_global_roots_list;
+jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
@@ -2451,14 +2452,17 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
         if ((uint64_t)(n+512) < 1024)
             return jl_box_int64(n);
     }
+    // TODO: check table before acquiring lock to reduce writer contention
     JL_GC_PUSH1(&val);
     JL_LOCK(&global_roots_lock);
-    jl_value_t *rval = jl_eqtable_getkey(jl_global_roots_table, val, NULL);
+    jl_value_t *rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val, NULL);
     if (rval) {
         val = rval;
     }
     else {
-        jl_global_roots_table = jl_eqtable_put(jl_global_roots_table, val, jl_nothing, NULL);
+        size_t idx;
+        jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &idx);
+        jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
     }
     JL_UNLOCK(&global_roots_lock);
     JL_GC_POP();
@@ -2599,7 +2603,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_docmeta_sym = (jl_sym_t*)jl_get_global((jl_module_t*)docs, jl_symbol("META"));
         }
     }
-    jl_genericmemory_t *global_roots_table = NULL;
+    jl_genericmemory_t *global_roots_list = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -2643,15 +2647,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
-        // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_table
+        // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
         if (worklist == NULL) {
-            global_roots_table = jl_alloc_memory_any(0);
-            for (size_t i = 0; i < jl_global_roots_table->length; i += 2) {
-                jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_table, i);
-                if (ptrhash_get(&serialization_order, val) != HT_NOTFOUND)
-                    global_roots_table = jl_eqtable_put(global_roots_table, val, jl_nothing, NULL);
+            global_roots_list = jl_alloc_memory_any(0);
+            for (size_t i = 0; i < jl_global_roots_list->length; i++) {
+                jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
+                if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
+                    size_t idx;
+                    global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
+                }
             }
-            jl_queue_for_serialization(&s, global_roots_table);
+            jl_queue_for_serialization(&s, global_roots_list);
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) some special weak references from
@@ -2763,7 +2769,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_value_t *tag = *tags[i];
                 jl_write_value(&s, tag);
             }
-            jl_write_value(&s, global_roots_table);
+            jl_write_value(&s, global_roots_list);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -3074,7 +3080,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         JL_SMALL_TYPEOF(XX)
 #undef XX
         export_jl_small_typeof();
-        jl_global_roots_table = (jl_genericmemory_t*)jl_read_value(&s);
+        jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
         s.ptls->root_task->tls = jl_read_value(&s);
@@ -3372,6 +3378,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+    if (!s.incremental) {
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        // jl_global_roots_keyset = jl_idset_rehash(jl_global_roots_list, global_roots_keyset, global_roots_keyset->length, 0);
+        for (size_t idx = 0; idx < jl_global_roots_list->length; idx++) {
+            jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, idx);
+            if (val)
+                jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
+        }
+    }
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
