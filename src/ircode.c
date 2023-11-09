@@ -76,7 +76,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     int l = jl_array_nrows(rs);
 
     if (!rt) {
-        h = jl_alloc_memory_any(0);
+        s->method->roots_table = rt = jl_alloc_memory_any(0);
         for (i = 0; i < l; i++) {
             s->method->roots_table = rt = jl_eqtable_put(rt, jl_array_ptr_ref(rs, i), jl_box_long(i), NULL);
         }
@@ -814,8 +814,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 
     if (m->roots == NULL) {
         m->roots = jl_alloc_vec_any(0);
-        //m->roots_table = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1); // does this need freeing?
-        m->h = jl_alloc_memory_any(0);
+        m->roots_table = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots);
     }
     jl_ircode_state s = {
@@ -891,11 +890,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_close(s.s);
     if (jl_array_nrows(m->roots) == 0) {
         m->roots = NULL;
-        m->h = NULL;
-        // if (m->roots_table != NULL) {
-        //     htable_free(m->roots_table);
-        //     m->roots_table = NULL;
-        // }
+        m->roots_table = NULL;
     }
     JL_GC_PUSH1(&v);
     jl_gc_enable(en);
