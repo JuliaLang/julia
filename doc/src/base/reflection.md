@@ -101,11 +101,10 @@ as assignments, branches, and calls:
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
     @ none within `top-level scope`
-1 ─ %1 = Base.vect
-│   %2 = 1 + 2
-│   %3 = sin(0.5)
-│   %4 = (%1)(%2, %3)
-└──      return %4
+1 ─ %1 = 1 + 2
+│   %2 = sin(0.5)
+│   %3 = Base.vect(%1, %2)
+└──      return %3
 ))))
 ```
 
