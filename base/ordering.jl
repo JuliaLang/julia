@@ -182,9 +182,10 @@ should not define `lt` for that order.
 function prepare end
 
 # Fallbacks
-@propagate_inbounds lt(o::Ordering, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
 @propagate_inbounds lt_prepared(o::Ordering, a, b) = lt(o, a, b) # TODO: remove this in Julia 2.0
 prepare(o::Ordering, x) = x
+# Not defining this because it would cause a stack overflow for invalid `Ordering`s:
+# lt(o::Ordering, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
 
 # Forward
 lt(o::ForwardOrdering, a, b) = isless(a, b)
@@ -192,15 +193,18 @@ lt(o::ForwardOrdering, a, b) = isless(a, b)
 # Reverse
 prepare(o::ReverseOrdering, x) = prepare(o.fwd, x)
 lt_prepared(o::ReverseOrdering, a, b) = lt_prepared(o.fwd, b, a)
+lt(::ReverseOrdering, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
 
 # By
 prepare(o::By, x) = prepare(o.order, o.by(x))
 lt_prepared(o::By, a, b) = lt_prepared(o.order, a, b)
+lt(::By, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
 
 # Perm
 @propagate_inbounds prepare(o::Perm, i) = (prepare(o.order, o.data[i]), i)
 lt_prepared(p::Perm, (da, a), (db, b)) =
     (lt_prepared(p.order, da, db)::Bool) | (!(lt_prepared(p.order, db, da)::Bool) & (a < b))
+@propagate_inbounds lt(::Perm, a, b) = lt_prepared(o, prepare(o, a), prepare(o, b))
 
 ## Lt
 lt(o::Lt, a, b) = o.lt(a, b)
