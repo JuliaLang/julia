@@ -450,7 +450,7 @@ function is_throw_call(e::Expr)
     if e.head === :call
         f = e.args[1]
         if isa(f, GlobalRef)
-            ff = abstract_eval_globalref(f)
+            ff = abstract_eval_globalref_type(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end

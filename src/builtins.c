@@ -669,7 +669,7 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
         }
     }
     if (extra && iterate == NULL) {
-        jl_undefined_var_error(jl_symbol("iterate"));
+        jl_undefined_var_error(jl_symbol("iterate"), NULL);
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates

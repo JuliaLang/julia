@@ -519,10 +519,10 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # `REPLInterpreter` is specifically used by `repl_eval_ex`, where all top-level frames are
 # `repl_frame` always. However, this assumption wouldn't stand if `REPLInterpreter` were to
 # be employed, for instance, by `typeinf_ext_toplevel`.
-is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === :no
+is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
 function is_call_graph_uncached(sv::CC.InferenceState)
-    sv.cache_mode === :global && return false
+    CC.is_cached(sv) && return false
     parent = sv.parent
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)
@@ -533,9 +533,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if CC.isdefined_globalref(g)
-            return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
+            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), CC.EFFECTS_TOTAL)
         end
-        return Union{}
+        return CC.RTEffects(Union{}, CC.EFFECTS_THROWS)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)
@@ -545,7 +545,7 @@ function is_repl_frame_getproperty(sv::CC.InferenceState)
     def = sv.linfo.def
     def isa Method || return false
     def.name === :getproperty || return false
-    sv.cached && return false
+    CC.is_cached(sv) && return false
     return is_repl_frame(sv.parent)
 end
 
@@ -1293,16 +1293,60 @@ end
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var
     if var === :or
-        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
+        print(io, "\nSuggestion: Use `||` for short-circuiting boolean OR.")
     elseif var === :and
-        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+        print(io, "\nSuggestion: Use `&&` for short-circuiting boolean AND.")
     elseif var === :help
         println(io)
         # Show friendly help message when user types help or help() and help is undefined
         show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
     elseif var === :quit
-        print(io, "\nsuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+        print(io, "\nSuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
     end
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
+            if isdefined(bnd, :owner)
+                owner = bnd.owner
+                if owner === bnd
+                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+                end
+            else
+                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
+                if C_NULL == owner
+                    print(io, "\nSuggestion: check for spelling errors or missing imports. No global of this name exists in this module.")
+                    owner = bnd
+                else
+                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
+                end
+            end
+            if owner !== bnd
+                # this could use jl_binding_dbgmodule for the exported location in the message too
+                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    warnfor(m, var) = Base.isbindingresolved(m, var) && isdefined(m, var) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
+    if scope !== Base && !warnfor(Base, var)
+        warned = false
+        for m in Base.loaded_modules_order
+            m === Core && continue
+            m === Base && continue
+            m === Main && continue
+            m === scope && continue
+            warned = warnfor(m, var) || warned
+        end
+        warned = warned || warnfor(Core, var)
+        warned = warned || warnfor(Main, var)
+    end
+    nothing
 end
 
 function __init__()

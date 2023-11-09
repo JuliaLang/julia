@@ -83,6 +83,7 @@ module IteratorsMD
     CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
+    CartesianIndex{N}(index::CartesianIndex{N}) where {N} = index
     CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     flatten(::Tuple{}) = ()
     flatten(I::Tuple{Any}) = Tuple(I[1])
@@ -165,6 +166,19 @@ module IteratorsMD
     # see #23719
     Base.iterate(::CartesianIndex) =
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
+
+    # ranges are deliberately disabled to prevent ambiguities with the colon constructor
+    Base.range_start_step_length(start::CartesianIndex, step::CartesianIndex, len::Integer) =
+        error("range with a specified length is deliberately unsupported for CartesianIndex arguments."*
+            " Use StepRangeLen($start, $step, $len) to construct this range")
+
+    # show is special-cased to avoid the start:stop:step display,
+    # which constructs a CartesianIndices
+    # See #50784
+    function show(io::IO, r::StepRangeLen{<:CartesianIndex})
+        print(io, "StepRangeLen(", first(r), ", ",
+                    step(r), ", ", length(r), ")")
+    end
 
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}

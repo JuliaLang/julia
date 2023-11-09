@@ -355,7 +355,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     uv_mutex_lock(&trampoline_lock);
     tramp = trampoline_alloc();
     ((void**)result)[0] = tramp;
-    tramp = init_trampoline(tramp, nval);
+    init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
     uv_mutex_unlock(&trampoline_lock);
     return result;

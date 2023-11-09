@@ -929,7 +929,7 @@ function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
     elseif length(argtypes) == 4
         fargs !== nothing && (farg = fargs[4])
         boundscheck = argtypes[4]
-        isvarargtype(boundscheck) && return :unknown
+        isvarargtype(boundscheck) && return :unsafe
         if widenconst(boundscheck) === Symbol
             return :on
         end
@@ -937,9 +937,9 @@ function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
         fargs !== nothing && (farg = fargs[5])
         boundscheck = argtypes[5]
     else
-        return :unknown
+        return :unsafe
     end
-    isvarargtype(boundscheck) && return :unknown
+    isvarargtype(boundscheck) && return :unsafe
     boundscheck = widenconditional(boundscheck)
     if widenconst(boundscheck) === Bool
         if isa(boundscheck, Const)
@@ -947,11 +947,13 @@ function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
         elseif farg !== nothing && isexpr(farg, :boundscheck)
             return :boundscheck
         end
+        return :unknown
     end
-    return :unknown
+    return :unsafe
 end
 
 function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
+    boundscheck === :unsafe && return false
     (;argtypes) = arginfo
     ordering = Const(:not_atomic)
     if length(argtypes) == 4
@@ -960,7 +962,7 @@ function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::
             ordering = argtypes[4]
         end
     elseif length(argtypes) == 5
-        ordering = argtypes[5]
+        ordering = argtypes[4]
     elseif length(argtypes) != 3
         return false
     end

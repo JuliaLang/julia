@@ -1532,6 +1532,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_as_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_global_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_local_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_list_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_dot_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_newvar_sym;
