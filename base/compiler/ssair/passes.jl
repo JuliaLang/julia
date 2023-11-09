@@ -2264,10 +2264,6 @@ function gvn!(ir::IRCode)
             end
 
             value = if stmt isa Expr
-                if stmt.head === :the_exception # Do not eliminate exceptions
-                    ssa_to_ssa[i] = i
-                    continue
-                end
                 perform_symbolic_evaluation(stmt, ssa_to_ssa)
             else
                 value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
