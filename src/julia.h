@@ -362,7 +362,7 @@ typedef struct _jl_method_t {
     // Override the conclusions of inter-procedural effect analysis,
     // forcing the conclusion to always true.
     _jl_purity_overrides_t purity;
-    
+
     // iddict: root -> index into `roots`
     jl_genericmemory_t *roots_table;
 

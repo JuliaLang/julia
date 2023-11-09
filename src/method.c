@@ -1235,8 +1235,7 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_append(m->roots, roots);
     for (int j = i; j < jl_array_nrows(m->roots); j++) {
-        jl_value_t *jbox = jl_box_long(j);
-        m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, j), jbox, NULL);
+        m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, j), jl_box_long(j), NULL);
         jl_gc_wb(m, m->roots_table);
     }
     JL_GC_POP();
