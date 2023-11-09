@@ -2468,9 +2468,20 @@ function move_invariant!(ir, preheader, LI)
     stmts = find_invariant_stmts(ir, LI)
     inserter = InsertBefore(ir, SSAValue(insertion_point))
 
+    # When moving multiple invariant statements, we need to fix their SSAValue
+    stmt_map = IdDict{SSAValue, SSAValue}()
+    function fixup(inst::NewInstruction)
+        for useref in userefs(inst)
+            if haskey(stmt_map, useref[])
+                useref[] = stmt_map[useref[]]
+            end
+        end
+        return inst
+    end
 
     for stmt in stmts
-        new_stmt = inserter(NewInstruction(ir.stmts[stmt]))
+        new_stmt = inserter(fixup(NewInstruction(ir.stmts[stmt])))
+        stmt_map[SSAValue(stmt)] = new_stmt
         ir.stmts[stmt] = new_stmt
     end
 
