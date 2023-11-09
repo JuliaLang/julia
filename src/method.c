@@ -1199,6 +1199,7 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
     if (!m->roots_table) {
         int l = jl_array_nrows(m->roots);
         m->roots_table = jl_alloc_memory_any(0);
+        jl_gc_wb(m, m->roots_table);
         for (int i = 0; i < l; i++) {
             m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, i), jl_box_long(i), NULL);
         }
