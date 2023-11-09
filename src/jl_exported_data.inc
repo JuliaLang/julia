@@ -73,12 +73,13 @@
     XX(jl_genericmemory_type) \
     XX(jl_genericmemory_typename) \
     XX(jl_memory_uint8_type) \
+    XX(jl_memory_uint16_type) \
+    XX(jl_memory_uint32_type) \
     XX(jl_memory_uint64_type) \
     XX(jl_memoryref_any_type) \
     XX(jl_genericmemoryref_type) \
     XX(jl_genericmemoryref_typename) \
     XX(jl_memoryref_uint8_type) \
-    XX(jl_memoryref_uint64_type) \
     XX(jl_methoderror_type) \
     XX(jl_method_instance_type) \
     XX(jl_method_match_type) \

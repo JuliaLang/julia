@@ -39,7 +39,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
-    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     arraylist_new(&m->usings, 0);
     if (jl_core_module && default_names) {
         JL_GC_PUSH1(&m);
@@ -717,7 +717,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 {
     uint_t hv = var->hash;
     for (int locked = 0; ; locked++) {
-        jl_array_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
+        jl_genericmemory_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
         jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
         ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, bindings, hv); // acquire
         if (idx != -1) {

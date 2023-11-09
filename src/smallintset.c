@@ -24,91 +24,85 @@
 extern "C" {
 #endif
 
-static inline size_t jl_intref(const jl_array_t *arr, size_t idx) JL_NOTSAFEPOINT
+static inline size_t jl_intref(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return jl_atomic_load_relaxed(&jl_array_data(arr, _Atomic(uint8_t))[idx]);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return jl_atomic_load_relaxed(&jl_array_data(arr, _Atomic(uint16_t))[idx]);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return jl_atomic_load_relaxed(&jl_array_data(arr, _Atomic(uint32_t))[idx]);
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint8_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint16_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint32_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]);
     else
         abort();
 }
 
-static inline size_t jl_intref_acquire(const jl_array_t *arr, size_t idx) JL_NOTSAFEPOINT
+static inline size_t jl_intref_acquire(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return jl_atomic_load_acquire(&jl_array_data(arr, _Atomic(uint8_t))[idx]);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return jl_atomic_load_acquire(&jl_array_data(arr, _Atomic(uint16_t))[idx]);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return jl_atomic_load_acquire(&jl_array_data(arr, _Atomic(uint32_t))[idx]);
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        return jl_atomic_load_acquire(&((_Atomic(uint8_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint16_type)
+        return jl_atomic_load_acquire(&((_Atomic(uint16_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint32_type)
+        return jl_atomic_load_acquire(&((_Atomic(uint32_t)*)arr->ptr)[idx]);
     else
         abort();
 }
 
-static inline void jl_intset_release(const jl_array_t *arr, size_t idx, size_t val) JL_NOTSAFEPOINT
+static inline void jl_intset_release(const jl_genericmemory_t *arr, size_t idx, size_t val) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        jl_atomic_store_release(&jl_array_data(arr, _Atomic(uint8_t))[idx], val);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        jl_atomic_store_release(&jl_array_data(arr, _Atomic(uint16_t))[idx], val);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        jl_atomic_store_release(&jl_array_data(arr, _Atomic(uint32_t))[idx], val);
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        jl_atomic_store_release(&((_Atomic(uint8_t)*)arr->ptr)[idx], val);
+    else if (el == jl_memory_uint16_type)
+        jl_atomic_store_release(&((_Atomic(uint16_t)*)arr->ptr)[idx], val);
+    else if (el == jl_memory_uint32_type)
+        jl_atomic_store_release(&((_Atomic(uint32_t)*)arr->ptr)[idx], val);
     else
         abort();
 }
 
-static inline size_t jl_max_int(const jl_array_t *arr)
+static inline size_t jl_max_int(const jl_genericmemory_t *arr)
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
         return 0xFF;
-    else if (el == (jl_value_t*)jl_uint16_type)
+    else if (el == jl_memory_uint16_type)
         return 0xFFFF;
-    else if (el == (jl_value_t*)jl_uint32_type)
+    else if (el == jl_memory_uint32_type)
         return 0xFFFFFFFF;
-    else if (el == (jl_value_t*)jl_any_type)
+    else if (el == jl_memory_any_type)
         return 0;
     else
         abort();
 }
 
-static jl_array_t *jl_alloc_int_1d(size_t np, size_t len)
+static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len)
 {
     jl_value_t *ty;
     size_t elsize;
     if (np < 0xFF) {
-        ty = jl_array_uint8_type;
+        ty = jl_memory_uint8_type;
         elsize = sizeof(uint8_t);
      }
     else if (np < 0xFFFF) {
-        static jl_value_t *int16 JL_ALWAYS_LEAFTYPE = NULL;
-        if (int16 == NULL)
-            int16 = jl_apply_array_type((jl_value_t*)jl_uint16_type, 1);
-        ty = int16;
+        ty = jl_memory_uint16_type;
         elsize = sizeof(uint16_t);
     }
     else {
         assert(np < 0x7FFFFFFF);
-        static jl_value_t *int32 JL_ALWAYS_LEAFTYPE = NULL;
-        if (int32 == NULL)
-            int32 = jl_apply_array_type((jl_value_t*)jl_uint32_type, 1);
-        ty = int32;
+        ty = jl_memory_uint32_type;
         elsize = sizeof(uint32_t);
     }
-    jl_array_t *a = jl_alloc_array_1d(ty, len);
-    memset(jl_array_data(a, char), 0, len * elsize);
+    jl_genericmemory_t *a = jl_alloc_genericmemory(ty, len);
+    memset(a->ptr, 0, len * elsize);
     return a;
 }
 
-ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv)
+ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv)
 {
-    size_t sz = jl_array_nrows(cache);
+    size_t sz = cache->length;
     if (sz == 0)
         return -1;
     JL_GC_PUSH1(&cache);
@@ -133,9 +127,9 @@ ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *
     return -1;
 }
 
-static int smallintset_insert_(jl_array_t *a, uint_t hv, size_t val1)
+static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1)
 {
-    size_t sz = jl_array_nrows(a);
+    size_t sz = a->length;
     if (sz <= 1)
         return 0;
     size_t orig, index, iter;
@@ -154,13 +148,13 @@ static int smallintset_insert_(jl_array_t *a, uint_t hv, size_t val1)
     return 0;
 }
 
-static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
+static void smallintset_rehash(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
 
-void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
+void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
 {
-    jl_array_t *a = jl_atomic_load_relaxed(pcache);
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >  jl_max_int(a))
-        smallintset_rehash(pcache, parent, hash, data, jl_array_nrows(a), val + 1);
+        smallintset_rehash(pcache, parent, hash, data, a->length, val + 1);
     while (1) {
         a = jl_atomic_load_relaxed(pcache);
         if (smallintset_insert_(a, hash(val, data), val + 1))
@@ -172,7 +166,7 @@ void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, sma
         /* lots of time rehashing all the keys over and over. */
         size_t newsz;
         a = jl_atomic_load_relaxed(pcache);
-        size_t sz = jl_array_nrows(a);
+        size_t sz = a->length;
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
         else if (sz >= (1 << 19) || (sz <= (1 << 8)))
@@ -183,10 +177,10 @@ void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, sma
     }
 }
 
-static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
+static void smallintset_rehash(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
 {
-    jl_array_t *a = jl_atomic_load_relaxed(pcache);
-    size_t sz = jl_array_nrows(a);
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    size_t sz = a->length;
     size_t i;
     for (i = 0; i < sz; i += 1) {
         size_t val = jl_intref(a, i);
@@ -194,7 +188,7 @@ static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent,
             np = val;
     }
     while (1) {
-        jl_array_t *newa = jl_alloc_int_1d(np, newsz);
+        jl_genericmemory_t *newa = jl_alloc_int_1d(np, newsz);
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
             size_t val1 = jl_intref(a, i);

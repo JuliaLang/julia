@@ -139,7 +139,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
     jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
     JL_TYPECHK(specializations, datatype, ut);
     uint_t hv = ((jl_datatype_t*)ut)->hash;
-    jl_array_t *speckeyset = NULL;
+    jl_genericmemory_t *speckeyset = NULL;
     jl_value_t *specializations = NULL;
     size_t i = -1, cl = 0, lastcl;
     for (int locked = 0; locked < 2; locked++) {

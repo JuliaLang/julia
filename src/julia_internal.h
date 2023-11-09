@@ -1393,8 +1393,8 @@ void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPO
 
 typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
-ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
-void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
+void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
 
 // -- typemap.c -- //
 
