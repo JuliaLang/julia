@@ -171,7 +171,8 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b = jl_get_binding_if_bound(ctx->module, var);
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    b = b ? jl_atomic_load_relaxed(&b->owner) : NULL;
     return b != NULL && jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
