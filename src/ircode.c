@@ -77,7 +77,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
 
     if (!rt) {
         s->method->roots_table = rt = jl_alloc_memory_any(0);
-        jl_gc_wb(m, s->method->roots_table);
+        jl_gc_wb(s->method, s->method->roots_table);
         for (i = 0; i < l; i++) {
             s->method->roots_table = rt = jl_eqtable_put(rt, jl_array_ptr_ref(rs, i), jl_box_long(i), NULL);
         }
