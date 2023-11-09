@@ -824,8 +824,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
-    JL_MUTEX_INIT(&m->writelock, "method->writelock");
     m->roots_table = NULL;
+    JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
 }
 

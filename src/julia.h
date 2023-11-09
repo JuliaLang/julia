@@ -362,13 +362,13 @@ typedef struct _jl_method_t {
     // Override the conclusions of inter-procedural effect analysis,
     // forcing the conclusion to always true.
     _jl_purity_overrides_t purity;
+    
+    // iddict: root -> index into `roots`
+    jl_genericmemory_t *roots_table;
 
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
-
-    // iddict: root -> index into `roots`
-    jl_genericmemory_t *roots_table;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
