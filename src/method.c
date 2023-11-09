@@ -1194,17 +1194,9 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
         m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
-    }
-    if (!m->roots_table) {
-        int l = jl_array_nrows(m->roots);
         m->roots_table = jl_alloc_memory_any(0);
+        jl_gc_wb(m, m->roots);
         jl_gc_wb(m, m->roots_table);
-        for (int i = 0; i < l; i++) {
-            jl_value_t *ibox = jl_box_long(i);
-            m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, i), ibox, NULL);
-            jl_gc_wb(m, m->roots_table);
-        }
     }
     if (!m->root_blocks && modid != 0) {
         m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
@@ -1227,8 +1219,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_push(m->roots, root);
-    jl_value_t *ibox = jl_box_long(i);
-    m->roots_table = jl_eqtable_put(m->roots_table, root, ibox, NULL);
+    m->roots_table = jl_eqtable_put(m->roots_table, root, jl_box_long(i), NULL);
     jl_gc_wb(m, m->roots_table);
     JL_GC_POP();
 }

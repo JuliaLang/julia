@@ -75,18 +75,6 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     int i;
     int l = jl_array_nrows(rs);
 
-    // In theory roots_table is initialized wherever roots is, but there seems to be a case
-    // where it is not; should really find that location, but for now we'll just initialize here.
-    if (!rt) {
-        s->method->roots_table = rt = jl_alloc_memory_any(0);
-        jl_gc_wb(s->method, rt);
-        for (i = 0; i < l; i++) {
-            jl_value_t *ibox = jl_box_long(i);
-            s->method->roots_table = rt = jl_eqtable_put(rt, jl_array_ptr_ref(rs, i), ibox, NULL);
-            jl_gc_wb(s->method, rt);
-        }
-    }
-
     i = jl_unbox_long(jl_eqtable_get(rt, v, jl_box_long(l)));
     if (i == l)
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
