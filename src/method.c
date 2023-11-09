@@ -1202,7 +1202,6 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
         jl_gc_wb(m, m->roots_table);
         for (int i = 0; i < l; i++) {
             jl_value_t *ibox = jl_box_long(i);
-            jl_gc_wb(m->roots_table, ibox);
             m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, i), ibox, NULL);
             jl_gc_wb(m, m->roots_table);
         }
@@ -1229,7 +1228,6 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
         add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_push(m->roots, root);
     jl_value_t *ibox = jl_box_long(i);
-    jl_gc_wb(m->roots_table, ibox);
     m->roots_table = jl_eqtable_put(m->roots_table, root, ibox, NULL);
     jl_gc_wb(m, m->roots_table);
     JL_GC_POP();
@@ -1245,10 +1243,9 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     int i = jl_array_nrows(m->roots);
     add_root_block(m->root_blocks, modid, i);
     jl_array_ptr_1d_append(m->roots, roots);
-    for (int j = 0; j < jl_array_nrows(roots); j++) {
-        jl_value_t *ijbox = jl_box_long(i + j);
-        jl_gc_wb(m->roots_table, ijbox);
-        m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(roots, j), ijbox, NULL);
+    for (int j = i; j < jl_array_nrows(m->roots); j++) {
+        jl_value_t *jbox = jl_box_long(j);
+        m->roots_table = jl_eqtable_put(m->roots_table, jl_array_ptr_ref(m->roots, j), jbox, NULL);
         jl_gc_wb(m, m->roots_table);
     }
     JL_GC_POP();
