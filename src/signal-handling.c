@@ -463,9 +463,9 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal (%d.%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {

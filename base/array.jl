@@ -1441,7 +1441,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n) -> s
+    sizehint!(s, n; shrink::Bool = true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
@@ -1462,10 +1462,15 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
+
+4. `shrink` controls if the collection can be shrunk.
+
+!!! compat "Julia 1.11"
+    The `shrink` argument was added in Julia 1.11.
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer)
+function sizehint!(a::Vector, sz::Integer; shrink::Bool = true)
     len = length(a)
     ref = a.ref
     mem = ref.mem
@@ -1474,7 +1479,7 @@ function sizehint!(a::Vector, sz::Integer)
     sz = max(Int(sz), offset + len - 1)
     if sz <= memlen
         # if we don't save at least 1/8th memlen then its not worth it to shrink
-        if memlen - sz <= div(memlen, 8)
+        if !shrink || memlen - sz <= div(memlen, 8)
             return a
         end
         newmem = array_new_memory(mem, sz)
@@ -1494,7 +1499,7 @@ function sizehint!(a::Vector, sz::Integer)
 end
 
 # Fall-back implementation for non-shrinkable collections
-_sizehint!(a, sz; shrink) = sizehint!(a, sz)
+sizehint!(a, sz; shrink::Bool) = sizehint!(a, sz)
 
 """
     pop!(collection) -> item

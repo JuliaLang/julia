@@ -213,13 +213,14 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
-    if (ptls2 == NULL || ptls2->signal_stack == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
+    if (ptls2 == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
         rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     }
     else {
-        rsp = (uintptr_t)ptls2->signal_stack + sig_stack_size;
+        rsp = (uintptr_t)ptls2->signal_stack + (ptls2->signal_stack_size ? ptls2->signal_stack_size : sig_stack_size);
     }
     assert(rsp % 16 == 0);
+    rsp -= 16;
 
 #ifdef _CPU_X86_64_
     rsp -= sizeof(void*);

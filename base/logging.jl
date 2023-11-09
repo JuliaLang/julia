@@ -335,12 +335,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
         checkerrors = nothing
         for kwarg in reverse(log_data.kwargs)
             if isa(kwarg.args[2].args[1], Symbol)
-                checkerrors = Expr(:if, Expr(:isdefined, kwarg.args[2]), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(kwarg.args[2].args[1])))
+                checkerrors = Expr(:if, Expr(:isdefined, kwarg.args[2]), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(kwarg.args[2].args[1]), QuoteNode(:local)))
             end
         end
         if isa(message, Symbol)
             message = esc(message)
-            checkerrors = Expr(:if, Expr(:isdefined, message), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(message.args[1])))
+            checkerrors = Expr(:if, Expr(:isdefined, message), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(message.args[1]), QuoteNode(:local)))
         end
         logrecord = quote
             let err = $checkerrors

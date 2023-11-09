@@ -884,7 +884,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
     elseif isa(result, VolatileInferenceResult)
         inferred_result = get_local_result(result.inf_result)
         # volatile inference result can be inlined destructively
-        preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
+        preserve_local_sources = !result.inf_result.is_src_volatile | OptimizationParams(state.interp).preserve_local_sources
     else
         inferred_result = get_cached_result(state, mi)
     end
@@ -1393,8 +1393,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
     cases = InliningCase[]
     argtypes = sig.argtypes
     local handled_all_cases::Bool = true
-    local revisit_idx = nothing
-    local only_method = nothing
+    local revisit_idx = local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
     local joint_effects::Effects = EFFECTS_TOTAL
@@ -1410,14 +1409,14 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             handled_all_cases = false
             continue
         else
-            if length(meth) == 1 && only_method !== false
+            if length(meth) == 1 && only_method !== missing
                 if only_method === nothing
                     only_method = meth[1].method
                 elseif only_method !== meth[1].method
-                    only_method = false
+                    only_method = missing
                 end
             else
-                only_method = false
+                only_method = missing
             end
         end
         local split_fully_covered::Bool = false

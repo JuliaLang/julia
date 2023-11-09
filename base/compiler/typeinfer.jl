@@ -227,7 +227,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         store_backedges(result, caller.stmt_edges[1])
     end
     opt = result.src
-    if opt isa OptimizationState && result.must_be_codeinf
+    if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
     end
     if opt isa CodeInfo
@@ -235,9 +235,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         opt.max_world = last(valid_worlds)
         caller.src = opt
     else
-        # In this case caller.src is invalid for clients (such as typeinf_ext) to use
-        # but that is what !must_be_codeinf permits
-        # This is hopefully unreachable when must_be_codeinf is true
+        # In this case `caller.src` is invalid for clients (such as `typeinf_ext`) to use
+        # but that is what's permitted by `caller.cache_mode`.
+        # This is hopefully unreachable from such clients using `NativeInterpreter`.
     end
     return nothing
 end
@@ -361,7 +361,9 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
     if inferred_result isa CodeInfo
+        uncompressed = inferred_result
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+        result.is_src_volatile |= uncompressed !== inferred_result
     end
     # The global cache can only handle objects that codegen understands
     if !isa(inferred_result, MaybeCompressed)
@@ -535,7 +537,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
-    me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
+    me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -854,7 +856,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
-        effects = isinferred ? frame.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
         volatile_inf_result = isinferred && let inferred_src = result.src

@@ -38,28 +38,18 @@ let r = Profile.retrieve()
     end
 end
 
-let iobuf = IOBuffer()
-    Profile.print(iobuf, format=:tree, C=true)
+# test printing options
+for options in ((format=:tree, C=true),
+                (format=:tree, maxdepth=2),
+                (format=:flat, C=true),
+                (),
+                (format=:flat, sortedby=:count),
+                (format=:tree, recur=:flat),
+               )
+    iobuf = IOBuffer()
+    Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:tree, maxdepth=2)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, C=true)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf)
-    @test !isempty(String(take!(iobuf)))
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, sortedby=:count)
-    @test !isempty(String(take!(iobuf)))
-    Profile.print(iobuf, format=:tree, recur=:flat)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
 end
 
 @testset "Profile.print() groupby options" begin
