@@ -103,6 +103,9 @@ end
     @test sprint(highlight, src, 3:4) == "abcd\n# └┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 4:4) == "abcd\n#  ╙\nαβγδ\n+-*/"
     @test sprint(highlight, src, 5:5) == "abcd\n#   └\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:6) == "abcd\nαβγδ\n╙\n+-*/"
+    @test sprint(highlight, src, 6:9) == "abcd\nαβγδ\n└┘\n+-*/"
+    @test sprint(highlight, src, 8:8) == "abcd\nαβγδ\n#╙\n+-*/"
 
     # multi-byte chars
     @test sprint(highlight, src, 8:13) == """
@@ -149,6 +152,18 @@ end
         αβγδ
         #┘
         +-*/"""
+    @test sprint(highlight, src, 6:15) == """
+        abcd
+        ┌───
+        αβγδ
+        +-*/
+        ┘"""
+    @test sprint(highlight, src, 8:15) == """
+        abcd
+        #┌──
+        αβγδ
+        +-*/
+        ┘"""
     @test sprint(highlight, src, 1:18) == """
         ┌───
         abcd

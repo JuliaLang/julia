@@ -124,6 +124,10 @@ function Base.thisind(source::SourceFile, i::Int)
     thisind(source.code, i - source.byte_offset) + source.byte_offset
 end
 
+function Base.nextind(source::SourceFile, i::Integer)
+    nextind(source.code, i - source.byte_offset) + source.byte_offset
+end
+
 Base.firstindex(source::SourceFile) = firstindex(source.code) + source.byte_offset
 Base.lastindex(source::SourceFile)  = lastindex(source.code)  + source.byte_offset
 
@@ -218,7 +222,8 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
         hitext = source[p:q]
         print(io, source[x:p-1])
         _printstyled(io, hitext; bgcolor=color)
-        print(io, source[q+1:d])
+        #print(io, source[q+1:d])
+        print(io, source[nextind(source,q):d])
         if d >= firstindex(source) && source[thisind(source, d)] != '\n'
             print(io, "\n")
         end
@@ -249,7 +254,7 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
             print(io, "⋮\n")
             _printstyled(io, source[z:q]; bgcolor=color)
         end
-        print(io, source[q+1:d])
+        print(io, source[nextind(source, q):d])
         source[thisind(source, d)] == '\n' || print(io, "\n")
         qline = source[c:q]
         _print_marker_line(io, "", qline, true, false, marker_line_color, note, notecolor)
