@@ -725,7 +725,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `Foo` not defined
+UndefVarError: `Foo` not defined in `Main`
 Stacktrace:
 [...]
 ```
@@ -746,7 +746,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `gvar` not defined
+UndefVarError: `gvar` not defined in `Main.Foo`
 Stacktrace:
 [...]
 ```
@@ -782,7 +782,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: `#bar` not defined
+UndefVarError: `#bar` not defined in `Main`
 [...]
 
 julia> anon_bar  = ()->1

@@ -4,12 +4,14 @@ using REPL.REPLCompletions
 using Test
 using Random
 using REPL
-    @testset "Check symbols previously not shown by REPL.doc_completions()" begin
+
+@testset "Check symbols previously not shown by REPL.doc_completions()" begin
     symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
-        for i in symbols
-            @test i ∈ REPL.doc_completions(i, Main)
-        end
+    for i in symbols
+        @test i ∈ REPL.doc_completions(i, Main)
     end
+end
+
 let ex = quote
     module CompletionFoo
         using Random
@@ -2002,6 +2004,16 @@ let inferred = REPL.REPLCompletions.repl_eval_ex(
     @test !isnothing(inferred)
     RT = Core.Compiler.widenconst(inferred)
     @test Val{false} <: RT
+end
+module TestLimitAggressiveInferenceGetProp
+global global_var = 1
+end
+function test_limit_aggressive_inference_getprop()
+    return getproperty(TestLimitAggressiveInferenceGetProp, :global_var)
+end
+let inferred = REPL.REPLCompletions.repl_eval_ex(
+        :(test_limit_aggressive_inference_getprop()), @__MODULE__; limit_aggressive_inference=true)
+    @test inferred == Core.Const(1)
 end
 
 # Test completion of var"" identifiers (#49280)
