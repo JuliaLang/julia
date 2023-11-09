@@ -287,7 +287,12 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
     zero(::Type)
 
-Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+Get the additive identity element for, `x`. If the additive element can be known based
+on the type alone, then a type may be given as an argument to `zero`.
+
+For example, `zero(Int)` will work because the additive identity is the same for all
+instances of `Int`, but `zero(Vector{Int})` is not defined because vectors of different
+lengths have different additive identities.
 
 See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
