@@ -1036,7 +1036,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
     # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
     # and would mutate the global RNG in sorting.
-    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+    pivot_index = mod(hash(lo), lo:hi)
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
@@ -1500,7 +1500,7 @@ function sort(v; kws...)
     size = IteratorSize(v)
     size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
     size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
-    sort!(copymutable(v); kws...)
+    sort!(collect(v); kws...)
 end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 sort(::AbstractString; kws...) =
@@ -1512,7 +1512,7 @@ function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
               rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
     o = ord(lt,by,rev,order)
     if N > 9
-        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        v = sort!(collect(x), DEFAULT_STABLE, o)
         tuple((v[i] for i in 1:N)...)
     else
         _sort(x, o)

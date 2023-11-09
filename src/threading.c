@@ -447,6 +447,30 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     jl_atomic_store_relaxed(&ptls->sleep_check_state, 2); // dead, interpreted as sleeping and unwakeable
     jl_fence();
     jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    // try to free some state we do not need anymore
+#ifndef _OS_WINDOWS_
+    void *signal_stack = ptls->signal_stack;
+    size_t signal_stack_size = ptls->signal_stack_size;
+    if (signal_stack != NULL) {
+        stack_t ss;
+        if (sigaltstack(NULL, &ss))
+            jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
+        if (ss.ss_sp == signal_stack) {
+            ss.ss_flags = SS_DISABLE;
+            if (sigaltstack(&ss, NULL) != 0) {
+                jl_errorf("warning: sigaltstack: %s (will leak this memory)", strerror(errno));
+                signal_stack = NULL;
+            }
+        }
+        if (signal_stack != NULL) {
+            if (signal_stack_size)
+                jl_free_stack(signal_stack, signal_stack_size);
+            else
+                free(signal_stack);
+        }
+        ptls->signal_stack = NULL;
+    }
+#endif
     // Acquire the profile write lock, to ensure we are not racing with the `kill`
     // call in the profile code which will also try to look at this thread.
     // We have no control over when the user calls pthread_join, so we must do
@@ -693,7 +717,7 @@ void jl_init_threading(void)
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
     jl_n_threads_per_pool[0] = nthreadsi;
     jl_n_threads_per_pool[1] = nthreads;
-
+    assert(jl_all_tls_states_size > 0);
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;

@@ -426,13 +426,6 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
     return b2;
 }
 
-JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var)
-{
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    return b == NULL ? NULL : jl_atomic_load_relaxed(&b->owner);
-}
-
-
 // get the current likely owner of binding when accessing m.var, without resolving the binding (it may change later)
 JL_DLLEXPORT jl_binding_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 {
@@ -467,7 +460,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
-        jl_undefined_var_error(var);
+        jl_undefined_var_error(var, (jl_value_t*)m);
     // XXX: this only considers if the original is deprecated, not the binding in m
     if (b->deprecated)
         jl_binding_deprecation_warning(m, var, b);

@@ -130,6 +130,7 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
+    _Atomic(int64_t) pool_live_bytes;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
     _Atomic(uint64_t) poolalloc;
@@ -262,6 +263,7 @@ typedef struct _jl_tls_states_t {
     int needs_resetstkoflw;
 #else
     void *signal_stack;
+    size_t signal_stack_size;
 #endif
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;

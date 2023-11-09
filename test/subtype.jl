@@ -1520,7 +1520,7 @@ f26453(x::T,y::T) where {S,T>:S} = 0
 @test f26453(1,2) == 0
 @test f26453(1,"") == 0
 g26453(x::T,y::T) where {S,T>:S} = T
-@test_throws UndefVarError(:T) g26453(1,1)
+@test_throws UndefVarError(:T, :static_parameter) g26453(1,1)
 @test issub_strict((Tuple{T,T} where T), (Tuple{T,T} where {S,T>:S}))
 
 # issue #27632

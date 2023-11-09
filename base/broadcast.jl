@@ -974,6 +974,32 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
     return dest
 end
 
+# Performance optimization: for BitVector outputs, we cache the result
+# in a 64-bit register before writing into memory (to bypass LSQ)
+@inline function copyto!(dest::BitVector, bc::Broadcasted{Nothing})
+    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    destc = dest.chunks
+    bcp = preprocess(dest, bc)
+    length(bcp) <= 0 && return dest
+    len = Base.num_bit_chunks(Int(length(bcp)))
+    @inbounds for i = 0:(len - 2)
+        z = UInt64(0)
+        for j = 0:63
+           z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
+        end
+        destc[i + 1] = z
+    end
+    @inbounds let i = len - 1
+        z = UInt64(0)
+        for j = 0:((length(bcp) - 1) & 63)
+             z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
+        end
+        destc[i + 1] = z
+    end
+    return dest
+end
+
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
