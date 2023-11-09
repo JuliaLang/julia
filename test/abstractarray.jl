@@ -1079,6 +1079,7 @@ end
 @testset "IndexStyle for various types" begin
     @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
     @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(Memory) == IndexLinear()
     @test Base.IndexStyle(UnitRange) == IndexLinear()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
