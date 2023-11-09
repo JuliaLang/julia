@@ -2150,8 +2150,8 @@ struct CongruenceClassElement
     blockidx::Int
 end
 
-function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa)
-    # rename all SSAValues
+# Rename SSA values in stmt to equivalent SSA values using ssa_to_ssa map.
+function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, args...)
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
         key = similar(stmt.args, length(stmt.args)+1)
@@ -2263,28 +2263,21 @@ function gvn!(ir::IRCode)
                 continue
             end
 
-            value = if stmt isa Expr
-                perform_symbolic_evaluation(stmt, ssa_to_ssa)
-            else
-                value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
-                if value isa SSAValue
-                    if ssa_to_ssa[i] != value.id
-                        ssa_to_ssa[i] = value.id
-                        changed = true
-                    end
-                    continue
-                end
-                value
-            end
+            value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
+
             if value === nothing
                 ssa_to_ssa[i] = i
                 continue
             end
 
-            temp = get!(val_to_ssa, value, SSAValue(i)).id
+            equivalent_ssa = if value isa SSAValue
+                value.id
+            else
+                get!(val_to_ssa, value, SSAValue(i)).id
+            end
 
-            if ssa_to_ssa[i] != temp
-                ssa_to_ssa[i] = temp
+            if ssa_to_ssa[i] != equivalent_ssa
+                ssa_to_ssa[i] = equivalent_ssa
                 changed = true
             end
         end
