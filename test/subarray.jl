@@ -810,4 +810,7 @@ end
 @testset "StepRangeLen of CartesianIndex-es" begin
     v = view(1:2, StepRangeLen(CartesianIndex(1,1), CartesianIndex(1,1), 0))
     @test isempty(v)
+    r = StepRangeLen(CartesianIndex(1), CartesianIndex(1), 1)
+    v = view(1:2, r)
+    @test v == view(1:2, collect(r))
 end
