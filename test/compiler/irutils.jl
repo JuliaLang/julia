@@ -17,6 +17,7 @@ end
 isnew(@nospecialize x) = isexpr(x, :new)
 issplatnew(@nospecialize x) = isexpr(x, :splatnew)
 isreturn(@nospecialize x) = isa(x, ReturnNode) && isdefined(x, :val)
+isisdefined(@nospecialize x) = isexpr(x, :isdefined)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)

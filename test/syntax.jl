@@ -1706,7 +1706,7 @@ end
 @test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
 
 # #19324
-@test_throws UndefVarError(:x) eval(:(module M19324
+@test_throws UndefVarError(:x, :local) eval(:(module M19324
                  x=1
                  for i=1:10
                      x += i
@@ -1923,7 +1923,7 @@ function capture_with_conditional_label()
     return y->x
 end
 let f = capture_with_conditional_label()  # should not throw
-    @test_throws UndefVarError(:x) f(0)
+    @test_throws UndefVarError(:x, :local) f(0)
 end
 
 # `_` should not create a global (or local)
