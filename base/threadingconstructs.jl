@@ -175,9 +175,57 @@ end
 function _threadsfor(iter, lbody, schedule)
     lidx = iter.args[1]         # index
     range = iter.args[2]
+    esc_range = esc(range)
+    func = if schedule === :greedy
+        greedy_func(esc_range, lidx, lbody)
+    else
+        default_func(esc_range, lidx, lbody)
+    end
     quote
         local threadsfor_fun
-        let range = $(esc(range))
+        $func
+        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
+            threading_run(threadsfor_fun, false)
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+            error("`@threads :static` cannot be used concurrently or nested")
+        else # :static
+            threading_run(threadsfor_fun, true)
+        end
+        nothing
+    end
+end
+
+function greedy_func(itr, lidx, lbody)
+    quote
+        let r = Ref{Task}(), c = Channel{eltype($itr)}(threadpoolsize(),taskref=r) do ch
+            for item in $itr
+                put!(ch, item)
+            end
+        end
+        function threadsfor_fun(tid)
+            t = r[]
+            while !istaskstarted(t)
+                yield(t)
+            end
+            while isready(c)
+                item = try
+                    take!(c)
+                catch e
+                    # should technically never happen, but could?!
+                    # we don't have a non-blocking `take!`
+                    rethrow(e)
+                end
+                local $(esc(lidx)) = item
+                $(esc(lbody))
+            end
+        end
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody)
+    quote
+        let range = $itr
         function threadsfor_fun(tid = 1; onethread = false)
             r = range # Load into local variable
             lenr = length(r)
@@ -215,14 +263,6 @@ function _threadsfor(iter, lbody, schedule)
             end
         end
         end
-        if $(schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
-            threading_run(threadsfor_fun, true)
-        end
-        nothing
     end
 end
 
@@ -288,6 +328,15 @@ microseconds).
 !!! compat "Julia 1.8"
     The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
 
+### `:greedy`
+
+`:greedy` scheduler spawns up to [`Threads.threadpoolsize()`](@ref) tasks, each greedily working on
+the given iterated values as they are produced. As soon as one task finishes its work, it takes
+the next value from the iterator.
+
+!!! compat "Julia 1.11"
+    The `:greedy` option for the `schedule` argument is available as of Julia 1.11.
+
 ### `:static`
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
@@ -343,7 +392,7 @@ macro threads(args...)
             # for now only allow quoted symbols
             sched = nothing
         end
-        if sched !== :static && sched !== :dynamic
+        if sched !== :static && sched !== :dynamic && sched !== :greedy
             throw(ArgumentError("unsupported schedule argument in @threads"))
         end
     elseif na == 1
