@@ -1333,12 +1333,10 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
     nunion === nothing && return nothing
     cases = InliningCase[]
     argtypes = sig.argtypes
-    local handled_all_cases::Bool = true
-    local revisit_idx = local only_method = nothing
-    local meth::MethodLookupResult
+    local handled_all_cases = local fully_covered = true
+    local revisit_idx = nothing
     local all_result_count = 0
-    local joint_effects::Effects = EFFECTS_TOTAL
-    local fully_covered::Bool = true
+    local joint_effects = EFFECTS_TOTAL
     for i = 1:nunion
         meth = getsplit(info, i)
         if meth.ambig
@@ -1349,18 +1347,8 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             # No applicable methods; try next union split
             handled_all_cases = false
             continue
-        else
-            if length(meth) == 1 && only_method !== missing
-                if only_method === nothing
-                    only_method = meth[1].method
-                elseif only_method !== meth[1].method
-                    only_method = missing
-                end
-            else
-                only_method = missing
-            end
         end
-        local split_fully_covered::Bool = false
+        local split_fully_covered = false
         for (j, match) in enumerate(meth)
             all_result_count += 1
             result = getresult(info, all_result_count)
@@ -1387,33 +1375,17 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
 
     (handled_all_cases & fully_covered) || (joint_effects = Effects(joint_effects; nothrow=false))
 
-    if handled_all_cases && revisit_idx !== nothing
-        # we handled everything except one match with unmatched sparams,
-        # so try to handle it by bypassing validate_sparams
-        (i, j, k) = revisit_idx
-        match = getsplit(info, i)[j]
-        result = getresult(info, k)
-        handled_all_cases &= handle_any_const_result!(cases,
-            result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
-    elseif length(cases) == 0 && only_method isa Method
-        # if the signature is fully covered and there is only one applicable method,
-        # we can try to inline it even in the presence of unmatched sparams
-        # -- But don't try it if we already tried to handle the match in the revisit_idx
-        # case, because that'll (necessarily) be the same method.
-        if nsplit(info)::Int > 1
-            atype = argtypes_to_type(argtypes)
-            (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), atype, only_method.sig)::SimpleVector
-            match = MethodMatch(metharg, methsp::SimpleVector, only_method, true)
-            result = nothing
-        else
-            @assert length(meth) == 1
-            match = meth[1]
-            result = getresult(info, 1)
+    if handled_all_cases
+        if revisit_idx !== nothing
+            # we handled everything except one match with unmatched sparams,
+            # so try to handle it by bypassing validate_sparams
+            (i, j, k) = revisit_idx
+            match = getsplit(info, i)[j]
+            result = getresult(info, k)
+            handled_all_cases &= handle_any_const_result!(cases,
+                result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
         end
-        handle_any_const_result!(cases,
-            result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
-        fully_covered = handled_all_cases = match.fully_covers
-    elseif !handled_all_cases
+    elseif !isempty(cases)
         # if we've not seen all candidates, union split is valid only for dispatch tuples
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
