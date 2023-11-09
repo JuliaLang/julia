@@ -784,7 +784,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     if BxN != CxN
         throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
-    if sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
+    if isbitstype(R) && sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
         @inbounds for n in BxN, k in BxK
@@ -793,7 +793,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
         end
-    elseif sizeof(R) ≤ 16 && ((A isa Adjoint && B isa Adjoint) || (A isa Transpose && B isa Transpose))
+    elseif isbitstype(R) && sizeof(R) ≤ 16 && ((A isa Adjoint && B isa Adjoint) || (A isa Transpose && B isa Transpose))
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
         t = wrapperop(A)

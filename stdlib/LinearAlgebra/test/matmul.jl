@@ -667,12 +667,9 @@ end
 import Base: *, adjoint, transpose
 import LinearAlgebra: Adjoint, Transpose
 (*)(x::RootInt, y::RootInt) = x.i * y.i
+(*)(x::RootInt, y::Integer) = x.i * y
 adjoint(x::RootInt) = x
 transpose(x::RootInt) = x
-Adjoint(x::RootInt) = x
-Transpose(x::RootInt) = x
-# TODO once Adjoint/Transpose constructors call adjoint/transpose recursively
-# rather than Adjoint/Transpose, the additional definitions should become unnecessary
 
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
