@@ -73,11 +73,15 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     jl_array_t *rs = s->method->roots;
     jl_genericmemory_t *rt = s->method->roots_table;
     int i;
-    int l = jl_array_nrows(rs);
 
-    i = jl_unbox_long(jl_eqtable_get(rt, v, jl_box_long(l)));
-    if (i == l)
+    jl_value_t *ival = jl_eqtable_get(rt, v, NULL);
+    if (!ival) {
+        i = jl_array_nrows(rs);
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
+    }
+    else {
+        i = jl_unbox_long(ival);
+    }
 
     return tagged_root(rr, s, i);
 }
