@@ -509,7 +509,7 @@
                   sparams))
          (kw      (gensy))
          (kwdecl  `(|::| ,kw (core NamedTuple)))
-         (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
+         (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
@@ -608,16 +608,18 @@
                                ,tempslot)))
                    vars vals)
               `(block
-                (= ,rkw (call (top pairs)
-                              ,(if (null? keynames)
-                                   kw
-                                   `(call (top structdiff) ,kw (curly (core NamedTuple)
-                                                                      (tuple ,@(map quotify keynames)))))))
-                ,@(if (null? restkw)
-                      `((if (call (top isempty) ,rkw)
+                ,(if (null? restkw)
+                      `(if (call (top isempty)
+                                 (call (top diff_names)
+                                       (call (top keys) ,kw)
+                                       (tuple ,@(map quotify keynames))))
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
-                      '())
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg))
+                      `(= ,rkw (call (top pairs)
+                                     ,(if (null? keynames)
+                                          kw
+                                          `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                             (tuple ,@(map quotify keynames))))))))
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
