@@ -102,7 +102,18 @@ end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+function pop!(s::Set, x, default)
+    dict = s.dict
+    index = ht_keyindex(dict, x)
+    if index > 0
+        @inbounds key = dict.keys[index]
+        _delete!(dict, index)
+        return key
+    else
+        return default
+    end
+end
+
 function pop!(s::Set, x)
     index = ht_keyindex(s.dict, x)
     index < 1 && throw(KeyError(x))
