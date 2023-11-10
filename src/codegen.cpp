@@ -3053,13 +3053,11 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
         // the method might have a root for this already; use it if so
         JL_LOCK(&m->writelock);
         if (m->roots) {
-            size_t i, len = jl_array_dim0(m->roots);
-            for (i = 0; i < len; i++) {
-                jl_value_t *mval = jl_array_ptr_ref(m->roots, i);
-                if (mval == val || jl_egal(mval, val)) {
-                    JL_UNLOCK(&m->writelock);
-                    return mval;
-                }
+            size_t len = jl_array_dim0(m->roots);
+            size_t i = jl_unbox_long(jl_eqtable_get(m->roots_table, val, jl_box_long(-1)));
+            if (i > -1) {
+                JL_UNLOCK(&m->writelock);
+                return jl_array_ptr_ref(m->roots, i);
             }
         }
         JL_UNLOCK(&m->writelock);
