@@ -2248,7 +2248,7 @@ function gvn!(ir::IRCode)
     while changed
         changed = false
 
-        # Reverse Post Order traversal of dominator tree
+        # Reverse Post Order traversal of dominator tree as this is an IR invariant
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
             stmt = ir[SSAValue(i)][:stmt]
             if !(stmt isa Expr) & !(stmt isa PhiNode)
