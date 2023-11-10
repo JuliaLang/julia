@@ -129,6 +129,7 @@ StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
 Tutorials = [
     "tutorials/profile.md",
+    "tutorials/external.md",
 ]
 
 DevDocs = [
