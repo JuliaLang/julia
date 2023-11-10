@@ -319,9 +319,12 @@ zero(::Type{Union{}}, slurp...) = Union{}(0)
     one(T::type)
 
 Return a multiplicative identity for `x`: a value such that
-`one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
-take a type `T`, in which case `one` returns a multiplicative
-identity for any `x` of type `T`.
+`one(x)*x == x*one(x) == x`. If the multiplicative identity can
+be known based on the type alone, then a type may be given as
+an argument to `one` (e.g. `one(Int)` will work because the
+multiplicative identity is the same for all instances of `Int`,
+but `one(Vector{Int})` is not defined because vectors of
+different lengths have different multiplicative identities.)
 
 If possible, `one(x)` returns a value of the same type as `x`,
 and `one(T)` returns a value of type `T`.  However, this may
