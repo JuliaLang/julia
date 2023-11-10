@@ -807,8 +807,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 
     if (m->roots == NULL) {
         m->roots = jl_alloc_vec_any(0);
-        m->roots_table = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots);
+        m->roots_table = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots_table);
     }
     jl_ircode_state s = {

@@ -1194,8 +1194,8 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
         m->roots = jl_alloc_vec_any(0);
-        m->roots_table = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots);
+        m->roots_table = jl_alloc_memory_any(0);
         jl_gc_wb(m, m->roots_table);
     }
     if (!m->root_blocks && modid != 0) {
