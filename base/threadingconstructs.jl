@@ -211,8 +211,7 @@ function greedy_func(itr, lidx, lbody)
                 item = try
                     take!(c)
                 catch e
-                    # should technically never happen, but could?!
-                    # we don't have a non-blocking `take!`
+                    e isa InvalidStateException && break
                     rethrow(e)
                 end
                 local $(esc(lidx)) = item
