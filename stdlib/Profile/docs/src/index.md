@@ -106,6 +106,7 @@ The methods in `Profile.Allocs` are not exported and need to be called e.g. as `
 
 ```@docs
 Profile.Allocs.clear
+Profile.Allocs.print
 Profile.Allocs.fetch
 Profile.Allocs.start
 Profile.Allocs.stop

@@ -228,7 +228,7 @@ end
     return h
 end
 
-function _sizehint!(d::Dict{T}, newsz; shrink = true) where T
+function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
@@ -236,8 +236,6 @@ function _sizehint!(d::Dict{T}, newsz; shrink = true) where T
     newsz = _tablesz(cld(3 * newsz, 2))
     return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
 end
-
-sizehint!(d::Dict{T}, newsz) where T = _sizehint!(d, newsz)
 
 """
     empty!(collection) -> collection
@@ -380,7 +378,7 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
     else
         key = convert(K, key0)::K
         if !(isequal(key, key0)::Bool)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     setindex!(h, v0, key)
@@ -478,7 +476,7 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     else
         key = convert(K, key0)::K
         if !isequal(key, key0)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     return get!(default, h, key)
@@ -777,7 +775,7 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
-    haslength(d2) && _sizehint!(d1, length(d1) + length(d2), shrink = false)
+    haslength(d2) && sizehint!(d1, length(d1) + length(d2), shrink=false)
     for (k, v) in d2
         i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
@@ -786,7 +784,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
             if !(k isa K)
                 k1 = convert(K, k)::K
                 if !isequal(k, k1)
-                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                    throw(KeyTypeError(K, k))
                 end
                 k = k1
             end

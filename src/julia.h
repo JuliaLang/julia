@@ -378,7 +378,7 @@ struct _jl_method_instance_t {
         jl_method_t *method; // method this is specialized from
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
-    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
+    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
     _Atomic(jl_value_t*) uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
@@ -1877,7 +1877,6 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
@@ -1953,7 +1952,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                const char *context,
                                                jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var);
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,

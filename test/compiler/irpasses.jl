@@ -503,7 +503,7 @@ function isdefined_elim()
     return arr
 end
 let src = code_typed1(isdefined_elim)
-    @test is_scalar_replaced(src)
+    @test count(isisdefined, src.code) == 0
 end
 @test isdefined_elim() == Any[]
 
@@ -1568,3 +1568,5 @@ let m = Meta.@lower 1 + 1
 
     Core.Compiler.verify_ir(ir)
 end
+
+# JET.test_opt(Core.Compiler.cfg_simplify!, (Core.Compiler.IRCode,))

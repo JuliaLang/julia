@@ -1706,7 +1706,7 @@ end
 @test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
 
 # #19324
-@test_throws UndefVarError(:x) eval(:(module M19324
+@test_throws UndefVarError(:x, :local) eval(:(module M19324
                  x=1
                  for i=1:10
                      x += i
@@ -1782,6 +1782,43 @@ end
 @test A28593.var.name === :S
 @test B28593.var.name === :S
 @test C28593.var.name === :S
+
+# issue #51899
+macro struct_macro_51899()
+    quote
+        mutable struct Struct51899
+            const const_field
+            const const_field_with_type::Int
+            $(esc(Expr(:const, :(escaped_const_field::MyType))))
+            @atomic atomic_field
+            @atomic atomic_field_with_type::Int
+        end
+    end
+end
+
+let ex = @macroexpand @struct_macro_51899()
+    const_field, const_field_with_type, escaped_const_field,
+    atomic_field, atomic_field_with_type = filter(x -> isa(x, Expr), ex.args[end].args[end].args)
+    @test Meta.isexpr(const_field, :const)
+    @test const_field.args[1] === :const_field
+
+    @test Meta.isexpr(const_field_with_type, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test const_field_with_type.args[1].args[1] === :const_field_with_type
+    @test const_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+
+    @test Meta.isexpr(escaped_const_field, :const)
+    @test Meta.isexpr(const_field_with_type.args[1], :(::))
+    @test escaped_const_field.args[1].args[1] === :escaped_const_field
+    @test escaped_const_field.args[1].args[2] === :MyType
+
+    @test Meta.isexpr(atomic_field, :atomic)
+    @test atomic_field.args[1] === :atomic_field
+
+    @test Meta.isexpr(atomic_field_with_type, :atomic)
+    @test atomic_field_with_type.args[1].args[1] === :atomic_field_with_type
+    @test atomic_field_with_type.args[1].args[2] == GlobalRef(@__MODULE__, :Int)
+end
 
 # issue #25955
 macro noeffect25955(e)
@@ -1886,7 +1923,7 @@ function capture_with_conditional_label()
     return y->x
 end
 let f = capture_with_conditional_label()  # should not throw
-    @test_throws UndefVarError(:x) f(0)
+    @test_throws UndefVarError(:x, :local) f(0)
 end
 
 # `_` should not create a global (or local)

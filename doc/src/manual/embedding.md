@@ -432,14 +432,14 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector

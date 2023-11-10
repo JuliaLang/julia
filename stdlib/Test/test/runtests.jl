@@ -77,7 +77,7 @@ end
     @test 1234 === @test_nowarn(1234)
     @test 5678 === @test_warn("WARNING: foo", begin println(stderr, "WARNING: foo"); 5678; end)
     let a
-        @test_throws UndefVarError(:a) a
+        @test_throws UndefVarError(:a, :local) a
         @test_nowarn a = 1
         @test a === 1
     end

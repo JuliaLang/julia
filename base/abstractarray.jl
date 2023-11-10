@@ -1034,6 +1034,8 @@ the other elements are left untouched.
 
 See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> x = [1., 0., 3., 0., 5.];
