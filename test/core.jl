@@ -8000,12 +8000,11 @@ for T in (Int, String, Symbol, Module)
     @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},)))
 end
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
-# objectid for datatypes is inconsistent for types that have unbound type parameters.
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
+@test Core.Compiler.is_foldable(Base.infer_effects(objectid, (DataType,)))
 
 # donotdelete should not taint consistency of the containing function
 f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)

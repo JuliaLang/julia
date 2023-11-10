@@ -720,18 +720,10 @@ If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `obj
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
-function objectid(x)
-    # objectid is foldable iff it isn't a pointer.
-    if isidentityfree(typeof(x))
-        return _foldable_objectid(x)
-    end
-    return _objectid(x)
+function objectid(@nospecialize(x))
+    @_total_meta
+    return ccall(:jl_object_id, UInt, (Any,), x)
 end
-function _foldable_objectid(@nospecialize(x))
-    @_foldable_meta
-    _objectid(x)
-end
-_objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 """
     isdispatchtuple(T)
