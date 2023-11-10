@@ -1158,3 +1158,17 @@ end
     issue51837(; openquotechar, newlinechar)
 end |> !Core.Compiler.is_nothrow
 @test_throws ArgumentError issue51837(; openquotechar='α', newlinechar='\n')
+
+# idempotency of effects derived by post-opt analysis
+callgetfield(x, f) = getfield(x, f, Base.@_boundscheck)
+@test Base.infer_effects(callgetfield, (Some{Any},Symbol)).noub === Core.Compiler.NOUB_IF_NOINBOUNDS
+callgetfield1(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_simple(x, f) = callgetfield1(x, f)
+@test Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_TRUE
+callgetfield2(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
+@test Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_FALSE

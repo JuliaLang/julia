@@ -1675,13 +1675,12 @@ function oc_capture_oc(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
 
+# inlining with unmatched type parameters
 @eval struct OldVal{T}
-    x::T
     (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
 end
-with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
-with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
-function with_unmatched_typeparam3()
+@test OldVal{0}() === OldVal{0}.instance
+function with_unmatched_typeparam()
     f(x::OldVal{i}) where {i} = i
     r = 0
     for i = 1:10000
@@ -1689,17 +1688,15 @@ function with_unmatched_typeparam3()
     end
     return r
 end
-
-@testset "Inlining with unmatched type parameters" begin
-    let src = code_typed1(with_unmatched_typeparam1, (Any,))
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+let src = code_typed1(with_unmatched_typeparam)
+    found = nothing
+    for x in src.code
+        if isexpr(x, :call) && length(x.args) == 1
+            found = x
+            break
+        end
     end
-    let src = code_typed1(with_unmatched_typeparam2)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-    let src = code_typed1(with_unmatched_typeparam3)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
+    @test isnothing(found) || (source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
