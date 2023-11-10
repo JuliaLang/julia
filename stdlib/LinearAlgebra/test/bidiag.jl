@@ -837,4 +837,12 @@ end
     @test all(iszero, diag(B, 1))
 end
 
+@testset "diagind" begin
+    B = Bidiagonal(1:4, 1:3, :U)
+    M = Matrix(B)
+    @testset for k in -4:4
+        @test B[diagind(B,k)] == M[diagind(M,k)]
+    end
+end
+
 end # module TestBidiagonal
