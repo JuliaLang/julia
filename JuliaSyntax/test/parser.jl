@@ -1004,6 +1004,7 @@ parsestmt_test_specs = [
     "|(&\nfunction" => "(call | (& (function (error (error)) (block (error)) (error-t))) (error-t))"
     "@(" => "(macrocall (parens (error-t)))"
     "x = @(" => "(= x (macrocall (parens (error-t))))"
+    "function(where" => "(function (tuple-p where (error-t)) (block (error)) (error-t))"
     # Contextual keyword pairs must not be separated by newlines even within parens
     "(abstract\ntype X end)" => "(wrapper (parens abstract (error-t type X)) (error-t end ✘))"
     "(mutable\nstruct X end)" => "(wrapper (parens mutable (error-t struct X)) (error-t end ✘))"

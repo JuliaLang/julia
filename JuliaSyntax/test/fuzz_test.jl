@@ -905,7 +905,11 @@ function try_hook_failure(str)
     try
         test_logger = Test.TestLogger()
         Logging.with_logger(test_logger) do
-            Meta_parseall(str)
+            try
+                Meta_parseall(str)
+            catch exc
+                exc isa Meta.ParseError || exc isa JuliaSyntax.ParseError || rethrow()
+            end
         end
         if !isempty(test_logger.logs)
             return str
