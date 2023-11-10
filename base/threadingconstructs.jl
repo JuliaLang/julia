@@ -204,10 +204,22 @@ function greedy_func(itr, lidx, lbody)
         end
         function threadsfor_fun(tid)
             t = r[]
+            # We have to wait until the task producing items
+            # is actually producing items, otherwise we'll
+            # skip the working loop below entirely.
+            # Yield to that task explicitly to make sure this loop
+            # is shortlived.
             while !istaskstarted(t)
                 yield(t)
             end
+
             while isready(c)
+                #=
+                The channel can be closed between `isready` and `take!`
+                and because we don't have a non-blocking/non-throwing `take!`,
+                safeguard here. If we get this exception, assume iteration
+                finished and exit the loop.
+                =#
                 item = try
                     take!(c)
                 catch e
