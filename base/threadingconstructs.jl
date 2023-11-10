@@ -213,19 +213,7 @@ function greedy_func(itr, lidx, lbody)
                 yield(t)
             end
 
-            while isready(c)
-                #=
-                The channel can be closed between `isready` and `take!`
-                and because we don't have a non-blocking/non-throwing `take!`,
-                safeguard here. If we get this exception, assume iteration
-                finished and exit the loop.
-                =#
-                item = try
-                    take!(c)
-                catch e
-                    e isa InvalidStateException && break
-                    rethrow(e)
-                end
+            for item in c
                 local $(esc(lidx)) = item
                 $(esc(lbody))
             end
