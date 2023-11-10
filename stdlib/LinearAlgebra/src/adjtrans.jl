@@ -400,11 +400,16 @@ map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...
 map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
+quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below
 broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Transpose{<:Any,<:AdjointAbsVec}}...) =
+    transpose(adjoint(broadcast((xs...) -> adjoint(transpose(f(conj.(xs)...))), quasiparentc.(tvs)...)))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Adjoint{<:Any,<:TransposeAbsVec}}...) =
+    adjoint(transpose(broadcast((xs...) -> transpose(adjoint(f(conj.(xs)...))), quasiparentc.(tvs)...)))
 # TODO unify and allow mixed combinations with a broadcast style
 
 
