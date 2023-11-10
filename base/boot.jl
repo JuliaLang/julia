@@ -342,6 +342,9 @@ end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
 end
+struct MissingCodeError <: Exception
+    mi::MethodInstance
+end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
