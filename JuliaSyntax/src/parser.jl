@@ -3475,6 +3475,9 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # xx  ==>  xx
         # x₁  ==>  x₁
         bump(ps)
+    elseif is_word_operator(leading_kind)
+        # where=1 ==> (= where 1)
+        bump(ps, remap_kind=K"Identifier")
     elseif is_operator(leading_kind)
         # +     ==>  +
         # .+    ==>  (. +)
