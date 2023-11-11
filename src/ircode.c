@@ -79,12 +79,10 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     if (!ival) {
         i = jl_array_nrows(rs);
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-        jl_value_t *ibox = jl_box_long(i);
-        s->roots_ids = rt = jl_eqtable_put(rt, v, ibox, NULL);
+        s->roots_ids = rt = jl_eqtable_put(rt, v, jl_box_long(i), NULL);
     }
-    else {
+    else
         i = jl_unbox_long(ival);
-    }
 
     return tagged_root(rr, s, i);
 }
@@ -824,10 +822,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         jl_alloc_memory_any(0)
     };
     // generate hash table to lookup root indexes
-    for (int i = 0; i < jl_array_nrows(m->roots); i++) {
-        jl_value_t *ibox = jl_box_long(i);
-        s.roots_ids = jl_eqtable_put(s.roots_ids, jl_array_ptr_ref(m->roots, i), ibox, NULL);
-    }
+    for (int i = 0; i < jl_array_nrows(m->roots); i++)
+        s.roots_ids = jl_eqtable_put(s.roots_ids, jl_array_ptr_ref(m->roots, i), jl_box_long(i), NULL);
 
     jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
                                                  code->nospecializeinfer, code->inlining, code->constprop);
