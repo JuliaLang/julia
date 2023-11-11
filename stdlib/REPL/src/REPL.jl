@@ -222,10 +222,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
-                isempty(install_packages_hooks) && load_pkg()
-                if !isempty(install_packages_hooks)
-                    check_for_missing_packages_and_run_hooks(ast)
-                end
+                check_for_missing_packages_and_run_hooks(ast)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
@@ -252,6 +249,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
+        isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
