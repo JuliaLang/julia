@@ -1490,6 +1490,17 @@ let src = @eval Module() begin
     @test count(iscall((src, Base.add_int)), src.code) == 1
 end
 
+# Test gvn! fixes #50877
+let src = @eval Module() begin
+    function f()
+        return exp(x) / (1 + exp(x))
+    end
+    code_typed(f, Tuple{Float64})[1][1]
+    end
+    @test count(iscall((src, Base.exp)), src.code) == 1
+end
+
+# Test gvn! doesn't make illegal changes
 function foo()
     arr = Int[0]
     a = arr[]

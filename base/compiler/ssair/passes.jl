@@ -2158,7 +2158,7 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
         copyto!(key, stmt.args)
         key[end] = stmt.head
         for (i, arg) in enumerate(stmt.args)
-            if isa(arg, SSAValue)
+            if isa(arg, AnySSAValue)
                 key[i] = SSAValue(ssa_to_ssa[arg.id])
             end
         end
@@ -2192,7 +2192,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     for (i, ordered_i) in enumerate(ordered_indices)
         val = stmt.values[ordered_i]
 
-        if val isa SSAValue && ssa_to_ssa[val.id] == 0
+        if val isa AnySSAValue && ssa_to_ssa[val.id] == 0
             deleteat!(key, key_edge_idx(i, deletions))
             deletions += 1
             deleteat!(key, key_value_idx(i, deletions))
@@ -2202,7 +2202,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
 
         key[key_edge_idx(i, deletions)] = stmt.edges[ordered_i]
 
-        if val isa SSAValue
+        if val isa AnySSAValue
             key[key_value_idx(i, deletions)] = ssa_to_ssa[val.id]
             if firstval === nothing
                 firstval = val
@@ -2237,50 +2237,57 @@ It implements the RPO value numbering algorithm based on the paper "SCC based va
 The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
-    changed = true
-    ssa_to_ssa = fill(0, length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    compact = IncrementalCompact(ir)
+
+    ssa_to_ssa = fill(0, length(compact.result)) # Map from ssa to ssa of equivalent value
     # Value type of val_to_ssa is a SSAValue in order to reuse cache from it being boxed in svec
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
-    sizehint!(val_to_ssa, length(ir.stmts))
+    sizehint!(val_to_ssa, length(compact.result))
 
     lazydomtree = LazyDomtree(ir)
 
+    changed = true
     while changed
         changed = false
 
+        blockidx = next_blockidx = compact.active_bb
         # Reverse Post Order traversal of dominator tree as this is an IR invariant
-        for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-            stmt = ir[SSAValue(i)][:stmt]
+        for ((_, idx), stmt) in compact
+            blockidx = next_blockidx
+            next_blockidx = compact.active_bb
+
             if !(stmt isa Expr) & !(stmt isa PhiNode)
-                ssa_to_ssa[i] = i
+                ssa_to_ssa[idx] = idx
                 continue
             end
 
             # :nothrow is necessary to be able to move with affecting semantics
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-            if !(ir[SSAValue(i)][:flag] & total_flags == total_flags)
-                ssa_to_ssa[i] = i
+            if !(compact[SSAValue(idx)][:flag] & total_flags == total_flags)
+                ssa_to_ssa[idx] = idx
                 continue
             end
 
             value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
 
             if value === nothing
-                ssa_to_ssa[i] = i
+                ssa_to_ssa[idx] = idx
                 continue
             end
 
-            equivalent_ssa = if value isa SSAValue
+            equivalent_ssa = if value isa AnySSAValue
                 value.id
             else
-                get!(val_to_ssa, value, SSAValue(i)).id
+                get!(val_to_ssa, value, SSAValue(idx)).id
             end
 
-            if ssa_to_ssa[i] != equivalent_ssa
-                ssa_to_ssa[i] = equivalent_ssa
+            if ssa_to_ssa[idx] != equivalent_ssa
+                ssa_to_ssa[idx] = equivalent_ssa
                 changed = true
             end
         end
+        ir = complete(compact)
+        compact = IncrementalCompact(ir)
 
         empty!(val_to_ssa)
         sizehint!(val_to_ssa, length(ir.stmts))
@@ -2288,20 +2295,23 @@ function gvn!(ir::IRCode)
 
     # Find Congruence Classes
     congruence_classes = nothing # could steal ht from val_to_ssa instead of delaying allocation
-    for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-        if ssa_to_ssa[i] != 0 && ssa_to_ssa[i] != i
+    blockidx = next_blockidx = compact.active_bb
+    for ((_, idx), stmt) in compact
+        blockidx = next_blockidx
+        next_blockidx = compact.active_bb
+        if ssa_to_ssa[idx] != 0 && ssa_to_ssa[idx] != idx
             if congruence_classes === nothing
                 congruence_classes = IdDict{Int, Vector{CongruenceClassElement}}()
             end
-            if !haskey(congruence_classes, ssa_to_ssa[i])
-                congruence_classes[ssa_to_ssa[i]] = [CongruenceClassElement(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
+            if !haskey(congruence_classes, ssa_to_ssa[idx])
+                congruence_classes[ssa_to_ssa[idx]] = [CongruenceClassElement(ssa_to_ssa[idx], block_for_inst(ir, ssa_to_ssa[idx]))]
             end
-            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClassElement(i, blockidx))
+            push!(congruence_classes[ssa_to_ssa[idx]], CongruenceClassElement(idx, blockidx))
         end
     end
 
     if congruence_classes === nothing
-        return ir
+        return complete(compact)
     end
 
     domtree = get!(lazydomtree)
@@ -2319,12 +2329,12 @@ function gvn!(ir::IRCode)
             if isempty(elimination_stack)
                 push!(elimination_stack, CongruenceClassElement(ssa, blockidx))
             elseif last(elimination_stack).ssa < ssa
-                ir.stmts.stmt[ssa] = SSAValue(last(elimination_stack).ssa)
+                compact[ssa] = SSAValue(last(elimination_stack).ssa)
             end
         end
     end
 
-    return ir
+    return complete(compact)
 end
 
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
