@@ -222,6 +222,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
+                isempty(install_packages_hooks) && load_pkg()
                 if !isempty(install_packages_hooks)
                     check_for_missing_packages_and_run_hooks(ast)
                 end
@@ -1586,6 +1587,15 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
+function load_pkg()
+    pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+    if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+        Pkg = Base.require(pkgid)
+        return Pkg
+    end
+    return nothing
+end
+
 module Numbered
 
 using ..REPL
@@ -1657,7 +1667,6 @@ function __current_ast_transforms(backend)
         backend.ast_transforms
     end
 end
-
 
 function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
