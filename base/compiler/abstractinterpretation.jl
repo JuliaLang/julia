@@ -320,7 +320,7 @@ function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), s
                                arginfo::ArgInfo, @nospecialize(maybecondinfo))
     rt = collect_limitations!(rt, sv)
     if isa(rt, InterMustAlias)
-        rt = from_intermustalias(rt, arginfo)
+        rt = from_intermustalias(rt, arginfo, sv)
     elseif is_lattice_bool(ipo_lattice(interp), rt)
         if maybecondinfo === nothing
             rt = widenconditional(rt)
@@ -340,10 +340,10 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_intermustalias(rt::InterMustAlias, arginfo::ArgInfo)
+function from_intermustalias(rt::InterMustAlias, arginfo::ArgInfo, sv::AbsIntState)
     fargs = arginfo.fargs
     if fargs !== nothing && 1 ≤ rt.slot ≤ length(fargs)
-        arg = fargs[rt.slot]
+        arg = ssa_def_slot(fargs[rt.slot], sv)
         if isa(arg, SlotNumber)
             argtyp = widenslotwrapper(arginfo.argtypes[rt.slot])
             if rt.vartyp ⊑ argtyp
@@ -1334,6 +1334,9 @@ function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
     return arg
 end
 
+# No slots in irinterp
+ssa_def_slot(@nospecialize(arg), sv::IRInterpretationState) = nothing
+
 struct AbstractIterationResult
     cti::Vector{Any}
     info::MaybeAbstractIterationInfo
@@ -1743,7 +1746,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
         a3 = argtypes[3]
         if isa(a3, Const)
             if rt !== Bottom && !isalreadyconst(rt)
-                var = fargs[2]
+                var = ssa_def_slot(fargs[2], sv)
                 if isa(var, SlotNumber)
                     vartyp = widenslotwrapper(argtypes[2])
                     fldidx = maybe_const_fldidx(vartyp, a3.val)
@@ -3047,6 +3050,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
+                    condxslot = ssa_def_slot(condx, frame)
                     condt = abstract_eval_value(interp, condx, currstate, frame)
                     if condt === Bottom
                         ssavaluetypes[currpc] = Bottom
@@ -3054,10 +3058,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         @goto find_next_bb
                     end
                     orig_condt = condt
-                    if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
+                    if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condxslot, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
-                        condt = Conditional(condx, Const(true), Const(false))
+                        condt = Conditional(condxslot, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
                     nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)

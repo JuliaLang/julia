@@ -4254,17 +4254,21 @@ f(x) = yt(x)
         (else (for-each linearize (cdr e))))
   e)
 
+;; N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
+;; a global in the current scope.
 (define (valid-ir-argument? e)
-  (or (simple-atom? e) (symbol? e)
+  (or (simple-atom? e)
+      (and (outerref? e) (nothrow-julia-global (cadr e)))
+      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
-           (memq (car e) '(quote inert top core globalref outerref
+           (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -4410,48 +4414,59 @@ f(x) = yt(x)
           (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " not at top level"))))
+    (define (valid-body-ir-argument? aval)
+      (or (valid-ir-argument? aval)
+          (and (symbol? aval) ; Arguments are always defined slots
+               (or (memq aval (lam:args lam))
+                   (let ((vi (get vinfo-table aval #f)))
+                     (and vi (vinfo:never-undef vi)))))))
+    (define (single-assign-var? aval)
+      (and (symbol? aval) ; Arguments are always sa
+           (or (memq aval (lam:args lam))
+               (let ((vi (get vinfo-table aval #f)))
+                 (and vi (vinfo:sa vi))))))
+    ;; TODO: We could also allow const globals here
+    (define (const-read-arg? x)
+      ;; Even if we have side effects, we know that singly-assigned
+      ;; locals cannot be affected them, so we can inline them anyway.
+      (or (simple-atom? x) (single-assign-var? x)
+        (and (pair? x)
+          (memq (car x) '(quote inert top core)))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
     (define (compile-args lst break-labels)
       (if (null? lst) '()
-          (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
-                                                (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref)))))
-                                lst)))
-            (let loop ((lst  lst)
-                       (vals '()))
-              (if (null? lst)
-                  (reverse! vals)
-                  (let* ((arg (car lst))
-                         (aval (or (compile arg break-labels #t #f)
-                                   ;; TODO: argument exprs that don't yield a value?
-                                   '(null))))
-                    (loop (cdr lst)
-                          (cons (if (and (not simple?)
-                                         (not (simple-atom? arg))
-                                         (not (simple-atom? aval))
-                                         (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core))))
-                                         (not (and (symbol? aval) ;; function args are immutable and always assigned
-                                                   (memq aval (lam:args lam))))
-                                         (not (and (or (symbol? arg)
-                                                       (and (pair? arg)
-                                                            (memq (car arg) '(globalref outerref))))
-                                                   (or (null? (cdr lst))
-                                                       (null? vals)))))
-                                    (let ((tmp (make-ssavalue)))
-                                      (emit `(= ,tmp ,aval))
-                                      tmp)
-                                    aval)
-                                vals))))))))
+        ;; First check if all the arguments as simple (and therefore side-effect free).
+        ;; Otherwise, we need to use ssa values for all arguments to ensure proper
+        ;; left-to-right evaluation semantics.
+        (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
+                                              (and (pair? x)
+                                                   (memq (car x) '(quote inert top core globalref outerref)))))
+                              lst)))
+          (let loop ((lst  lst)
+                     (vals '()))
+            (if (null? lst)
+                (reverse! vals)
+                (let* ((arg (car lst))
+                       (aval (or (compile arg break-labels #t #f)
+                                 ;; TODO: argument exprs that don't yield a value?
+                                 '(null))))
+                  (loop (cdr lst)
+                        (cons (if (and
+                                   (or simple? (const-read-arg? aval))
+                                   (valid-body-ir-argument? aval))
+                                  aval
+                                  (let ((tmp (make-ssavalue)))
+                                    (emit `(= ,tmp ,aval))
+                                    tmp))
+                              vals))))))))
     (define (compile-cond ex break-labels)
       (let ((cnd (or (compile ex break-labels #t #f)
                      ;; TODO: condition exprs that don't yield a value?
                      '(null))))
-        (if (not (valid-ir-argument? cnd))
+        (if (valid-body-ir-argument? cnd) cnd
             (let ((tmp (make-ssavalue)))
               (emit `(= ,tmp ,cnd))
-              tmp)
-            cnd)))
+              tmp))))
     (define (emit-cond cnd break-labels endl)
       (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
                       (flatten-ex 'block cnd)
