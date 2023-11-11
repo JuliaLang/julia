@@ -2144,12 +2144,6 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
-
-struct CongruenceClassElement
-    ssa::Int
-    blockidx::Int
-end
-
 # Rename SSA values in stmt to equivalent SSA values using ssa_to_ssa map.
 function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
     # taken from renumber_ir_elements!
@@ -2159,7 +2153,7 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
         key[end] = stmt.head
         for (i, arg) in enumerate(stmt.args)
             if isa(arg, SSAValue)
-                key[i] = SSAValue(ssa_to_ssa[arg.id])
+                key[i] = ssa_to_ssa[arg.id]
             end
         end
         return svec(key...)
@@ -2192,7 +2186,7 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     for (i, ordered_i) in enumerate(ordered_indices)
         val = stmt.values[ordered_i]
 
-        if val isa SSAValue && ssa_to_ssa[val.id] == 0
+        if val isa SSAValue && ssa_to_ssa[val.id] == SSAValue(0)
             deleteat!(key, key_edge_idx(i, deletions))
             deletions += 1
             deleteat!(key, key_value_idx(i, deletions))
@@ -2224,6 +2218,11 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     return svec(key...)
 end
 
+struct CongruenceClassElement
+    ssa::Int
+    blockidx::Int
+end
+
 """
     gvn!(ir::IRCode) -> newir::IRCode
 
@@ -2237,43 +2236,45 @@ It implements the RPO value numbering algorithm based on the paper "SCC based va
 The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
-    changed = true
-    ssa_to_ssa = fill(0, length(ir.stmts)) # Map from ssa to ssa of equivalent value
-    # Value type of val_to_ssa is a SSAValue in order to reuse cache from it being boxed in svec
+    ssa_to_ssa = fill(SSAValue(0), length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    # Value type of val_to_ssa is a SSAValue in order to reuse cache
+    # from it being boxed in a svec in `perform_symbolic_evaluation`
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
     sizehint!(val_to_ssa, length(ir.stmts))
 
     lazydomtree = LazyDomtree(ir)
 
+    changed = true
     while changed
         changed = false
 
         # Reverse Post Order traversal of dominator tree as this is an IR invariant
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-            stmt = ir[SSAValue(i)][:stmt]
+            inst = ir[SSAValue(i)]
+            stmt = inst[:stmt]
             if !(stmt isa Expr) & !(stmt isa PhiNode)
-                ssa_to_ssa[i] = i
+                ssa_to_ssa[i] = SSAValue(i)
                 continue
             end
 
             # :nothrow is necessary to be able to move with affecting semantics
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-            if !(ir[SSAValue(i)][:flag] & total_flags == total_flags)
-                ssa_to_ssa[i] = i
+            if !(inst[:flag] & total_flags == total_flags)
+                ssa_to_ssa[i] = SSAValue(i)
                 continue
             end
 
             value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
 
             if value === nothing
-                ssa_to_ssa[i] = i
+                ssa_to_ssa[i] = SSAValue(i)
                 continue
             end
 
             equivalent_ssa = if value isa SSAValue
-                value.id
+                value
             else
-                get!(val_to_ssa, value, SSAValue(i)).id
+                get!(val_to_ssa, value, SSAValue(i))
             end
 
             if ssa_to_ssa[i] != equivalent_ssa
@@ -2289,12 +2290,12 @@ function gvn!(ir::IRCode)
     # Find Congruence Classes
     congruence_classes = nothing # could steal ht from val_to_ssa instead of delaying allocation
     for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
-        if ssa_to_ssa[i] != 0 && ssa_to_ssa[i] != i
+        if ssa_to_ssa[i] != SSAValue(0) && ssa_to_ssa[i] != SSAValue(i)
             if congruence_classes === nothing
-                congruence_classes = IdDict{Int, Vector{CongruenceClassElement}}()
+                congruence_classes = IdDict{SSAValue, Vector{CongruenceClassElement}}()
             end
             if !haskey(congruence_classes, ssa_to_ssa[i])
-                congruence_classes[ssa_to_ssa[i]] = [CongruenceClassElement(ssa_to_ssa[i], block_for_inst(ir, ssa_to_ssa[i]))]
+                congruence_classes[ssa_to_ssa[i]] = [CongruenceClassElement(ssa_to_ssa[i].id, block_for_inst(ir, ssa_to_ssa[i].id))]
             end
             push!(congruence_classes[ssa_to_ssa[i]], CongruenceClassElement(i, blockidx))
         end
