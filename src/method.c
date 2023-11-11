@@ -1212,9 +1212,8 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);
-    int i = jl_array_nrows(m->roots);
     if (current_root_id(m->root_blocks) != modid)
-        add_root_block(m->root_blocks, modid, i);
+        add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
     jl_array_ptr_1d_push(m->roots, root);
     JL_GC_POP();
 }
@@ -1226,8 +1225,7 @@ void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
     assert(jl_is_method(m));
     assert(jl_is_array(roots));
     prepare_method_for_roots(m, modid);
-    int i = jl_array_nrows(m->roots);
-    add_root_block(m->root_blocks, modid, i);
+    add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
     jl_array_ptr_1d_append(m->roots, roots);
     JL_GC_POP();
 }
