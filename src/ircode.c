@@ -27,7 +27,7 @@ typedef struct {
     jl_method_t *method;
     jl_ptls_t ptls;
     uint8_t relocatability;
-    jl_genericmemory_t *roots_ids;
+    jl_genericmemory_t *roots_ids; // iddict for method root ids; only needed during compression
 } jl_ircode_state;
 
 // type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
@@ -80,7 +80,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
         i = jl_array_nrows(rs);
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
         jl_value_t *ibox = jl_box_long(i);
-        s->roots_ids = jl_eqtable_put(s->roots_ids, v, ibox, NULL);
+        s->roots_ids = rt = jl_eqtable_put(rt, v, ibox, NULL);
     }
     else {
         i = jl_unbox_long(ival);
