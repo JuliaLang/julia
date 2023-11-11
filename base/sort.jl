@@ -1474,7 +1474,8 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-Uses `Base.copymutable` to support immutable collections and iterables.
+Returns something [`similar`](@ref) to `v` when `v` is an `AbstractArray` and uses
+[`collect`](@ref) to support arbitrary non-`AbstractArray` iterables.
 
 !!! compat "Julia 1.10"
     `sort` of arbitrary iterables requires at least Julia 1.10.

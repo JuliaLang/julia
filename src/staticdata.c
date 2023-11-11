@@ -2594,6 +2594,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_docmeta_sym = (jl_sym_t*)jl_get_global((jl_module_t*)docs, jl_symbol("META"));
         }
     }
+    jl_genericmemory_t *global_roots_table = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -2602,7 +2603,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_value_t *tag = *tags[i];
                 jl_queue_for_serialization(&s, tag);
             }
-            jl_queue_for_serialization(&s, jl_global_roots_table);
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
@@ -2638,8 +2638,19 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
-        // step 1.3: prune (garbage collect) some special weak references from
-        // built-in type caches
+        // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_table
+        if (worklist == NULL) {
+            global_roots_table = jl_alloc_memory_any(0);
+            for (size_t i = 0; i < jl_global_roots_table->length; i += 2) {
+                jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_table, i);
+                if (ptrhash_get(&serialization_order, val) != HT_NOTFOUND)
+                    global_roots_table = jl_eqtable_put(global_roots_table, val, jl_nothing, NULL);
+            }
+            jl_queue_for_serialization(&s, global_roots_table);
+            jl_serialize_reachable(&s);
+        }
+        // step 1.4: prune (garbage collect) some special weak references from
+        // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)serialization_queue.items[i];
             if (jl_is_typename(tn)) {
@@ -2747,7 +2758,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_value_t *tag = *tags[i];
                 jl_write_value(&s, tag);
             }
-            jl_write_value(&s, jl_global_roots_table);
+            jl_write_value(&s, global_roots_table);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));

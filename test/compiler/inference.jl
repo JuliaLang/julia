@@ -2999,13 +2999,16 @@ end
 @test ig27907(Int, Int, 1, 0) == 0
 
 # issue #28279
+# ensure that lowering doesn't move these into statement position, which would require renumbering
+using Base: +, -
 function f28279(b::Bool)
-    i = 1
-    while i > b
-        i -= 1
+    let i = 1
+        while i > b
+            i -= 1
+        end
+        if b end
+        return i + 1
     end
-    if b end
-    return i + 1
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
@@ -5451,7 +5454,6 @@ end
 @test Base.return_types(phic_type8) |> only === Int
 @test phic_type8() === 2
 
-
 function phic_type9()
     local a
     try
@@ -5489,6 +5491,11 @@ function phic_type10()
 end
 @test Base.return_types(phic_type10) |> only === Int
 @test phic_type10() === 2
+
+undef_trycatch() = try (a_undef_trycatch = a_undef_trycatch, b = 2); return 1 catch end
+# `global a_undef_trycatch` could be defined dynamically, so both paths must be allowed
+@test Base.return_types(undef_trycatch) |> only === Union{Nothing, Int}
+@test undef_trycatch() === nothing
 
 # Test that `exit` returns `Union{}` (issue #51856)
 function test_exit_bottom(s)
