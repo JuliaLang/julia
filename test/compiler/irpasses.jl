@@ -1490,6 +1490,17 @@ let src = @eval Module() begin
     @test count(iscall((src, Base.add_int)), src.code) == 1
 end
 
+# Test gvn! fixes #50877
+let src = @eval Module() begin
+    function f()
+        return exp(x) / (1 + exp(x))
+    end
+    code_typed(f, Tuple{Float64})[1][1]
+    end
+    @test count(iscall((src, Base.exp)), src.code) == 1
+end
+
+# Test gvn! doesn't make illegal changes
 function foo()
     arr = Int[0]
     a = arr[]
@@ -1497,8 +1508,26 @@ function foo()
     b = arr[]
     (a, b)
 end
-
 @test foo() == (0, 1)
+
+# Test gvn! perform_symbolic_evaluation on PhiNodes works correctly
+@testset "perform_symbolic_evaluation" begin
+    # test if all incoming values to PhiNode are equivalent
+    # to the same SSAValue, dominating edge is found
+    ssa_to_ssa = fill(SSAValue(2), 2)
+    stmt = PhiNode(Int32[1, 2], Any[SSAValue(1), SSAValue(2)])
+
+    domtree = DomTree(DFSTree(0), SNCAData[], [0, 1, 1], DomTreeNode[])
+    domtree = compute_domtree_nodes!(domtree)
+
+    lazydomtree = LazyDomtree(IRCode())
+    lazydomtree.domtree = domtree
+    @test perform_symbolic_evaluation(stmt, ssa_to_ssa, 2, lazydomtree) == SSAValue(2)
+
+    stmt = PhiNode(Int32[2, 1], Any[SSAValue(1), SSAValue(2)])
+    @test perform_symbolic_evaluation(stmt, ssa_to_ssa, 2, lazydomtree) == SSAValue(2)
+end
+
 
 # Issue #51144 - UndefRefError during compaction
 let code = Any[

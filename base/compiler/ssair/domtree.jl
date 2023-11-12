@@ -727,7 +727,7 @@ function naive_idoms(blocks::Vector{BasicBlock}, is_post_dominator::Bool=false)
     idoms
 end
 
-# On what step do we first see a node and last see a node in a DFS traversal of the dominator tree
+# On what step do we first and last see a node in a DFS traversal of the dominator tree
 struct DFSNumber
     in::Int
     out::Int
@@ -741,7 +741,7 @@ end
 function construct_dfscached_domtree(domtree::DomTree)
     dfsnumbers = fill(DFSNumber(1, 0), length(domtree.nodes))
 
-    workstack = [(1, 1)] # index into domtree, index into children of node
+    workstack = [(1, 1)] # (index into domtree, index into children of node)
 
     dfsnum = 1
     while !isempty(workstack)
