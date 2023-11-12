@@ -39,6 +39,8 @@ difference between defining a `main` function and executing the code directly at
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+
 Build system changes
 --------------------
 
