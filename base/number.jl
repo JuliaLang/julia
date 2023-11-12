@@ -324,7 +324,7 @@ be known based on the type alone, then a type may be given as
 an argument to `one` (e.g. `one(Int)` will work because the
 multiplicative identity is the same for all instances of `Int`,
 but `one(Matrix{Int})` is not defined because matrices of
-different shapes have different multiplicative identies.)
+different shapes have different multiplicative identities.)
 
 If possible, `one(x)` returns a value of the same type as `x`,
 and `one(T)` returns a value of type `T`.  However, this may
