@@ -1862,19 +1862,16 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
         key = similar(stmt.args, length(stmt.args)+1)
-        copyto!(key, stmt.args)
-        key[end] = stmt.head
+        key[1] = stmt.head
         for (i, arg) in enumerate(stmt.args)
-            if isa(arg, SSAValue)
-                key[i] = ssa_to_ssa[arg.id]
-            end
+            key[i+1] = isa(arg, SSAValue) ? ssa_to_ssa[arg.id] : arg
         end
         return svec(key...)
     else
         return nothing
     end
 end
-function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree)
+function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree, ir)
     isempty(stmt.values) && return nothing
 
     for i in eachindex(stmt.values)
@@ -1889,7 +1886,6 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     key[end] = blockidx
 
     firstval = nothing
-    firstedge = Int32(0)
     allthesame = true # If all values into the phi node are the same SSAValue
     deletions = 0
 
@@ -1897,8 +1893,10 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for (i, ordered_i) in enumerate(ordered_indices)
+        edge = stmt.edges[ordered_i]
         val = stmt.values[ordered_i]
 
+        # Optimistically assume edges are unreachable and remove them
         if val isa SSAValue && ssa_to_ssa[val.id] == SSAValue(0)
             deleteat!(key, key_edge_idx(i, deletions))
             deletions += 1
@@ -1907,24 +1905,25 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
             continue
         end
 
-        key[key_edge_idx(i, deletions)] = stmt.edges[ordered_i]
+        key[key_edge_idx(i, deletions)] = edge
 
         if val isa SSAValue
-            key[key_value_idx(i, deletions)] = ssa_to_ssa[val.id]
+            equivalent_ssa = ssa_to_ssa[val.id]
+            key[key_value_idx(i, deletions)] = equivalent_ssa
             if firstval === nothing
-                firstval = val
-                firstedge = stmt.edges[key_edge_idx(i, deletions)]
-            else
-                allthesame &= val === firstval
+                firstval = equivalent_ssa
             end
+            allthesame &= equivalent_ssa === firstval
         else
             key[key_value_idx(i, deletions)] = val
             allthesame = false
         end
     end
-    if allthesame && firstval !== nothing && dominates(get!(lazydomtree), BBNumber(firstedge), blockidx)
+    if allthesame && firstval !== nothing &&
+            dominates(get!(lazydomtree), block_for_inst(ir, firstval.id), blockidx)
         return firstval
     end
+    length(key) == 1 && return svec()
     # returns (sorted edges, ssa_to_ssa[ssa values of sorted edges], block index)
     # faster to splat a single vector into a svec than multiple,
     # which is why the code above is so complex
@@ -1950,6 +1949,7 @@ The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
     ssa_to_ssa = fill(SSAValue(0), length(ir.stmts)) # Map from ssa to ssa of equivalent value
+
     # Value type of val_to_ssa is a SSAValue in order to reuse cache
     # from it being boxed in a svec in `perform_symbolic_evaluation`
     val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
@@ -1965,19 +1965,20 @@ function gvn!(ir::IRCode)
         for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
             inst = ir[SSAValue(i)]
             stmt = inst[:stmt]
+
             if !(stmt isa Expr) & !(stmt isa PhiNode)
                 ssa_to_ssa[i] = SSAValue(i)
                 continue
             end
 
-            # :nothrow is necessary to be able to move with affecting semantics
+            # nothrow is necessary to be able to eliminate instruction with affecting semantics
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
             if !(inst[:flag] & total_flags == total_flags)
                 ssa_to_ssa[i] = SSAValue(i)
                 continue
             end
 
-            value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree)
+            value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree, ir)
 
             if value === nothing
                 ssa_to_ssa[i] = SSAValue(i)
@@ -2001,7 +2002,7 @@ function gvn!(ir::IRCode)
     end
 
     # Find Congruence Classes
-    congruence_classes = nothing # could steal ht from val_to_ssa instead of delaying allocation
+    congruence_classes = nothing # could steal memory backing val_to_ssa instead of delaying allocation
     for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
         if ssa_to_ssa[i] != SSAValue(0) && ssa_to_ssa[i] != SSAValue(i)
             if congruence_classes === nothing
