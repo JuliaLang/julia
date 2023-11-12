@@ -575,6 +575,14 @@ static char *abspath(const char *in, int nprefix)
         }
     }
 #else
+    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
+    char *in2 = (char*)malloc_s(JL_PATH_MAX);
+    if (strlen(in) - nprefix == 0) {
+        memcpy(in2, in, nprefix);
+        in2[nprefix+1] = '.';
+        in2[nprefix+2] = '\0';
+        in = in2;
+    }
     DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -585,6 +593,7 @@ static char *abspath(const char *in, int nprefix)
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     memcpy(out, in, nprefix);
+    free(in2);
 #endif
     return out;
 }
