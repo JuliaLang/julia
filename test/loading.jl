@@ -1333,3 +1333,47 @@ end
         @test filesize(cache_path) != cache_size
     end
 end
+
+@testset "code coverage disabled during precompilation" begin
+    mktempdir() do depot
+        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        function rm_cov_files()
+            for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+                rm(cov_file)
+            end
+            @test !cov_exists()
+        end
+        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+
+        rm_cov_files() # clear out any coverage files first
+        @test !cov_exists()
+
+        cd(cov_test_dir) do
+            # In our depot, precompile CovTest.jl with coverage on
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            @test !cov_exists()
+            rm_cov_files()
+
+            # same again but call foo(), which is in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+
+            # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+        end
+    end
+end

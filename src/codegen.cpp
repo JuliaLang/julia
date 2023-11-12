@@ -8450,15 +8450,19 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
+    // If a pkgimage or sysimage is being generated, disable tracking.
+    // This means sysimage build or pkgimage precompilation workloads aren't tracked.
     auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
-        return (coverage_mode == JL_LOG_ALL ||
+        return (jl_generating_output() == 0 &&
+                (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && coverage_mode == JL_LOG_USER) ||
-                (is_tracked && coverage_mode == JL_LOG_PATH));
+                (is_tracked && coverage_mode == JL_LOG_PATH)));
     };
     auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
-        return (malloc_log_mode == JL_LOG_ALL ||
+        return (jl_generating_output() == 0 &&
+                (malloc_log_mode == JL_LOG_ALL ||
                 (in_user_code && malloc_log_mode == JL_LOG_USER) ||
-                (is_tracked && malloc_log_mode == JL_LOG_PATH));
+                (is_tracked && malloc_log_mode == JL_LOG_PATH)));
     };
     SmallVector<unsigned, 0> current_lineinfo, new_lineinfo;
     auto coverageVisitStmt = [&] (size_t dbg) {

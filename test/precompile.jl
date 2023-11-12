@@ -1778,7 +1778,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end

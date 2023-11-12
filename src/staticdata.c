@@ -3675,7 +3675,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -3695,6 +3695,10 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
+
+    if (ignore_native){
+        memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
+    }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, false);
 

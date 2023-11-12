@@ -62,8 +62,19 @@ end
 
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
+    function get_julia_cmd(arg)
+        io = Base.BufferStream()
+        cmd = `$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`
+        try
+            run(pipeline(cmd, stdout=io, stderr=io))
+        catch
+            @error "cmd failed" cmd read(io, String)
+            rethrow()
+        end
+        return read(io, String)
+    end
+
     opts = Base.JLOptions()
-    get_julia_cmd(arg) = strip(read(`$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`, String), ['`'])
 
     for (arg, default) in (
                             ("-C$(unsafe_string(opts.cpu_target))",  false),
