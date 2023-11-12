@@ -639,13 +639,13 @@ end
     @test d == IdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Int,Int}
     @test_throws KeyError d[:a]
-    @test_throws ArgumentError d[:a] = 1
+    @test_throws TypeError d[:a] = 1
     @test_throws MethodError d[1] = :a
 
     # copy constructor
     d = IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test collect(values(IdDict{Int,Float64}(d))) == collect(values(d))
-    @test_throws ArgumentError IdDict{Float64,Int}(d)
+    @test_throws TypeError IdDict{Float64,Int}(d)
 
     # misc constructors
     @test typeof(IdDict(1=>1, :a=>2)) == IdDict{Any,Int}
@@ -672,7 +672,7 @@ end
     @test_throws MethodError get!(d, "b", "b")
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
-    @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
+    @test_throws TypeError get!(IdDict{Symbol,Any}(), 2, "b")
     @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
     @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
@@ -1491,6 +1491,11 @@ end
     filter!(x -> x.first < 10, d)
     sizehint!(d, 10)
     @test length(d.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.slots) < 1000
 end
 
 # getindex is :effect_free and :terminates but not :consistent
@@ -1501,4 +1506,32 @@ for T in (Int, Float64, String, Symbol)
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test_broken Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end
+end
+
+struct BadHash
+    i::Int
+end
+Base.hash(::BadHash, ::UInt)=UInt(1)
+@testset "maxprobe reset #51595" begin
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    empty!(d)
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    for _ in 1:20
+        pop!(d)
+    end
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
+end
+
+# Issue #52066
+let d = Dict()
+    d[1] = 'a'
+    d[1.0] = 'b'
+    @test only(d) === Pair{Any,Any}(1.0, 'b')
 end

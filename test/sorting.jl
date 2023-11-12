@@ -559,6 +559,11 @@ end
 
     @test_throws ArgumentError sort("string")
     @test_throws ArgumentError("1 cannot be sorted") sort(1)
+
+    @test sort(Set((1, 3, 6))) == [1, 3, 6]
+    @test sort(Dict((1=>9, 3=>2, 6=>5))) == [1=>9, 3=>2, 6=>5]
+    @test sort(keys(Dict((1=>2, 3=>5, 6=>9)))) == [1, 3, 6]
+    @test sort(values(Dict((1=>9, 3=>2, 6=>5)))) == [2, 5, 9]
 end
 
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
@@ -972,8 +977,8 @@ end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
     v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 4 == @allocations sort(v)
-    @test 4 == @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    @test 10 > @allocations sort(v)
+    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end
@@ -981,15 +986,15 @@ end
 function test_allocs()
     v = rand(10)
     i = randperm(length(v))
-    @test 1 == @allocations sort(v)
+    @test 2 >= @allocations sort(v)
     @test 0 == @allocations sortperm!(i, v)
     @test 0 == @allocations sort!(i)
     @test 0 == @allocations sortperm!(i, v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=false)
+    @test 2 >= @allocations sortperm(v, rev=true)
+    @test 2 >= @allocations sortperm(v, rev=false)
     @test 0 == @allocations sortperm!(i, v, order=Base.Reverse)
-    @test 1 == @allocations sortperm(v)
-    @test 1 == @allocations sortperm(i, by=sqrt)
+    @test 2 >= @allocations sortperm(v)
+    @test 2 >= @allocations sortperm(i, by=sqrt)
     @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
     sort!(Int[], rev=false) # compile
     @test 0 == @allocations sort!(i, rev=false)

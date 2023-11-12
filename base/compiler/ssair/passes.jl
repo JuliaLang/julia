@@ -1236,7 +1236,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         src = nothing
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
+    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
     src === nothing && return false
     src = retrieve_ir_for_inlining(mi, src)
 
@@ -1917,29 +1917,65 @@ end
 
 is_terminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)
 
+function follow_map(map::Vector{Int}, idx::Int)
+    while map[idx] ≠ 0
+        idx = map[idx]
+    end
+    return idx
+end
+
+function ascend_eliminated_preds(bbs::Vector{BasicBlock}, pred::Int)
+    while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
+        pred = bbs[pred].preds[1]
+    end
+    return pred
+end
+
+# Compute (renamed) successors and predecessors given (renamed) block
+function compute_succs(merged_succ::Vector{Int}, bbs::Vector{BasicBlock}, result_bbs::Vector{Int}, bb_rename_succ::Vector{Int}, i::Int)
+    orig_bb = follow_map(merged_succ, result_bbs[i])
+    return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
+end
+
+function compute_preds(bbs::Vector{BasicBlock}, result_bbs::Vector{Int}, bb_rename_pred::Vector{Int}, i::Int)
+    orig_bb = result_bbs[i]
+    preds = copy(bbs[orig_bb].preds)
+    res = Int[]
+    while !isempty(preds)
+        pred = popfirst!(preds)
+        if pred == 0
+            push!(res, 0)
+            continue
+        end
+        r = bb_rename_pred[pred]
+        (r == -2 || r == -1) && continue
+        if r == -3
+            prepend!(preds, bbs[pred].preds)
+        else
+            push!(res, r)
+        end
+    end
+    return res
+end
+
+function add_preds!(all_new_preds::Vector{Int32}, bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, old_edge::Int32)
+    preds = copy(bbs[old_edge].preds)
+    while !isempty(preds)
+        old_edge′ = popfirst!(preds)
+        new_edge = bb_rename_pred[old_edge′]
+        if new_edge > 0 && new_edge ∉ all_new_preds
+            push!(all_new_preds, Int32(new_edge))
+        elseif new_edge == -3
+            prepend!(preds, bbs[old_edge′].preds)
+        end
+    end
+end
+
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
     dropped_bbs = Vector{Int}() # sorted
-    function follow_merge_into(idx::Int)
-        while merge_into[idx] != 0
-            idx = merge_into[idx]
-        end
-        return idx
-    end
-    function follow_merged_succ(idx::Int)
-        while merged_succ[idx] != 0
-            idx = merged_succ[idx]
-        end
-        return idx
-    end
-    function ascend_eliminated_preds(pred)
-        while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
-            pred = bbs[pred].preds[1]
-        end
-        return pred
-    end
 
     # Walk the CFG from the entry block and aggressively combine blocks
     for (idx, bb) in enumerate(bbs)
@@ -1953,7 +1989,7 @@ function cfg_simplify!(ir::IRCode)
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
-                if follow_merged_succ(succ) != idx
+                if follow_map(merged_succ, succ) != idx
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
@@ -1961,13 +1997,13 @@ function cfg_simplify!(ir::IRCode)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
                 found_interference = false
-                preds = Int[ascend_eliminated_preds(pred) for pred in bb.preds]
+                preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
                     stmt = ir[SSAValue(idx)][:stmt]
                     stmt === nothing && continue
                     isa(stmt, PhiNode) || break
                     for edge in stmt.edges
-                        edge = ascend_eliminated_preds(edge)
+                        edge = ascend_eliminated_preds(bbs, Int(edge))
                         for pred in preds
                             if pred == edge
                                 found_interference = true
@@ -1986,14 +2022,14 @@ function cfg_simplify!(ir::IRCode)
 
     # Assign new BB numbers in DFS order, dropping unreachable blocks
     max_bb_num = 1
-    bb_rename_succ = fill(0, length(bbs))
+    bb_rename_succ = zeros(Int, length(bbs))
     worklist = BitSetBoundedMinPrioritySet(length(bbs))
     push!(worklist, 1)
     while !isempty(worklist)
         i = popfirst!(worklist)
         # Drop blocks that will be merged away
         if merge_into[i] != 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = typemin(Int)
         end
         # Mark dropped blocks for fixup
         if !isempty(searchsorted(dropped_bbs, i))
@@ -2013,7 +2049,7 @@ function cfg_simplify!(ir::IRCode)
                 # we have to schedule that block next
                 while merged_succ[curr] != 0
                     if bb_rename_succ[curr] == 0
-                        bb_rename_succ[curr] = -1
+                        bb_rename_succ[curr] = typemin(Int)
                     end
                     curr = merged_succ[curr]
                 end
@@ -2025,8 +2061,9 @@ function cfg_simplify!(ir::IRCode)
                         push!(worklist, terminator.dest)
                     end
                 elseif isexpr(terminator, :enter)
-                    if bb_rename_succ[terminator.args[1]] == 0
-                        push!(worklist, terminator.args[1])
+                    enteridx = terminator.args[1]::Int
+                    if bb_rename_succ[enteridx] == 0
+                        push!(worklist, enteridx)
                     end
                 end
                 ncurr = curr + 1
@@ -2052,9 +2089,9 @@ function cfg_simplify!(ir::IRCode)
         resolved_all = true
         for bb in dropped_bbs
             obb = bb_rename_succ[bb]
-            if obb < -1
+            if obb < 0 && obb != typemin(Int)
                 nsucc = bb_rename_succ[-obb]
-                if nsucc == -1
+                if nsucc == typemin(Int)
                     nsucc = -merge_into[-obb]
                 end
                 bb_rename_succ[bb] = nsucc
@@ -2069,6 +2106,8 @@ function cfg_simplify!(ir::IRCode)
         if bb_rename_succ[i] == 0
             bb_rename_succ[i] = -1
             bb_rename_pred[i] = -2
+        elseif bb_rename_succ[i] == typemin(Int)
+            bb_rename_succ[i] = -1
         end
     end
 
@@ -2112,7 +2151,7 @@ function cfg_simplify!(ir::IRCode)
         elseif is_multi
             bb_rename_pred[i] = -3
         else
-            bbnum = follow_merge_into(pred)
+            bbnum = follow_map(merge_into, pred)
             bb_rename_pred[i] = bb_rename_succ[bbnum]
         end
     end
@@ -2134,48 +2173,12 @@ function cfg_simplify!(ir::IRCode)
         bb_starts[i+1] = bb_starts[i] + result_bbs_lengths[i]
     end
 
-    cresult_bbs = let result_bbs = result_bbs,
-                      merged_succ = merged_succ,
-                      merge_into = merge_into,
-                      bbs = bbs,
-                      bb_rename_succ = bb_rename_succ
-
-        # Compute (renamed) successors and predecessors given (renamed) block
-        function compute_succs(i::Int)
-            orig_bb = follow_merged_succ(result_bbs[i])
-            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
-        end
-        function compute_preds(i::Int)
-            orig_bb = result_bbs[i]
-            preds = bbs[orig_bb].preds
-            res = Int[]
-            function scan_preds!(preds::Vector{Int})
-                for pred in preds
-                    if pred == 0
-                        push!(res, 0)
-                        continue
-                    end
-                    r = bb_rename_pred[pred]
-                    (r == -2 || r == -1) && continue
-                    if r == -3
-                        scan_preds!(bbs[pred].preds)
-                    else
-                        push!(res, r)
-                    end
-                end
-            end
-            scan_preds!(preds)
-            return res
-        end
-
-        BasicBlock[
-            BasicBlock(StmtRange(bb_starts[i],
-                                 i+1 > length(bb_starts) ?
-                                    length(compact.result) : bb_starts[i+1]-1),
-                       compute_preds(i),
-                       compute_succs(i))
-            for i = 1:length(result_bbs)]
-    end
+    cresult_bbs = BasicBlock[
+        BasicBlock(StmtRange(bb_starts[i],
+                             i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
+                   compute_preds(bbs, result_bbs, bb_rename_pred, i),
+                   compute_succs(merged_succ, bbs, result_bbs, bb_rename_succ, i))
+        for i = 1:length(result_bbs)]
 
     # Fixup terminators for any blocks that would have caused double edges
     for (bbidx, (new_bb, old_bb)) in enumerate(zip(cresult_bbs, result_bbs))
@@ -2186,7 +2189,7 @@ function cfg_simplify!(ir::IRCode)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert terminator[:stmt] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
-            terminator[:stmt] = GotoNode(terminator[:stmt].dest)
+            terminator[:stmt] = GotoNode(terminator[:stmt].dest::Int)
             pop!(new_bb.succs)
             new_succ = cresult_bbs[new_bb.succs[1]]
             for (i, nsp) in enumerate(new_succ.preds)
@@ -2210,11 +2213,12 @@ function cfg_simplify!(ir::IRCode)
             for i in bbs[ms].stmts
                 node = ir.stmts[i]
                 compact.result[compact.result_idx] = node
-                if isa(node[:stmt], GotoNode) && merged_succ[ms] != 0
+                stmt = node[:stmt]
+                if isa(stmt, GotoNode) && merged_succ[ms] != 0
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
                     compact.result[compact.result_idx][:stmt] = nothing
-                elseif isa(node[:stmt], PhiNode)
-                    phi = node[:stmt]
+                elseif isa(stmt, PhiNode)
+                    phi = stmt
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
@@ -2236,17 +2240,7 @@ function cfg_simplify!(ir::IRCode)
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
-                            function add_preds!(old_edge)
-                                for old_edge′ in bbs[old_edge].preds
-                                    new_edge = bb_rename_pred[old_edge′]
-                                    if new_edge > 0 && !in(new_edge, all_new_preds)
-                                        push!(all_new_preds, new_edge)
-                                    elseif new_edge == -3
-                                        add_preds!(old_edge′)
-                                    end
-                                end
-                            end
-                            add_preds!(old_edge)
+                            add_preds!(all_new_preds, bbs, bb_rename_pred, old_edge)
                             append!(edges, all_new_preds)
                             if isassigned(renamed_values, old_index)
                                 val = renamed_values[old_index]

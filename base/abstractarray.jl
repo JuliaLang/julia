@@ -268,8 +268,8 @@ julia> ndims(A)
 3
 ```
 """
-ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::AbstractArray{T,N}) where {T,N} = N::Int
+ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
@@ -731,8 +731,6 @@ end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
-throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
-
 # check along a single dimension
 """
     checkindex(Bool, inds::AbstractUnitRange, index)
@@ -905,6 +903,8 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
@@ -1034,6 +1034,8 @@ the other elements are left untouched.
 
 See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> x = [1., 0., 3., 0., 5.];
@@ -1080,13 +1082,22 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if srcstyle isa IndexLinear
             # Single-index implementation
             @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
+                if isassigned(src, i)
+                    dest[i + Δi] = src[i]
+                else
+                    _unsetindex!(dest, i + Δi)
+                end
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
+            @inbounds for a in eachindex(src)
+                i += 1
+                if isassigned(src, a)
+                    dest[i] = src[a]
+                else
+                    _unsetindex!(dest, i)
+                end
             end
         end
     else
@@ -1094,14 +1105,22 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
-                @inbounds dest[I] = src[I]
+                if isassigned(src, I)
+                    @inbounds dest[I] = src[I]
+                else
+                    _unsetindex!(dest, I)
+                end
             end
         else
             # Dual-iterator implementation
             ret = iterate(iterdest)
-            @inbounds for a in src
+            @inbounds for a in itersrc
                 idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
+                if isassigned(src, a)
+                    dest[idx] = src[a]
+                else
+                    _unsetindex!(dest, idx)
+                end
                 ret = iterate(iterdest, state)
             end
         end
@@ -1120,8 +1139,8 @@ function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstar
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
-               src::AbstractArray, sstart::Integer,
-               n::Integer)
+                 src::AbstractArray, sstart::Integer,
+                 n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
@@ -1130,7 +1149,11 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+        if isassigned(src′, sstart+i)
+            dest[dstart+i] = src′[sstart+i]
+        else
+            _unsetindex!(dest, dstart+i)
+        end
     end
     return dest
 end
@@ -1141,7 +1164,7 @@ function copy(a::AbstractArray)
 end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+                 A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1229,10 +1252,10 @@ end
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
+pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
-    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
+    pointer(x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
@@ -1370,6 +1393,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = zeros(2,2);
@@ -1425,6 +1450,8 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
 end
+
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
 
 """
     parent(A)
@@ -1507,7 +1534,7 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !isempty(A) && !isempty(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
@@ -1531,7 +1558,8 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Array) = (UInt(pointer(A)),)
+dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 
@@ -3343,6 +3371,8 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 

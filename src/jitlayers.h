@@ -22,9 +22,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
-
+#include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
+
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -98,7 +99,9 @@ struct OptimizationOptions {
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
+#if JL_LLVM_VERSION < 160000
     StandardInstrumentations SI;
+#endif
     std::unique_ptr<PassInstrumentationCallbacks> PIC;
     PassBuilder PB;
     ModulePassManager MPM;
@@ -192,7 +195,7 @@ struct jl_codegen_call_target_t {
     bool specsig;
 };
 
-typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> jl_workqueue_t;
+typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 // TODO DenseMap?
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
 
@@ -332,7 +335,7 @@ public:
     <typename ResourceT, size_t max = 0,
         typename BackingT = std::stack<ResourceT,
             std::conditional_t<max == 0,
-                SmallVector<ResourceT>,
+                SmallVector<ResourceT, 0>,
                 SmallVector<ResourceT, max>
             >
         >
@@ -386,7 +389,7 @@ public:
             }
             private:
             ResourcePool &pool;
-            llvm::Optional<ResourceT> resource;
+            Optional<ResourceT> resource;
         };
 
         OwningResource operator*() JL_NOTSAFEPOINT {
@@ -534,7 +537,7 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
-    std::vector<std::function<void()>> PrintLLVMTimers;
+    SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
@@ -566,6 +569,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     }
     return *_shared_module;
 }
+void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

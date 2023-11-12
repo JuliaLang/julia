@@ -347,3 +347,7 @@ let ir = Base.code_ircode((Int,Int)) do x, y
     code_llvm(io, oc, (Int,Int))
     @test occursin("j_*_", String(take!(io)))
 end
+
+foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
+
+code_llvm(devnull,foopaque,()) #shouldn't crash

@@ -478,6 +478,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
+                      :leave,
                       :new_opaque_closure)
 end
 
@@ -1360,6 +1361,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if isa(cond, Bool) && cond === true
                 # cond was folded to true - this statement
                 # is dead.
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
                 ssa_rename[idx] = nothing
                 return result_idx
             end

@@ -172,7 +172,7 @@ const OC_MISMATCH_WARNING =
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
-                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), safepoint_on_entry=raw, gcstack_arg=raw))
+                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -280,7 +280,7 @@ See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
-                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), safepoint_on_entry=raw, gcstack_arg=raw))
+                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
@@ -307,7 +307,7 @@ See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref),
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
-                     params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), safepoint_on_entry=raw, gcstack_arg=raw))
+                     params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     d = _dump_function(f, types, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)

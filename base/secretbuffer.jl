@@ -29,12 +29,12 @@ true
 ```
 """
 mutable struct SecretBuffer <: IO
-    data::Vector{UInt8}
+    data::Memory{UInt8}
     size::Int
     ptr::Int
 
     function SecretBuffer(; sizehint=128)
-        s = new(Vector{UInt8}(undef, sizehint), 0, 1)
+        s = new(Memory{UInt8}(undef, sizehint), 0, 1)
         finalizer(final_shred!, s)
         return s
     end
@@ -49,7 +49,7 @@ Strings are bad at keeping secrets because they are unable to be securely
 zeroed or destroyed. Therefore, avoid using this constructor with secret data.
 Instead of starting with a string, either construct the `SecretBuffer`
 incrementally with `SecretBuffer()` and [`write`](@ref), or use a `Vector{UInt8}` with
-the `Base.SecretBuffer!(::Vector{UInt8})` constructor.
+the `Base.SecretBuffer!(::AbstractVector{UInt8})` constructor.
 """
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
 function SecretBuffer(str::String)
@@ -68,7 +68,7 @@ convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
 
 Initialize a new `SecretBuffer` from `data`, securely zeroing `data` afterwards.
 """
-function SecretBuffer!(d::Vector{UInt8})
+function SecretBuffer!(d::AbstractVector{UInt8})
     len = length(d)
     s = SecretBuffer(sizehint=len)
     for i in 1:len
@@ -106,7 +106,7 @@ show(io::IO, s::SecretBuffer) = print(io, "SecretBuffer(\"*******\")")
 ==(s1::SecretBuffer, s2::SecretBuffer) = (s1.ptr == s2.ptr) && (s1.size == s2.size) && (UInt8(0) == _bufcmp(s1.data, s2.data, min(s1.size, s2.size)))
 # Also attempt a constant time buffer comparison algorithm — the length of the secret might be
 # inferred by a timing attack, but not its values.
-@noinline function _bufcmp(data1::Vector{UInt8}, data2::Vector{UInt8}, sz::Int)
+@noinline function _bufcmp(data1::Memory{UInt8}, data2::Memory{UInt8}, sz::Int)
     res = UInt8(0)
     for i = 1:sz
         res |= xor(data1[i], data2[i])
@@ -117,11 +117,23 @@ end
 const _sb_hash = UInt === UInt32 ? 0x111c0925 : 0xb06061e370557428
 hash(s::SecretBuffer, h::UInt) = hash(_sb_hash, h)
 
+copy(s::SecretBuffer) = copy!(SecretBuffer(sizehint=length(s.data)), s)
+function copy!(dest::SecretBuffer, src::SecretBuffer)
+    if length(dest.data) != length(src.data)
+        securezero!(dest.data)
+        dest.data = copy(src.data)
+    else
+        copyto!(dest.data, src.data)
+    end
+    dest.size = src.size
+    dest.ptr = src.ptr
+    return dest
+end
 
 function write(io::SecretBuffer, b::UInt8)
     if io.ptr > length(io.data)
         # We need to resize! the array: do this manually to ensure no copies are left behind
-        newdata = Vector{UInt8}(undef, (io.size+16)*2)
+        newdata = Memory{UInt8}(undef, (io.size+16)*2)
         copyto!(newdata, io.data)
         securezero!(io.data)
         io.data = newdata
@@ -140,8 +152,7 @@ function write(io::IO, s::SecretBuffer)
     return nb
 end
 
-cconvert(::Type{Cstring}, s::SecretBuffer) = unsafe_convert(Cstring, s)
-function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
+function cconvert(::Type{Cstring}, s::SecretBuffer)
     # Ensure that no nuls appear in the valid region
     if any(==(0x00), s.data[i] for i in 1:s.size)
         throw(ArgumentError("`SecretBuffers` containing nul bytes cannot be converted to C strings"))
@@ -152,8 +163,10 @@ function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
     write(s, '\0')
     s.ptr = p
     s.size -= 1
-    return Cstring(unsafe_convert(Ptr{Cchar}, s.data))
+    return s.data
 end
+# optional shim for manual calls to unsafe_convert:
+#   unsafe_convert(::Type{Cstring}, s::SecretBuffer) = unsafe_convert(Cstring, cconvert(Cstring, s))
 
 seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)
 seekend(io::SecretBuffer) = seek(io, io.size+1)

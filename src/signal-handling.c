@@ -429,7 +429,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->ptls->in_pure_callback = 0;
         ct->ptls->in_finalizer = 0;
         ct->ptls->defer_signal = 0;
-        jl_atomic_store_release(&ct->ptls->gc_state, 0); // forceably exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        jl_atomic_store_release(&ct->ptls->gc_state, 0); // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
     }
 }
 
@@ -463,9 +463,9 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal (%d.%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {
