@@ -93,7 +93,13 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
         end
         # Construct the absolute (local) path to the stdlib package's root directory
         package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
-        isdir(package_root_dir) || error("Missing stdlib: $(package_root_dir)")
+        # Documenter needs package_root_dir to exist --- it's just a sanity check it does on the remotes= keyword.
+        # In normal (local) builds, this will be the case, since the Makefiles will have unpacked the standard
+        # libraries. However, on CI we do this thing where we actually build docs in a clean worktree, just
+        # unpacking the `usr/` directory from the main build, and the unpacked stdlibs will be missing, and this
+        # will cause Documenter to throw an error. However, we don't _actually_ need the source files of the standard
+        # libraries to be present, so we just generate empty root directories to satisfy the check in Documenter.
+        isdir(package_root_dir) || mkpath(package_root_dir)
         package_root_dir => (remote, package_sha)
     end
     Dict(remotes_list)
