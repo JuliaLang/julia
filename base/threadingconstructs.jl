@@ -331,7 +331,12 @@ microseconds).
 
 `:greedy` scheduler spawns up to [`Threads.threadpoolsize()`](@ref) tasks, each greedily working on
 the given iterated values as they are produced. As soon as one task finishes its work, it takes
-the next value from the iterator.
+the next value from the iterator. Work done by any individual task is not necessarily on
+contiguous values from the iterator. The given iterator may produce values forever, only the
+iterator interface is required (no indexing).
+
+This scheduling option is generally a good choice if the workload of individual iterations
+is not uniform/has a large spread.
 
 !!! compat "Julia 1.11"
     The `:greedy` option for the `schedule` argument is available as of Julia 1.11.
