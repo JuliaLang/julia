@@ -1493,11 +1493,11 @@ end
 # Test gvn! fixes #50877
 let src = @eval Module() begin
     function f(x)
-        return exp(x) / (1 + exp(x))
+        return Base.exp(x) / (1 + Base.exp(x))
     end
     code_typed(f, Tuple{Float64})[1][1]
     end
-    @test count(iscall((src, Base.exp)), src.code) == 1
+    @test count(isinvoke(:exp), src.code) == 1
 end
 
 # Test gvn! doesn't make illegal changes
@@ -1514,18 +1514,25 @@ end
 @testset "perform_symbolic_evaluation" begin
     # test if all incoming values to PhiNode are equivalent
     # to the same SSAValue, dominating edge is found
-    ssa_to_ssa = fill(SSAValue(2), 2)
-    stmt = PhiNode(Int32[1, 2], Any[SSAValue(1), SSAValue(2)])
 
-    domtree = DomTree(DFSTree(0), SNCAData[], [0, 1, 1], DomTreeNode[])
-    domtree = compute_domtree_nodes!(domtree)
+    function f()
+        x = Base.inferencebarrier(4)
+        if (x > 4)
+            x = Base.inferencebarrier(x)
+        end
+        return x
+    end
 
-    lazydomtree = LazyDomtree(IRCode())
-    lazydomtree.domtree = domtree
-    @test perform_symbolic_evaluation(stmt, ssa_to_ssa, 2, lazydomtree) == SSAValue(2)
+    ir = Base.code_ircode(f, Tuple{}) |> only |> first
+    lazydomtree =  Core.Compiler.LazyDomtree(ir)
 
-    stmt = PhiNode(Int32[2, 1], Any[SSAValue(1), SSAValue(2)])
-    @test perform_symbolic_evaluation(stmt, ssa_to_ssa, 2, lazydomtree) == SSAValue(2)
+    ssa_to_ssa = fill(SSAValue(1), 4)
+
+    stmt = PhiNode(Int32[1, 2], Any[SSAValue(1), SSAValue(4)])
+    @test Core.Compiler.perform_symbolic_evaluation(stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
+
+    stmt = PhiNode(Int32[2, 1], Any[SSAValue(4), SSAValue(1)])
+    @test Core.Compiler.perform_symbolic_evaluation(stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
 end
 
 
