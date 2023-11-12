@@ -1492,7 +1492,7 @@ end
 
 # Test gvn! fixes #50877
 let src = @eval Module() begin
-    function f()
+    function f(x)
         return exp(x) / (1 + exp(x))
     end
     code_typed(f, Tuple{Float64})[1][1]
