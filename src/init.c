@@ -579,8 +579,8 @@ static char *abspath(const char *in, int nprefix)
     char *in2 = (char*)malloc_s(JL_PATH_MAX);
     if (strlen(in) - nprefix == 0) {
         memcpy(in2, in, nprefix);
-        in2[nprefix+1] = '.';
-        in2[nprefix+2] = '\0';
+        in2[nprefix] = '.';
+        in2[nprefix+1] = '\0';
         in = in2;
     }
     DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
@@ -689,7 +689,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
     if (jl_options.tracked_path)
-        jl_options.tracked_path = absformat(jl_options.tracked_path);
+        jl_options.tracked_path = abspath(jl_options.tracked_path, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
