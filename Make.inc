@@ -1357,6 +1357,11 @@ endif
 JLIBLDFLAGS += -Wl,-z,noexecstack
 endif
 
+#musl has a really small default stack
+ifeq ($(findstring musl,$(BB_TRIPLET)),musl)
+JLDFLAGS += -Wl,-z,stack-size=1024768
+endif
+
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
