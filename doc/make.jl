@@ -365,6 +365,7 @@ else
     )
 end
 
+@info read(`$(Sys.which("git")) --version`, String)
 const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
 makedocs(
     build     = output_path,
