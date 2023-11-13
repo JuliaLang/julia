@@ -1357,7 +1357,6 @@ endif
 JLIBLDFLAGS += -Wl,-z,noexecstack
 endif
 
-
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
