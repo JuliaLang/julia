@@ -464,6 +464,7 @@ let # generate cache
         lookup)
     io = IOBuffer()
     code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    @test  occursin("j_sin_", String(take!(io)))
-    @test !occursin("j_cos_", String(take!(io)))
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
 end
