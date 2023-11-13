@@ -288,6 +288,31 @@ function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Arra
     serialize_any(s, b)
 end
 
+serialize(s::AbstractSerializer, m::GenericMemory) = error("GenericMemory{:atomic} currently cannot be serialized")
+function serialize(s::AbstractSerializer, m::Memory)
+    serialize_cycle_header(s, m) && return
+    serialize(s, length(m))
+    elty = eltype(m)
+    if isbitstype(elty)
+        serialize_array_data(s.io, m)
+    else
+        sizehint!(s.table, div(length(m),4))  # prepare for lots of pointers
+        @inbounds for i in eachindex(m)
+            if isassigned(m, i)
+                serialize(s, m[i])
+            else
+                writetag(s.io, UNDEFREF_TAG)
+            end
+        end
+    end
+end
+
+function serialize(s::AbstractSerializer, x::GenericMemoryRef)
+    serialize_type(s, typeof(x))
+    serialize(s, getfield(x, :mem))
+    serialize(s, Base.memoryrefoffset(x))
+end
+
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
     if len > 7
@@ -511,7 +536,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.super)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
-    serialize(s, isdefined(primary, :instance))
+    serialize(s, Base.issingletontype(primary))
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
@@ -653,6 +678,11 @@ function serialize(s::AbstractSerializer, u::UnionAll)
 end
 
 serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
+
+function serialize(s::AbstractSerializer, x::Core.AddrSpace)
+    serialize_type(s, typeof(x))
+    write(s.io, Core.bitcast(UInt8, x))
+end
 
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
@@ -1276,7 +1306,7 @@ function deserialize_array(s::AbstractSerializer)
     return A
 end
 
-function deserialize_fillarray!(A::Array{T}, s::AbstractSerializer) where {T}
+function deserialize_fillarray!(A::Union{Array{T},Memory{T}}, s::AbstractSerializer) where {T}
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
@@ -1284,6 +1314,48 @@ function deserialize_fillarray!(A::Array{T}, s::AbstractSerializer) where {T}
         end
     end
     return A
+end
+
+function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
+    slot = pop!(s.pending_refs) # e.g. deserialize_cycle
+    n = deserialize(s)::Int
+    elty = eltype(X)
+    if isbitstype(elty)
+        A = X(undef, n)
+        if X === Memory{Bool}
+            i = 1
+            while i <= n
+                b = read(s.io, UInt8)::UInt8
+                v = (b >> 7) != 0
+                count = b & 0x7f
+                nxt = i + count
+                while i < nxt
+                    A[i] = v
+                    i += 1
+                end
+            end
+        else
+            A = read!(s.io, A)::X
+        end
+        s.table[slot] = A
+        return A
+    end
+    A = X(undef, n)
+    s.table[slot] = A
+    sizehint!(s.table, s.counter + div(n, 4))
+    deserialize_fillarray!(A, s)
+    return A
+end
+
+function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
+    x = Core.memoryref(deserialize(s))::X
+    i = deserialize(s)::Int
+    i == 2 || (x = Core.memoryref(x, i, true))
+    return x::X
+end
+
+function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
+    Core.bitcast(X, read(s.io, UInt8))
 end
 
 function deserialize_expr(s::AbstractSerializer, len)
@@ -1341,7 +1413,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
-            if !Base.issingletontype(ty)
+            if !isdefined(ty, :instance)
                 singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
                 # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)

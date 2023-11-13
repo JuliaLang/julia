@@ -18,30 +18,22 @@ InvalidationTesterCache() = InvalidationTesterCache(IdDict{MethodInstance,CodeIn
 const INVALIDATION_TESTER_CACHE = InvalidationTesterCache()
 
 struct InvalidationTester <: CC.AbstractInterpreter
-    callback!
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
     code_cache::InvalidationTesterCache
-    function InvalidationTester(callback! = nothing;
+    function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::CC.InferenceParams = CC.InferenceParams(),
                                 opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                                 inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                                 code_cache::InvalidationTesterCache = INVALIDATION_TESTER_CACHE)
-        if callback! === nothing
-            callback! = function (replaced::MethodInstance)
-                # Core.println(replaced) # debug
-                delete!(code_cache.dict, replaced)
-            end
-        end
-        return new(callback!, world, inf_params, opt_params, inf_cache, code_cache)
+        return new(world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 
 struct InvalidationTesterCacheView
-    interp::InvalidationTester
     dict::IdDict{MethodInstance,CodeInstance}
 end
 
@@ -49,42 +41,17 @@ CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
 CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
 CC.get_world_counter(interp::InvalidationTester) = interp.world
 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
-CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp, interp.code_cache.dict), WorldRange(interp.world))
+CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp.code_cache.dict), WorldRange(interp.world))
 CC.get(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
 function CC.setindex!(wvc::WorldView{InvalidationTesterCacheView}, ci::CodeInstance, mi::MethodInstance)
-    add_callback!(wvc.cache.interp.callback!, mi)
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.dict, replaced)
+        # Core.println("[InvalidationTester] ", replaced) # debug
+    end
     setindex!(wvc.cache.dict, ci, mi)
 end
-
-function add_callback!(@nospecialize(callback!), mi::MethodInstance)
-    callback = function (replaced::MethodInstance, max_world,
-                         seen::Base.IdSet{MethodInstance} = Base.IdSet{MethodInstance}())
-        push!(seen, replaced)
-        callback!(replaced)
-        if isdefined(replaced, :backedges)
-            for item in replaced.backedges
-                isa(item, MethodInstance) || continue # might be `Type` object representing an `invoke` signature
-                mi = item
-                mi in seen && continue # otherwise fail into an infinite loop
-                var"#self#"(mi, max_world, seen)
-            end
-        end
-        return nothing
-    end
-
-    if !isdefined(mi, :callbacks)
-        mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return nothing
-end
-
 
 # basic functionality test
 # ------------------------

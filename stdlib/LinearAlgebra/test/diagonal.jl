@@ -108,6 +108,12 @@ Random.seed!(1)
         for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
+
+        if eltype(D) <: Real
+            @test minimum(D) ≈ minimum(DM)
+            @test maximum(D) ≈ maximum(DM)
+        end
+
         if relty <: BlasFloat
             for func in (exp, cis, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)

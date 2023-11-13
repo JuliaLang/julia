@@ -288,16 +288,13 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
+	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
 
-	# We have a single exception; we want 7z.dll to live in private_libexecdir, not bindir, so that 7z.exe can find it.
+	# We have a single exception; we want 7z.dll to live in private_libexecdir,
+	# not bindir, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(private_libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
-	# The rest are compiler dependencies, as an example memcpy is exported by msvcrt
-	# These are files from mingw32 and required for creating shared libraries like our caches.
-	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin

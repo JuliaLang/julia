@@ -43,14 +43,14 @@ Optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT
         auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
         return typ == "f32" || typ == "f64";
     } else {
-        return {};
+        return None;
     }
 }
 
 static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTSAFEPOINT {
     auto unconditional = always_have_fma(intr, TT);
-    if (unconditional.hasValue())
-        return unconditional.getValue();
+    if (unconditional)
+        return *unconditional;
 
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
