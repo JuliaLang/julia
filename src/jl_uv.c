@@ -51,9 +51,9 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
     if (fd == -1)
-        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
@@ -63,9 +63,12 @@ static void wait_empty_func(uv_timer_t *t)
     if (!uv_loop_alive(t->loop))
         return;
     jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
-                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
+    if (jl_generating_output() && jl_options.incremental) {
+        jl_safe_printf("This means that a package has started a background task or event source that has not finished running. For precompilation to complete successfully, the event source needs to be closed explicitly. See the developer documentation on fixing precompilation hangs for more help.\n");
+    }
     jl_gc_collect(JL_GC_FULL);
 }
 
