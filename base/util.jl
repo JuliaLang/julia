@@ -163,8 +163,7 @@ To get the julia command without propagated command line arguments, `julia_cmd()
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 
 !!! compat "Julia 1.9"
-    The keyword argument `cpu_target` was added.
-
+    The keyword argument `cpu_target` was added in 1.9.
     The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
