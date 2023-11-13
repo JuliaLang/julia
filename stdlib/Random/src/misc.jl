@@ -221,9 +221,9 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
 end
 
 function shuffle!(r::AbstractRNG, v::AbstractArray{Bool})
-    old_sum = sum(v)
-    x = 2old_sum <= length(v)
-    fuel = x ? old_sum : length(v) - old_sum
+    old_count = count(v)
+    x = 2old_count <= length(v)
+    fuel = x ? old_count : length(v) - old_count
     fuel == 0 && return v
     v .= !x
     while 0 < fuel
