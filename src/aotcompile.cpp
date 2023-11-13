@@ -1418,7 +1418,8 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
         return 1;
     }
-
+    if (info.triple.isMusl())
+        return 1;
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
