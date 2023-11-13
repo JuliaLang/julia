@@ -220,7 +220,7 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
+function shuffle!(r::AbstractRNG, v::AbstractArray{Bool})
     old_sum = sum(v)
     x = 2old_sum <= length(v)
     fuel = x ? old_sum : length(v) - old_sum
