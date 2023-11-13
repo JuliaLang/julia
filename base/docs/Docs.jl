@@ -663,8 +663,8 @@ end
 
 Return `true` if `sym` in `mod` has a docstring and `false` otherwise.
 """
-hasdoc(mod::Module, sym::Symbol) = hasdoc(Base.Docs.Binding(mod, sym))
-function hasdoc(binding::Binding, sig::Type = Union{})
+hasdoc(mod::Module, sym::Symbol) = hasdoc(Docs.Binding(mod, sym))
+function hasdoc(binding::Docs.Binding, sig::Type = Union{})
     defined(binding) && !isnothing(getdoc(resolve(binding), sig)) && return true
     for mod in modules
         dict = meta(mod; autoinit=false)
