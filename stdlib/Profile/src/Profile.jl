@@ -37,6 +37,7 @@ appended to an internal buffer of backtraces.
 macro profile(ex)
     return quote
         try
+            Base.Experimental.@force_compile
             start_timer()
             $(esc(ex))
         finally

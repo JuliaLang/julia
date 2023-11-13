@@ -79,6 +79,7 @@ end
 
 function _prof_expr(expr, opts)
     quote
+        Base.Experimental.@force_compile
         $start(; $(esc(opts)))
         try
             $(esc(expr))
