@@ -7357,21 +7357,27 @@ let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
 end
 @test ftype_eval[] == 1
 let code = code_lowered(FieldConvert)[1].code
-    @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
-    @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
-    @test code[7] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(10)))
-    @test code[8] == Core.SlotNumber(10)
-    @test code[9] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
-    @test code[14] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(9), Core.SlotNumber(9)))
-    @test code[15] == Core.SlotNumber(9)
-    @test code[16] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
-    @test code[21] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(16), Core.SlotNumber(8)))
-    @test code[22] == Core.SlotNumber(8)
-    @test code[23] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
-    @test code[28] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(23), Core.SlotNumber(7)))
-    @test code[29] == Core.SlotNumber(7)
-    @test code[30] == Expr(:new, Core.SSAValue(1), Core.SSAValue(8), Core.SSAValue(15), Core.SlotNumber(4), Core.SSAValue(22), Core.SSAValue(29))
-    @test code[31] == Core.ReturnNode(Core.SSAValue(30))
+    local fc_global_ssa, sp1_ssa, apply_type_ssa, field_type_ssa,
+        field_type2_ssa, field_type4_ssa, field_type5_ssa,
+        slot_read_1, slot_read_2, slot_read_3, slot_read_4,
+        new_ssa
+    @test code[(fc_global_ssa = 1;)] == GlobalRef(@__MODULE__, :FieldConvert)
+    @test code[(sp1_ssa = 2;)] == Expr(:static_parameter, 1)
+    @test code[(apply_type_ssa = 3;)] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(fc_global_ssa), GlobalRef(@__MODULE__, :FieldTypeA), Core.SSAValue(sp1_ssa))
+    @test code[(field_type_ssa = 4;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 1)
+    @test code[10] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type_ssa), Core.SlotNumber(10)))
+    @test code[(slot_read_1 = 11;)] == Core.SlotNumber(10)
+    @test code[(field_type2_ssa = 12;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 2)
+    @test code[18] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type2_ssa), Core.SlotNumber(9)))
+    @test code[(slot_read_2 = 19;)] == Core.SlotNumber(9)
+    @test code[(field_type4_ssa = 20;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 4)
+    @test code[26] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type4_ssa), Core.SlotNumber(8)))
+    @test code[(slot_read_3 = 27;)] == Core.SlotNumber(8)
+    @test code[(field_type5_ssa = 28;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 5)
+    @test code[34] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type5_ssa), Core.SlotNumber(7)))
+    @test code[(slot_read_4 = 35;)] == Core.SlotNumber(7)
+    @test code[(new_ssa = 36;)] == Expr(:new, Core.SSAValue(apply_type_ssa), Core.SSAValue(slot_read_1), Core.SSAValue(slot_read_2), Core.SlotNumber(4), Core.SSAValue(slot_read_3), Core.SSAValue(slot_read_4))
+    @test code[37] == Core.ReturnNode(Core.SSAValue(new_ssa))
 end
 
 # Issue #32820
@@ -8041,4 +8047,16 @@ end
 
 let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
     @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
+end
+
+# Test that a nothrow-globalref doesn't get outlined during lowering
+module WellKnownGlobal
+    global well_known = 1
+end
+macro insert_global()
+    Expr(:call, GlobalRef(Base, :println), GlobalRef(WellKnownGlobal, :well_known))
+end
+check_globalref_lowering() = @insert_global
+let src = code_lowered(check_globalref_lowering)[1]
+    @test length(src.code) == 2
 end

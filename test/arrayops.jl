@@ -1786,6 +1786,32 @@ end
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
+
+    # Error recovery
+    A = [1, 2]
+    @test_throws MethodError append!(A, [1, 2, "hi"])
+    @test A == [1, 2, 1, 2]
+
+    oA = OffsetVector(A, 0:3)
+    @test_throws InexactError append!(oA, [1, 2, 3.01])
+    @test oA == OffsetVector([1, 2, 1, 2, 1, 2], 0:5)
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1]))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws MethodError prepend!(A, [1, 2, "hi"])
+    @test A == [2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1]))
+    @test A == [2, 1, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [2, 1, 1, 2]
 end
 
 let A = [1,2]

@@ -1569,4 +1569,19 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
 end
 
+function f_with_merge_to_entry_block()
+    while true
+        i = @noinline rand(Int)
+        if @noinline isodd(i)
+            return i
+        end
+    end
+end
+
+let (ir, _) = only(Base.code_ircode(f_with_merge_to_entry_block))
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+end
+
 # JET.test_opt(Core.Compiler.cfg_simplify!, (Core.Compiler.IRCode,))

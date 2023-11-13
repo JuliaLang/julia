@@ -2081,6 +2081,8 @@ function bodyfunction(basemethod::Method)
                     else
                         return nothing
                     end
+                elseif isa(fsym, Core.SSAValue)
+                    fsym = ast.code[fsym.id]
                 else
                     return nothing
                 end

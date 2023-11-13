@@ -74,8 +74,7 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    _::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
@@ -83,12 +82,6 @@ function inlining_policy(interp::AbstractInterpreter,
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
         return src
     end
     return nothing
