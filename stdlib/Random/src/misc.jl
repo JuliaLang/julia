@@ -220,18 +220,18 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-function shuffle!(r::AbstractRNG, v::AbstractArray{Bool})
-    old_count = count(v)
-    x = 2old_count <= length(v)
-    fuel = x ? old_count : length(v) - old_count
-    fuel == 0 && return v
-    v .= !x
+function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
+    old_count = count(a)
+    x = 2old_count <= length(a)
+    fuel = x ? old_count : length(a) - old_count
+    fuel == 0 && return a
+    a .= !x
     while 0 < fuel
-        k = rand(eachindex(v))
-        fuel -= v[k] != x
-        v[k] = x
+        k = rand(eachindex(a))
+        fuel -= a[k] != x
+        a[k] = x
     end
-    v
+    a
 end
 
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
