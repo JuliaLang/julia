@@ -578,7 +578,7 @@ Change the type-interpretation of the binary data in the isbits value `x`
 to that of the isbits type `Out`.
 The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-[`Float32`](@ref).
+[`Float32`](@ref). This operation is guaranteed to be reversible.
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
@@ -594,11 +594,16 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 (0x0301, 0x02)
 ```
 
+!!! note
+
+    The treatment of padding differs from reinterpret(::DataType, ::AbstractArray).
+
 !!! warning
 
     Use caution if some combinations of bits in `Out` are not considered valid and would
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
+
 """
 function reinterpret(::Type{Out}, x) where {Out}
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
