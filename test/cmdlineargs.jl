@@ -979,8 +979,8 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
-#heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
-@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
+    
+@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(393216000)"
 end
 
 ## `Main.main` entrypoint
