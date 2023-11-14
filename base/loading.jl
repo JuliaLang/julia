@@ -2121,6 +2121,10 @@ function _require(pkg::PkgId, env=nothing)
             end
         end
 
+        if JLOptions().use_compiled_modules == 3
+            error("Precompiled image $pkg not available with flags $(CacheFlags())")
+        end
+
         # if the module being required was supposed to have a particular version
         # but it was not handled by the precompile loader, complain
         for (concrete_pkg, concrete_build_id) in _concrete_dependencies
