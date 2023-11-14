@@ -979,7 +979,7 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
-    
+
 @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(393216000)"
 end
 
