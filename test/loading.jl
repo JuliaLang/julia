@@ -1092,7 +1092,7 @@ end
     end
 end
 
-pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
@@ -1277,6 +1277,9 @@ end
 
 @testset "relocatable upgrades #51989" begin
     mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
         # Create fake `Foo.jl` package with two files:
         foo_path = joinpath(depot, "dev", "Foo")
         mkpath(joinpath(foo_path, "src"))
@@ -1300,9 +1303,8 @@ end
 
         # In our depot, `dev` and then `precompile` this `Foo` package.
         @test success(addenv(
-            `$(Base.julia_cmd()) --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
-            "JULIA_DEPOT_PATH" => depot,
-        ))
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
         foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
@@ -1321,7 +1323,7 @@ end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
         @test success(addenv(
-            `$(Base.julia_cmd()) --startup-file=no -e 'using Foo; exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
         ))
 

@@ -1968,7 +1968,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
+        jl_errorf("`%s` requires the compiler", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
