@@ -2168,41 +2168,35 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
     no_of_edges = length(stmt.edges)
 
     key = Vector{Any}(undef, no_of_edges*2 + 1)
-    key_edge_idx(i, deletions) = i - deletions ÷ 2
-    key_value_idx(i, deletions) = no_of_edges - deletions + i
-    key[end] = blockidx
+    resize!(key, 1)
+    key[1] = blockidx
 
     firstval = nothing
     allthesame = true # If all values into the phi node are the same SSAValue
-    deletions = 0
 
     ordered_indices = collect(1:no_of_edges)
     sort!(ordered_indices; by=i->stmt.edges[i])
 
-    for (i, ordered_i) in enumerate(ordered_indices)
+    for ordered_i in ordered_indices
         edge = stmt.edges[ordered_i]
         val = stmt.values[ordered_i]
 
         # Optimistically assume edges are unreachable and remove them
         if val isa SSAValue && ssa_to_ssa[val.id] == SSAValue(0)
-            deleteat!(key, key_edge_idx(i, deletions))
-            deletions += 1
-            deleteat!(key, key_value_idx(i, deletions))
-            deletions += 1
             continue
         end
 
-        key[key_edge_idx(i, deletions)] = edge
+        push!(key, edge)
 
         if val isa SSAValue
             equivalent_ssa = ssa_to_ssa[val.id]
-            key[key_value_idx(i, deletions)] = equivalent_ssa
+            push!(key, equivalent_ssa)
             if firstval === nothing
                 firstval = equivalent_ssa
             end
             allthesame &= equivalent_ssa === firstval
         else
-            key[key_value_idx(i, deletions)] = val
+            push!(key, val)
             allthesame = false
         end
     end
