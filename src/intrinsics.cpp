@@ -587,7 +587,8 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, bt_value_rt);
+        unsigned align = sizeof(void*); // Allocations are at least pointer aligned
+        Value *box = emit_allocobj(ctx, nb, bt_value_rt, true, align);
         setName(ctx.emission_context, box, "bitcast_box");
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
@@ -646,7 +647,8 @@ static jl_cgval_t generic_cast(
     else {
         Value *targ_rt = boxed(ctx, targ);
         emit_concretecheck(ctx, targ_rt, std::string(jl_intrinsic_name(f)) + ": target type not a leaf primitive type");
-        Value *box = emit_allocobj(ctx, nb, targ_rt);
+        unsigned align = sizeof(void*); // Allocations are at least pointer aligned
+        Value *box = emit_allocobj(ctx, nb, targ_rt, true, align);
         setName(ctx.emission_context, box, "cast_box");
         init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
@@ -697,7 +699,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     else if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety, true);
         setName(ctx.emission_context, strct, "pointerref_box");
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -853,7 +855,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
-        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety, true);
         setName(ctx.emission_context, strct, "atomic_pointerref_box");
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
