@@ -74,7 +74,7 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
+function ht_keyindex!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
     keyindex = ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
     # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
@@ -82,7 +82,7 @@ function ht_keyindex!(d::IdDict{K, V}, @nospecialize(key)) where {K, V}
     return abs(keyindex), keyindex < 0
 end
 
-function _setindex!(d::IdDict{K, V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
+function _setindex!(d::IdDict{K,V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
     @inbounds d.ht[keyindex+1] = val
     d.count += inserted
 
