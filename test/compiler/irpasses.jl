@@ -1529,10 +1529,10 @@ end
     ssa_to_ssa = fill(SSAValue(1), 4)
 
     stmt = PhiNode(Int32[1, 2], Any[SSAValue(1), SSAValue(4)])
-    @test Core.Compiler.perform_symbolic_evaluation(stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
+    @test Core.Compiler.perform_symbolic_evaluation!(Any[], stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
 
     stmt = PhiNode(Int32[2, 1], Any[SSAValue(4), SSAValue(1)])
-    @test Core.Compiler.perform_symbolic_evaluation(stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
+    @test Core.Compiler.perform_symbolic_evaluation!(Any[], stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
 end
 
 

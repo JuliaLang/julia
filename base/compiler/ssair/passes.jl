@@ -2145,10 +2145,10 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
 end
 
 # Rename SSA values in stmt to equivalent SSA values using ssa_to_ssa map.
-function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
+function perform_symbolic_evaluation!(key, stmt::Expr, ssa_to_ssa, _...)
     # taken from renumber_ir_elements!
     if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
-        key = similar(stmt.args, length(stmt.args)+1)
+        resize!(key, length(stmt.args)+1)
         key[1] = stmt.head
         for (i, arg) in enumerate(stmt.args)
             key[i+1] = isa(arg, SSAValue) ? ssa_to_ssa[arg.id] : arg
@@ -2158,7 +2158,7 @@ function perform_symbolic_evaluation(stmt::Expr, ssa_to_ssa, _...)
         return nothing
     end
 end
-function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree, ir)
+function perform_symbolic_evaluation!(key, stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree, ir)
     isempty(stmt.values) && return nothing
 
     for i in eachindex(stmt.values)
@@ -2167,7 +2167,6 @@ function perform_symbolic_evaluation(stmt::PhiNode, ssa_to_ssa, blockidx, lazydo
 
     no_of_edges = length(stmt.edges)
 
-    key = Vector{Any}(undef, no_of_edges*2 + 1)
     resize!(key, 1)
     key[1] = blockidx
 
@@ -2237,6 +2236,7 @@ function gvn!(ir::IRCode)
     sizehint!(val_to_ssa, length(ir.stmts))
 
     lazydomtree = LazyDomtree(ir)
+    key = Vector{Any}(undef, 10)
 
     changed = true
     while changed
@@ -2259,7 +2259,7 @@ function gvn!(ir::IRCode)
                 continue
             end
 
-            value = perform_symbolic_evaluation(stmt, ssa_to_ssa, blockidx, lazydomtree, ir)
+            value = perform_symbolic_evaluation!(key, stmt, ssa_to_ssa, blockidx, lazydomtree, ir)
 
             if value === nothing
                 ssa_to_ssa[i] = SSAValue(i)
@@ -2305,9 +2305,10 @@ function gvn!(ir::IRCode)
 
     # Eliminate Common Subexpressions
     # https://github.com/llvm/llvm-project/blob/232f0c9a9aa14802139126e97fcd0b5874b2f150/llvm/lib/Transforms/Scalar/NewGVN.cpp#L3979-L4040
+    elimination_stack = CongruenceClassElement[]
     for class in values(congruence_classes)
         sort!(class; by=x->(dfscached_domtree.dfsnumbers[x.blockidx].in, dfscached_domtree.dfsnumbers[x.blockidx].out, x.ssa))
-        elimination_stack = CongruenceClassElement[]
+        resize!(elimination_stack, 0)
         for (; ssa, blockidx) in class
             while !isempty(elimination_stack) && !dominates(dfscached_domtree, last(elimination_stack).blockidx, blockidx)
                 pop!(elimination_stack)
