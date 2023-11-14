@@ -1092,7 +1092,7 @@ end
     end
 end
 
-pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
