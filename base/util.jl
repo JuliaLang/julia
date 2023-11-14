@@ -163,8 +163,7 @@ To get the julia command without propagated command line arguments, `julia_cmd()
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 
 !!! compat "Julia 1.9"
-    The keyword argument `cpu_target` was added.
-
+    The keyword argument `cpu_target` was added in 1.9.
     The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
@@ -691,7 +690,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
-    delete!(ENV2, "JULIA_LOAD_PATH")
+    ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
