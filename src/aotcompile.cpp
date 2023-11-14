@@ -317,15 +317,25 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_nrows(methods); i < l; i++) {
+            char *aliasname = NULL;
             // each item in this list is either a MethodInstance indicating something
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
+            // or an svec(MethodInstance, Symbol) describing an MI specialization with a C alias.
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
-                if (worlds == 1)
-                    jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
-                continue;
+                jl_value_t *sym = jl_svecref(item, 1);
+                if (jl_is_symbol(sym)) {
+                    mi = (jl_method_instance_t*)jl_svecref(item, 0);
+                    aliasname = jl_symbol_name((jl_sym_t*)sym);
+                }
+                else {
+                    if (worlds == 1)
+                        jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    continue;
+                }
             }
-            mi = (jl_method_instance_t*)item;
+            if (!aliasname)
+                mi = (jl_method_instance_t*)item;
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
@@ -341,6 +351,14 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                             params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
                     jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
+                    if (aliasname) {
+                        result_m.withModuleDo([&](Module &M) {
+                            auto F = M.getFunction(decls.specFunctionObject);
+                            assert(F);
+                            GlobalAlias::create(F->getValueType(), F->getType()->getAddressSpace(),
+                                GlobalValue::ExternalLinkage, aliasname, F, &M);
+                                });
+                    }
                     if (result_m)
                         params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                 }
@@ -1778,8 +1796,10 @@ void jl_dump_native_impl(void *native_code,
                 filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
                 buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
             } \
-            filenames.push_back("metadata" prefix suffix); \
-            buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+            if (params->emit_metadata) { \
+                filenames.push_back("metadata" prefix suffix); \
+                buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+            } \
             if (z) { \
                 filenames.push_back("sysimg" prefix suffix); \
                 buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
