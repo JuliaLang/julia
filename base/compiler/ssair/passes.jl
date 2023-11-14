@@ -2258,7 +2258,7 @@ function gvn!(ir::IRCode)
                 continue
             end
 
-            # nothrow is necessary to be able to eliminate instruction with affecting semantics
+            # nothrow is necessary to be able to eliminate instructions without affecting semantics
             total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
             if !(inst[:flag] & total_flags == total_flags)
                 ssa_to_ssa[i] = SSAValue(i)
