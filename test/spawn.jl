@@ -660,9 +660,21 @@ let p = run(`$sleepcmd 100`, wait=false)
     kill(p)
 end
 
-# Second argument of shell_parse
+# Second return of shell_parse
 let s = "   \$abc   "
-    @test s[Base.shell_parse(s)[2]] == "abc"
+    @test Base.shell_parse(s)[2] === findfirst('a', s)
+    s = "abc def"
+    @test Base.shell_parse(s)[2] === findfirst('d', s)
+    s = "abc 'de'f\"\"g"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc \$x'de'f\"\"g"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc def\$x'g'"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc def\$x "
+    @test Base.shell_parse(s)[2] === findfirst('x', s)
+    s = "abc \$(d)ef\$(x "
+    @test Base.shell_parse(s)[2] === findfirst('x', s) - 1
 end
 
 # Logging macros should not output to finalized streams (#26687)
