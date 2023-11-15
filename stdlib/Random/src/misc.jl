@@ -226,8 +226,8 @@ function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
     fuel = x ? old_count : length(a) - old_count
     fuel == 0 && return a
     a .= !x
-    while 0 < fuel
-        k = rand(eachindex(a))
+    while fuel > 0
+        k = rand(r, eachindex(a))
         fuel -= a[k] != x
         a[k] = x
     end
