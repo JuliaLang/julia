@@ -243,8 +243,21 @@ const sorted_keyvals = ["false", "true"]
 
 complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
 
-function complete_path(path::AbstractString, pos::Int;
-                       use_envpath=false, shell_escape=false,
+function do_raw_escape(s)
+    # escape_raw_string with delim='`' and ignoring the rule for the ending \
+    return replace(s, r"(\\+)`" => s"\1\\`")
+end
+function do_shell_escape(s)
+    return Base.shell_escape_posixly(s)
+end
+function do_string_escape(s)
+    return escape_string(s, ('\"','$'))
+end
+
+function complete_path(path::AbstractString;
+                       use_envpath=false,
+                       shell_escape=false,
+                       raw_escape=false,
                        string_escape=false)
     @assert !(shell_escape && string_escape)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
@@ -257,50 +270,49 @@ function complete_path(path::AbstractString, pos::Int;
     else
         dir, prefix = splitdir(path)
     end
-    local files
-    try
+    files = try
         if isempty(dir)
-            files = readdir()
+            readdir()
         elseif isdir(dir)
-            files = readdir(dir)
+            readdir(dir)
         else
-            return Completion[], 0:-1, false
+            return Completion[], dir, false
         end
-    catch
-        return Completion[], 0:-1, false
+    catch ex
+        ex isa Base.IOError || rethrow()
+        return Completion[], dir, false
     end
 
     matches = Set{String}()
     for file in files
         if startswith(file, prefix)
             p = joinpath(dir, file)
-            is_dir = try isdir(p) catch; false end
-            push!(matches, is_dir ? joinpath(file, "") : file)
+            is_dir = try isdir(p) catch ex; ex isa Base.IOError ? false : rethrow() end
+            push!(matches, is_dir ? file * "/" : file)
         end
     end
 
-    if use_envpath && length(dir) == 0
+    if use_envpath && isempty(dir)
         # Look for files in PATH as well
-        local pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
+        pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
 
         for pathdir in pathdirs
-            local actualpath
-            try
-                actualpath = realpath(pathdir)
-            catch
+            actualpath = try
+                realpath(pathdir)
+            catch ex
+                ex isa Base.IOError || rethrow()
                 # Bash doesn't expect every folder in PATH to exist, so neither shall we
                 continue
             end
 
-            if actualpath != pathdir && in(actualpath,pathdirs)
+            if actualpath != pathdir && in(actualpath, pathdirs)
                 # Remove paths which (after resolving links) are in the env path twice.
                 # Many distros eg. point /bin to /usr/bin but have both in the env path.
                 continue
             end
 
-            local filesinpath
-            try
-                filesinpath = readdir(pathdir)
+            filesinpath = try
+                readdir(pathdir)
             catch e
                 # Bash allows dirs in PATH that can't be read, so we should as well.
                 if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -321,18 +333,38 @@ function complete_path(path::AbstractString, pos::Int;
         end
     end
 
-    function do_escape(s)
-        return shell_escape ? replace(s, r"(\s|\\)" => s"\\\0") :
-               string_escape ? escape_string(s, ('\"','$')) :
-               s
-    end
+    matches = ((shell_escape ? do_shell_escape(s) : string_escape ? do_string_escape(s) : s) for s in matches)
+    matches = ((raw_escape ? do_raw_escape(s) : s) for s in matches)
+    matches = Completion[PathCompletion(s) for s in matches]
+    return matches, dir, !isempty(matches)
+end
 
-    matchList = Completion[PathCompletion(do_escape(s)) for s in matches]
-    startpos = pos - lastindex(do_escape(prefix)) + 1
-    # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
-    # hence we need to add one to get the first index. This is also correct when considering
-    # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
-    return matchList, startpos:pos, !isempty(matchList)
+function complete_path(path::AbstractString,
+                       pos::Int;
+                       use_envpath=false,
+                       shell_escape=false,
+                       string_escape=false)
+    ## TODO: enable this depwarn once Pkg is fixed
+    #Base.depwarn("complete_path with pos argument is deprecated because the return value [2] is incorrect to use", :complete_path)
+    paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape)
+    if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
+        else
+            dir, prefix = splitdir(homedir() * path[2:end])
+        end
+    else
+        dir, prefix = splitdir(path)
+    end
+    startpos = pos - lastindex(prefix) + 1
+    Sys.iswindows() && map!(paths, paths) do c::PathCompletion
+        # emulation for unnecessarily complicated return value, since / is a
+        # perfectly acceptable path character which does not require quoting
+        # but is required by Pkg's awkward parser handling
+        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c
+    end
+    return paths, startpos:pos, success
 end
 
 function complete_expanduser(path::AbstractString, r)
@@ -784,10 +816,11 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
-function close_path_completion(str, startpos, r, paths, pos)
+function close_path_completion(dir, paths, str, pos)
     length(paths) == 1 || return false  # Only close if there's a single choice...
-    _path = str[startpos:prevind(str, first(r))] * (paths[1]::PathCompletion).path
-    path = expanduser(unescape_string(replace(_path, "\\\$"=>"\$", "\\\""=>"\"")))
+    path = (paths[1]::PathCompletion).path
+    path = unescape_string(replace(path, "\\\$"=>"\$"))
+    path = joinpath(dir, path)
     # ...except if it's a directory...
     try
         isdir(path)
@@ -1075,42 +1108,80 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         return complete_identifiers!(Completion[], ffunc, context_module, string,
             string[startpos:pos], pos, dotpos, startpos)
     elseif inc_tag === :cmd
-        m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial))
-        startpos = nextind(partial, reverseind(partial, m.offset))
-        r = startpos:pos
+        # TODO: should this call shell_completions instead of partially reimplementing it?
+        let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
+            startpos = nextind(partial, reverseind(partial, m.offset))
+            r = startpos:pos
+            scs::String = string[r]
 
-        # This expansion with "\\ "=>' ' replacement and shell_escape=true
-        # assumes the path isn't further quoted within the cmd backticks.
-        expanded = complete_expanduser(replace(string[r], r"\\ " => " "), r)
-        expanded[3] && return expanded  # If user expansion available, return it
+            expanded = complete_expanduser(scs, r)
+            expanded[3] && return expanded  # If user expansion available, return it
 
-        paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos,
-                                          shell_escape=true)
+            path::String = replace(scs, r"(\\+)\g1(\\?)`" => "\1\2`") # fuzzy unescape_raw_string: match an even number of \ before ` and replace with half as many
+            # This expansion with "\\ "=>' ' replacement and shell_escape=true
+            # assumes the path isn't further quoted within the cmd backticks.
+            path = replace(path, r"\\ " => " ", r"\$" => "\$") # fuzzy shell_parse (reversed by shell_escape_posixly)
+            paths, dir, success = complete_path(path, shell_escape=true, raw_escape=true)
 
-        return sort!(paths, by=p->p.path), r, success
+            if success && !isempty(dir)
+                let dir = do_raw_escape(do_shell_escape(dir))
+                    # if escaping of dir matches scs prefix, remove that from the completions
+                    # otherwise make it the whole completion
+                    if endswith(dir, "/") && startswith(scs, dir)
+                        r = (startpos + sizeof(dir)):pos
+                    elseif startswith(scs, dir * "/")
+                        r = nextind(string, startpos + sizeof(dir)):pos
+                    else
+                        map!(paths, paths) do c::PathCompletion
+                            return PathCompletion(dir * "/" * c.path)
+                        end
+                    end
+                end
+            end
+            return sort!(paths, by=p->p.path), r, success
+        end
     elseif inc_tag === :string
         # Find first non-escaped quote
-        m = match(r"\"(?!\\)", reverse(partial))
-        startpos = nextind(partial, reverseind(partial, m.offset))
-        r = startpos:pos
+        let m = match(r"\"(?!\\)", reverse(partial))
+            startpos = nextind(partial, reverseind(partial, m.offset))
+            r = startpos:pos
+            scs::String = string[r]
 
-        expanded = complete_expanduser(string[r], r)
-        expanded[3] && return expanded  # If user expansion available, return it
+            expanded = complete_expanduser(scs, r)
+            expanded[3] && return expanded  # If user expansion available, return it
 
-        path_prefix = try
-            unescape_string(replace(string[r], "\\\$"=>"\$", "\\\""=>"\""))
-        catch
-            nothing
-        end
-        if !isnothing(path_prefix)
-            paths, r, success = complete_path(path_prefix, pos, string_escape=true)
-
-            if close_path_completion(string, startpos, r, paths, pos)
-                paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
+            path = try
+                unescape_string(replace(scs, "\\\$"=>"\$"))
+            catch ex
+                ex isa ArgumentError || rethrow()
+                nothing
             end
+            if !isnothing(path)
+                paths, dir, success = complete_path(path::String, string_escape=true)
 
-            # Fallthrough allowed so that Latex symbols can be completed in strings
-            success && return sort!(paths, by=p->p.path), r, success
+                if close_path_completion(dir, paths, path, pos)
+                    paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
+                end
+
+                if success && !isempty(dir)
+                    let dir = do_string_escape(dir)
+                        # if escaping of dir matches scs prefix, remove that from the completions
+                        # otherwise make it the whole completion
+                        if endswith(dir, "/") && startswith(scs, dir)
+                            r = (startpos + sizeof(dir)):pos
+                        elseif startswith(scs, dir * "/")
+                            r = nextind(string, startpos + sizeof(dir)):pos
+                        else
+                            map!(paths, paths) do c::PathCompletion
+                                return PathCompletion(dir * "/" * c.path)
+                            end
+                        end
+                    end
+                end
+
+                # Fallthrough allowed so that Latex symbols can be completed in strings
+                success && return sort!(paths, by=p->p.path), r, success
+            end
         end
     end
 
@@ -1196,35 +1267,58 @@ end
 function shell_completions(string, pos)
     # First parse everything up to the current position
     scs = string[1:pos]
-    local args, last_parse
-    try
-        args, last_parse = Base.shell_parse(scs, true)::Tuple{Expr,UnitRange{Int}}
-    catch
+    args, last_arg_start = try
+        Base.shell_parse(scs, true)::Tuple{Expr,Int}
+    catch ex
+        ex isa ArgumentError || ex isa ErrorException || rethrow()
         return Completion[], 0:-1, false
     end
     ex = args.args[end]::Expr
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 0:-1, false
-    arg = ex.args[end]
-    if all(s -> isa(s, AbstractString), ex.args)
-        arg = arg::AbstractString
-        # Treat this as a path
-
-        # As Base.shell_parse throws away trailing spaces (unless they are escaped),
-        # we need to special case here.
-        # If the last char was a space, but shell_parse ignored it search on "".
-        ignore_last_word = arg != " " && scs[end] == ' '
-        prefix = ignore_last_word ? "" : join(ex.args)
+    lastarg = ex.args[end]
+    # As Base.shell_parse throws away trailing spaces (unless they are escaped),
+    # we need to special case here.
+    # If the last char was a space, but shell_parse ignored it search on "".
+    if isexpr(lastarg, :incomplete) || isexpr(lastarg, :error)
+        partial = string[last_arg_start:pos]
+        ret, range = completions(partial, lastindex(partial))
+        range = range .+ (last_arg_start - 1)
+        return ret, range, true
+    elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
+        r = pos+1:pos
+        paths, dir, success = complete_path("", use_envpath=false, shell_escape=true)
+        return paths, r, success
+    elseif all(arg -> arg isa AbstractString, ex.args)
+        # Join these and treat this as a path
+        path::String = join(ex.args)
+        r = last_arg_start:pos
 
         # Also try looking into the env path if the user wants to complete the first argument
-        use_envpath = !ignore_last_word && length(args.args) < 2
+        use_envpath = length(args.args) < 2
 
-        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
-    elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        partial = scs[last_parse]
-        ret, range = completions(partial, lastindex(partial))
-        range = range .+ (first(last_parse) - 1)
-        return ret, range, true
+        # TODO: call complete_expanduser here?
+
+        paths, dir, success = complete_path(path, use_envpath=use_envpath, shell_escape=true)
+
+        if success && !isempty(dir)
+            let dir = do_shell_escape(dir)
+                # if escaping of dir matches scs prefix, remove that from the completions
+                # otherwise make it the whole completion
+                partial = string[last_arg_start:pos]
+                if endswith(dir, "/") && startswith(partial, dir)
+                    r = (last_arg_start + sizeof(dir)):pos
+                elseif startswith(partial, dir * "/")
+                    r = nextind(string, last_arg_start + sizeof(dir)):pos
+                else
+                    map!(paths, paths) do c::PathCompletion
+                        return PathCompletion(dir * "/" * c.path)
+                    end
+                end
+            end
+        end
+
+        return paths, r, success
     end
     return Completion[], 0:-1, false
 end

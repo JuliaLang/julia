@@ -325,7 +325,7 @@ end
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
     @test c[1] == "α"
-    @test r == 1:length(s)
+    @test r == 1:lastindex(s)
     @test length(c) == 1
 end
 
@@ -1041,7 +1041,7 @@ let s, c, r
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
     c = map(completion_text, c)
-    @test "null" in c
+    @test "null\"" in c
     @test r == 13:15
     @test s[r] == "nul"
 
@@ -1065,8 +1065,8 @@ let s, c, r
     if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === length(s) + 1:0
-        @test s[r] == ""
+        @test !("$s/tmp/" in c)
+        @test r === (sizeof(s) + 1):sizeof(s)
     end
 
     s = "cd \$(Iter"
@@ -1091,7 +1091,7 @@ let s, c, r
         touch(file)
         s = string(tempdir(), "/repl\\ ")
         c,r = test_scomplete(s)
-        @test ["repl\\ completions"] == c
+        @test ["'repl completions'"] == c
         @test s[r] == "repl\\ "
         rm(file)
     end
@@ -1185,7 +1185,7 @@ let current_dir, forbidden
             catch e
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
-            c, r = test_complete("\""*escape_string(joinpath(path, "selfsym")))
+            c, r = test_complete("\"$(escape_string(path))/selfsym")
             @test c == ["selfsymlink"]
         end
     end
@@ -1222,20 +1222,20 @@ mktempdir() do path
         dir_space = replace(space_folder, " " => "\\ ")
         s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
         c, r = test_scomplete(s)
-        @test s[r] == "space"
-        @test "space\\ .file" in c
+        @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
+        @test "'$space_folder'/'space .file'" in c
         # Also use shell escape rules within cmd backticks
         s = "`$s"
         c, r = test_scomplete(s)
-        @test s[r] == "space"
-        @test "space\\ .file" in c
+        @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
+        @test "'$space_folder'/'space .file'" in c
 
         # escape string according to Julia escaping rules
-        julia_esc(str) = escape_string(str, ('\"','$'))
+        julia_esc(str) = REPL.REPLCompletions.do_string_escape(str)
 
         # For normal strings the string should be properly escaped according to
         # the usual rules for Julia strings.
-        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder) * "/space")
         c, r = test_complete(s)
         @test s[r] == "space"
         @test "space .file\"" in c
@@ -1244,7 +1244,7 @@ mktempdir() do path
         # which needs to be escaped in Julia strings (on unix we could do this
         # test with all sorts of special chars)
         touch(joinpath(space_folder, "needs_escape\$.file"))
-        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        escpath = julia_esc(joinpath(path, space_folder) * "/needs_escape\$")
         s = "cd(\"$escpath"
         c, r = test_complete(s)
         @test s[r] == "needs_escape\\\$"
@@ -1281,12 +1281,12 @@ mktempdir() do path
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
                     c, r, res = test_scomplete(test_dir)
-                    @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                    @test c[1] == "'$test_dir/'"
                     @test res
                 end
                 escdir = julia_esc(test_dir)
                 c, r, res = test_complete("\""*escdir)
-                @test c[1] == escdir*(Sys.iswindows() ? "\\\\" : "/")
+                @test c[1] == escdir * "/"
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1322,25 +1322,41 @@ if Sys.iswindows()
     cd(path) do
         s = "cd ..\\\\"
         c,r = test_scomplete(s)
-        @test r == length(s)+1:length(s)
-        @test temp_name * "\\\\" in c
+        @test r == lastindex(s)-3:lastindex(s)
+        @test "../$temp_name/" in c
+
+        s = "cd ../"
+        c,r = test_scomplete(s)
+        @test r == lastindex(s)+1:lastindex(s)
+        @test "$temp_name/" in c
 
         s = "ls $(file[1:2])"
         c,r = test_scomplete(s)
-        @test r == length(s)-1:length(s)
+        @test r == lastindex(s)-1:lastindex(s)
         @test file in c
 
         s = "cd(\"..\\\\"
         c,r = test_complete(s)
-        @test r == length(s)+1:length(s)
-        @test temp_name * "\\\\" in c
+        @test r == lastindex(s)-3:lastindex(s)
+        @test "../$temp_name/" in c
+
+        s = "cd(\"../"
+        c,r = test_complete(s)
+        @test r == lastindex(s)+1:lastindex(s)
+        @test "$temp_name/" in c
 
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
-        @test r == length(s) - 1:length(s)
+        @test r == lastindex(s) - 1:lastindex(s)
         @test (length(c) > 1 && file in c) || (["$file\""] == c)
     end
     rm(tmp)
+end
+
+# issue 51985
+let s = "`\\"
+    c,r = test_scomplete(s)
+    @test r == lastindex(s)+1:lastindex(s)
 end
 
 # auto completions of true and false... issue #14101
