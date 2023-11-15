@@ -777,7 +777,8 @@ JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
                                        jl_module_t *inmodule, const char *file, int line);
 
-jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world);
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
 
 jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);

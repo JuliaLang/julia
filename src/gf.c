@@ -2233,7 +2233,23 @@ static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT
     return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
 }
 
-jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world)
+{
+    // TODO: The fast path is heavily optimized for args and avoids forming the signature type
+    jl_methtable_t *mt = jl_gf_ft_mtable(jl_tparam0(tt));
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
+    jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+    if (entry)
+        return entry->func.linfo;
+    JL_GC_PUSH1(&tt);
+    JL_LOCK(&mt->writelock);
+    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, world);
+    JL_UNLOCK(&mt->writelock);
+    JL_GC_POP();
+    return sf;
+}
+
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
 {
     assert(nargs > 0 && "expected caller to handle this case");
     jl_methtable_t *mt = jl_gf_mtable(args[0]);
