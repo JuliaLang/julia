@@ -150,15 +150,9 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
-            elseif ismissing(v0)
-                if !all(ismissing, A)
-                    v0 = mapreduce(f, $f2, skipmissing(A))
-                end
-            elseif isunordered(v0) # v0 is a third-party unordered value
-                Tnm = nonmissingtype(Tr)
-                # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, T}} can still error here.
-                v0 = $typeextreme(Tnm)
+            elseif isunordered(v0) && !all(isunordered, A1)
+                # v0 is missing or a third-party unordered value
+                v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -189,12 +183,11 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
+        # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
-    elseif isunordered(v0[1])
+    elseif isunordered(v0[1]) && !all(isunordered, A1)
         # v0 is missing or a third-party unordered value
-        # TODO: Some types, like BigInt, don't support typemin/typemax.
-        # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+        v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])
