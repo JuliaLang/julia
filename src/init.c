@@ -575,6 +575,14 @@ static char *abspath(const char *in, int nprefix)
         }
     }
 #else
+    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
+    char *in2 = (char*)malloc_s(JL_PATH_MAX);
+    if (strlen(in) - nprefix == 0) {
+        memcpy(in2, in, nprefix);
+        in2[nprefix] = '.';
+        in2[nprefix+1] = '\0';
+        in = in2;
+    }
     DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -585,6 +593,7 @@ static char *abspath(const char *in, int nprefix)
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     memcpy(out, in, nprefix);
+    free(in2);
 #endif
     return out;
 }
@@ -680,7 +689,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
     if (jl_options.tracked_path)
-        jl_options.tracked_path = absformat(jl_options.tracked_path);
+        jl_options.tracked_path = abspath(jl_options.tracked_path, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
