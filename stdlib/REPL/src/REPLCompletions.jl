@@ -388,7 +388,7 @@ function complete_path(path::AbstractString,
         # emulation for unnecessarily complicated return value, since / is a
         # perfectly acceptable path character which does not require quoting
         # but is required by Pkg's awkward parser handling
-        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c.path
+        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c
     end
     return paths, startpos:pos, success
 end

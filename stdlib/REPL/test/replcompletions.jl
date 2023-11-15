@@ -1290,12 +1290,12 @@ mktempdir() do path
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
                     c, r, res = test_scomplete(test_dir)
-                    @test c[1] == '\''*test_dir*(Sys.iswindows() ? "\\" : "/")*'\''
+                    @test c[1] == "'$test_dir/'"
                     @test res
                 end
                 escdir = julia_esc(test_dir)
                 c, r, res = test_complete("\""*escdir)
-                @test c[1] == escdir*(Sys.iswindows() ? "\\\\" : "/")
+                @test c[1] == escdir * "/"
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1332,12 +1332,12 @@ if Sys.iswindows()
         s = "cd ..\\\\"
         c,r = test_scomplete(s)
         @test r == lastindex(s)-3:lastindex(s)
-        @test "../'$temp_name\\'" in c
+        @test "../$temp_name/" in c
 
         s = "cd ../"
         c,r = test_scomplete(s)
         @test r == lastindex(s)+1:lastindex(s)
-        @test "'$temp_name\\'" in c
+        @test "$temp_name/" in c
 
         s = "ls $(file[1:2])"
         c,r = test_scomplete(s)
@@ -1347,12 +1347,12 @@ if Sys.iswindows()
         s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == lastindex(s)-3:lastindex(s)
-        @test "../$temp_name\\\\" in c
+        @test "../$temp_name/" in c
 
         s = "cd(\"../"
         c,r = test_complete(s)
         @test r == lastindex(s)+1:lastindex(s)
-        @test "$temp_name\\\\" in c
+        @test "$temp_name/" in c
 
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
