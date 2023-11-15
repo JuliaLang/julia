@@ -627,7 +627,7 @@ true
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_total_meta; (typeof(x).name::Core.TypeName).flags & 0x2 == 0x2)
+ismutable(@nospecialize(x)) = (@_total_meta; (inferencebarrier(typeof(x))::DataType).name.flags & 0x2 == 0x2)
 # The type assertion above is required to fix some invalidations.
 # See also https://github.com/JuliaLang/julia/issues/52134
 
