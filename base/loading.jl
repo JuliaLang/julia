@@ -1046,13 +1046,17 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing)
     if isnothing(ignore_native)
-        io = open(path, "r")
-        try
-            iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
-            _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
-            ignore_native = pkg_tracked(includes)
-        finally
-            close(io)
+        if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
+            ignore_native = false
+        else
+            io = open(path, "r")
+            try
+                iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+                _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
+                ignore_native = pkg_tracked(includes)
+            finally
+                close(io)
+            end
         end
     end
     assert_havelock(require_lock)
