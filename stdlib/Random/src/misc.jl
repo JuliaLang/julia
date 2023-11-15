@@ -222,14 +222,14 @@ end
 
 function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
     old_count = count(a)
-    x = 2old_count <= length(a)
-    fuel = x ? old_count : length(a) - old_count
+    uncommon_value = 2old_count <= length(a)
+    fuel = uncommon_value ? old_count : length(a) - old_count
     fuel == 0 && return a
-    a .= !x
+    a .= !uncommon_value
     while fuel > 0
         k = rand(r, eachindex(a))
-        fuel -= a[k] != x
-        a[k] = x
+        fuel -= a[k] != uncommon_value
+        a[k] = uncommon_value
     end
     a
 end
