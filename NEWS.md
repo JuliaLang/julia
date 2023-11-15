@@ -19,6 +19,10 @@ New language features
 
 Language changes
 ----------------
+* During precompilation, the `atexit` hooks now run before saving the output file. This
+  allows users to safely tear down background state (such as closing Timers and sending
+  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
+  wants to begin exiting.
 
 Compiler/Runtime improvements
 -----------------------------
