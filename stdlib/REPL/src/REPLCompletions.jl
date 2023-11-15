@@ -293,7 +293,8 @@ function complete_path(path::AbstractString;
         else
             return Completion[], dir, false
         end
-    catch
+    catch ex
+        ex isa Base.IOError || rethrow()
         return Completion[], dir, false
     end
 
@@ -301,8 +302,8 @@ function complete_path(path::AbstractString;
     for file in files
         if startswith(file, prefix)
             p = joinpath(dir, file)
-            is_dir = try isdir(p) catch; false end
-            push!(matches, is_dir ? joinpath(file, "") : file)
+            is_dir = try isdir(p) catch ex; ex isa Base.IOError ? false : rethrow() end
+            push!(matches, is_dir ? file * "/" : file)
         end
     end
 
@@ -313,7 +314,8 @@ function complete_path(path::AbstractString;
         for pathdir in pathdirs
             actualpath = try
                 realpath(pathdir)
-            catch
+            catch ex
+                ex isa Base.IOError || rethrow()
                 # Bash doesn't expect every folder in PATH to exist, so neither shall we
                 continue
             end
@@ -371,20 +373,22 @@ function complete_path(path::AbstractString,
     ## TODO: enable this depwarn once Pkg is fixed
     #Base.depwarn("complete_path with pos argument is deprecated because the return value [2] is incorrect to use", :complete_path)
     paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape)
-    if success
-        if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
-            # if the path is just "~", don't consider the expanded username as a prefix
-            if path == "~"
-                dir, prefix = homedir(), ""
-            else
-                dir, prefix = splitdir(homedir() * path[2:end])
-            end
+    if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
         else
-            dir, prefix = splitdir(path)
+            dir, prefix = splitdir(homedir() * path[2:end])
         end
-        startpos = pos - lastindex(prefix) + 1
     else
-        startpos = pos + 1
+        dir, prefix = splitdir(path)
+    end
+    startpos = pos - lastindex(prefix) + 1
+    Sys.iswindows() && map!(paths, paths) do c::PathCompletion
+        # emulation for unnecessarily complicated return value, since / is a
+        # perfectly acceptable path character which does not require quoting
+        # but is required by Pkg's awkward parser handling
+        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c.path
     end
     return paths, startpos:pos, success
 end
