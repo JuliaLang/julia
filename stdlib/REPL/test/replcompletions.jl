@@ -2139,3 +2139,12 @@ end
 
 # issue #51823
 @test "include" in test_complete_context("inc", Main)[1]
+
+# REPL completions should not try to concrete-evaluate !:noub methods
+function very_unsafe_method(i::Int)
+    xs = Any[]
+    @inbounds xs[i]
+end
+let t = REPLCompletions.repl_eval_ex(:(unsafe_method(42)), @__MODULE__)
+    @test isnothing(t)
+end

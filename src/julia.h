@@ -248,20 +248,21 @@ typedef struct _jl_line_info_node_t {
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent          : 1;
-        uint8_t ipo_effect_free         : 1;
-        uint8_t ipo_nothrow             : 1;
-        uint8_t ipo_terminates_globally : 1;
+        uint16_t ipo_consistent          : 1;
+        uint16_t ipo_effect_free         : 1;
+        uint16_t ipo_nothrow             : 1;
+        uint16_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally  : 1;
-        uint8_t ipo_notaskstate         : 1;
-        uint8_t ipo_inaccessiblememonly : 1;
-        uint8_t ipo_noub                : 1;
+        uint16_t ipo_terminates_locally  : 1;
+        uint16_t ipo_notaskstate         : 1;
+        uint16_t ipo_inaccessiblememonly : 1;
+        uint16_t ipo_noub                : 1;
+        uint16_t ipo_noub_if_noinbounds  : 1;
     } overrides;
-    uint8_t bits;
+    uint16_t bits;
 } _jl_purity_overrides_t;
 
 // This type describes a single function body

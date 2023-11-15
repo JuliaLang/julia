@@ -924,6 +924,7 @@ end
 
 function getfield_boundscheck(argtypes::Vector{Any})
     if length(argtypes) == 2
+        isvarargtype(argtypes[2]) && return :unsafe
         return :on
     elseif length(argtypes) == 3
         boundscheck = argtypes[3]
@@ -933,10 +934,10 @@ function getfield_boundscheck(argtypes::Vector{Any})
         end
     elseif length(argtypes) == 4
         boundscheck = argtypes[4]
+        isvarargtype(boundscheck) && return :unsafe
     else
         return :unsafe
     end
-    isvarargtype(boundscheck) && return :unsafe
     boundscheck = widenconditional(boundscheck)
     if widenconst(boundscheck) === Bool
         if isa(boundscheck, Const)
@@ -2144,7 +2145,6 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
-
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
@@ -2509,8 +2509,43 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
+        if f === memoryref || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+            noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+        else
+            noub = ALWAYS_TRUE
+        end
+        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
     end
+end
+
+function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
+    nargs = length(argtypes)
+    nargs == 0 && return true # must throw and noub
+    lastargtype = argtypes[end]
+    isva = isvarargtype(lastargtype)
+    if f === memoryref
+        if nargs == 1 && !isva
+            return true
+        elseif nargs == 2 && !isva
+            return true
+        end
+        expected_nargs = 3
+    elseif f === memoryrefget || f === memoryref_isassigned
+        expected_nargs = 3
+    else
+        @assert f === memoryrefset! "unexpected memoryop is given"
+        expected_nargs = 4
+    end
+    if nargs == expected_nargs && !isva
+        boundscheck = widenconditional(lastargtype)
+        hasintersect(widenconst(boundscheck), Bool) || return true # must throw and noub
+        boundscheck isa Const && boundscheck.val === true && return true
+    elseif nargs > expected_nargs + 1
+        return true # must throw and noub
+    elseif !isva
+        return true # must throw and noub
+    end
+    return false
 end
 
 """

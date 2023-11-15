@@ -281,7 +281,8 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
-        #=:noub=#true))
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false))
 end
 
 macro inline()   Expr(:meta, :inline)   end

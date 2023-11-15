@@ -1007,7 +1007,7 @@ function flags_for_effects(effects::Effects)
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
     end
-    if is_noub(effects, false)
+    if is_noub(effects)
         flags |= IR_FLAG_NOUB
     end
     return flags
