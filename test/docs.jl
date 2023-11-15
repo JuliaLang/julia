@@ -69,6 +69,13 @@ $$latex literal$$
 """
 function break_me_docs end
 
+
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -1525,8 +1532,3 @@ Base.@ccallable c51586_long()::Int = 3
 
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
-
-"hasdoc returns true on a name with a docstring."
-@test Docs.hasdoc(Base, :map)
-"hasdoc returns false on a name without a docstring."
-@test !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
