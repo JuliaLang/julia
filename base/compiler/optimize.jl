@@ -295,7 +295,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
+            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
             effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)

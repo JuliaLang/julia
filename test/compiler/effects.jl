@@ -478,9 +478,9 @@ end |> Core.Compiler.is_effect_free
 # `getfield_effects` handles access to union object nicely
 let 𝕃 = Core.Compiler.fallback_lattice
     getfield_effects = Core.Compiler.getfield_effects
-    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Core.Const(getfield), Some{String}, Core.Const(:value)], String))
-    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)], Symbol))
-    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{String}, Core.Const(:value)], String))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{Symbol}, Core.Const(:value)], Symbol))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
 end
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
@@ -881,7 +881,7 @@ end
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
-    Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}], Bool))
+    Any[String, Vararg{Any}], Bool))
 
 # Test that :new can be eliminated even if an sparam is unknown
 struct SparamUnused{T}
