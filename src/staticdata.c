@@ -501,8 +501,6 @@ typedef struct {
     int8_t incremental;
 } jl_serializer_state;
 
-static jl_value_t *jl_idtable_type = NULL;
-static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 static jl_sym_t *jl_docmeta_sym = NULL;
@@ -1253,24 +1251,35 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         assert(!(s->incremental && jl_object_in_image(v)));
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
+        int mutabl = t->name->mutabl;
         ios_t *f = s->s;
         if (t->smalltag) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
-                if (jl_datatype_nfields(t) == 0 || t->name->mutabl == 0 || t == jl_string_type) {
+                if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
                 }
             }
         }
 
-        // realign stream to expected gc alignment (16 bytes)
+        // realign stream to expected gc alignment (16 bytes) after tag
         uintptr_t skip_header_pos = ios_pos(f) + sizeof(jl_taggedvalue_t);
+        uintptr_t object_id_expected = mutabl &&
+                 t != jl_datatype_type &&
+                 t != jl_typename_type &&
+                 t != jl_string_type &&
+                 t != jl_simplevector_type &&
+                 t != jl_module_type;
+        if (object_id_expected)
+            skip_header_pos += sizeof(size_t);
         write_padding(f, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
 
         // write header
+        if (object_id_expected)
+            write_uint(f, jl_object_id(v));
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
         if (f == s->const_data)
-            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED);
+            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
         else
             write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(f);
@@ -1717,11 +1726,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     // will need to populate the binding field later
                     arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                 }
-            }
-            else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
-                assert(f == s->s);
-                // will need to rehash this, later (after types are fully constructed)
-                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
             }
             else if (jl_is_genericmemoryref(v)) {
                 assert(f == s->s);
@@ -2582,8 +2586,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
         }
     }
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
-    jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
     jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
     if (jl_bigint_type) {
         gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
@@ -3409,12 +3411,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
         }
         else {
-            // rehash IdDict
-            //assert(((jl_datatype_t*)(jl_typeof(obj)))->name == jl_idtable_typename);
-            jl_genericmemory_t **a = (jl_genericmemory_t**)obj;
-            assert(jl_typetagis(*a, jl_memory_any_type));
-            *a = jl_idtable_rehash(*a, (*a)->length);
-            jl_gc_wb(obj, *a);
+            abort();
         }
     }
     // Now pick up the globalref binding pointer field

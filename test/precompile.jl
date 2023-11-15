@@ -288,6 +288,9 @@ precompile_test_harness(false) do dir
               a_vec_inline = Pair{Int,Any}[]
               push!(a_vec_inline, 1=>2, 3=>4)
               a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -371,6 +374,10 @@ precompile_test_harness(false) do dir
         @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
         Foo.a_mat_inline[1, 2] = 5=>6
         @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
