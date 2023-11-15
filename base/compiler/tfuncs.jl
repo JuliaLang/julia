@@ -922,19 +922,16 @@ function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
     return field
 end
 
-function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
-    farg = nothing
+function getfield_boundscheck(argtypes::Vector{Any})
     if length(argtypes) == 3
         return :on
     elseif length(argtypes) == 4
-        fargs !== nothing && (farg = fargs[4])
         boundscheck = argtypes[4]
         isvarargtype(boundscheck) && return :unsafe
         if widenconst(boundscheck) === Symbol
             return :on
         end
     elseif length(argtypes) == 5
-        fargs !== nothing && (farg = fargs[5])
         boundscheck = argtypes[5]
     else
         return :unsafe
@@ -944,15 +941,13 @@ function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
     if widenconst(boundscheck) === Bool
         if isa(boundscheck, Const)
             return boundscheck.val::Bool ? :on : :off
-        elseif farg !== nothing && isexpr(farg, :boundscheck)
-            return :boundscheck
         end
-        return :unknown
+        return :unknown # including a case when specified as `:boundscheck`
     end
     return :unsafe
 end
 
-function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
+function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundscheck::Symbol=getfield_boundscheck(argtypes))
     boundscheck === :unsafe && return false
     (;argtypes) = arginfo
     ordering = Const(:not_atomic)
@@ -2180,7 +2175,7 @@ end
     elseif f === invoke
         return false
     elseif f === getfield
-        return getfield_nothrow(𝕃, ArgInfo(nothing, Any[Const(f), argtypes...]))
+        return getfield_nothrow(𝕃, Any[Const(f), argtypes...])
     elseif f === setfield!
         if na == 3
             return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2384,8 +2379,7 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize(rt))
-    (;argtypes) = arginfo
+function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 3 && return EFFECTS_THROWS
     obj = argtypes[2]
     if isvarargtype(obj)
@@ -2409,8 +2403,8 @@ function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize
         consistent = ALWAYS_FALSE
     end
     noub = ALWAYS_TRUE
-    bcheck = getfield_boundscheck(arginfo)
-    nothrow = getfield_nothrow(𝕃, arginfo, bcheck)
+    bcheck = getfield_boundscheck(argtypes)
+    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if !nothrow
         if bcheck !== :on
             # If we cannot independently prove inboundsness, taint `:noub`.
@@ -2453,15 +2447,15 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), arginfo::ArgInfo, @nospecialize(rt))
+function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
-        return intrinsic_effects(f, arginfo.argtypes[2:end])
+        return intrinsic_effects(f, argtypes[2:end])
     end
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
     if f === getfield
-        return getfield_effects(𝕃, arginfo, rt)
+        return getfield_effects(𝕃, argtypes, rt)
     end
 
     # if this builtin call deterministically throws,

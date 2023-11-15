@@ -1796,8 +1796,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         types = to_tuple_type(types)
         argtypes = Any[Core.Const(f), types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
-            Core.Compiler.ArgInfo(nothing, argtypes), rt)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
