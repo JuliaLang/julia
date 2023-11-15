@@ -996,11 +996,10 @@ end
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
 
 # test --bug-report=rr
-if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :aarch64) # rr is only available on these platforms
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
         @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
                                       "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                      "_RR_TRACE_DIR" => temp_trace_dir);
-                               #=stdout, stderr=#))
+                                      "_RR_TRACE_DIR" => temp_trace_dir); #=stderr, stdout=#))
     end
 end
