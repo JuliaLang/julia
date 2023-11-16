@@ -383,12 +383,13 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     return SSASubstitute(mi, argexprs, spvals_ssa, linetable_offset)
 end
 
-function adjust_boundscheck!(inline_compact, idx′, stmt, boundscheck)
+function adjust_boundscheck!(inline_compact::IncrementalCompact, idx′::Int, stmt::Expr, boundscheck::Symbol)
     if boundscheck === :off
-        length(stmt.args) == 0 && push!(stmt.args, false)
+        isempty(stmt.args) && push!(stmt.args, false)
     elseif boundscheck !== :propagate
-        length(stmt.args) == 0 && push!(stmt.args, true)
+        isempty(stmt.args) && push!(stmt.args, true)
     end
+    return nothing
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
@@ -398,11 +399,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
 
     ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.mi, inlined_at, argexprs)
 
-    if boundscheck === :default || boundscheck === :propagate
-        if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
-            boundscheck = :off
-        end
-    end
+    boundscheck = iszero(compact.result[idx][:flag] & IR_FLAG_INBOUNDS) ? boundscheck : :off
+
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
@@ -419,7 +417,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             inline_compact[idx′] = nothing
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
-                                    ssa_substitute, boundscheck)
+                                    ssa_substitute)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -450,7 +448,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             inline_compact[idx′] = nothing
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
-                                    ssa_substitute, boundscheck)
+                                    ssa_substitute)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -659,10 +657,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
     end
     finish_cfg_inline!(state)
 
-    boundscheck = :default
-    if boundscheck === :default && propagate_inbounds
-        boundscheck = :propagate
-    end
+    boundscheck = propagate_inbounds ? :propagate : :default
 
     let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false))
         # This needs to be a minimum and is more of a size hint
@@ -1845,9 +1840,9 @@ struct SSASubstitute
 end
 
 function ssa_substitute!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
-                         ssa_substitute::SSASubstitute, boundscheck::Symbol)
+                         ssa_substitute::SSASubstitute)
     subst_inst[:line] += ssa_substitute.linetable_offset
-    return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute, boundscheck)
+    return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute)
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
@@ -1864,7 +1859,7 @@ function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
 end
 
 function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
-                            ssa_substitute::SSASubstitute, boundscheck::Symbol)
+                            ssa_substitute::SSASubstitute)
     if isa(val, Argument)
         return ssa_substitute.arg_replacements[val.n]
     end
@@ -1920,7 +1915,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute, boundscheck)
+        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute)
     end
     return urs[]
 end

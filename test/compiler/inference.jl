@@ -1580,15 +1580,21 @@ end
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
-# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc
+# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc, memoryref_isassigned, memoryrefoffset_tfunc
 let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefget_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefget_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryref_isassigned_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_isassigned_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefset!_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefset!_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryrefoffset_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefoffset_tfunc(Core.Compiler.fallback_lattice, xs...)
+    interp = Core.Compiler.NativeInterpreter()
+    builtin_tfunction(@nospecialize xs...) = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
     @test memoryref_tfunc(Memory{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Integer}) == MemoryRef{Integer}
     @test memoryref_tfunc(MemoryRef{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Vararg{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Int}, Int) == Union{}
     @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
     @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
@@ -1603,6 +1609,20 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryrefget_tfunc(MemoryRef{Int}, String, Bool) === Union{}
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
     @test memoryrefget_tfunc(Any, Any, Any) === Any
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Int
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Any, Any) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{<:Integer}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef{:not_atomic}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(Vector{Int}, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(String, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, String, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
+    @test memoryref_isassigned_tfunc(Any, Any, Any) === Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Vararg{Any}]) == Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Bool
     @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
     let ua = MemoryRef{<:Integer}
         @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
@@ -1617,6 +1637,15 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
     @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
     @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Symbol}]) == Union{}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) == MemoryRef{Int}
+    @test memoryrefoffset_tfunc(MemoryRef) == memoryrefoffset_tfunc(GenericMemoryRef) == Int
+    @test memoryrefoffset_tfunc(Memory) == memoryrefoffset_tfunc(GenericMemory) == Union{}
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Memory}]) == Union{}
 end
 
 let tuple_tfunc(@nospecialize xs...) =

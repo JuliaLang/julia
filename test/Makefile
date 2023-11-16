@@ -7,7 +7,7 @@ STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
-export JULIA_LOAD_PATH := @stdlib
+export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 

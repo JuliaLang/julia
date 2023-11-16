@@ -10,7 +10,8 @@ call_result_unused(si::StmtInfo) = !si.used
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
-    ⊑ₚ = ⊑(ipo_lattice(interp))
+    𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
+    ⊑ₚ = ⊑(𝕃ₚ)
     if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         # At this point we are guaranteed to end up throwing on this path,
@@ -21,7 +22,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
+    matches = find_matching_methods(𝕃ᵢ, argtypes, atype, method_table(interp),
         InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
@@ -40,7 +41,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
 
-    𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
@@ -131,9 +131,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                Any[Bottom for _ in 1:length(argtypes)]
             end
             for i = 1:length(argtypes)
-                cnd = conditional_argtype(this_conditional, sig, argtypes, i)
-                conditionals[1][i] = tmerge(conditionals[1][i], cnd.thentype)
-                conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
+                cnd = conditional_argtype(𝕃ᵢ, this_conditional, sig, argtypes, i)
+                conditionals[1][i] = tmerge(𝕃ᵢ, conditionals[1][i], cnd.thentype)
+                conditionals[2][i] = tmerge(𝕃ᵢ, conditionals[2][i], cnd.elsetype)
             end
         end
         if bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
@@ -394,7 +394,7 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
                 new_elsetype = maybecondinfo[2][i]
             else
                 # otherwise compute it on the fly
-                cnd = conditional_argtype(rt, maybecondinfo, argtypes, i)
+                cnd = conditional_argtype(𝕃ᵢ, rt, maybecondinfo, argtypes, i)
                 new_thentype = cnd.thentype
                 new_elsetype = cnd.elsetype
             end
@@ -440,11 +440,12 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
     return widenconditional(rt)
 end
 
-function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Vector{Any}, i::Int)
+function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospecialize(sig),
+                             argtypes::Vector{Any}, i::Int)
     if isa(rt, InterConditional) && rt.slot == i
         return rt
     else
-        thentype = elsetype = tmeet(widenslotwrapper(argtypes[i]), fieldtype(sig, i))
+        thentype = elsetype = tmeet(𝕃ᵢ, widenslotwrapper(argtypes[i]), fieldtype(sig, i))
         condval = maybe_extract_const_bool(rt)
         condval === true && (elsetype = Bottom)
         condval === false && (thentype = Bottom)
@@ -2016,7 +2017,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_applicable(interp, argtypes, sv, max_methods)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
-        effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
+        ft = popfirst!(argtypes)
+        effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
+        pushfirst!(argtypes, ft)
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -2042,8 +2045,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        effects = builtin_effects(𝕃ᵢ, Core._typevar, ArgInfo(nothing,
-            Any[Const(Core._typevar), n, lb_var, ub_var]), pT)
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
         return CallMeta(pT, effects, call.info)
     elseif f === UnionAll
         call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)

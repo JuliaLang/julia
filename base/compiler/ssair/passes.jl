@@ -1259,8 +1259,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         stmt′ = ssamap(stmt′) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
-        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′,
-                                   ssa_substitute, :default)
+        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
         ssa_rename[idx′] = insert_node!(ir, idx,
             NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
             attach_after)
