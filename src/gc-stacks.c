@@ -223,6 +223,9 @@ void sweep_stack_pools(void)
                 void *stk = small_arraylist_pop(al);
                 free_stack(stk, pool_sizes[p]);
             }
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                small_arraylist_free(al);
+            }
         }
 
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;

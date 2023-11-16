@@ -3775,6 +3775,22 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         else {
             ptls2->heap.remset->len = 0;
         }
+        // free empty GC state for threads that have exited
+        if (ptls2->current_task == NULL) {
+            jl_thread_heap_t *heap = &ptls2->heap;
+            if (heap->weak_refs.len == 0)
+                small_arraylist_free(&heap->weak_refs);
+            if (heap->live_tasks.len == 0)
+                small_arraylist_free(&heap->live_tasks);
+            if (heap->remset->len == 0)
+                arraylist_free(heap->remset);
+            if (heap->last_remset->len == 0)
+                arraylist_free(heap->last_remset);
+            if (ptls2->finalizers.len == 0)
+                arraylist_free(&ptls->finalizers);
+            if (ptls2->sweep_objs.len == 0)
+                arraylist_free(&ptls->sweep_objs);
+        }
     }
 
 #ifdef __GLIBC__
@@ -3991,6 +4007,18 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+}
+
+void jl_free_thread_gc_state(jl_ptls_t ptls)
+{
+    jl_gc_markqueue_t *mq = &ptls->mark_queue;
+    ws_queue_t *cq = &mq->chunk_queue;
+    free_ws_array(jl_atomic_load_relaxed(&cq->array));
+    jl_atomic_store_relaxed(&cq->array, NULL);
+    ws_queue_t *q = &mq->ptr_queue;
+    free_ws_array(jl_atomic_load_relaxed(&q->array));
+    jl_atomic_store_relaxed(&q->array, NULL);
+    arraylist_free(&mq->reclaim_set);
 }
 
 // System-wide initializations

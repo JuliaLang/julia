@@ -508,6 +508,11 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif
+    free(ptls->bt_data);
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    void jl_free_thread_gc_state(jl_ptls_t ptls);
+    jl_free_thread_gc_state(ptls);
     // then park in safe-region
     (void)jl_gc_safe_enter(ptls);
 }
