@@ -81,6 +81,12 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 #include "julia_threads.h"
 #include "julia_assert.h"
 
+#if defined(USE_ITTAPI)
+#define INTEL_ITTNOTIFY_API_PRIVATE
+#include "ittapi/ittnotify.h"
+#undef INTEL_ITTNOTIFY_API_PRIVATE
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -2218,6 +2224,9 @@ typedef struct _jl_task_t {
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
+#if defined(USE_ITTAPI)
+    __itt_id itt_id;
+#endif
 } jl_task_t;
 
 #define JL_TASK_STATE_RUNNABLE 0
