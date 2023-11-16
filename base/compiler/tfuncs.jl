@@ -1992,7 +1992,7 @@ end
 add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
 
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, mem)
-    a = widenconst(mem)
+    a = widenconst(unwrapva(mem))
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
         if isa(unw, DataType) && unw.name === GenericMemory.body.body.body.name
@@ -2006,7 +2006,10 @@ add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
     return GenericMemoryRef
 end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx)
-    memoryref_tfunc(𝕃, ref, idx, Const(true))
+    if isvarargtype(idx)
+        idx = unwrapva(idx)
+    end
+    return memoryref_tfunc(𝕃, ref, idx, Const(true))
 end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
@@ -2021,12 +2024,10 @@ add_tfunc(memoryref, 1, 3, memoryref_tfunc, 1)
 end
 add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
 
-
-
 @nospecs function memoryref_builtin_common_errorcheck(mem, order, boundscheck)
     hasintersect(widenconst(mem), GenericMemoryRef) || return false
     hasintersect(widenconst(order), Symbol) || return false
-    hasintersect(widenconst(boundscheck), Bool) || return false
+    hasintersect(widenconst(unwrapva(boundscheck)), Bool) || return false
     return true
 end
 
