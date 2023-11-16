@@ -1294,11 +1294,11 @@ and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
 function append! end
 
-function append!(a::Vector, items::AbstractVector)
-    itemindices = eachindex(items)
-    n = length(itemindices)
+function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
+    items isa Tuple && (items = map(x -> convert(T, x), items))
+    n = length(items)
     _growend!(a, n)
-    copyto!(a, length(a)-n+1, items, first(itemindices), n)
+    copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
 end
 
@@ -1308,16 +1308,11 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
-    @_terminates_locally_meta
-    n = length(a)
+    n = Int(length(iter))::Int
     i = lastindex(a)
-    resize!(a, n+Int(length(iter))::Int)
-    for (i, item) in zip(i+1:lastindex(a), iter)
-        if isa(a, Vector) # give better effects for builtin vectors
-            @_safeindex a[i] = item
-        else
-            a[i] = item
-        end
+    sizehint!(a, length(a) + n; shrink=false)
+    for item in iter
+        push!(a, item)
     end
     a
 end
@@ -1359,15 +1354,13 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-function prepend!(a::Vector, items::AbstractVector)
-    itemindices = eachindex(items)
-    n = length(itemindices)
+function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
+    items isa Tuple && (items = map(x -> convert(T, x), items))
+    n = length(items)
     _growbeg!(a, n)
-    if a === items
-        copyto!(a, 1, items, n+1, n)
-    else
-        copyto!(a, 1, items, first(itemindices), n)
-    end
+    # in case of aliasing, the _growbeg might have shifted our data, so copy
+    # just the last n elements instead of all of them from the first
+    copyto!(a, 1, items, lastindex(items)-n+1, n)
     return a
 end
 
@@ -1379,12 +1372,14 @@ prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, ini
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     require_one_based_indexing(a)
-    n = length(iter)
-    _growbeg!(a, n)
-    i = 0
+    n = Int(length(iter))::Int
+    sizehint!(a, length(a) + n; first=true, shrink=false)
+    n = 0
     for item in iter
-        @_safeindex a[i += 1] = item
+        n += 1
+        pushfirst!(a, item)
     end
+    reverse!(a, 1, n)
     a
 end
 function _prepend!(a::Vector, ::IteratorSize, iter)
@@ -1441,12 +1436,16 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n) -> s
+    sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
+
+If `first` is true, then the reserved space is from the start of the collection, for ordered
+collections. Supplying this keyword may result in an error if the collection is nor ordered
+or if `pushfirst!` is not supported for this collection.
 
 See also [`resize!`](@ref).
 
@@ -1462,31 +1461,41 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
+
+4. `shrink` controls if the collection can be shrunk.
+
+!!! compat "Julia 1.11"
+    The `shrink` and `first` arguments were added in Julia 1.11.
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer)
+function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
     len = length(a)
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
-    offset = memoryrefoffset(ref)
-    sz = max(Int(sz), offset + len - 1)
+    sz = max(Int(sz), len)
+    inc = sz - len
     if sz <= memlen
         # if we don't save at least 1/8th memlen then its not worth it to shrink
-        if memlen - sz <= div(memlen, 8)
+        if !shrink || memlen - sz <= div(memlen, 8)
             return a
         end
         newmem = array_new_memory(mem, sz)
-        if len == 0
-            newref = GenericMemoryRef(newmem)
+        if first
+            newref = GenericMemoryRef(newmem, inc + 1)
         else
-            unsafe_copyto!(newmem, offset, mem, offset, len)
-            newref = @inbounds GenericMemoryRef(newmem, offset)
+            newref = GenericMemoryRef(newmem)
         end
+        unsafe_copyto!(newref, ref, len)
         setfield!(a, :ref, newref)
-    else
-        inc = sz - len;
+    elseif first
+        _growbeg!(a, inc)
+        newref = getfield(a, :ref)
+        newref = GenericMemoryRef(newref, inc + 1)
+        setfield!(a, :size, (len,)) # undo the size change from _growbeg!
+        setfield!(a, :ref, newref) # undo the offset change from _growbeg!
+    else # last
         _growend!(a, inc)
         setfield!(a, :size, (len,)) # undo the size change from _growend!
     end
@@ -1494,7 +1503,13 @@ function sizehint!(a::Vector, sz::Integer)
 end
 
 # Fall-back implementation for non-shrinkable collections
-_sizehint!(a, sz; shrink) = sizehint!(a, sz)
+# avoid defining this the normal way to avoid avoid infinite recursion
+function Core.kwcall(kwargs::NamedTuple{names}, ::typeof(sizehint!), a, sz) where names
+    get(kwargs, :first, false)::Bool
+    get(kwargs, :shrink, true)::Bool
+    isempty(diff_names(names, (:first, :shrink))) || kwerr(kwargs, sizehint!, a, sz)
+    sizehint!(a, sz)
+end
 
 """
     pop!(collection) -> item

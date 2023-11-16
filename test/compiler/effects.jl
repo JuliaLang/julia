@@ -477,9 +477,10 @@ end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
 let 𝕃 = Core.Compiler.fallback_lattice
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+    getfield_effects = Core.Compiler.getfield_effects
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{String}, Core.Const(:value)], String))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{Symbol}, Core.Const(:value)], Symbol))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
 end
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
@@ -495,6 +496,25 @@ end |> Core.Compiler.is_nothrow
 end |> Core.Compiler.is_nothrow
 @test Base.infer_effects((Tuple{Int,Int},String)) do t, i
     getfield(t, i, false) # invalid name type
+end |> !Core.Compiler.is_nothrow
+
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :not_atomic)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :invalid_atomic_spec)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :invalid_atomic_spec, boundscheck)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Any)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
 end |> !Core.Compiler.is_nothrow
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
@@ -861,7 +881,7 @@ end
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
-    Core.Compiler.ArgInfo(nothing, Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}]), Bool))
+    Any[String, Vararg{Any}], Bool))
 
 # Test that :new can be eliminated even if an sparam is unknown
 struct SparamUnused{T}
@@ -1139,3 +1159,17 @@ end
     issue51837(; openquotechar, newlinechar)
 end |> !Core.Compiler.is_nothrow
 @test_throws ArgumentError issue51837(; openquotechar='α', newlinechar='\n')
+
+# idempotency of effects derived by post-opt analysis
+callgetfield(x, f) = getfield(x, f, Base.@_boundscheck)
+@test Base.infer_effects(callgetfield, (Some{Any},Symbol)).noub === Core.Compiler.NOUB_IF_NOINBOUNDS
+callgetfield1(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_simple(x, f) = callgetfield1(x, f)
+@test Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_TRUE
+callgetfield2(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
+@test Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_FALSE

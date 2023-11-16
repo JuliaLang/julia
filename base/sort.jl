@@ -1474,7 +1474,8 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-Uses `Base.copymutable` to support immutable collections and iterables.
+Returns something [`similar`](@ref) to `v` when `v` is an `AbstractArray` and uses
+[`collect`](@ref) to support arbitrary non-`AbstractArray` iterables.
 
 !!! compat "Julia 1.10"
     `sort` of arbitrary iterables requires at least Julia 1.10.
@@ -1500,7 +1501,7 @@ function sort(v; kws...)
     size = IteratorSize(v)
     size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
     size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
-    sort!(copymutable(v); kws...)
+    sort!(collect(v); kws...)
 end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 sort(::AbstractString; kws...) =
@@ -1512,7 +1513,7 @@ function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
               rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
     o = ord(lt,by,rev,order)
     if N > 9
-        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        v = sort!(collect(x), DEFAULT_STABLE, o)
         tuple((v[i] for i in 1:N)...)
     else
         _sort(x, o)

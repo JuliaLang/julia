@@ -1196,8 +1196,14 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls != NULL) {
-            memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
+            // don't reset `pool_live_bytes` here
             jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+            jl_atomic_store_relaxed(&ptls->gc_num.malloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.realloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.poolalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.bigalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.alloc_acc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.free_acc, 0);
         }
     }
 }
@@ -1414,6 +1420,38 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 // sweep phase
 
+gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
+
+extern gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
+
+STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+{
+#ifdef GC_MEASURE_PAGE_FRAGMENTATION
+    gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[pg->pool_n];
+    jl_atomic_fetch_add(&stats->n_freed_objs, pg->nfree);
+    jl_atomic_fetch_add(&stats->n_pages_allocd, 1);
+#endif
+}
+
+STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
+{
+#ifdef GC_MEASURE_PAGE_FRAGMENTATION
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[i];
+        double utilization = 1.0;
+        size_t n_freed_objs = jl_atomic_load_relaxed(&stats->n_freed_objs);
+        size_t n_pages_allocd = jl_atomic_load_relaxed(&stats->n_pages_allocd);
+        if (n_pages_allocd != 0) {
+            utilization -= ((double)n_freed_objs * (double)jl_gc_sizeclasses[i]) / (double)n_pages_allocd / (double)GC_PAGE_SZ;
+        }
+        jl_safe_printf("Size class %d: %.2f%% utilization\n", jl_gc_sizeclasses[i], utilization * 100.0);
+        jl_atomic_store_relaxed(&stats->n_freed_objs, 0);
+        jl_atomic_store_relaxed(&stats->n_pages_allocd, 0);
+    }
+    jl_safe_printf("-----------------------------------------\n");
+#endif
+}
+
 int64_t buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
@@ -1523,6 +1561,7 @@ done:
             push_lf_back(&global_page_pool_lazily_freed, pg);
         }
     }
+    gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
     jl_atomic_fetch_add(&ptls->gc_num.pool_live_bytes, GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
@@ -1736,6 +1775,7 @@ static void gc_sweep_pool(void)
 #else
     gc_free_pages();
 #endif
+    gc_dump_page_utilization_data();
     gc_time_pool_end(current_sweep_full);
 }
 

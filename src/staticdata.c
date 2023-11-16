@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    173
+#define NUM_TAGS    174
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -236,6 +236,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_undefref_exception);
         INSERT_TAG(jl_readonlymemory_exception);
         INSERT_TAG(jl_atomicerror_type);
+        INSERT_TAG(jl_missingcodeerror_type);
 
         // other special values
         INSERT_TAG(jl_emptysvec);
@@ -499,8 +500,6 @@ typedef struct {
     int8_t incremental;
 } jl_serializer_state;
 
-static jl_value_t *jl_idtable_type = NULL;
-static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 static jl_sym_t *jl_docmeta_sym = NULL;
@@ -1251,24 +1250,35 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         assert(!(s->incremental && jl_object_in_image(v)));
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
+        int mutabl = t->name->mutabl;
         ios_t *f = s->s;
         if (t->smalltag) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
-                if (jl_datatype_nfields(t) == 0 || t->name->mutabl == 0 || t == jl_string_type) {
+                if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
                 }
             }
         }
 
-        // realign stream to expected gc alignment (16 bytes)
+        // realign stream to expected gc alignment (16 bytes) after tag
         uintptr_t skip_header_pos = ios_pos(f) + sizeof(jl_taggedvalue_t);
+        uintptr_t object_id_expected = mutabl &&
+                 t != jl_datatype_type &&
+                 t != jl_typename_type &&
+                 t != jl_string_type &&
+                 t != jl_simplevector_type &&
+                 t != jl_module_type;
+        if (object_id_expected)
+            skip_header_pos += sizeof(size_t);
         write_padding(f, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
 
         // write header
+        if (object_id_expected)
+            write_uint(f, jl_object_id(v));
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
         if (f == s->const_data)
-            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED);
+            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
         else
             write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(f);
@@ -1715,11 +1725,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     // will need to populate the binding field later
                     arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                 }
-            }
-            else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
-                assert(f == s->s);
-                // will need to rehash this, later (after types are fully constructed)
-                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
             }
             else if (jl_is_genericmemoryref(v)) {
                 assert(f == s->s);
@@ -2580,8 +2585,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
         }
     }
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
-    jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
     jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
     if (jl_bigint_type) {
         gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
@@ -2593,6 +2596,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_docmeta_sym = (jl_sym_t*)jl_get_global((jl_module_t*)docs, jl_symbol("META"));
         }
     }
+    jl_genericmemory_t *global_roots_table = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -2601,7 +2605,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_value_t *tag = *tags[i];
                 jl_queue_for_serialization(&s, tag);
             }
-            jl_queue_for_serialization(&s, jl_global_roots_table);
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
@@ -2637,8 +2640,19 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
-        // step 1.3: prune (garbage collect) some special weak references from
-        // built-in type caches
+        // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_table
+        if (worklist == NULL) {
+            global_roots_table = jl_alloc_memory_any(0);
+            for (size_t i = 0; i < jl_global_roots_table->length; i += 2) {
+                jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_table, i);
+                if (ptrhash_get(&serialization_order, val) != HT_NOTFOUND)
+                    global_roots_table = jl_eqtable_put(global_roots_table, val, jl_nothing, NULL);
+            }
+            jl_queue_for_serialization(&s, global_roots_table);
+            jl_serialize_reachable(&s);
+        }
+        // step 1.4: prune (garbage collect) some special weak references from
+        // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)serialization_queue.items[i];
             if (jl_is_typename(tn)) {
@@ -2746,7 +2760,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_value_t *tag = *tags[i];
                 jl_write_value(&s, tag);
             }
-            jl_write_value(&s, jl_global_roots_table);
+            jl_write_value(&s, global_roots_table);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -3396,12 +3410,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
         }
         else {
-            // rehash IdDict
-            //assert(((jl_datatype_t*)(jl_typeof(obj)))->name == jl_idtable_typename);
-            jl_genericmemory_t **a = (jl_genericmemory_t**)obj;
-            assert(jl_typetagis(*a, jl_memory_any_type));
-            *a = jl_idtable_rehash(*a, (*a)->length);
-            jl_gc_wb(obj, *a);
+            abort();
         }
     }
     // Now pick up the globalref binding pointer field
@@ -3665,7 +3674,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -3685,6 +3694,10 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
+
+    if (ignore_native){
+        memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
+    }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
 

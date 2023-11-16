@@ -288,7 +288,7 @@ julia> using .A, .B
 
 julia> f
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: UndefVarError: `f` not defined
+ERROR: UndefVarError: `f` not defined in `Main`
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -404,7 +404,7 @@ x = 0
 
 module Sub
 using ..TestPackage
-z = y # ERROR: UndefVarError: `y` not defined
+z = y # ERROR: UndefVarError: `y` not defined in `Main`
 end
 
 y = 1
@@ -420,7 +420,7 @@ For similar reasons, you cannot use a cyclic ordering:
 module A
 
 module B
-using ..C # ERROR: UndefVarError: `C` not defined
+using ..C # ERROR: UndefVarError: `C` not defined in `Main.A`
 end
 
 module C
