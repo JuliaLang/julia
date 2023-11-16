@@ -2017,7 +2017,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_applicable(interp, argtypes, sv, max_methods)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
-        effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
+        ft = popfirst!(argtypes)
+        effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
+        pushfirst!(argtypes, ft)
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -2043,8 +2045,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        effects = builtin_effects(𝕃ᵢ, Core._typevar, ArgInfo(nothing,
-            Any[Const(Core._typevar), n, lb_var, ub_var]), pT)
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
         return CallMeta(pT, effects, call.info)
     elseif f === UnionAll
         call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)
