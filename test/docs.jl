@@ -70,7 +70,6 @@ $$latex literal$$
 function break_me_docs end
 
 
-
 # `hasdoc` returns `true` on a name with a docstring.
 @test Docs.hasdoc(Base, :map)
 # `hasdoc` returns `false` on a name without a docstring.
