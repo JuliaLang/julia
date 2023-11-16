@@ -1166,7 +1166,6 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
         jl_atomic_store_release(&type->name->linearcache, nc);
         jl_gc_wb(type->name, nc);
         cache = nc;
-        n = jl_svec_len(nc);
     }
     assert(jl_svecref(cache, insert_at) == jl_nothing);
     jl_svecset(cache, insert_at, (jl_value_t*)type); // todo: make this an atomic-store
@@ -3508,6 +3507,7 @@ void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
     jl_pair_type           = core("Pair");
     jl_kwcall_func         = core("kwcall");
     jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;

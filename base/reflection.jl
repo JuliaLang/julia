@@ -720,18 +720,10 @@ If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `obj
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
-function objectid(x)
-    # objectid is foldable iff it isn't a pointer.
-    if isidentityfree(typeof(x))
-        return _foldable_objectid(x)
-    end
-    return _objectid(x)
+function objectid(@nospecialize(x))
+    @_total_meta
+    return ccall(:jl_object_id, UInt, (Any,), x)
 end
-function _foldable_objectid(@nospecialize(x))
-    @_foldable_meta
-    _objectid(x)
-end
-_objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 """
     isdispatchtuple(T)
@@ -1187,7 +1179,7 @@ A list of modules can also be specified as an array.
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also: [`which`](@ref) and `@which`.
+See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
@@ -1802,10 +1794,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[Core.Const(f), types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
-            Core.Compiler.ArgInfo(nothing, argtypes), rt)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1898,7 +1889,7 @@ Returns the method of `f` (a `Method` object) that would be called for arguments
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
-See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
+See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), and [`@edit`](@ref Main.InteractiveUtils.@edit).
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -2081,6 +2072,8 @@ function bodyfunction(basemethod::Method)
                     else
                         return nothing
                     end
+                elseif isa(fsym, Core.SSAValue)
+                    fsym = ast.code[fsym.id]
                 else
                     return nothing
                 end

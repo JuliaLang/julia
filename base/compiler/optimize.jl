@@ -74,35 +74,14 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
         return src
     end
     return nothing
@@ -316,8 +295,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
-            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -396,7 +375,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref(x)
+        return abstract_eval_globalref_type(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)

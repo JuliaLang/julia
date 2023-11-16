@@ -194,7 +194,6 @@ int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_set_peek_cond(uintptr_t);
 JL_DLLEXPORT double jl_get_profile_peek_duration(void);
 JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 
@@ -1370,7 +1369,7 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 // -- synchronization utilities -- //
@@ -1532,6 +1531,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_as_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_global_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_local_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_list_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_dot_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_newvar_sym;
@@ -1570,6 +1570,8 @@ extern JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_eval_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_include_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_all_sym;

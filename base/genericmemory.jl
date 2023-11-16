@@ -26,7 +26,8 @@ size(a::GenericMemory, d::Int) =
 size(a::GenericMemory, d::Integer) =  size(a, convert(d, Int))
 size(a::GenericMemory) = (length(a),)
 
-pointer(mem::GenericMemory, i::Int) = (@_propagate_inbounds_meta; unsafe_convert(Ptr{Cvoid}, GenericMemoryRef(mem, i))) # boundschecked, even for i==1
+IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(GenericMemoryRef(A, i)); A)
@@ -65,10 +66,10 @@ function isassigned(a::Memory, i::Int)
     return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), :not_atomic, false)
 end
 
-@eval isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, $(Expr(:boundscheck)))
+isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, @_boundscheck)
 
 ## copy ##
-@eval function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
+function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_meta
     n == 0 && return dest
     @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
@@ -117,6 +118,13 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
 end
 
 copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
+
+function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
+    n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
+    unsafe_copyto!(dest, doffs, src, soffs, n)
+    return dest
+end
+
 
 ## Constructors ##
 
@@ -176,13 +184,11 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-@eval begin
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
     val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, $(Expr(:boundscheck)))
-    memoryrefset!(ref, val, :not_atomic, $(Expr(:boundscheck)))
+    ref = memoryref(memoryref(A), i1, @_boundscheck)
+    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
     return A
-end
 end
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
