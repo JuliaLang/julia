@@ -1501,7 +1501,7 @@ function sort(v; kws...)
     size = IteratorSize(v)
     size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
     size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
-    sort!(collect(v); kws...)
+    sort!(copymutable(v); kws...)
 end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 sort(::AbstractString; kws...) =
@@ -1513,7 +1513,7 @@ function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
               rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
     o = ord(lt,by,rev,order)
     if N > 9
-        v = sort!(collect(x), DEFAULT_STABLE, o)
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
         tuple((v[i] for i in 1:N)...)
     else
         _sort(x, o)
