@@ -68,8 +68,8 @@ using Core:
     CodeInstance, MethodInstance, CodeInfo
 using .CC:
     InferenceResult, OptimizationState, IRCode, copy as cccopy,
-    @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, sroa_pass!,
-    adce_pass!, JLOptions, verify_ir, verify_linetable
+    @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, gvn!,
+    sroa_pass!, adce_pass!, JLOptions, verify_ir, verify_linetable
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
 struct CodeCache
@@ -181,6 +181,7 @@ function run_passes_ipo_safe_with_ea(interp::EscapeAnalyzer,
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
+    @timeit "GVN"       ir = gvn!(ir)
     @timeit "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @timeit "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @timeit "compact 3" ir = compact!(ir, true)
