@@ -23,6 +23,11 @@ Language changes
   allows users to safely tear down background state (such as closing Timers and sending
   disconnect notifications to heartbeat tasks) and cleanup other resources when the program
   wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution. ([#52123])
 
 Compiler/Runtime improvements
 -----------------------------
