@@ -55,6 +55,18 @@ Alias for [`LogLevel(2000)`](@ref LogLevel).
 """
 const Error = Base.CoreLogging.Error
 
+"""
+    custom_log_levels::Dict{LogLevel,Tuple{String,Symbol}}
+
+Add to this dict to introduce a print style for a custom log.
+
+For instance:
+```
+custom_log_levels[LogLevel(-500)] = ("MyLog", :magenta)
+```
+"""
+const custom_log_levels = Base.CoreLogging.custom_log_levels
+
 using Base.CoreLogging:
     closed_stream
 

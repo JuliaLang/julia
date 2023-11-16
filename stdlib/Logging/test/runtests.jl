@@ -280,6 +280,7 @@ end
 end
 
 @testset "custom log macro" begin
+    Logging.custom_log_levels[CustomLog] = ("CustomLog", :magenta)
     @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
 
     buf = IOBuffer()
@@ -289,7 +290,7 @@ end
     with_logger(logger) do
         @customlog "a"
     end
-    @test occursin("LogLevel(-500): a", String(take!(buf)))
+    @test occursin("CustomLog: a", String(take!(buf)))
 end
 
 end
