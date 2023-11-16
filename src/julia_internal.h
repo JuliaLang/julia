@@ -354,7 +354,7 @@ void *jl_gc_perm_alloc(size_t sz, int zero,
 void gc_sweep_sysimg(void);
 
 
-// pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
+// pools are 65528 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
@@ -373,23 +373,22 @@ static const int jl_gc_sizeclasses[] = {
     144, 160, 176, 192, 208, 224, 240, 256,
 
     // the following tables are computed for maximum packing efficiency via the formula:
-    // pg = 2^14
+    // pg = 2^16 -8
     // sz = (div.(pg-8, rng).÷16)*16; hcat(sz, (pg-8).÷sz, pg .- (pg-8).÷sz.*sz)'
 
-    // rng = 60:-4:32 (8 pools)
+    // rng = 240:-16:128 (8 pools)
     272, 288, 304, 336, 368, 400, 448, 496,
-//   60,  56,  53,  48,  44,  40,  36,  33, /pool
-//   64, 256, 272, 256, 192, 384, 256,  16, bytes lost
-
-    // rng = 30:-2:16 (8 pools)
+    // 240,  227,  215,  195,  178,  163,  146,  132, /pool
+    // 248,  152,  168,  8,  24,  328,  120,  56, bytes lost
+    // rng = 120:-8:64 (8 pools)
     544, 576, 624, 672, 736, 816, 896, 1008,
-//   30,  28,  26,  24,  22,  20,  18,  16, /pool
-//   64, 256, 160, 256, 192,  64, 256, 256, bytes lost
+    // 120,  113,  105,  97,  89,  80,  73,  65, /pool
+    // 248,  440,  8,  344,  24,  248,  120,  8, bytes lost
 
-    // rng = 15:-1:8 (8 pools)
+    // rng = 60:-4:32 (8 pools)
     1088, 1168, 1248, 1360, 1488, 1632, 1808, 2032
-//    15,   14,   13,   12,   11,   10,    9,    8, /pool
-//    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
+    // 60,  56,  52,  48,  44,  40,  36,  32, /pool
+    // 248,  120,  632,  248,  56,  248,  440,  504, bytes lost
 };
 static_assert(sizeof(jl_gc_sizeclasses) / sizeof(jl_gc_sizeclasses[0]) == JL_GC_N_POOLS, "");
 
