@@ -370,23 +370,23 @@ function logmsg_code(_module, file, line, level, message, exs...)
         let
             level = $level
             # simplify std_level code emitted, if we know it is one of our global constants
-            std_level = $(level isa Symbol ? :level : :(level isa LogLevel ? level : convert(LogLevel, level)::LogLevel))
-            if std_level >= _min_enabled_level[]
+            std_level = $(level isa Symbol ? :level : :(level isa Base.CoreLogging.LogLevel ? level : convert(Base.CoreLogging.LogLevel, level)::Base.CoreLogging.LogLevel))
+            if std_level >= Base.CoreLogging._min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
-                logger = current_logger_for_env(std_level, group, _module)
+                logger = Base.CoreLogging.current_logger_for_env(std_level, group, _module)
                 if !(logger === nothing)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if invokelatest(shouldlog, logger, level, _module, group, id)
+                    if invokelatest(Base.CoreLogging.shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
                         if file isa String
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && invokelatest(handle_message,
+                        $(logrecord) && invokelatest(Base.CoreLogging.handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end
