@@ -331,9 +331,14 @@ typedef struct {
 //  structure of this representation allows us to partially unroll and optimize
 //  various conditions at each level.
 
-//  The following constants define the branching factors at each level.
-//  The constants and GC_PAGE_LG2 must therefore sum to sizeof(void*).
-//  They should all be multiples of 32 (sizeof(uint32_t)) except that REGION2_PG_COUNT may also be 1.
+// data structures for tracking fragmentation in the pool allocator
+// #define GC_MEASURE_PAGE_FRAGMENTATION
+
+typedef struct {
+    _Atomic(size_t) n_freed_objs;
+    _Atomic(size_t) n_pages_allocd;
+} gc_fragmentation_stat_t;
+
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
