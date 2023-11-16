@@ -655,8 +655,6 @@ function parsedoc end
 function apropos end
 function doc end
 
-end
-
 
 """
     Docs.hasdoc(mod::Module, sym::Symbol)::Bool
@@ -673,3 +671,8 @@ function hasdoc(binding::Docs.Binding, sig::Type = Union{})
     alias = aliasof(binding)
     return alias == binding ? false : hasdoc(alias, sig)
 end
+
+
+end
+
+
