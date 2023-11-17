@@ -95,10 +95,10 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
     end
 end
 
-function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union{Int,Nothing},
-    @nospecialize(stmt), @nospecialize(typ), irsv::IRInterpretationState)
+function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, idx::Int,
+                                bb::Union{Int,Nothing}, irsv::IRInterpretationState)
     ir = irsv.ir
-    inst = ir[SSAValue(idx)]
+    stmt = inst[:stmt]
     if isa(stmt, GotoIfNot)
         cond = stmt.cond
         condval = maybe_extract_const_bool(argextype(cond, ir))
@@ -172,7 +172,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
                 inst[:stmt] = quoted(rt.val)
             end
             return true
-        elseif !⊑(typeinf_lattice(interp), typ, rt)
+        elseif !⊑(typeinf_lattice(interp), inst[:type], rt)
             inst[:type] = rt
             return true
         end
@@ -226,7 +226,7 @@ function scan!(callback, scanner::BBScanner, forwards_only::Bool)
         lstmt = last(stmts)
         for idx = stmts
             inst = ir[SSAValue(idx)]
-            ret = callback(inst, idx, lstmt, bb)
+            ret = callback(inst, lstmt, bb)
             ret === nothing && return true
             ret::Bool || break
             idx == lstmt && process_terminator!(inst[:stmt], bb, bb_ip) && forwards_only && return false
@@ -236,11 +236,11 @@ function scan!(callback, scanner::BBScanner, forwards_only::Bool)
 end
 
 function populate_def_use_map!(tpdum::TwoPhaseDefUseMap, scanner::BBScanner)
-    scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+    scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
         for ur in userefs(inst)
             val = ur[]
             if isa(val, SSAValue)
-                push!(tpdum[val.id], idx)
+                push!(tpdum[val.id], inst.idx)
             end
         end
         return true
@@ -255,6 +255,8 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
 
     (; ir, tpdum, ssa_refined) = irsv
 
+    @assert isempty(ir.new_nodes) "IRCode should be compacted before irinterp"
+
     all_rets = Int[]
     scanner = BBScanner(ir)
 
@@ -263,15 +265,16 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     # Fast path: Scan both use counts and refinement in one single pass of
     #            of the instructions. In the absence of backedges, this will
     #            converge.
-    completed_scan = scan!(scanner, true) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+    completed_scan = scan!(scanner, true) do inst::Instruction, lstmt::Int, bb::Int
+        idx = inst.idx
         irsv.curridx = idx
-        stmt = ir.stmts[idx][:stmt]
-        typ = ir.stmts[idx][:type]
-        flag = ir.stmts[idx][:flag]
+        stmt = inst[:stmt]
+        typ = inst[:type]
+        flag = inst[:flag]
         any_refined = false
         if (flag & IR_FLAG_REFINED) != 0
             any_refined = true
-            ir.stmts[idx][:flag] &= ~IR_FLAG_REFINED
+            inst[:flag] &= ~IR_FLAG_REFINED
         end
         for ur in userefs(stmt)
             val = ur[]
@@ -292,11 +295,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end
-        if (any_refined && reprocess_instruction!(interp, idx, bb, stmt, typ, irsv)) ||
+        if (any_refined && reprocess_instruction!(interp, inst, idx, bb, irsv)) ||
             (externally_refined !== nothing && idx in externally_refined)
             push!(ssa_refined, idx)
-            stmt = ir.stmts[idx][:stmt]
-            typ = ir.stmts[idx][:type]
+            stmt = inst[:stmt]
+            typ = inst[:type]
         end
         if typ === Bottom && !is_terminator_or_phi
             kill_terminator_edges!(irsv, lstmt, bb)
@@ -316,7 +319,8 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
 
         # Slow Path Phase 1.A: Complete use scanning
-        scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+        scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
+            idx = inst.idx
             irsv.curridx = idx
             stmt = inst[:stmt]
             flag = inst[:flag]
@@ -356,9 +360,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             idx = popfirst!(stmt_ip)
             irsv.curridx = idx
             inst = ir[SSAValue(idx)]
-            stmt = inst[:stmt]
-            typ = inst[:type]
-            if reprocess_instruction!(interp, idx, nothing, stmt, typ, irsv)
+            if reprocess_instruction!(interp, inst, idx, nothing, irsv)
                 append!(stmt_ip, tpdum[idx])
             end
         end
