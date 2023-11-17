@@ -1173,3 +1173,70 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
 @test Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
       Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
       Core.Compiler.ALWAYS_FALSE
+
+# noub modeling for memory ops
+let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryref, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+    function builtin_effects(@nospecialize xs...)
+        interp = Core.Compiler.NativeInterpreter()
+        𝕃 = Core.Compiler.typeinf_lattice(interp)
+        rt = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
+        return Core.Compiler.builtin_effects(𝕃, xs..., rt)
+    end
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[Memory,]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
+    # `:boundscheck` taint should be refined by post-opt analysis
+    @test Base.infer_effects() do xs::Vector{Any}, i::Int
+        memoryrefget(memoryref(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
+    end |> Core.Compiler.is_noub_if_noinbounds
+end
+
+# high level tests
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Int},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Any},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Int},Int,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Any},Any,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Int},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Any},Int)))
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    xs[i]
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    xs[i]
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Int},Int,Int)) do xs, x, i
+    xs[i] = x
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Any,Int)) do xs, x, i
+    xs[i] = x
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    @inbounds xs[i]
+end |> !Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds xs[i]
+end |> !Core.Compiler.is_noub

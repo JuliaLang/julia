@@ -563,9 +563,21 @@ function is_ipo_dataflow_analysis_profitable(effects::Effects)
              is_nothrow(effects) && is_noub(effects))
 end
 
-function is_getfield_with_boundscheck_arg(@nospecialize(stmt), sv::PostOptAnalysisState)
-    is_known_call(stmt, getfield, sv.ir) || return false
-    length(stmt.args) < 4 && return false
+function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
+    isexpr(stmt, :call) || return false
+    ft = argextype(stmt.args[1], sv.ir)
+    f = singleton_type(ft)
+    f === nothing && return false
+    if f === getfield
+        nargs = 4
+    elseif f === memoryref || f === memoryrefget || f === memoryref_isassigned
+        nargs = 4
+    elseif f === memoryrefset!
+        nargs = 5
+    else
+        return false
+    end
+    length(stmt.args) < nargs && return false
     boundscheck = stmt.args[end]
     argextype(boundscheck, sv.ir) === Bool || return false
     isa(boundscheck, SSAValue) || return false
@@ -573,15 +585,13 @@ function is_getfield_with_boundscheck_arg(@nospecialize(stmt), sv::PostOptAnalys
 end
 
 function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
-    # Special case: `:boundscheck` into `getfield`
     stmt = inst[:stmt]
-    is_getfield_with_boundscheck_arg(stmt, sv) || return false
-    barg = stmt.args[end]
+    iscall_with_boundscheck(stmt, sv) || return false
+    barg = stmt.args[end]::SSAValue
     bstmt = sv.ir[barg][:stmt]
     isexpr(bstmt, :boundscheck) || return false
     # If IR_FLAG_INBOUNDS is already set, no more conditional ub
     (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
-    sv.any_conditional_ub = true
     return true
 end
 
@@ -596,7 +606,10 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     end
     sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
     if iszero(flag & IR_FLAG_NOUB)
-        if !is_conditional_noub(inst, sv)
+        # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
+        if is_conditional_noub(inst, sv)
+            sv.any_conditional_ub = true
+        else
             sv.all_noub = false
         end
     end
@@ -606,9 +619,9 @@ function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
-    # Special case: For getfield, we allow inconsistency of the :boundscheck argument
+    # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
-    if is_getfield_with_boundscheck_arg(stmt, sv)
+    if iscall_with_boundscheck(stmt, sv)
         for i = 1:(length(stmt.args)-1)
             val = stmt.args[i]
             if isa(val, SSAValue)
@@ -703,7 +716,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if is_getfield_with_boundscheck_arg(stmt, sv)
+        if iscall_with_boundscheck(stmt, sv)
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]

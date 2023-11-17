@@ -21,20 +21,20 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
             try
                 Core._call_in_world_total(world, args...)
             catch
-                return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects, false)))
+                return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects)))
             end
         end
         return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
         if is_constprop_edge_recursed(mi, irsv)
-            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
+            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
         end
         newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = irsv
             return ir_abstract_constant_propagation(interp, newirsv)
         end
-        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects, false)))
+        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
     end
 end
 
