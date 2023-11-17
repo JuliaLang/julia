@@ -1578,8 +1578,10 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }
-    if (jl_generating_output())
-        jl_error("Method overwriting is not permitted during Module precompile.");
+    if (jl_generating_output()) {
+        jl_printf(JL_STDERR, "ERROR: Method overwriting is not permitted during Module precompile.\n");
+        jl_exit(125);
+    }
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
