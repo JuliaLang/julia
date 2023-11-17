@@ -1475,14 +1475,22 @@ current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
 function activate_module(s::MIState)
     word = current_word_with_dots(s);
-    isempty(word) && return beep(s)
-    try
-        mod = Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
-        REPL.activate(mod)
-        edit_clear(s)
-    catch
-        beep(s)
+    mod = if isempty(word)
+        edit_insert(s, ' ') # makes the `edit_clear` below actually update the prompt
+        Main
+    else
+        try
+            Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
+        catch
+            nothing
+        end
     end
+    if !(mod isa Module)
+        beep(s)
+        return
+    end
+    REPL.activate(mod)
+    edit_clear(s)
 end
 
 history_prev(::EmptyHistoryProvider) = ("", false)

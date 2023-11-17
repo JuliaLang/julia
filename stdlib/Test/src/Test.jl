@@ -1459,7 +1459,7 @@ parent test set (with the context object appended to any failing tests.)
     `@testset let` requires at least Julia 1.9.
 
 !!! compat "Julia 1.10"
-    Multiple `let` assignements are supported since Julia 1.10.
+    Multiple `let` assignments are supported since Julia 1.10.
 
 ## Examples
 ```jldoctest
@@ -1589,11 +1589,11 @@ function testset_beginend_call(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local oldrng = copy(default_rng())
-        local oldseed = Random.GLOBAL_SEED
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
         try
-            # default RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(Random.GLOBAL_SEED)
+            # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+            copy!(Random.default_rng(), tls_seed_orig)
             let
                 $(esc(tests))
             end
@@ -1608,8 +1608,8 @@ function testset_beginend_call(args, tests, source)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
-            copy!(default_rng(), oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
             pop_testset()
             ret = finish(ts)
         end
@@ -1674,10 +1674,7 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(default_rng(), tmprng)
-
+            copy!(default_rng(), tls_seed_orig)
         end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
             $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
@@ -1703,10 +1700,9 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local finish_errored = false
-        local oldrng = copy(default_rng())
-        local oldseed = Random.GLOBAL_SEED
-        Random.seed!(Random.GLOBAL_SEED)
-        local tmprng = copy(default_rng())
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
+        copy!(Random.default_rng(), tls_seed_orig)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1717,8 +1713,8 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(default_rng(), oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
         end
         arr
     end
@@ -1818,7 +1814,7 @@ matches the inferred type modulo `AllowedType`, or when the return type is a sub
 `AllowedType`. This is useful when testing type stability of functions returning a small
 union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
+```jldoctest; setup = :(using InteractiveUtils; using Base: >), filter = r"begin\\n(.|\\n)*end"
 julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 

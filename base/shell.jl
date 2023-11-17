@@ -18,12 +18,11 @@ end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
-    s = SubString(str, firstindex(str))
+    last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
+    s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
 
-    # N.B.: This is used by REPLCompletions
-    last_parse = 0:-1
-    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple,:()), last_arg) : ([], last_arg)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -32,6 +31,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     arg = []
     i = firstindex(s)
     st = Iterators.Stateful(pairs(s))
+    update_last_arg = false # true after spaces or interpolate
 
     function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
@@ -54,6 +54,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     for (j, c) in st
         j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
+            update_last_arg = true
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
@@ -77,12 +78,17 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # use parseatom instead of parse to respect filename (#28188)
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            last_parse = (stpos:prevind(s, j)) .+ s.offset
-            push_nonempty!(arg, ex)
+            last_arg = stpos + s.offset
+            update_last_arg = true
+            push!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
             i = firstindex(s)
         else
+            if update_last_arg
+                last_arg = i + s.offset
+                update_last_arg = false
+            end
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
                 i = consume_upto!(arg, s, i, j)
@@ -124,14 +130,14 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     push_nonempty!(arg, s[i:end])
     append_2to1!(args, arg)
 
-    interpolate || return args, last_parse
+    interpolate || return args, last_arg
 
     # construct an expression
     ex = Expr(:tuple)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    return ex, last_parse
+    return ex, last_arg
 end
 
 function shell_split(s::AbstractString)
@@ -216,7 +222,7 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-'
+            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
                 # other common characters
             elseif c == '\''
                 have_single = true

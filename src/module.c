@@ -41,16 +41,14 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
-    JL_GC_PUSH1(&m);
     if (jl_core_module && default_names) {
+        JL_GC_PUSH1(&m);
         jl_module_using(m, jl_core_module);
-    }
-    // export own name, so "using Foo" makes "Foo" itself visible
-    if (default_names) {
+        // export own name, so "using Foo" makes "Foo" itself visible
         jl_set_const(m, name, (jl_value_t*)m);
+        jl_module_public(m, name, 1);
+        JL_GC_POP();
     }
-    jl_module_public(m, name, 1);
-    JL_GC_POP();
     return m;
 }
 
@@ -428,13 +426,6 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
     return b2;
 }
 
-JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var)
-{
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    return b == NULL ? NULL : jl_atomic_load_relaxed(&b->owner);
-}
-
-
 // get the current likely owner of binding when accessing m.var, without resolving the binding (it may change later)
 JL_DLLEXPORT jl_binding_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 {
@@ -469,7 +460,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
-        jl_undefined_var_error(var);
+        jl_undefined_var_error(var, (jl_value_t*)m);
     // XXX: this only considers if the original is deprecated, not the binding in m
     if (b->deprecated)
         jl_binding_deprecation_warning(m, var, b);
@@ -810,7 +801,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
         if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
-                jl_gc_wb_binding(bp, val);
+                jl_gc_wb(bp, val);
                 return;
             }
         }
@@ -899,7 +890,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
     if (b->constp) {
         jl_value_t *old = NULL;
         if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
-            jl_gc_wb_binding(b, rhs);
+            jl_gc_wb(b, rhs);
             return;
         }
         if (jl_egal(rhs, old))
@@ -913,7 +904,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
                        jl_symbol_name(mod->name), jl_symbol_name(var));
     }
     jl_atomic_store_release(&b->value, rhs);
-    jl_gc_wb_binding(b, rhs);
+    jl_gc_wb(b, rhs);
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var)
@@ -953,9 +944,10 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             break;
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
+        int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
         if ((b->publicp ||
              (imported && b->imported) ||
-             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
+             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
             (all || (!b->deprecated && !hidden))) {
             jl_array_grow_end(a, 1);
             // n.b. change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:

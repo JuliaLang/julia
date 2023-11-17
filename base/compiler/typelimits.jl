@@ -128,15 +128,14 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 return Type{<:Type}
             end
             # try to peek into c to get a comparison object, but if we can't perhaps t is already simple enough on its own
-            # (this is slightly more permissive than type_more_complex implements for the same case).
             if isType(c)
                 ct = c.parameters[1]
             else
                 ct = Union{}
             end
             Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
-            Qt === Any && return Type
             Qt === tt && return t
+            Qt === Any && return Type
             # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
             # enough, since this moves Qt outside of Type for is_derived_type_from_any
             Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
@@ -178,7 +177,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             return Any
         end
         widert = t.name.wrapper
-        if !(t <: widert)
+        if !(t <: widert) # XXX: we should call has_free_typevars(t) here, but usually t does not have those wrappers by the time it got here
             # This can happen when a typevar has bounds too wide for its context, e.g.
             # `Complex{T} where T` is not a subtype of `Complex`. In that case widen even
             # faster to something safe to ensure the result is a supertype of the input.
@@ -229,19 +228,21 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
+    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
     isvarargtype(t) && (t = unwrapva(t))
     isvarargtype(c) && (c = unwrapva(c))
     if isa(c, UnionAll)
-        # allow wrapping type with fewer UnionAlls than comparison if in a covariant context
+        # allow wrapping type with fewer UnionAlls than comparison only if in a covariant context
         if !isa(t, UnionAll) && tupledepth == 0
             return true
         end
-        t = unwrap_unionall(t)
         c = unwrap_unionall(c)
+    end
+    if isa(t, UnionAll)
+        t = unwrap_unionall(t)
     end
     # rules for various comparison types
     if isa(c, TypeVar)
@@ -265,7 +266,24 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     # base case for data types
     if isa(t, DataType)
         tP = t.parameters
-        if isa(c, DataType) && t.name === c.name
+        if isType(t)
+            # Type is fairly important, so do not widen it as fast as other types if avoidable
+            tt = tP[1]
+            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            if isType(c)
+                ct = c.parameters[1]
+            else
+                ct = Union{}
+                tupledepth == 0 && return true # cannot allow nesting
+            end
+            # allow creating variation within a nested Type, but not very deep
+            if tupledepth > 1
+                tupledepth = 1
+            else
+                tupledepth = 0
+            end
+            return type_more_complex(tt, ct, sources, depth + 1, tupledepth, 0)
+        elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
             isempty(tP) && return false
@@ -277,22 +295,9 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
             else
                 tupledepth = 0
             end
-            isgenerator = (t.name.name === :Generator && t.name.module === _topmod(t.name.module))
             for i = 1:length(tP)
                 tPi = tP[i]
                 cPi = cP[i + ntail]
-                if isgenerator
-                    let tPi = unwrap_unionall(tPi),
-                        cPi = unwrap_unionall(cPi)
-                        if isa(tPi, DataType) && isa(cPi, DataType) &&
-                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
-                                sym_isless(cPi.name.name, tPi.name.name)
-                            # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
-                            # TODO: is there a better way?
-                            continue
-                        end
-                    end
-                end
                 type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false

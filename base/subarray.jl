@@ -416,12 +416,8 @@ iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false
 iscontiguous(::Type{<:FastContiguousSubArray}) = true
 
-first_index(V::FastSubArray) = V.offset1 + V.stride1 # cached for fast linear SubArrays
-function first_index(V::SubArray)
-    P, I = parent(V), V.indices
-    s1 = compute_stride1(P, I)
-    s1 + compute_offset1(P, s1, I)
-end
+first_index(V::FastSubArray) = V.offset1 + V.stride1 * firstindex(V) # cached for fast linear SubArrays
+first_index(V::SubArray) = compute_linindex(parent(V), V.indices)
 
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
@@ -447,11 +443,6 @@ function compute_linindex(parent, I::NTuple{N,Any}) where N
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
     compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
-function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
-    @inline
-    Δi = I[1]-first(IP[1])
-    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
-end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @inline
     Δi = first(I[1])-first(IP[1])
@@ -465,10 +456,6 @@ find_extended_dims(dim) = ()
 find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
-
-function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
-    return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
-end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
@@ -494,3 +481,10 @@ function _indices_sub(i1::AbstractArray, I...)
 end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
+
+function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,j)))..., s)
+end
+function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,)))..., j, s)
+end

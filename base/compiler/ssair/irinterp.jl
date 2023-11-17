@@ -125,7 +125,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined
+        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             inst[:flag] |= flags_for_effects(effects)
         elseif head === :invoke

@@ -79,6 +79,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  *
  * * load
  * * `pointer_from_objref`
+ * * `gc_loaded`
  * * Any real llvm intrinsics
  * * gc preserve intrinsics
  * * `ccall` gcroot array (`jl_roots` operand bundle)
@@ -94,7 +95,6 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * TODO:
  * * Return twice
  * * Handle phi node.
- * * Look through `pointer_from_objref`.
  * * Handle jl_box*
  */
 
@@ -310,7 +310,9 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.pointer_from_objref_func || callee->getName() == "memcmp") {
+        if (callee == pass.pointer_from_objref_func
+            || callee == pass.gc_loaded_func
+            || callee->getName() == "memcmp") {
             return false;
         }
     }
@@ -475,7 +477,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
     // within the BB.
     // If some successors are live and others are dead, it's the first instruction in
     // the successors that are dead.
-    std::vector<Instruction*> first_dead;
+    SmallVector<Instruction*, 0> first_dead;
     for (auto bb: bbs) {
         bool has_use = false;
         for (auto succ: successors(bb)) {
@@ -566,7 +568,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto oldfType = call->getFunctionType();
     auto newfType = FunctionType::get(
             oldfType->getReturnType(),
-            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            ArrayRef<Type*>(argTys).slice(0, oldfType->getNumParams()),
             oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
@@ -693,6 +695,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 call->eraseFromParent();
                 return;
             }
+            //if (pass.gc_loaded_func == callee) {
+            //    call->replaceAllUsesWith(new_i);
+            //    call->eraseFromParent();
+            //    return;
+            //}
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
@@ -1164,7 +1171,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             for (auto &bundle: bundles) {
                 if (bundle.getTag() != "jl_roots")
                     continue;
-                std::vector<Value*> operands;
+                SmallVector<Value*, 0> operands;
                 for (auto op: bundle.inputs()) {
                     if (op == orig_i || isa<Constant>(op))
                         continue;

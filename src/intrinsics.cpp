@@ -15,7 +15,6 @@ STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
 STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
 STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
-STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
@@ -165,7 +164,7 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
         return getInt32Ty(ctxt);
-    if (t == getHalfTy(ctxt))
+    if (t == getHalfTy(ctxt) || t == getBFloatTy(ctxt))
         return getInt16Ty(ctxt);
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != getVoidTy(ctxt) && nb > 0);
@@ -229,7 +228,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     }
 
     size_t nf = jl_datatype_nfields(bt);
-    std::vector<Constant*> fields(0);
+    SmallVector<Constant*, 0> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
         jl_value_t *ft = jl_field_type(bt, i);
@@ -245,8 +244,8 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
             size_t fsz = 0, al = 0;
-            (void)jl_islayout_inline(ft, &fsz, &al);
-            fsz = jl_field_size(bt, i);
+            (void)jl_islayout_inline(ft, &fsz, &al); // compute al
+            fsz = jl_field_size(bt, i); // get LLT_ALIGN(fsz+1,al)
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
@@ -487,7 +486,7 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
     Function *func = prepare_call(runtime_func()[f]);
-    SmallVector<Value *> argvalues(nargs);
+    SmallVector<Value *, 0> argvalues(nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
     }
@@ -537,7 +536,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         }
         else {
             Value *size = emit_datatype_size(ctx, typ);
-            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nb));
+            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(size->getType(), nb));
             setName(ctx.emission_context, sizecheck, "sizecheck");
             error_unless(ctx,
                     sizecheck,
@@ -1193,11 +1192,11 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     if (f == cglobal_auto || f == cglobal)
         return emit_cglobal(ctx, args, nargs);
 
-    SmallVector<jl_cgval_t> argv(nargs);
+    SmallVector<jl_cgval_t, 0> argv(nargs);
     for (size_t i = 0; i < nargs; ++i) {
         jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
         if (arg.typ == jl_bottom_type) {
-            // intrinsics generally don't handle buttom values, so bail out early
+            // intrinsics generally don't handle bottom values, so bail out early
             return jl_cgval_t();
         }
         argv[i] = arg;
@@ -1207,15 +1206,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     // return emit_runtime_call(ctx, f, argv, nargs);
 
     switch (f) {
-    case arraylen: {
-        ++Emitted_arraylen;
-        assert(nargs == 1);
-        const jl_cgval_t &x = argv[0];
-        jl_value_t *typ = jl_unwrap_unionall(x.typ);
-        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
-        return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
-    }
     case pointerref:
         ++Emitted_pointerref;
         assert(nargs == 3);
@@ -1337,7 +1327,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         //if (xtyp == (jl_value_t*)jl_bool_type)
         //    r = getInt1Ty(ctx.builder.getContext());
 
-        SmallVector<Type *> argt(nargs);
+        SmallVector<Type *, 0> argt(nargs);
         argt[0] = xtyp;
 
         if (f == shl_int || f == lshr_int || f == ashr_int) {
@@ -1354,7 +1344,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
 
         // unbox the arguments
-        SmallVector<Value *> argvalues(nargs);
+        SmallVector<Value *, 0> argvalues(nargs);
         for (size_t i = 0; i < nargs; ++i) {
             argvalues[i] = emit_unbox(ctx, argt[i], argv[i], argv[i].typ);
         }
@@ -1424,7 +1414,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
-        FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
+        FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
@@ -1454,7 +1444,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 (f == checked_smul_int ?
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
-        FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
+        FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, ArrayRef<Type*>(t));
         Value *res = ctx.builder.CreateCall(intr, {x, y});
         Value *val = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
         setName(ctx.emission_context, val, "checked");
@@ -1574,30 +1564,30 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         }
     }
     case bswap_int: {
-        FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
-        return ctx.builder.CreateCall(bswapintr, x);
+        FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t)); //TODO: Move to deduction guides
+        return ctx.builder.CreateCall(bswapintr, x);                                                           // when we drop LLVM 15
     }
     case ctpop_int: {
-        FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
+        FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(ctpopintr, x);
     }
     case ctlz_int: {
-        FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
+        FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, ArrayRef<Type*>(t));
         y = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         return ctx.builder.CreateCall(ctlz, {x, y});
     }
     case cttz_int: {
-        FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
+        FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(t));
         y = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         return ctx.builder.CreateCall(cttz, {x, y});
     }
 
     case abs_float: {
-        FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
+        FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
-        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, makeArrayRef(t));
+        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
@@ -1616,27 +1606,27 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {
-        FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
+        FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(ceilintr, x);
     }
     case floor_llvm: {
-        FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
+        FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(floorintr, x);
     }
     case trunc_llvm: {
-        FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
+        FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(truncintr, x);
     }
     case rint_llvm: {
-        FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
+        FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(rintintr, x);
     }
     case sqrt_llvm: {
-        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
         return ctx.builder.CreateCall(sqrtintr, x);
     }
     case sqrt_llvm_fast: {
-        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
         return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 

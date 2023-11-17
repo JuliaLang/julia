@@ -476,6 +476,16 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "copyto! uses adjoint!/transpose!" begin
+    for T in (Float64, ComplexF64), f in (transpose, adjoint), sz in ((5,4), (5,))
+        S = rand(T, sz)
+        adjS = f(S)
+        A = similar(S')
+        copyto!(A, adjS)
+        @test A == adjS
+    end
+end
+
 @testset "aliasing with adjoint and transpose" begin
     A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
     B = copy(A)
@@ -669,6 +679,21 @@ end
     o = OneHotVecOrMat((2,), (4,))
     @test sprint(Base.print_matrix, Transpose(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
     @test sprint(Base.print_matrix, Adjoint(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
+end
+
+@testset "copy_transpose!" begin
+    # scalar case
+    A = [randn() for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
+    # matrix of matrices
+    A = [randn(2,3) for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
 end
 
 end # module TestAdjointTranspose

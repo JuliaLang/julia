@@ -190,7 +190,7 @@ The corresponding IR (with irrelevant types stripped) is:
 4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
 │   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
 │   %15 = φᶜ (%5)::Core.Const(1)
-└──       $(Expr(:leave, 1))
+└──       $(Expr(:leave, Core.SSAValue(2)))
 5 ─       $(Expr(:pop_exception, :(%2)))::Any
 │         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any
 │   %19 = Core.tuple(%15, %14)
@@ -225,7 +225,7 @@ Instead, we do the following:
 - RAUW style operations are performed by setting the corresponding statement index to the replacement
   value.
 - Statements are erased by setting the corresponding statement to `nothing` (this is essentially just a special-case
-  convention of the above.
+  convention of the above).
 - If there are any uses of the statement being erased, they will be set to `nothing`.
 
 There is a `compact!` function that compacts the above data structure by performing the insertion of nodes in the appropriate place, trivial copy propagation, and renaming of uses to any changed SSA values. However, the clever part

@@ -54,7 +54,7 @@ is_inlineable(@nospecialize src::MaybeCompressed) =
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
-function inline_cost_clamp(x::Int)::InlineCostType
+function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
@@ -74,35 +74,14 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
         return src
     end
     return nothing
@@ -309,15 +288,15 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
-            if f === Intrinsics.cglobal
+            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
-            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -396,7 +375,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref(x)
+        return abstract_eval_globalref_type(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)
@@ -656,7 +635,6 @@ end
 
 function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
-    flag = inst[:flag]
 
     if isexpr(stmt, :enter)
         # try/catch not yet modeled
@@ -707,9 +685,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, true)
+    scan!(ScanStmt(sv), scanner, false)
     complete!(sv.tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(sv.tpdum, scanner)
+
     (; ir, inconsistent, tpdum) = sv
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in sv.inconsistent
@@ -839,27 +818,35 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         expr = code[i]
-        if !(i in sv.unreachable) && isa(expr, GotoIfNot)
-            # Replace this live GotoIfNot with:
-            # - no-op if :nothrow and the branch target is unreachable
-            # - cond if :nothrow and both targets are unreachable
-            # - typeassert if must-throw
-            block = block_for_inst(sv.cfg, i)
-            if ssavaluetypes[i] === Bottom
-                destblock = block_for_inst(sv.cfg, expr.dest)
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
-                expr = Expr(:call, Core.typeassert, expr.cond, Bool)
-            elseif i + 1 in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block + 1)
-                expr = GotoNode(expr.dest)
-            elseif expr.dest in sv.unreachable
-                @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
-                cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
-                expr = nothing
+        if !(i in sv.unreachable)
+            if isa(expr, GotoIfNot)
+                # Replace this live GotoIfNot with:
+                # - no-op if :nothrow and the branch target is unreachable
+                # - cond if :nothrow and both targets are unreachable
+                # - typeassert if must-throw
+                block = block_for_inst(sv.cfg, i)
+                if ssavaluetypes[i] === Bottom
+                    destblock = block_for_inst(sv.cfg, expr.dest)
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
+                    expr = Expr(:call, Core.typeassert, expr.cond, Bool)
+                elseif i + 1 in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block + 1)
+                    expr = GotoNode(expr.dest)
+                elseif expr.dest in sv.unreachable
+                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
+                    expr = nothing
+                end
+                code[i] = expr
+            elseif isexpr(expr, :enter)
+                catchdest = expr.args[1]::Int
+                if catchdest in sv.unreachable
+                    cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
+                    code[i] = nothing
+                end
             end
-            code[i] = expr
         end
     end
 
@@ -1014,6 +1001,7 @@ isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetyp
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         params::OptimizationParams, error_path::Bool = false)
+    #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -1031,11 +1019,36 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)
             iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-            if !isassigned(T_IFUNC_COST, iidx)
-                # unknown/unhandled intrinsic
-                return params.inline_nonleaf_penalty
+            if isassigned(T_IFUNC, iidx)
+                minarg, maxarg, = T_IFUNC[iidx]
+                nargs = length(ex.args)
+                if minarg + 1 <= nargs <= maxarg + 1
+                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # and are likely to combine with the operations around them,
+                    # so reduce their cost by half.
+                    cost = T_IFUNC_COST[iidx]
+                    if cost == 0 || nargs < 3 ||
+                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                        return cost
+                    end
+                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
+                    nconst = Int(aty2 isa Const)
+                    for i = 3:nargs
+                        aty = widenconditional(argextype(ex.args[i], src, sptypes))
+                        if widenconst(aty) != widenconst(aty2)
+                            nconst = 0
+                            break
+                        end
+                        nconst += aty isa Const
+                    end
+                    if nconst + 2 >= nargs
+                        cost = (cost - 1) ÷ 2
+                    end
+                    return cost
+                end
             end
-            return T_IFUNC_COST[iidx]
+            # unknown/unhandled intrinsic: hopefully the caller gets a slightly better answer after the inlining
+            return UNKNOWN_CALL_COST
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1046,9 +1059,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, sptypes)
-                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 1 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === Core.memoryrefset! && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 5 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
@@ -1056,7 +1072,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if fidx === nothing
                 # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
-                return 20
+                return UNKNOWN_CALL_COST
             end
             return T_FFUNC_COST[fidx]
         end
@@ -1065,17 +1081,23 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head === :invoke_modify
+    elseif head === :foreigncall
+        foreigncall = ex.args[1]
+        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+            return 1
+        end
+        return 20
+    elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : 20
+        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
-            cost = 20
+            cost = UNKNOWN_CALL_COST
         else
             cost = 0
         end
@@ -1114,14 +1136,15 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams,
-                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
-    bodycost::Int = 0
-    for line = 1:length(ir.stmts)
-        stmt = ir[SSAValue(line)][:stmt]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
+function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+    bodycost = 0
+    for i = 1:length(ir.stmts)
+        stmt = ir[SSAValue(i)][:stmt]
+        thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return MAX_INLINE_COST
+        if bodycost > cost_threshold
+            return MAX_INLINE_COST
+        end
     end
     return inline_cost_clamp(bodycost)
 end
@@ -1211,7 +1234,12 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             if el.head === :enter
                 tgt = el.args[1]::Int
-                el.args[1] = tgt + labelchangemap[tgt]
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    body[i] = nothing
+                else
+                    el.args[1] = tgt + labelchangemap[tgt]
+                end
             elseif !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)

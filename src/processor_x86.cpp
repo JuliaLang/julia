@@ -771,7 +771,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
@@ -789,7 +789,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
     return targets;
 }
 
-static std::vector<TargetData<feature_sz>> jit_targets;
+static llvm::SmallVector<TargetData<feature_sz>, 0> jit_targets;
 
 static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg, bool require_host)
 {
@@ -961,10 +961,17 @@ static void ensure_jit_target(bool imaging)
                 break;
             }
         }
+        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
+        for (auto fe: clone_bf16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
+                break;
+            }
+        }
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<feature_sz> &data)
 {
     std::string name = data.name;
@@ -983,7 +990,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         name = "x86-64";
 #endif
     }
-    std::vector<std::string> features;
+    llvm::SmallVector<std::string, 0> features;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
             continue;
@@ -1007,7 +1014,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     return std::make_pair(std::move(name), std::move(features));
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<feature_sz> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -1071,7 +1078,7 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
@@ -1085,11 +1092,11 @@ extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_di
     return res;
 }
 
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
+    llvm::SmallVector<jl_target_spec_t, 0> res;
     for (auto &target: jit_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;

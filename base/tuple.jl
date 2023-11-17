@@ -28,8 +28,8 @@ firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
-@eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, @_boundscheck)
+getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), @_boundscheck)
 __inbounds_getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, false)
 __inbounds_getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), false)
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
@@ -596,7 +596,7 @@ any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @noinline
     @_total_meta
     for y in itr
@@ -604,7 +604,7 @@ function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     end
     return false
 end
-in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
+in(x::Symbol, itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """
