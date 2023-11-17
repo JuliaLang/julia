@@ -63,6 +63,9 @@ New library functions
 
 New library features
 --------------------
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
