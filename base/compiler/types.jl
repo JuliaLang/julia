@@ -342,9 +342,6 @@ struct NativeInterpreter <: AbstractInterpreter
     # Parameters for inference and optimization
     inf_params::InferenceParams
     opt_params::OptimizationParams
-
-    # a boolean flag to indicate if this interpreter is performing semi concrete interpretation
-    irinterp::Bool
 end
 
 function NativeInterpreter(world::UInt = get_world_counter();
@@ -364,7 +361,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
 
     inf_cache = Vector{InferenceResult}() # Initially empty cache
 
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, #=irinterp=#false)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 
 function NativeInterpreter(interp::NativeInterpreter;
@@ -372,9 +369,8 @@ function NativeInterpreter(interp::NativeInterpreter;
                            method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
                            inf_cache::Vector{InferenceResult} = interp.inf_cache,
                            inf_params::InferenceParams = interp.inf_params,
-                           opt_params::OptimizationParams = interp.opt_params,
-                           irinterp::Bool = interp.irinterp)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, irinterp)
+                           opt_params::OptimizationParams = interp.opt_params)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
@@ -467,34 +463,6 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
-
-typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    InferenceLattice(SimpleInferenceLattice.instance) :
-    InferenceLattice(BaseInferenceLattice.instance)
-ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    InferenceLattice(SimpleInferenceLattice.instance) :
-    InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(interp::NativeInterpreter) = SimpleInferenceLattice.instance
-
-"""
-    switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
-
-This interface allows `ir_abstract_constant_propagation` to convert `interp` to a new
-`irinterp::AbstractInterpreter` to perform semi-concrete interpretation.
-`NativeInterpreter` uses this interface to switch its lattice to `optimizer_lattice` during
-semi-concrete interpretation on `IRCode`.
-"""
-switch_to_irinterp(interp::AbstractInterpreter) = interp
-switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
-
-"""
-    switch_from_irinterp(irinterp::AbstractInterpreter) -> interp::AbstractInterpreter
-
-The inverse operation of `switch_to_irinterp`, allowing `typeinf` to convert `irinterp` back
-to a new `interp::AbstractInterpreter` to perform ordinary abstract interpretation.
-"""
-switch_from_irinterp(irinterp::AbstractInterpreter) = irinterp
-switch_from_irinterp(irinterp::NativeInterpreter) = NativeInterpreter(irinterp; irinterp=false)
 
 abstract type CallInfo end
 

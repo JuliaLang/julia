@@ -251,8 +251,6 @@ populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
 
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
         externally_refined::Union{Nothing,BitSet} = nothing)
-    interp = switch_to_irinterp(interp)
-
     (; ir, tpdum, ssa_refined) = irsv
 
     @assert isempty(ir.new_nodes) "IRCode should be compacted before irinterp"

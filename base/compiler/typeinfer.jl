@@ -243,7 +243,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    interp = switch_from_irinterp(interp)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
