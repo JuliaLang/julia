@@ -53,6 +53,8 @@ viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@inline; viewindexing(tail(
 viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
 # In general, scalar ranges are only fast if all other indices are scalar
+# Other ranges, such as those of `CartesianIndex`es, are not fast even if these
+# are followed by `ScalarIndex`es
 viewindexing(I::Tuple{AbstractRange{<:ScalarIndex}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
