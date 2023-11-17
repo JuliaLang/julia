@@ -71,7 +71,6 @@ External links:
 */
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
@@ -3522,7 +3521,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 }
 
 // TODO?: refactor to make it easier to create the "package inspector"
-static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, bool needs_permalloc)
+static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
@@ -3548,7 +3547,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
         JL_SIGATOMIC_BEGIN();
         size_t len = dataendpos - datastartpos;
         char *sysimg;
-        bool success = !needs_permalloc;
+        int success = !needs_permalloc;
         ios_seek(f, datastartpos);
         if (needs_permalloc)
             sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
@@ -3608,7 +3607,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uin
     jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, bool needs_permalloc)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
@@ -3625,7 +3624,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    jl_value_t *ret = jl_restore_package_image_from_stream(NULL, &f, &pkgimage, depmods, completeinfo, pkgname, true);
+    jl_value_t *ret = jl_restore_package_image_from_stream(NULL, &f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
 }
@@ -3700,7 +3699,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
     }
 
-    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, false);
+    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
 
     return mod;
 }
