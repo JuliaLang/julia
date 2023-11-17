@@ -581,7 +581,7 @@ typedef struct _jl_vararg_t {
 
 typedef struct _jl_weakref_t {
     JL_DATA_TYPE
-    jl_value_t *value;
+    _Atomic(jl_value_t*) value;
 } jl_weakref_t;
 
 typedef struct _jl_binding_t {
