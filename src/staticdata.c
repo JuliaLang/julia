@@ -71,7 +71,6 @@ External links:
 */
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
@@ -3322,7 +3321,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         JL_SIGATOMIC_BEGIN();
         size_t len = dataendpos - datastartpos;
         char *sysimg;
-        bool success = !needs_permalloc;
+        int success = !needs_permalloc;
         ios_seek(f, datastartpos);
         if (needs_permalloc)
             sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
