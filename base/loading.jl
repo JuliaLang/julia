@@ -1278,7 +1278,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
-        id = PkgId(uuid5(parent.uuid, ext), ext)
+        id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
         if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
