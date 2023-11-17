@@ -660,7 +660,7 @@ _array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, In
 _array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
-_array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
+_array_for(::Type{T}, isz, itr) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
 
 
 """
