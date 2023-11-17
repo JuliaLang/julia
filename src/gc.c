@@ -3854,8 +3854,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
     errno = last_errno;
     jl_may_leak(base);
     assert(align > 0);
-    unsigned diff = (offset - (uintptr_t)base) % align;
-    return (void*)((char*)base + diff);
+    return (void*)(LLT_ALIGN((uintptr_t)base + offset, (uintptr_t)align) - offset);
 }
 
 STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset) JL_NOTSAFEPOINT

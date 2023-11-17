@@ -351,7 +351,7 @@ JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
 extern uv_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
-void *jl_gc_perm_alloc(size_t sz, int zero,
+JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void gc_sweep_sysimg(void);
 

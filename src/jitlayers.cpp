@@ -1301,6 +1301,69 @@ namespace {
 
         JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
     };
+
+    struct JITPointersT {
+
+        JITPointersT(SharedBytesT &SharedBytes, std::mutex &Lock) JL_NOTSAFEPOINT
+            : SharedBytes(SharedBytes), Lock(Lock) {}
+
+        void operator()(Module &M) JL_NOTSAFEPOINT {
+            std::lock_guard<std::mutex> locked(Lock);
+            for (auto &GV : make_early_inc_range(M.globals())) {
+                if (auto *Shared = getSharedBytes(GV)) {
+                    ++InternedGlobals;
+                    GV.replaceAllUsesWith(Shared);
+                    GV.eraseFromParent();
+                }
+            }
+
+            // Windows needs some inline asm to help
+            // build unwind tables
+            jl_decorate_module(M);
+        }
+
+    private:
+        // optimize memory by turning long strings into memoized copies, instead of
+        // making a copy per object file of output.
+        // we memoize them using a StringSet with a custom-alignment allocator
+        // to ensure they are properly aligned
+        Constant *getSharedBytes(GlobalVariable &GV) JL_NOTSAFEPOINT {
+            // We could probably technically get away with
+            // interning even external linkage globals,
+            // as long as they have global unnamedaddr,
+            // but currently we shouldn't be emitting those
+            // except in imaging mode, and we don't want to
+            // do this optimization there.
+            if (GV.hasExternalLinkage() || !GV.hasGlobalUnnamedAddr()) {
+                return nullptr;
+            }
+            if (!GV.hasInitializer()) {
+                return nullptr;
+            }
+            if (!GV.isConstant()) {
+                return nullptr;
+            }
+            auto CDS = dyn_cast<ConstantDataSequential>(GV.getInitializer());
+            if (!CDS) {
+                return nullptr;
+            }
+            StringRef Data = CDS->getRawDataValues();
+            if (Data.size() < 16) {
+                // Cutoff, since we don't want to intern small strings
+                return nullptr;
+            }
+            Align Required = GV.getAlign().valueOrOne();
+            Align Preferred = MaxAlignedAlloc::alignment(Data.size());
+            if (Required > Preferred)
+                return nullptr;
+            StringRef Interned = SharedBytes.insert(Data).first->getKey();
+            assert(llvm::isAddrAligned(Preferred, Interned.data()));
+            return literal_static_pointer_val(Interned.data(), GV.getType());
+        }
+
+        SharedBytesT &SharedBytes;
+        std::mutex &Lock;
+    };
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -1493,8 +1556,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
-        jl_decorate_module(M);
-        shareStrings(M);
+        JITPointersT(SharedBytes, RLST_mutex)(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
                 auto Name = ES.intern(getMangledName(F.getName()));
@@ -1818,32 +1880,6 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
             }
         });
     });
-}
-
-// optimize memory by turning long strings into memoized copies, instead of
-// making a copy per object file of output.
-void JuliaOJIT::shareStrings(Module &M)
-{
-    ++InternedGlobals;
-    std::vector<GlobalVariable*> erase;
-    for (auto &GV : M.globals()) {
-        if (!GV.hasInitializer() || !GV.isConstant())
-            continue;
-        ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV.getInitializer());
-        if (CDS == nullptr)
-            continue;
-        StringRef data = CDS->getRawDataValues();
-        if (data.size() > 16) { // only for long strings: keep short ones as values
-            Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
-            Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)(*ES.intern(data)).data()),
-                GV.getType());
-            GV.replaceAllUsesWith(v);
-            erase.push_back(&GV);
-        }
-    }
-    for (auto GV : erase)
-        GV->eraseFromParent();
 }
 
 //TargetMachine pass-through methods
