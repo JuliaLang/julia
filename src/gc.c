@@ -958,7 +958,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
-    wr->value = value;  // NOTE: wb not needed here
+    jl_atomic_store_relaxed(&wr->value, value);  // NOTE: wb not needed here
     small_arraylist_push(&ptls->heap.weak_refs, wr);
     return wr;
 }
