@@ -783,9 +783,6 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
-            else if (ty == (jl_value_t*)jl_bool_type) {
-                lty = getInt8Ty(ctxt);
-            }
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
@@ -3350,10 +3347,10 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 ctx.builder.restoreIP(IP);
             } else {
                 auto arg_typename = [&] JL_NOTSAFEPOINT {
-                    return jl_symbol_name(((jl_datatype_t*)(jt))->name->name);
+                    return "box::" + std::string(jl_symbol_name(((jl_datatype_t*)(jt))->name->name));
                 };
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt);
-                setName(ctx.emission_context, box, "box" + StringRef("::") + arg_typename());
+                setName(ctx.emission_context, box, arg_typename);
                 init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
             }
         }
@@ -3693,7 +3690,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     assert(jl_is_concrete_type(ty));
     jl_datatype_t *sty = (jl_datatype_t*)ty;
     auto arg_typename = [&] JL_NOTSAFEPOINT {
-        return jl_symbol_name((sty)->name->name);
+        return "new::" + std::string(jl_symbol_name((sty)->name->name));
     };
     size_t nf = jl_datatype_nfields(sty);
     if (nf > 0 || sty->name->mutabl) {
@@ -3726,7 +3723,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
             else {
                 strct = emit_static_alloca(ctx, lt);
-                setName(ctx.emission_context, strct, "new" + StringRef("::") + arg_typename());
+                setName(ctx.emission_context, strct, arg_typename);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }
@@ -3897,7 +3894,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
         }
         Value *strct = emit_allocobj(ctx, sty);
-        setName(ctx.emission_context, strct, "new" + StringRef("::") + arg_typename());
+        setName(ctx.emission_context, strct, arg_typename);
         jl_cgval_t strctinfo = mark_julia_type(ctx, strct, true, ty);
         strct = decay_derived(ctx, strct);
         undef_derived_strct(ctx, strct, sty, strctinfo.tbaa);

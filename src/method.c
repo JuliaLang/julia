@@ -192,7 +192,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         jl_error("In ccall calling convention, expected two argument tuple or symbol.");
                     }
                     JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
-                    JL_TYPECHK(ccall method definition, uint8, jl_get_nth_field(cc, 1));
+                    JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
                 }
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
@@ -327,7 +327,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 8) {
+                    if (jl_expr_nargs(ma) == 9) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
@@ -336,6 +336,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
                         li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
                         li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
+                        li->purity.overrides.ipo_noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
                     }
                 }
                 else

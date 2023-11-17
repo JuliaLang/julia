@@ -147,7 +147,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
-        jl_undefined_var_error(e);
+        jl_undefined_var_error(e, (jl_value_t*)m);
     return v;
 }
 
@@ -155,7 +155,7 @@ jl_value_t *jl_eval_globalref(jl_globalref_t *g)
 {
     jl_value_t *v = jl_get_globalref_value(g);
     if (v == NULL)
-        jl_undefined_var_error(g->name);
+        jl_undefined_var_error(g->name, (jl_value_t*)g->mod);
     return v;
 }
 
@@ -191,7 +191,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             jl_error("access to invalid slot number");
         jl_value_t *v = s->locals[n - 1];
         if (v == NULL)
-            jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1));
+            jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1), (jl_value_t*)jl_local_sym);
         return v;
     }
     if (jl_is_quotenode(e)) {
@@ -268,7 +268,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             if (var == jl_getfield_undefref_sym)
                 jl_throw(jl_undefref_exception);
             else
-                jl_undefined_var_error(var);
+                jl_undefined_var_error(var, (jl_value_t*)jl_local_sym);
         }
         return jl_nothing;
     }
@@ -307,7 +307,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
             if (jl_is_typevar(sp) && !s->preevaluation)
-                jl_undefined_var_error(((jl_tvar_t*)sp)->name);
+                jl_undefined_var_error(((jl_tvar_t*)sp)->name, (jl_value_t*)jl_static_parameter_sym);
             return sp;
         }
         // static parameter val unknown needs to be an error for ccall
@@ -683,7 +683,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
         }
     }
     if (!src || !jl_is_code_info(src)) {
-        jl_error("source missing for method called in interpreter");
+        jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
     }
     return src;
 }
