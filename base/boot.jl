@@ -481,12 +481,12 @@ end)
 function CodeInstance(
     mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
         (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
         mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, argescapes,
+        ipo_effects, effects, analysis_results,
         relocatability)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
