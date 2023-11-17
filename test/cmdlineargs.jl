@@ -77,7 +77,9 @@ end
     opts = Base.JLOptions()
 
     for (arg, default) in (
-                            ("-C$(unsafe_string(opts.cpu_target))",  false),
+                            # Use a Cmd to handle space nicely when
+                            # interpolating inside another Cmd.
+                            (`-C $(unsafe_string(opts.cpu_target))`,  false),
 
                             ("-J$(unsafe_string(opts.image_file))",  false),
 
@@ -134,13 +136,21 @@ end
                             ("--pkgimages=no",  false),
                         )
         @testset "$arg" begin
+            str = arg isa Cmd ? join(arg.exec, ' ') : arg
             if default
-                @test !occursin(arg, get_julia_cmd(arg))
+                @test !occursin(str, get_julia_cmd(arg))
             else
-                @test occursin(arg, get_julia_cmd(arg))
+                @test occursin(str, get_julia_cmd(arg))
             end
         end
     end
+
+    # Test empty `cpu_target` gives a helpful error message, issue #52209.
+    io = IOBuffer()
+    p = run(pipeline(`$(Base.julia_cmd(; cpu_target="")) --startup-file=no -e ''`; stderr=io); wait=false)
+    wait(p)
+    @test p.exitcode == 1
+    @test occursin("empty CPU name", String(take!(io)))
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
