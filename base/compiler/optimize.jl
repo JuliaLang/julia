@@ -602,7 +602,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     end
 end
 
-function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisState)
+function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
@@ -625,7 +625,7 @@ function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisSta
             end
         end
     end
-    stmt_inconsistent && push!(inconsistent, idx)
+    stmt_inconsistent && push!(inconsistent, inst.idx)
     return stmt_inconsistent
 end
 
@@ -633,7 +633,7 @@ struct ScanStmt
     sv::PostOptAnalysisState
 end
 
-function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
+function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
 
     if isexpr(stmt, :enter)
@@ -644,9 +644,9 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 
     scan_non_dataflow_flags!(inst, sv)
 
-    stmt_inconsistent = scan_inconsistency!(inst, idx, sv)
+    stmt_inconsistent = scan_inconsistency!(inst, sv)
 
-    if stmt_inconsistent && idx == lstmt
+    if stmt_inconsistent && inst.idx == lstmt
         if isa(stmt, ReturnNode) && isdefined(stmt, :val)
             sv.all_retpaths_consistent = false
         elseif isa(stmt, GotoIfNot)
@@ -736,6 +736,8 @@ end
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
     is_ipo_dataflow_analysis_profitable(result.ipo_effects) || return false
 
+    @assert isempty(ir.new_nodes) "IRCode should be compacted before post-opt analysis"
+
     sv = PostOptAnalysisState(result, ir)
     scanner = BBScanner(ir)
 
@@ -746,7 +748,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             check_inconsistentcy!(sv, scanner)
         else
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
