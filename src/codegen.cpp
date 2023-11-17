@@ -1052,7 +1052,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
 #if JL_LLVM_VERSION >= 150000
-        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
 #endif
 #if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
@@ -5217,7 +5217,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 }
                 else {
                     Value *dest = vi.value.V;
-                    if (vi.pTIndex)
+                    if (vi.pTIndex) // TODO: use lifetime-end here instead
                         ctx.builder.CreateStore(UndefValue::get(cast<AllocaInst>(vi.value.V)->getAllocatedType()), vi.value.V);
                     Type *store_ty = julia_type_to_llvm(ctx, rval_info.constant ? jl_typeof(rval_info.constant) : rval_info.typ);
                     Type *dest_ty = store_ty->getPointerTo();
@@ -7018,7 +7018,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         outboxed = (output_type != (jl_value_t*)jl_voidpointer_type);
         if (outboxed) {
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
-            Value *strct = emit_allocobj(ctx, (jl_datatype_t*)output_type);
+            Value *strct = emit_allocobj(ctx, (jl_datatype_t*)output_type, true);
             setName(ctx.emission_context, strct, "cfun_result");
             Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), ctx.types().T_size->getPointerTo());
             MDNode *tbaa = best_tbaa(ctx.tbaa(), output_type);
@@ -7194,7 +7194,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
                 theArg = ctx.builder.CreateAlignedLoad(lty, theArg, Align(julia_alignment(ty)));
         }
-        assert(dyn_cast<UndefValue>(theArg) == NULL);
+        assert(!isa<UndefValue>(theArg));
         args[idx] = theArg;
         idx++;
     }
@@ -8962,6 +8962,7 @@ static jl_llvm_functions_t
     }
 
     for (PHINode *PN : ToDelete) {
+        // This basic block is statically unreachable, thus so is this PHINode
         PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
         PN->eraseFromParent();
     }

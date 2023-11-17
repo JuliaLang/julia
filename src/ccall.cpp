@@ -1003,8 +1003,9 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
+    unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
-    Value *strct = emit_allocobj(ctx, nb, runtime_dt);
+    Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
     init_bits_value(ctx, strct, result, tbaa);
     return strct;
@@ -1383,6 +1384,10 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(i < nccallargs && i + fc_args_start <= nargs);
         jl_value_t *argi = args[fc_args_start + i];
         argv[i] = emit_expr(ctx, argi);
+        if (argv[i].typ == jl_bottom_type) {
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
     }
 
     // emit roots
@@ -1984,7 +1989,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // XXX: result needs to be zero'd and given a GC root here
             // and has incorrect write barriers.
             // instead this code path should behave like `unsafe_load`
-            result = emit_allocobj(ctx, (jl_datatype_t*)rt);
+            result = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
             setName(ctx.emission_context, result, "ccall_sret_box");
             sretty = ctx.types().T_jlvalue;
             sretboxed = true;
@@ -2141,7 +2146,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else if (jlretboxed && !retboxed) {
             assert(jl_is_datatype(rt));
             if (static_rt) {
-                Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt);
+                Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
                 MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
                 int boxalign = julia_alignment(rt);
