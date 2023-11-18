@@ -8059,3 +8059,11 @@ check_globalref_lowering() = @insert_global
 let src = code_lowered(check_globalref_lowering)[1]
     @test length(src.code) == 2
 end
+
+# Test correctness of widen_diagonal
+let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x),
+    check_widen_diagonal(x, y) = !<:(x, y) && x <: widen_diagonal(y)
+    @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
+    @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
+    @test Union{Tuple{T}, Tuple{T,Int}} where {T} == widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
+end
