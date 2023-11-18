@@ -2352,24 +2352,22 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
         ut = unwrap_unionall(t)
-        consistent = noub = ALWAYS_FALSE
-        nothrow = false
         if isa(ut, DataType) && !isabstracttype(ut)
             ismutable = ismutabletype(ut)
             fcount = datatype_fieldcount(ut)
             nargs = length(e.args) - 1
-            if (fcount === nothing || (fcount > nargs && (let t = t
+            has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = t
                     any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
                 end)))
-                # allocation with undefined field leads to undefined behavior and should taint `:noub`
+            if has_any_uninitialized
+                # allocation with undefined field is inconsistent always
+                consistent = ALWAYS_FALSE
             elseif ismutable
-                # mutable object isn't `:consistent`, but we still have a chance that
+                # mutable allocation isn't `:consistent`, but we still have a chance that
                 # return type information later refines the `:consistent`-cy of the method
                 consistent = CONSISTENT_IF_NOTRETURNED
-                noub = ALWAYS_TRUE
             else
-                consistent = ALWAYS_TRUE
-                noub = ALWAYS_TRUE
+                consistent = ALWAYS_TRUE # immutable allocation is consistent
             end
             if isconcretedispatch(t)
                 nothrow = true
@@ -2411,9 +2409,13 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end
             else
                 t = refine_partial_type(t)
+                nothrow = false
             end
+        else
+            consistent = ALWAYS_FALSE
+            nothrow = false
         end
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow, noub)
+        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
         nothrow = false # TODO: More precision

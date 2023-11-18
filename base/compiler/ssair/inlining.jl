@@ -1265,7 +1265,7 @@ function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecia
     elseif nothrow
         ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
     end
-    if !isexpr(stmt, :call) && !isexpr(stmt, :invoke)
+    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
         # There is a bit of a subtle point here, which is that some non-call
         # statements (e.g. PiNode) can be UB:, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
