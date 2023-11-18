@@ -24,9 +24,7 @@ const IR_FLAG_INLINE      = UInt32(1) << 1
 # This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE    = UInt32(1) << 2
 const IR_FLAG_THROW_BLOCK = UInt32(1) << 3
-# This statement may be removed if its result is unused. In particular,
-# it must be both :effect_free and :nothrow.
-# TODO: Separate these out.
+# This statement was proven :effect_free
 const IR_FLAG_EFFECT_FREE = UInt32(1) << 4
 # This statement was proven not to throw
 const IR_FLAG_NOTHROW     = UInt32(1) << 5
@@ -38,6 +36,12 @@ const IR_FLAG_CONSISTENT  = UInt32(1) << 6
 const IR_FLAG_REFINED     = UInt32(1) << 7
 # This is :noub == ALWAYS_TRUE
 const IR_FLAG_NOUB        = UInt32(1) << 8
+
+# TODO: Both of these should eventually go away once
+# This is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_EFIIMO      = UInt32(1) << 9
+# This is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+const IR_FLAG_INACCESSIBLE_OR_ARGMEM = UInt32(1) << 10
 
 const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
 
@@ -54,7 +58,7 @@ is_inlineable(@nospecialize src::MaybeCompressed) =
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
-function inline_cost_clamp(x::Int)::InlineCostType
+function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
@@ -74,35 +78,14 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
         return src
     end
     return nothing
@@ -316,8 +299,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
-            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -396,7 +379,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref(x)
+        return abstract_eval_globalref_type(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)
@@ -535,7 +518,6 @@ function get!(lazyagdomtree::LazyAugmentedDomtree)
     return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
 end
 
-# TODO refine `:effect_free` using EscapeAnalysis
 mutable struct PostOptAnalysisState
     const result::InferenceResult
     const ir::IRCode
@@ -543,8 +525,10 @@ mutable struct PostOptAnalysisState
     const tpdum::TwoPhaseDefUseMap
     const lazypostdomtree::LazyPostDomtree
     const lazyagdomtree::LazyAugmentedDomtree
+    const ea_analysis_pending::Vector{Int}
     all_retpaths_consistent::Bool
     all_effect_free::Bool
+    effect_free_if_argmem_only::Union{Nothing,Bool}
     all_nothrow::Bool
     all_noub::Bool
     any_conditional_ub::Bool
@@ -553,12 +537,14 @@ mutable struct PostOptAnalysisState
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         lazypostdomtree = LazyPostDomtree(ir)
         lazyagdomtree = LazyAugmentedDomtree(ir)
-        return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, true, true, true, true, false)
+        return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, Int[],
+                   true, true, nothing, true, true, false)
     end
 end
 
 give_up_refinements!(sv::PostOptAnalysisState) =
-    sv.all_retpaths_consistent = sv.all_effect_free = sv.all_nothrow = sv.all_noub = false
+    sv.all_retpaths_consistent = sv.all_effect_free = sv.effect_free_if_argmem_only =
+    sv.all_nothrow = sv.all_noub = false
 
 function any_refinable(sv::PostOptAnalysisState)
     effects = sv.result.ipo_effects
@@ -568,12 +554,47 @@ function any_refinable(sv::PostOptAnalysisState)
             (!is_noub(effects) & sv.all_noub))
 end
 
-function refine_effects!(sv::PostOptAnalysisState)
+struct GetNativeEscapeCache{CodeCache}
+    code_cache::CodeCache
+    GetNativeEscapeCache(code_cache::CodeCache) where CodeCache = new{CodeCache}(code_cache)
+end
+GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
+function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
+    codeinst = get(code_cache, mi, nothing)
+    codeinst isa CodeInstance || return false
+    argescapes = traverse_analysis_results(codeinst) do @nospecialize result
+        return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
+    end
+    if argescapes !== nothing
+        return argescapes
+    end
+    effects = decode_effects(codeinst.ipo_purity_bits)
+    if is_effect_free(effects) && is_inaccessiblememonly(effects)
+        # We might not have run EA on simple frames without any escapes (e.g. when optimization
+        # is skipped when result is constant-folded by abstract interpretation). If those
+        # frames aren't inlined, the accuracy of EA for caller context takes a big hit.
+        # This is a HACK to avoid that, but obviously, a more comprehensive fix would be ideal.
+        return true
+    end
+    return false
+end
+
+function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
+    if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
+        ir = sv.ir
+        nargs = length(ir.argtypes)
+        estate = EscapeAnalysis.analyze_escapes(ir, nargs, GetNativeEscapeCache(interp))
+        argescapes = EscapeAnalysis.ArgEscapeCache(estate)
+        stack_analysis_result!(sv.result, argescapes)
+        validate_mutable_arg_escapes!(estate, sv)
+    end
+
     any_refinable(sv) || return false
     effects = sv.result.ipo_effects
     sv.result.ipo_effects = Effects(effects;
         consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
-        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE :
+                      sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
         nothrow = sv.all_nothrow ? true : effects.nothrow,
         noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
     return true
@@ -584,52 +605,133 @@ function is_ipo_dataflow_analysis_profitable(effects::Effects)
              is_nothrow(effects) && is_noub(effects))
 end
 
-function is_getfield_with_boundscheck_arg(@nospecialize(stmt), sv::PostOptAnalysisState)
-    is_known_call(stmt, getfield, sv.ir) || return false
-    length(stmt.args) < 4 && return false
+function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
+    isexpr(stmt, :call) || return false
+    ft = argextype(stmt.args[1], sv.ir)
+    f = singleton_type(ft)
+    f === nothing && return false
+    if f === getfield
+        nargs = 4
+    elseif f === memoryref || f === memoryrefget || f === memoryref_isassigned
+        nargs = 4
+    elseif f === memoryrefset!
+        nargs = 5
+    else
+        return false
+    end
+    length(stmt.args) < nargs && return false
     boundscheck = stmt.args[end]
     argextype(boundscheck, sv.ir) === Bool || return false
     isa(boundscheck, SSAValue) || return false
     return true
 end
 
+function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospecialize(stmt),
+                                  estate::EscapeAnalysis.EscapeState)
+    stmt isa Expr || return false
+    if isexpr(stmt, :invoke)
+        startidx = 2
+    elseif isexpr(stmt, :new)
+        startidx = 1
+    else
+        return false
+    end
+    for i = startidx:length(stmt.args)
+        arg = stmt.args[i]
+        argt = argextype(arg, ir)
+        if is_mutation_free_argtype(argt)
+            continue
+        end
+        # See if we can find the allocation
+        if isa(arg, Argument)
+            if EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(estate[arg]))
+                # Even if we prove everything else effect_free, the best we can
+                # say is :effect_free_if_argmem_only
+                if sv.effect_free_if_argmem_only === nothing
+                    sv.effect_free_if_argmem_only = true
+                end
+            else
+                sv.effect_free_if_argmem_only = false
+            end
+            return false
+        elseif isa(arg, SSAValue)
+            EscapeAnalysis.has_no_escape(estate[arg]) || return false
+            check_all_args_noescape!(sv, ir, ir[arg][:stmt], estate) || return false
+        else
+            return false
+        end
+    end
+    return true
+end
+
+function validate_mutable_arg_escapes!(estate::EscapeAnalysis.EscapeState, sv::PostOptAnalysisState)
+    ir = sv.ir
+    for idx in sv.ea_analysis_pending
+        # See if any mutable memory was allocated in this function and determined
+        # not to escape.
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        if !check_all_args_noescape!(sv, ir, stmt, estate)
+            return sv.all_effect_free = false
+        end
+    end
+    return true
+end
+
 function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
-    # Special case: `:boundscheck` into `getfield`
     stmt = inst[:stmt]
-    is_getfield_with_boundscheck_arg(stmt, sv) || return false
-    barg = stmt.args[end]
+    iscall_with_boundscheck(stmt, sv) || return false
+    barg = stmt.args[end]::SSAValue
     bstmt = sv.ir[barg][:stmt]
     isexpr(bstmt, :boundscheck) || return false
     # If IR_FLAG_INBOUNDS is already set, no more conditional ub
     (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
-    sv.any_conditional_ub = true
     return true
 end
 
+const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLE_OR_ARGMEM
+
 function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
+    # If we can prove that the argmem does not escape the current function, we can
+    # refine this to :effect_free.
+    needs_ea_validation = (flag & IR_FLAGS_NEEDS_EA) == IR_FLAGS_NEEDS_EA
     stmt = inst[:stmt]
-    if !isterminator(stmt) && stmt !== nothing
-        # ignore control flow node – they are not removable on their own and thus not
-        # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
-        # the whole method invocation
-        sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+    if !needs_ea_validation
+        if !isterminator(stmt) && stmt !== nothing
+            # ignore control flow node – they are not removable on their own and thus not
+            # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
+            # the whole method invocation
+            sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+        end
+    elseif sv.all_effect_free
+        if (isexpr(stmt, :invoke) || isexpr(stmt, :new) ||
+            # HACK for performance: limit the scope of EA to code with object field access only,
+            # since its abilities to reason about e.g. arrays are currently very limited anyways.
+            is_known_call(stmt, setfield!, sv.ir))
+            push!(sv.ea_analysis_pending, inst.idx)
+        else
+            sv.all_effect_free = false
+        end
     end
     sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
     if iszero(flag & IR_FLAG_NOUB)
-        if !is_conditional_noub(inst, sv)
+        # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
+        if is_conditional_noub(inst, sv)
+            sv.any_conditional_ub = true
+        else
             sv.all_noub = false
         end
     end
 end
 
-function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisState)
+function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
-    # Special case: For getfield, we allow inconsistency of the :boundscheck argument
+    # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
-    if is_getfield_with_boundscheck_arg(stmt, sv)
+    if iscall_with_boundscheck(stmt, sv)
         for i = 1:(length(stmt.args)-1)
             val = stmt.args[i]
             if isa(val, SSAValue)
@@ -646,7 +748,7 @@ function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisSta
             end
         end
     end
-    stmt_inconsistent && push!(inconsistent, idx)
+    stmt_inconsistent && push!(inconsistent, inst.idx)
     return stmt_inconsistent
 end
 
@@ -654,9 +756,8 @@ struct ScanStmt
     sv::PostOptAnalysisState
 end
 
-function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
+function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
-    flag = inst[:flag]
 
     if isexpr(stmt, :enter)
         # try/catch not yet modeled
@@ -666,9 +767,9 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 
     scan_non_dataflow_flags!(inst, sv)
 
-    stmt_inconsistent = scan_inconsistency!(inst, idx, sv)
+    stmt_inconsistent = scan_inconsistency!(inst, sv)
 
-    if stmt_inconsistent && idx == lstmt
+    if stmt_inconsistent && inst.idx == lstmt
         if isa(stmt, ReturnNode) && isdefined(stmt, :val)
             sv.all_retpaths_consistent = false
         elseif isa(stmt, GotoIfNot)
@@ -707,9 +808,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, true)
+    scan!(ScanStmt(sv), scanner, false)
     complete!(sv.tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(sv.tpdum, scanner)
+
     (; ir, inconsistent, tpdum) = sv
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in sv.inconsistent
@@ -724,7 +826,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if is_getfield_with_boundscheck_arg(stmt, sv)
+        if iscall_with_boundscheck(stmt, sv)
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
@@ -755,7 +857,11 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
 end
 
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
-    is_ipo_dataflow_analysis_profitable(result.ipo_effects) || return false
+    if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
+        return false
+    end
+
+    @assert isempty(ir.new_nodes) "IRCode should be compacted before post-opt analysis"
 
     sv = PostOptAnalysisState(result, ir)
     scanner = BBScanner(ir)
@@ -767,7 +873,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             check_inconsistentcy!(sv, scanner)
         else
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
@@ -778,7 +884,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    return refine_effects!(sv)
+    return refine_effects!(interp, sv)
 end
 
 # run the optimization work
@@ -1022,6 +1128,7 @@ isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetyp
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         params::OptimizationParams, error_path::Bool = false)
+    #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -1067,8 +1174,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     return cost
                 end
             end
-            # unknown/unhandled intrinsic
-            return params.inline_nonleaf_penalty
+            # unknown/unhandled intrinsic: hopefully the caller gets a slightly better answer after the inlining
+            return UNKNOWN_CALL_COST
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
@@ -1079,12 +1186,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, sptypes)
-                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-            elseif f === Core.arrayset && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 8 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 1 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === Core.memoryrefset! && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 5 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
@@ -1092,7 +1199,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if fidx === nothing
                 # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
-                return 20
+                return UNKNOWN_CALL_COST
             end
             return T_FFUNC_COST[fidx]
         end
@@ -1101,17 +1208,23 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head === :invoke_modify
+    elseif head === :foreigncall
+        foreigncall = ex.args[1]
+        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+            return 1
+        end
+        return 20
+    elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : 20
+        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
-            cost = 20
+            cost = UNKNOWN_CALL_COST
         else
             cost = 0
         end
@@ -1150,14 +1263,15 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams,
-                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
-    bodycost::Int = 0
-    for line = 1:length(ir.stmts)
-        stmt = ir[SSAValue(line)][:stmt]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, params)
+function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+    bodycost = 0
+    for i = 1:length(ir.stmts)
+        stmt = ir[SSAValue(i)][:stmt]
+        thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return MAX_INLINE_COST
+        if bodycost > cost_threshold
+            return MAX_INLINE_COST
+        end
     end
     return inline_cost_clamp(bodycost)
 end

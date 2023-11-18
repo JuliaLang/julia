@@ -248,7 +248,7 @@ function exec_options(opts)
             let InteractiveUtils = load_InteractiveUtils()
                 invokelatest(InteractiveUtils.report_bug, arg)
             end
-            return nothing
+            return false
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -270,6 +270,10 @@ function exec_options(opts)
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
+
+    # load terminfo in for styled printing
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    global current_terminfo = load_terminfo(term_env)
 
     # load ~/.julia/config/startup.jl file
     if startup
@@ -416,13 +420,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     end
     # TODO cleanup REPL_MODULE_REF
-
     if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || Base.banner(term, short=banner==:short)
+            banner == :no || REPL.banner(term, short=banner==:short)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -442,7 +444,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        banner == :no || Base.banner(short=banner==:short)
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
@@ -484,17 +485,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     nothing
 end
 
-# MainInclude exists to hide Main.include and eval from `names(Main)`.
+# MainInclude exists to weakly add certain identifiers to Main
 baremodule MainInclude
 using ..Base
-# These definitions calls Base._include rather than Base.include to get
-# one-frame stacktraces for the common case of using include(fname) in Main.
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
-eval(x) = Core.eval(Main, x)
 
 """
     ans
@@ -510,16 +503,10 @@ A variable referring to the last thrown errors, automatically imported to the in
 The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
+
+# weakly exposes ans and err variables to Main
+export ans, err
 end
-
-"""
-    eval(expr)
-
-Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
-"""
-MainInclude.eval
 
 function should_use_main_entrypoint()
     isdefined(Main, :main) || return false
@@ -527,30 +514,6 @@ function should_use_main_entrypoint()
     (isdefined(M_binding_owner, Symbol("#__main_is_entrypoint__#")) && M_binding_owner.var"#__main_is_entrypoint__#") || return false
     return true
 end
-
-"""
-    include([mapexpr::Function,] path::AbstractString)
-
-Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
-Returns the result of the last evaluated expression of the input file. During including,
-a task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. This function is typically used to load source
-interactively, or to combine files in packages that are broken into multiple source files.
-The argument `path` is normalized using [`normpath`](@ref) which will resolve
-relative path tokens such as `..` and convert `/` to the appropriate path separator.
-
-The optional first argument `mapexpr` can be used to transform the included code before
-it is evaluated: for each parsed expression `expr` in `path`, the `include` function
-actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
-
-Use [`Base.include`](@ref) to evaluate a file into another module.
-
-!!! compat "Julia 1.5"
-    Julia 1.5 is required for passing the `mapexpr` argument.
-"""
-MainInclude.include
 
 function _start()
     empty!(ARGS)

@@ -477,6 +477,7 @@ The following `setting`s are supported.
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:noub`
+- `:noub_if_noinbounds`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -714,9 +715,10 @@ macro assume_effects(args...)
         ex = nothing
         idx = length(args)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub) =
-        (false, false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
+    consistent = effect_free = nothrow = terminates_globally = terminates_locally =
+        notaskstate = inaccessiblememonly = noub = noub_if_noinbounds = false
+    for i in 1:idx
+        org_setting = args[i]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -734,6 +736,8 @@ macro assume_effects(args...)
             inaccessiblememonly = val
         elseif setting === :noub
             noub = val
+        elseif setting === :noub_if_noinbounds
+            noub_if_noinbounds = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = noub = val
         elseif setting === :removable
@@ -746,15 +750,18 @@ macro assume_effects(args...)
     end
     if is_function_def(inner)
         return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub)))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds)))
         return esc(ex)
     else # anonymous function case
         return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly, noub))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
     end
 end
 
@@ -1029,7 +1036,6 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,

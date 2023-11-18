@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/Support/AllocatorBase.h>
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
@@ -22,9 +24,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
-
+#include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
+
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -98,7 +101,9 @@ struct OptimizationOptions {
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
+#if JL_LLVM_VERSION < 160000
     StandardInstrumentations SI;
+#endif
     std::unique_ptr<PassInstrumentationCallbacks> PIC;
     PassBuilder PB;
     ModulePassManager MPM;
@@ -289,6 +294,44 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li) JL
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
+template <size_t offset = 0>
+class MaxAlignedAllocImpl
+    : public AllocatorBase<MaxAlignedAllocImpl<offset>> {
+
+public:
+    MaxAlignedAllocImpl() JL_NOTSAFEPOINT = default;
+
+    static Align alignment(size_t Size) JL_NOTSAFEPOINT {
+        // Define the maximum alignment we expect to require, from offset bytes off
+        // the returned pointer, this is >= alignof(std::max_align_t), which is too
+        // small often to actually use.
+        const size_t MaxAlignment = JL_CACHE_BYTE_ALIGNMENT;
+        return Align(std::min((size_t)llvm::PowerOf2Ceil(Size), MaxAlignment));
+    }
+
+    LLVM_ATTRIBUTE_RETURNS_NONNULL void *Allocate(size_t Size, Align Alignment) {
+        Align MaxAlign = alignment(Size);
+        assert(Alignment < MaxAlign); (void)Alignment;
+        return jl_gc_perm_alloc(Size, 0, MaxAlign.value(), offset);
+    }
+
+    inline LLVM_ATTRIBUTE_RETURNS_NONNULL
+    void * Allocate(size_t Size, size_t Alignment) {
+        return Allocate(Size, Align(Alignment));
+    }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Allocate;
+
+    void Deallocate(const void *Ptr, size_t Size, size_t /*Alignment*/) { abort(); }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Deallocate;
+
+private:
+};
+using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
+
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
@@ -297,6 +340,7 @@ typedef JITSymbol JL_SymbolInfo;
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
+using SharedBytesT = StringSet<MaxAlignedAllocImpl<sizeof(StringSet<>::MapEntryTy)>>;
 
 class JuliaOJIT {
 public:
@@ -386,7 +430,7 @@ public:
             }
             private:
             ResourcePool &pool;
-            llvm::Optional<ResourceT> resource;
+            Optional<ResourceT> resource;
         };
 
         OwningResource operator*() JL_NOTSAFEPOINT {
@@ -513,6 +557,7 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
 private:
 
     const std::unique_ptr<TargetMachine> TM;
@@ -526,6 +571,7 @@ private:
     std::mutex RLST_mutex{};
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    SharedBytesT SharedBytes;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
 
@@ -566,6 +612,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     }
     return *_shared_module;
 }
+void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

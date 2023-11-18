@@ -137,10 +137,10 @@ JL_EXTENSION typedef struct _bigval_t {
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
-// data structure for tracking malloc'd arrays.
+// data structure for tracking malloc'd arrays and genericmemory.
 
 typedef struct _mallocarray_t {
-    jl_array_t *a;
+    jl_value_t *a;
     struct _mallocarray_t *next;
 } mallocarray_t;
 
@@ -233,6 +233,14 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
         jl_cpu_pause();
     }
 }
+
+// data structures for tracking fragmentation in the pool allocator
+// #define GC_MEASURE_PAGE_FRAGMENTATION
+
+typedef struct {
+    _Atomic(size_t) n_freed_objs;
+    _Atomic(size_t) n_pages_allocd;
+} gc_fragmentation_stat_t;
 
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
@@ -498,9 +506,9 @@ void gc_time_big_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
 void gc_time_big_end(void) JL_NOTSAFEPOINT;
 
-void gc_time_mallocd_array_start(void) JL_NOTSAFEPOINT;
-void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT;
-void gc_time_mallocd_array_end(void) JL_NOTSAFEPOINT;
+void gc_time_mallocd_memory_start(void) JL_NOTSAFEPOINT;
+void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT;
+void gc_time_mallocd_memory_end(void) JL_NOTSAFEPOINT;
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes);
@@ -527,12 +535,12 @@ STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
     (void)bits;
 }
 #define gc_time_big_end()
-#define gc_time_mallocd_array_start()
-STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
+#define gc_time_mallocd_memory_start()
+STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }
-#define gc_time_mallocd_array_end()
+#define gc_time_mallocd_memory_end()
 #define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
@@ -651,7 +659,7 @@ void gc_stats_big_obj(void);
 // For debugging
 void gc_count_pool(void);
 
-size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
+size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable);
 JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void);

@@ -29,14 +29,16 @@ all-debug:   $(addprefix cache-debug-, $(STDLIBS))
 
 define stdlib_builder
 ifneq ($(filter $(1),$(INDEPENDENT_STDLIBS)),)
+# Define target-specific export for `JULIA_CPU_TARGET`
+$$(BUILDDIR)/stdlib/$1.release.image: export JULIA_CPU_TARGET=$(JULIA_CPU_TARGET)
+$$(BUILDDIR)/stdlib/$1.debug.image: export JULIA_CPU_TARGET=$(JULIA_CPU_TARGET)
+
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 else
@@ -70,6 +72,7 @@ $(eval $(call stdlib_builder,Serialization,))
 $(eval $(call stdlib_builder,Sockets,))
 $(eval $(call stdlib_builder,Unicode,))
 $(eval $(call stdlib_builder,Profile,))
+$(eval $(call stdlib_builder,StyledStrings,))
 
 # 1-depth packages
 $(eval $(call stdlib_builder,GMP_jll,Artifacts Libdl))

@@ -103,7 +103,8 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
                         if (name.startswith("julia.cpu.have_fma.")) {
                             // for some platforms we know they always do (or don't) support
                             // FMA. in those cases we don't need to clone the function.
-                            if (!always_have_fma(*callee, TT).hasValue())
+                            // always_have_fma returns an optional<bool>
+                            if (!always_have_fma(*callee, TT))
                                 flag |= JL_TARGET_CLONE_CPU;
                         } else {
                             flag |= JL_TARGET_CLONE_CPU;
@@ -690,7 +691,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     SmallVector<Value *, 0> Args;
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
-    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, makeArrayRef(Args));
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);
