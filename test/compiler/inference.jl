@@ -5148,3 +5148,16 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# Issue #52168
+f52168(x, t::Type) = x::NTuple{2, Base.inferencebarrier(t)::Type}
+@test f52168((1, 2.), Any) === (1, 2.)
+
+# Issue #27031
+let x = 1, _Any = Any
+    @noinline bar27031(tt::Tuple{T,T}, ::Type{Val{T}}) where {T} = notsame27031(tt)
+    @noinline notsame27031(tt::Tuple{T, T}) where {T} = error()
+    @noinline notsame27031(tt::Tuple{T, S}) where {T, S} = "OK"
+    foo27031() = bar27031((x, 1.0), Val{_Any})
+    @test foo27031() == "OK"
+end
