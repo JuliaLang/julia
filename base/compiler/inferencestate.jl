@@ -206,6 +206,7 @@ const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 mutable struct TryCatchFrame
     exct
     const enter_idx
+    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
 end
 
 mutable struct InferenceState

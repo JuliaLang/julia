@@ -2771,7 +2771,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
 
     if contains_is(argtypes_vec, Union{})
-        return CallMeta(Const(Union{}), Any, EFFECTS_TOTAL, NoCallInfo())
+        return CallMeta(Const(Union{}), Union{}, EFFECTS_TOTAL, NoCallInfo())
     end
 
     # Run the abstract_call without restricting abstract call
@@ -2789,7 +2789,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     rt = widenslotwrapper(call.rt)
     if isa(rt, Const)
         # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), Any, EFFECTS_TOTAL, info)
+        return CallMeta(Const(typeof(rt.val)), Union{}, EFFECTS_TOTAL, info)
     end
     rt = widenconst(rt)
     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))

@@ -71,7 +71,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         rt = const_call_result.rt
                         exct = const_call_result.exct
                         (; effects, const_result, edge) = const_call_result
-                    elseif better_effects(const_call_result.effects, effects)
+                    elseif is_better_effects(const_call_result.effects, effects)
                         exct = const_call_result.exct
                         (; effects, const_result, edge) = const_call_result
                     elseif !(exct ⊑ₚ const_call_result.exct)
@@ -120,7 +120,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     this_rt = this_const_rt
                     this_exct = const_call_result.exct
                     (; effects, const_result, edge) = const_call_result
-                elseif better_effects(const_call_result.effects, effects)
+                elseif is_better_effects(const_call_result.effects, effects)
                     this_exct = const_call_result.exct
                     (; effects, const_result, edge) = const_call_result
                 elseif !(this_exct ⊑ₚ const_call_result.exct)
@@ -2043,7 +2043,19 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === applicable
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw
-            return CallMeta(Union{}, la == 2 ? argtypes[2] : ArgumentError, EFFECTS_THROWS, NoCallInfo())
+            if la == 2
+                arg2 = argtypes[2]
+                if isvarargtype(arg2)
+                    exct = tmerge(𝕃ᵢ, unwrapva(argtypes[2]), ArgumentError)
+                else
+                    exct = arg2
+                end
+            elseif la == 3 && isvarargtype(argtypes[3])
+                exct = tmerge(𝕃ᵢ, argtypes[2], ArgumentError)
+            else
+                exct = ArgumentError
+            end
+            return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
@@ -2372,7 +2384,7 @@ end
 function abstract_eval_the_exception(interp::AbstractInterpreter, sv::InferenceState)
     return sv.handlers[sv.handler_at[sv.currpc][2]].exct
 end
-abstract_eval_the_exception(interp, sv) = Any
+abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = Any
 
 function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
                                       sv::AbsIntState)
