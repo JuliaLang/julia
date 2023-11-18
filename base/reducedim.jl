@@ -150,9 +150,14 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
-            elseif isunordered(v0) && !all(isunordered, A1)
+            elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
-                v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                Tnm = nonmissingtype(Tr)
+                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                    v0 = $typeextreme(Tnm)
+                elseif !all(isunordered, A1)
+                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                end
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -185,9 +190,16 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
     if v0[1] isa Number && isnan(v0[1])
         # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
-    elseif isunordered(v0[1]) && !all(isunordered, A1)
+    elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        Tminnm = nonmissingtype(Tmin)
+        Tmaxnm = nonmissingtype(Tmax)
+        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
+            v0 = (typemax(Tminnm), typemin(Tmaxnm))
+        elseif !all(isunordered, A1)
+            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        end
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])
