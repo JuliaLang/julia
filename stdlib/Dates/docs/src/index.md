@@ -703,6 +703,9 @@ Dates.Date
 Dates.Time
 Dates.TimeZone
 Dates.UTC
+Dates.adjust
+Dates.DatePeriod
+Dates.TimePeriod
 ```
 
 ## Dates Functions

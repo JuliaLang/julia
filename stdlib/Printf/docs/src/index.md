@@ -5,4 +5,5 @@ Printf.@printf
 Printf.@sprintf
 Printf.Format
 Printf.format
+Printf.Printf
 ```

@@ -6,6 +6,10 @@ FileWatching.poll_file
 FileWatching.watch_file
 FileWatching.watch_folder
 FileWatching.unwatch_folder
+FileWatching.FDWatcher
+FileWatching.FileMonitor
+FileWatching.FolderMonitor
+FileWatching.PollingFileWatcher
 ```
 
 # Pidfile

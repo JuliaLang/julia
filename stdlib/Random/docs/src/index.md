@@ -366,3 +366,51 @@ failure due to very improbable data (e.g. an extremely ill-conditioned matrix).
 
 The statistical *distribution* from which random samples are drawn *is* guaranteed to be the same
 across any minor Julia releases.
+
+# SHA
+
+```@docs
+SHA.HMAC_CTX
+SHA.SHA
+SHA.SHA1_CTX
+SHA.SHA224_CTX
+SHA.SHA256_CTX
+SHA.SHA2_224_CTX
+SHA.SHA2_256_CTX
+SHA.SHA2_384_CTX
+SHA.SHA2_512_CTX
+SHA.SHA384_CTX
+SHA.SHA3_224_CTX
+SHA.SHA3_256_CTX
+SHA.SHA3_384_CTX
+SHA.SHA3_512_CTX
+SHA.SHA512_CTX
+SHA.digest!
+SHA.hmac_sha1
+SHA.hmac_sha224
+SHA.hmac_sha256
+SHA.hmac_sha2_224
+SHA.hmac_sha2_256
+SHA.hmac_sha2_384
+SHA.hmac_sha2_512
+SHA.hmac_sha384
+SHA.hmac_sha3_224
+SHA.hmac_sha3_256
+SHA.hmac_sha3_384
+SHA.hmac_sha3_512
+SHA.hmac_sha512
+SHA.sha1
+SHA.sha224
+SHA.sha256
+SHA.sha2_224
+SHA.sha2_256
+SHA.sha2_384
+SHA.sha2_512
+SHA.sha384
+SHA.sha3_224
+SHA.sha3_256
+SHA.sha3_384
+SHA.sha3_512
+SHA.sha512
+SHA.update!
+```

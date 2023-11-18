@@ -3,6 +3,7 @@
 This module is intended for interactive work. It is loaded automatically in [interactive mode](@ref command-line-interface).
 
 ```@docs
+InteractiveUtils.InteractiveUtils
 InteractiveUtils.apropos
 InteractiveUtils.varinfo
 InteractiveUtils.versioninfo

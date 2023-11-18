@@ -1,5 +1,12 @@
 # [Markdown](@id markdown_stdlib)
 
+```@docs
+Markdown.@doc_str
+Markdown.@md_str
+Markdown.html
+Markdown.latex
+```
+
 This section describes Julia's markdown syntax, which is enabled by the
 Markdown standard library. The following Markdown elements are supported:
 

@@ -6,4 +6,6 @@ Provides serialization of Julia objects.
 Serialization.serialize
 Serialization.deserialize
 Serialization.writeheader
+Serialization.AbstractSerializer
+Serialization.Serializer
 ```

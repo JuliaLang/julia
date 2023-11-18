@@ -292,6 +292,15 @@ the operation with [`atreplinit`](@ref) . For example, to bind the up and down a
 history without prefix search, one could put the following code in `~/.julia/config/startup.jl`:
 
 ```julia
+
+```@docs
+REPL.AbstractREPL
+REPL.BasicREPL
+REPL.LineEditREPL
+REPL.REPL
+REPL.StreamREPL
+```
+
 import REPL
 import REPL.LineEdit
 

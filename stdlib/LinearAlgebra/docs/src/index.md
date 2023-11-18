@@ -412,6 +412,7 @@ Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
+LinearAlgebra.RankDeficientException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
@@ -555,6 +556,7 @@ Base.transpose
 LinearAlgebra.transpose!
 LinearAlgebra.Transpose
 LinearAlgebra.TransposeFactorization
+LinearAlgebra.copy_transpose!
 Base.adjoint
 LinearAlgebra.adjoint!
 LinearAlgebra.Adjoint
@@ -565,6 +567,7 @@ LinearAlgebra.checksquare
 LinearAlgebra.peakflops
 LinearAlgebra.hermitianpart
 LinearAlgebra.hermitianpart!
+LinearAlgebra.LAPACKException
 ```
 
 ## Low-level matrix operations
