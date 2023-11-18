@@ -1434,7 +1434,7 @@ end
 """
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
-Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
+Suggest that collection `s` reserve capacity for `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
@@ -1442,6 +1442,10 @@ performance.
 If `first` is true, then the reserved space is from the start of the collection, for ordered
 collections. Supplying this keyword may result in an error if the collection is nor ordered
 or if `pushfirst!` is not supported for this collection.
+
+If `shrink` is `true` (the default), the reserved space may be reduced if it is
+larger than `n`. Passing `shrink=false` will ensure that the existing space is preserved
+even if it is larger than requested.
 
 See also [`resize!`](@ref).
 
@@ -1457,8 +1461,6 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
-
-4. `shrink` controls if the collection can be shrunk.
 
 !!! compat "Julia 1.11"
     The `shrink` and `first` arguments were added in Julia 1.11.
