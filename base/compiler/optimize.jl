@@ -583,7 +583,7 @@ function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
         nargs = length(ir.argtypes)
-        estate = EscapeAnalysis.analyze_escapes(ir, nargs, GetNativeEscapeCache(interp))
+        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
         validate_mutable_arg_escapes!(estate, sv)
