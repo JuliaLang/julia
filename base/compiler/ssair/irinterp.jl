@@ -51,17 +51,24 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRIn
     return RTEffects(rt, exct, effects)
 end
 
+function kill_block!(ir, bb)
+    # Kill the entire block
+    stmts = ir.cfg.blocks[bb].stmts
+    for bidx = stmts
+        inst = ir[SSAValue(bidx)]
+        inst[:stmt] = nothing
+        inst[:type] = Bottom
+        inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    end
+    ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
+    return
+end
+
+
 function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
     if length(ir.cfg.blocks[to].preds) == 0
-        # Kill the entire block
-        for bidx = ir.cfg.blocks[to].stmts
-            inst = ir[SSAValue(bidx)]
-            inst[:stmt] = nothing
-            inst[:type] = Bottom
-            inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-        end
-        return
+        kill_block!(ir, to)
     end
     for sidx = ir.cfg.blocks[to].stmts
         stmt = ir[SSAValue(sidx)][:stmt]
@@ -83,15 +90,38 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
     ir = irsv.ir
     stmt = ir[SSAValue(term_idx)][:stmt]
     if isa(stmt, GotoIfNot)
-        kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
-        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+        kill_edge!(irsv, bb, stmt.dest)
+        kill_edge!(irsv, bb, bb+1)
     elseif isa(stmt, GotoNode)
-        kill_edge!(ir, bb, stmt.label, update_phi!(irsv))
+        kill_edge!(irsv, bb, stmt.label)
     elseif isa(stmt, ReturnNode)
         # Nothing to do
     else
         @assert !isexpr(stmt, :enter)
-        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+        kill_edge!(irsv, bb, bb+1)
+    end
+end
+
+function kill_edge!(irsv::IRInterpretationState, from::Int, to::Int)
+    ir = irsv.ir
+    kill_edge!(ir, from, to, update_phi!(irsv))
+
+    lazydomtree = irsv.lazydomtree
+    domtree = nothing
+    if isdefined(lazydomtree, :domtree)
+        domtree = get!(lazydomtree)
+        domtree_delete_edge!(domtree, ir.cfg.blocks, from, to)
+    elseif length(ir.cfg.blocks[to].preds) != 0
+        # TODO: If we're not maintaining the domtree, computing it just for this
+        # is slightly overkill - just the dfs tree would be enough.
+        domtree = get!(lazydomtree)
+    end
+
+    if domtree !== nothing && bb_unreachable(domtree, to)
+        kill_block!(ir, to)
+        for edge in ir.cfg.blocks[to].succs
+            kill_edge!(irsv, to, edge)
+        end
     end
 end
 
@@ -113,10 +143,10 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             if condval
                 inst[:stmt] = nothing
                 inst[:type] = Any
-                kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
+                kill_edge!(irsv, bb, stmt.dest)
             else
                 inst[:stmt] = GotoNode(stmt.dest)
-                kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+                kill_edge!(irsv, bb, bb+1)
             end
             return true
         end

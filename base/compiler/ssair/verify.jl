@@ -47,7 +47,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
 
         use_inst = ir[op]
-        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode})
+        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode}) && !(isa(use_inst[:stmt], ReturnNode) && !isdefined(use_inst[:stmt], :val))
+            # Allow uses of `unreachable`, which may have been inserted when
+            # an earlier block got deleted, but for some reason we didn't figure
+            # out yet that this entire block is dead also.
             @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
             error("")
         end

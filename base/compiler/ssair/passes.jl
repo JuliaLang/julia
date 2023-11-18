@@ -382,7 +382,9 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             elseif isexpr(def, :new)
                 typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
-                @assert !ismutabletype(typ)
+                if ismutabletype(typ)
+                    isconst(typ, field) || return nothing
+                end
                 if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
@@ -1735,7 +1737,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
-    compact = IncrementalCompact(ir)
+    compact = IncrementalCompact(ir, true)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
@@ -2203,7 +2205,7 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
