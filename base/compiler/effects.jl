@@ -171,6 +171,68 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
         nonoverlayed)
 end
 
+function is_better_effects(new::Effects, old::Effects)
+    any_improved = false
+    if new.consistent == ALWAYS_TRUE
+        any_improved |= old.consistent != ALWAYS_TRUE
+    else
+        if !iszero(new.consistent & CONSISTENT_IF_NOTRETURNED)
+            old.consistent == ALWAYS_TRUE && return false
+            any_improved |= iszero(old.consistent & CONSISTENT_IF_NOTRETURNED)
+        elseif !iszero(new.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
+            old.consistent == ALWAYS_TRUE && return false
+            any_improved |= iszero(old.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
+        else
+            return false
+        end
+    end
+    if new.effect_free == ALWAYS_TRUE
+        any_improved |= old.consistent != ALWAYS_TRUE
+    elseif new.effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        old.effect_free == ALWAYS_TRUE && return false
+        any_improved |= old.effect_free != EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+    elseif new.effect_free != old.effect_free
+        return false
+    end
+    if new.nothrow
+        any_improved |= !old.nothrow
+    elseif new.nothrow != old.nothrow
+        return false
+    end
+    if new.terminates
+        any_improved |= !old.terminates
+    elseif new.terminates != old.terminates
+        return false
+    end
+    if new.notaskstate
+        any_improved |= !old.notaskstate
+    elseif new.notaskstate != old.notaskstate
+        return false
+    end
+    if new.inaccessiblememonly == ALWAYS_TRUE
+        any_improved |= old.inaccessiblememonly != ALWAYS_TRUE
+    elseif new.inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+        old.inaccessiblememonly == ALWAYS_TRUE && return false
+        any_improved |= old.inaccessiblememonly != INACCESSIBLEMEM_OR_ARGMEMONLY
+    elseif new.inaccessiblememonly != old.inaccessiblememonly
+        return false
+    end
+    if new.noub == ALWAYS_TRUE
+        any_improved |= old.noub != ALWAYS_TRUE
+    elseif new.noub == NOUB_IF_NOINBOUNDS
+        old.noub == ALWAYS_TRUE && return false
+        any_improved |= old.noub != NOUB_IF_NOINBOUNDS
+    elseif new.noub != old.noub
+        return false
+    end
+    if new.nonoverlayed
+        any_improved |= !old.nonoverlayed
+    elseif new.nonoverlayed != old.nonoverlayed
+        return false
+    end
+    return any_improved
+end
+
 function merge_effects(old::Effects, new::Effects)
     return Effects(
         merge_effectbits(old.consistent, new.consistent),

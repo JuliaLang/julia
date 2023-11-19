@@ -10,6 +10,7 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
+    exct::Any
     effects::Effects
     info::CallInfo
 end

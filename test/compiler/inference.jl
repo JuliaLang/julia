@@ -4439,8 +4439,8 @@ let x = Tuple{Int,Any}[
         #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
-    @test handler_at == first.(x)
+    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -5533,3 +5533,28 @@ function test_exit_bottom(s)
     n
 end
 @test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
+
+function foo_typed_throw_error()
+    try
+        error()
+    catch e
+        if isa(e, ErrorException)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_error) |> only === Float64
+
+will_throw_no_method(x::Int) = 1
+function foo_typed_throw_metherr()
+    try
+        will_throw_no_method(1.0)
+    catch e
+        if isa(e, MethodError)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_metherr) |> only === Float64
