@@ -298,6 +298,8 @@ Logging.Debug
 Logging.Info
 Logging.Warn
 Logging.Error
+Logging.BelowMinLevel
+Logging.AboveMaxLevel
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
