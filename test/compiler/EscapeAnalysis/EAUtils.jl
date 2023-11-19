@@ -148,7 +148,7 @@ function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::I
     nargs = let def = caller.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
     get_escape_cache = GetEscapeCache(interp)
     estate = try
-        analyze_escapes(ir, nargs, get_escape_cache)
+        analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), get_escape_cache)
     catch err
         @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
         Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
