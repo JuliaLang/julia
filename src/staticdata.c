@@ -790,7 +790,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // so must not be present here
             record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
-            record_field_change((jl_value_t**)&mi->callbacks, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
         else {
@@ -822,6 +821,11 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         // make sure we don't serialize other reachable cache entries of foreign methods
+        // Should this now be:
+        // if (ci !in ci->defs->cache)
+        //     record_field_change((jl_value_t**)&ci->next, NULL);
+        // Why are we checking that the method/module this orignates from is in_image?
+        // and then disconnect this CI?
         if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
@@ -2359,7 +2363,6 @@ static void strip_specializations_(jl_method_instance_t *mi)
     if (jl_options.strip_ir) {
         record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
-        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 

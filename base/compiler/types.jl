@@ -14,6 +14,7 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `OptimizationParams(interp::NewInterpreter)` - return an `OptimizationParams` instance
 - `get_world_counter(interp::NewInterpreter)` - return the world age for this interpreter
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
+- `cache_owner(interp::NewInterpreter)` - return the owner of any new cache entries
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
 :(AbstractInterpreter)
@@ -404,6 +405,7 @@ InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_world_counter(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
+cache_owner(interp::NativeInterpreter) = nothing
 code_cache(interp::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(interp))
 
 """

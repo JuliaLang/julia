@@ -475,6 +475,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     return (startind:lastindex(s), method_name_end)
 end
 
+const REPLCacheOwner = :REPL # For now symbol (or even type is fine)
 struct REPLInterpreterCache
     dict::IdDict{MethodInstance,CodeInstance}
 end
@@ -517,6 +518,7 @@ CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
 CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
 CC.get_world_counter(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
+CC.cache_owner(::REPLInterpreter) = REPLCacheOwner
 CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
 CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
