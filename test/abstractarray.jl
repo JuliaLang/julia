@@ -1354,6 +1354,28 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     @test tpa.data == reverse(collect(1:6))
 end
 
+mutable struct SimpleArray{T} <: AbstractVector{T}
+    els::Vector{T}
+end
+Base.size(sa::SimpleArray) = size(sa.els)
+Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
+Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
+Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
+Base.copy(sa::SimpleArray) = SimpleArray(copy(sa.els))
+
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+@testset "Failing `$f` should not grow the array $a" for
+        f in (push!, append!, pushfirst!, prepend!),
+        a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+    for args in ((1,), (1,2), ([1], [2]), [1])
+        orig = copy(a)
+        @test_throws Exception f(a, args...)
+        @test a == orig
+    end
+end
+
 @testset "splatting into hvcat" begin
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]

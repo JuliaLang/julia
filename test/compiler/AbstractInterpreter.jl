@@ -335,14 +335,12 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     return ret
 end
 function CC.inlining_policy(interp::NoinlineInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
         return nothing
     end
     return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
-        src::Any, info::CallInfo, stmt_flag::UInt32, mi::MethodInstance,
-        argtypes::Vector{Any})
+        src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
 @inline function inlined_usually(x, y, z)
@@ -466,6 +464,7 @@ let # generate cache
         lookup)
     io = IOBuffer()
     code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    @test  occursin("j_sin_", String(take!(io)))
-    @test !occursin("j_cos_", String(take!(io)))
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
 end

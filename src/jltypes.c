@@ -3132,7 +3132,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
-                            jl_uint8_type,
+                            jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 22);
@@ -3201,7 +3201,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
-                            jl_uint8_type),
+                            jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 10);
     //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
@@ -3255,7 +3255,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             //"edges",
                             //"absolute_max",
                             "ipo_purity_bits", "purity_bits",
-                            "argescapes",
+                            "analysis_results",
                             "isspecsig", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(15,
@@ -3507,6 +3507,7 @@ void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
     jl_pair_type           = core("Pair");
     jl_kwcall_func         = core("kwcall");
     jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;

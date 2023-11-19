@@ -1528,3 +1528,10 @@ Base.hash(::BadHash, ::UInt)=UInt(1)
     d[BadHash(1)]=nothing
     @test !(BadHash(2) in keys(d))
 end
+
+# Issue #52066
+let d = Dict()
+    d[1] = 'a'
+    d[1.0] = 'b'
+    @test only(d) === Pair{Any,Any}(1.0, 'b')
+end
