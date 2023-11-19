@@ -1112,7 +1112,7 @@ end
 (this::Refiner)() = (this.result_flags[this.result_idx] |= IR_FLAG_REFINED; nothing)
 
 function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},
-                                processed_idx::Int, result_idx::Int,
+                                already_inserted, result_idx::Int,
                                 ssa_rename::Vector{Any}, used_ssas::Vector{Int},
                                 new_new_used_ssas::Vector{Int},
                                 do_rename_ssa::Bool,
@@ -1123,7 +1123,7 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
         val = old_values[i]
         if isa(val, SSAValue)
             if do_rename_ssa
-                if val.id > processed_idx
+                if !already_inserted(i, OldSSAValue(val.id))
                     push!(late_fixup, result_idx)
                     val = OldSSAValue(val.id)
                 else
@@ -1133,7 +1133,7 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
                 used_ssas[val.id] += 1
             end
         elseif isa(val, OldSSAValue)
-            if val.id > processed_idx
+            if !already_inserted(i, val)
                 push!(late_fixup, result_idx)
             else
                 # Always renumber these. do_rename_ssa applies only to actual SSAValues
@@ -1293,6 +1293,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
+    already_inserted = (::Int, ssa::OldSSAValue)->ssa.id <= processed_idx
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
@@ -1461,7 +1462,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = stmt.values
         end
 
-        values = process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+        values = process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
@@ -1500,7 +1501,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 push!(values, value)
             end
         end
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)
