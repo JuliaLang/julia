@@ -946,6 +946,14 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
     return inst
 end
 
+function delete_inst_here!(compact)
+    # Delete the statement, update refcounts etc
+    compact[SSAValue(compact.result_idx-1)] = nothing
+    # Pretend that we never compacted this statement in the first place
+    compact.result_idx -= 1
+    return nothing
+end
+
 function getindex(view::TypesView, v::OldSSAValue)
     id = v.id
     ir = view.ir.ir

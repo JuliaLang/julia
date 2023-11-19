@@ -1738,6 +1738,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
+    made_changes = false
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
@@ -1759,7 +1760,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
-                    compact[idx] = nothing
+                    delete_inst_here!(compact)
                     continue
                 end
             end
@@ -1801,6 +1802,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         if t === Union{}
             stmt = compact[SSAValue(phi)][:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
+            made_changes = true
             continue
         elseif t === Any
             continue
@@ -1822,16 +1824,17 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         compact.result[phi][:type] = t
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
+        made_changes = true
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1852,10 +1855,11 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         while !isempty(extra_worklist)
             if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
+                made_changes = true
             end
         end
     end
-    return complete(compact)
+    return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
