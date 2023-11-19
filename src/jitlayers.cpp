@@ -1414,10 +1414,12 @@ namespace {
 
     struct JITPointersT {
 
-        JITPointersT(orc::ExecutionSession &ES) JL_NOTSAFEPOINT : ES(ES) {}
+        JITPointersT(SharedBytesT &SharedBytes, std::mutex &Lock) JL_NOTSAFEPOINT
+            : SharedBytes(SharedBytes), Lock(Lock) {}
 
         Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
             TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
+                std::lock_guard<std::mutex> locked(Lock);
                 for (auto &GV : make_early_inc_range(M.globals())) {
                     if (auto *Shared = getSharedBytes(GV)) {
                         ++InternedGlobals;
@@ -1433,10 +1435,11 @@ namespace {
             return std::move(TSM);
         }
 
+    private:
         // optimize memory by turning long strings into memoized copies, instead of
         // making a copy per object file of output.
-        // we memoize them using the ExecutionSession's string pool;
-        // this makes it unsafe to call clearDeadEntries() on the pool.
+        // we memoize them using a StringSet with a custom-alignment allocator
+        // to ensure they are properly aligned
         Constant *getSharedBytes(GlobalVariable &GV) JL_NOTSAFEPOINT {
             // We could probably technically get away with
             // interning even external linkage globals,
@@ -1462,11 +1465,17 @@ namespace {
                 // Cutoff, since we don't want to intern small strings
                 return nullptr;
             }
-            auto Interned = *ES.intern(Data);
+            Align Required = GV.getAlign().valueOrOne();
+            Align Preferred = MaxAlignedAlloc::alignment(Data.size());
+            if (Required > Preferred)
+                return nullptr;
+            StringRef Interned = SharedBytes.insert(Data).first->getKey();
+            assert(llvm::isAddrAligned(Preferred, Interned.data()));
             return literal_static_pointer_val(Interned.data(), GV.getType());
         }
 
-        orc::ExecutionSession &ES;
+        SharedBytesT &SharedBytes;
+        std::mutex &Lock;
     };
 }
 
@@ -1700,7 +1709,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
     LockLayer(ObjectLayer),
     CompileLayer(ES, LockLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
-    JITPointersLayer(ES, CompileLayer, orc::IRTransformLayer::TransformFunction(JITPointersT(ES))),
+    JITPointersLayer(ES, CompileLayer, orc::IRTransformLayer::TransformFunction(JITPointersT(SharedBytes, RLST_mutex))),
     OptimizeLayer(ES, JITPointersLayer, orc::IRTransformLayer::TransformFunction(OptimizerT<N_optlevels>(*TM, PrintLLVMTimers, llvm_printing_mutex))),
     OptSelLayer(ES, OptimizeLayer, orc::IRTransformLayer::TransformFunction(selectOptLevel)),
     DepsVerifyLayer(ES, OptSelLayer, orc::IRTransformLayer::TransformFunction(validateExternRelocations)),

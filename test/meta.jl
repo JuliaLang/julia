@@ -254,14 +254,14 @@ end
 f(::T) where {T} = T
 ci = code_lowered(f, Tuple{Int})[1]
 @test Meta.partially_inline!(ci.code, [], Tuple{typeof(f),Int}, Any[Int], 0, 0, :propagate) ==
-    Any[Core.ReturnNode(QuoteNode(Int))]
+    Any[QuoteNode(Int), Core.ReturnNode(Core.SSAValue(1))]
 
 g(::Val{x}) where {x} = x ? 1 : 0
 ci = code_lowered(g, Tuple{Val{true}})[1]
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 3)
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 5)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(1), 4)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(3), 6)
 
 @testset "inlining with isdefined" begin
     isdefined_slot(x) = @isdefined(x)
