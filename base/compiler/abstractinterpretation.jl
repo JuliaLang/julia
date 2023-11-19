@@ -67,7 +67,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     result, f, this_arginfo, si, match, sv)
                 const_result = volatile_inf_result
                 if const_call_result !== nothing
-                    if !(rt ⊑ₚ const_call_result.rt)
+                    if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
                         exct = const_call_result.exct
                         (; effects, const_result, edge) = const_call_result
@@ -76,7 +76,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         (; effects, const_result, edge) = const_call_result
                     elseif !(exct ⊑ₚ const_call_result.exct)
                         exct = const_call_result.exct
-                        (; effects, const_result, edge) = const_call_result
+                        (; const_result, edge) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
@@ -113,9 +113,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             if const_call_result !== nothing
                 this_const_conditional = ignorelimited(const_call_result.rt)
                 this_const_rt = widenwrappedconditional(const_call_result.rt)
-                # return type of const-prop' inference can be wider than that of non const-prop' inference
-                # e.g. in cases when there are cycles but cached result is still accurate
-                if !(this_rt ⊑ₚ this_const_rt)
+                if this_const_rt ⊑ₚ this_rt
+                    # As long as the const-prop result we have is not *worse* than
+                    # what we found out on types, we'd like to use it. Even if the
+                    # end result is exactly equivalent, it is likely that the IR
+                    # we produced while constproping is better than that with
+                    # generic types.
+                    # Return type of const-prop' inference can be wider than that of non const-prop' inference
+                    # e.g. in cases when there are cycles but cached result is still accurate
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     this_exct = const_call_result.exct
@@ -125,7 +130,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     (; effects, const_result, edge) = const_call_result
                 elseif !(this_exct ⊑ₚ const_call_result.exct)
                     this_exct = const_call_result.exct
-                    (; effects, const_result, edge) = const_call_result
+                    (; const_result, edge) = const_call_result
                 else
                     add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                 end
