@@ -69,16 +69,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if const_call_result !== nothing
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
-                        exct = const_call_result.exct
                         (; effects, const_result, edge) = const_call_result
                     elseif is_better_effects(const_call_result.effects, effects)
-                        exct = const_call_result.exct
                         (; effects, const_result, edge) = const_call_result
-                    elseif !(exct ⊑ₚ const_call_result.exct)
+                    else
+                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
+                    end
+                    if !(exct ⊑ₚ const_call_result.exct)
                         exct = const_call_result.exct
                         (; const_result, edge) = const_call_result
                     else
-                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
+                        add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
@@ -123,16 +124,19 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     # e.g. in cases when there are cycles but cached result is still accurate
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
-                    this_exct = const_call_result.exct
                     (; effects, const_result, edge) = const_call_result
                 elseif is_better_effects(const_call_result.effects, effects)
-                    this_exct = const_call_result.exct
                     (; effects, const_result, edge) = const_call_result
-                elseif !(this_exct ⊑ₚ const_call_result.exct)
+                else
+                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
+                end
+                # Treat the exception type separately. Currently, constprop often cannot determine the exception type
+                # because consistent-cy does not apply to exceptions.
+                if !(this_exct ⊑ₚ const_call_result.exct)
                     this_exct = const_call_result.exct
                     (; const_result, edge) = const_call_result
                 else
-                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
+                    add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                 end
             end
             all_effects = merge_effects(all_effects, effects)
