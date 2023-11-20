@@ -1280,3 +1280,13 @@ end |> !Core.Compiler.is_noub
 @test Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds xs[i]
 end |> !Core.Compiler.is_noub
+Base.@propagate_inbounds getindex_propagate(xs, i) = xs[i]
+getindex_dont_propagate(xs, i) = xs[i]
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex_propagate, (Vector{Any},Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(getindex_dont_propagate, (Vector{Any},Int)))
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_propagate(xs, i)
+end |> !Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_dont_propagate(xs, i)
+end |> Core.Compiler.is_noub
