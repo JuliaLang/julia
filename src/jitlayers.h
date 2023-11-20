@@ -312,7 +312,9 @@ public:
         // the returned pointer, this is >= alignof(std::max_align_t), which is too
         // small often to actually use.
         const size_t MaxAlignment = JL_CACHE_BYTE_ALIGNMENT;
-        return Align(std::min((size_t)llvm::PowerOf2Ceil(Size), MaxAlignment));
+        if (Size <= offset)
+            return Align(1);
+        return Align(std::min((size_t)llvm::PowerOf2Ceil(Size - offset), MaxAlignment));
     }
 
     LLVM_ATTRIBUTE_RETURNS_NONNULL void *Allocate(size_t Size, Align Alignment) {
