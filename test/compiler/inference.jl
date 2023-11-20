@@ -5558,3 +5558,32 @@ function foo_typed_throw_metherr()
     return 1
 end
 @test Base.return_types(foo_typed_throw_metherr) |> only === Float64
+
+# using `exct` information if `:nothrow` is proven
+Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+    x == Inf && return zero(x)
+    return sin(x)
+end
+@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_nothrow(x)
+    catch err
+        return err
+    end
+end |> only === Float64
+# for semi-concrete interpretation result too
+Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
+    if maythrow
+        return sin(x)
+    else
+        return @noinline sin_nothrow(x)
+    end
+end
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_maythrow(x, false)
+    catch err
+        return err
+    end
+end |> only === Float64

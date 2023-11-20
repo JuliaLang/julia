@@ -1196,13 +1196,14 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
                 effects = result.effects
-                if !is_nothrow(effects)
-                    effects = Effects(effects; nothrow)
+                if nothrow
+                    effects = Effects(effects; nothrow=true)
                 end
                 if noub
-                    effects = Effects(effects; noub = ALWAYS_TRUE)
+                    effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
-                return ConstCallResults(rt, result.exct, SemiConcreteResult(mi, ir, effects), effects, mi)
+                exct = refine_exception_type(result.exct, effects)
+                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects), effects, mi)
             end
         end
     end
