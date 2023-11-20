@@ -1579,8 +1579,8 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_uv_flush(s);
     }
     if (jl_generating_output()) {
-        jl_printf(JL_STDERR, "ERROR: Method overwriting is not permitted during Module precompile.\n");
-        jl_exit(125);
+        jl_printf(JL_STDERR, "ERROR: Method overwriting is not permitted during Module precompilation. Use `__precompile__(false)` to opt-out of precompilation.\n");
+        jl_throw(jl_precompilable_error);
     }
 }
 
