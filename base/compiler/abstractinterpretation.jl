@@ -3086,6 +3086,14 @@ function propagate_to_error_handler!(frame::InferenceState, currpc::Int, W::BitS
     end
 end
 
+function update_cycle_worklists!(callback, frame::InferenceState)
+    for (caller, caller_pc) in frame.cycle_backedges
+        if callback(caller, caller_pc)
+            push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
+        end
+    end
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
@@ -3204,11 +3212,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 elseif isa(stmt, ReturnNode)
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
                     if update_bestguess!(interp, frame, currstate, rt)
-                        for (caller, caller_pc) in frame.cycle_backedges
-                            if caller.ssavaluetypes[caller_pc] !== Any
-                                # no reason to revisit if that call-site doesn't affect the final result
-                                push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
-                            end
+                        update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
+                            # no reason to revisit if that call-site doesn't affect the final result
+                            return caller.ssavaluetypes[caller_pc] !== Any
                         end
                     end
                     ssavaluetypes[frame.currpc] = Any
@@ -3231,11 +3237,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if cur_hand == 0
                     if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
                         frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
-                        for (caller, caller_pc) in frame.cycle_backedges
-                            handler = caller.handler_at[caller_pc][1]
-                            if (handler == 0 ? caller.exc_bestguess : caller.handlers[handler].exct) !== Any
-                                push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
-                            end
+                        update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
+                            caller_handler = caller.handler_at[caller_pc][1]
+                            caller_exct = caller_handler == 0 ?
+                                caller.exc_bestguess : caller.handlers[caller_handler].exct
+                            return caller_exct !== Any
                         end
                     end
                 else
