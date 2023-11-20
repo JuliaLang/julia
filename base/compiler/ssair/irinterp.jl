@@ -51,7 +51,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRIn
     return RTEffects(rt, exct, effects)
 end
 
-function kill_block!(ir, bb)
+function kill_block!(ir::IRCode, bb::Int)
     # Kill the entire block
     stmts = ir.cfg.blocks[bb].stmts
     for bidx = stmts
@@ -63,7 +63,6 @@ function kill_block!(ir, bb)
     ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
     return
 end
-
 
 function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
