@@ -719,7 +719,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
     for (int locked = 0; ; locked++) {
         jl_genericmemory_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
         jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
-        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, (jl_value_t*)bindings, hv); // acquire
+        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, (jl_value_t*)bindings, hv, 0); // acquire
         if (idx != -1) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
             if (locked)

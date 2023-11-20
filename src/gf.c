@@ -164,7 +164,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         }
         cl = jl_svec_len(specializations);
         if (hv) {
-            ssize_t idx = jl_smallintset_lookup(speckeyset, speccache_eq, type, specializations, hv);
+            ssize_t idx = jl_smallintset_lookup(speckeyset, speccache_eq, type, specializations, hv, 0);
             if (idx != -1) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, idx);
                 if (locked)

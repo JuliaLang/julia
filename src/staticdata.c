@@ -2455,12 +2455,12 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
     // TODO: check table before acquiring lock to reduce writer contention
     JL_GC_PUSH1(&val);
     JL_LOCK(&global_roots_lock);
-    jl_value_t *rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val, NULL);
+    jl_value_t *rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val);
     if (rval) {
         val = rval;
     }
     else {
-        size_t idx;
+        ssize_t idx;
         jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &idx);
         jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
     }
@@ -2653,7 +2653,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
                 if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
-                    size_t idx;
+                    ssize_t idx;
                     global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
                 }
             }
@@ -3378,15 +3378,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
-    if (!s.incremental) {
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        // jl_global_roots_keyset = jl_idset_rehash(jl_global_roots_list, global_roots_keyset, global_roots_keyset->length, 0);
-        for (size_t idx = 0; idx < jl_global_roots_list->length; idx++) {
-            jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, idx);
-            if (val)
-                jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
-        }
-    }
+    if (!s.incremental && jl_global_roots_list->length > 0)
+        jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, (jl_genericmemory_t*)jl_an_empty_memory_any, -jl_global_roots_list->length);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
