@@ -1434,18 +1434,19 @@ end
 """
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
-Suggest that collection `s` reserve capacity for `n` elements. That is, if
+Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
 
-If `first` is true, then the reserved space is from the start of the collection, for ordered
-collections. Supplying this keyword may result in an error if the collection is nor ordered
+If the collection is ordered and `first` is `true`, then any additional space is reserved
+before the start of the collection rather than after the end. This way, subsequent calls
+to `pushfirst!` (instead of `push!`) may become faster.
+Supplying this keyword may result in an error if the collection is nor ordered
 or if `pushfirst!` is not supported for this collection.
 
-If `shrink` is `true` (the default), the reserved space may be reduced if it is
-larger than `n`. Passing `shrink=false` will ensure that the existing space is preserved
-even if it is larger than requested.
+If `shrink=true` (the default), the collection's capacity may be reduced if its current
+capacity is greater than `n`
 
 See also [`resize!`](@ref).
 
