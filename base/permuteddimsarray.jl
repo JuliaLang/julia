@@ -148,7 +148,7 @@ end
 
 Permute the dimensions of the matrix `m`, by flipping the elements across the diagonal of
 the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
-operation is not recursive, which especially useful for arrays of non-numeric values
+operation is not recursive, which is especially useful for arrays of non-numeric values
 (where the recursive `transpose` would throw an error) and/or 2d arrays that do not represent
 linear operators.
 
