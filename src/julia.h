@@ -1833,6 +1833,19 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
+
+STATIC_INLINE jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
+{
+    size_t dims[2] = {nr, nc};
+    return jl_alloc_array_nd(atype, &dims[0], 2);
+}
+
+STATIC_INLINE jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z)
+{
+    size_t dims[3] = {nr, nc, z};
+    return jl_alloc_array_nd(atype, &dims[0], 3);
+}
+
 // property access
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 JL_DLLEXPORT void *jl_array_eltype(jl_value_t *a);
