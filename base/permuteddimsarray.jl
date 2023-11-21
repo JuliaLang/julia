@@ -214,7 +214,7 @@ julia> permutedims(["a", "b", "c"])
  "a"  "b"  "c"
 ```
 For vectors of numbers, `permutedims(v)` works much like `transpose(v)`
-except that the return type differs (it uses [`reshape`](@ref) 
+except that the return type differs (it uses [`reshape`](@ref)
 rather than a [`LinearAlgebra.Transpose`](@ref) view, though both
 share memory with the original array `v`):
 ```jldoctest; setup = :(using LinearAlgebra)
