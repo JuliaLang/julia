@@ -1821,6 +1821,8 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                                          jl_value_t *dims, int own_buffer);
 
 JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
+JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc);
+JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z);
 JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
 JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
@@ -1833,19 +1835,6 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
-
-STATIC_INLINE jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
-{
-    size_t dims[2] = {nr, nc};
-    return jl_alloc_array_nd(atype, &dims[0], 2);
-}
-
-STATIC_INLINE jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z)
-{
-    size_t dims[3] = {nr, nc, z};
-    return jl_alloc_array_nd(atype, &dims[0], 3);
-}
-
 // property access
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 JL_DLLEXPORT void *jl_array_eltype(jl_value_t *a);
