@@ -1692,14 +1692,44 @@ function code_ircode_by_type(
     return asts
 end
 
+function _builtin_return_type(interp::Core.Compiler.AbstractInterpreter,
+                              @nospecialize(f::Core.Builtin), @nospecialize(types))
+    argtypes = Any[to_tuple_type(types).parameters...]
+    rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+    return Core.Compiler.widenconst(rt)
+end
+
+function _builtin_effects(interp::Core.Compiler.AbstractInterpreter,
+                          @nospecialize(f::Core.Builtin), @nospecialize(types))
+    argtypes = Any[to_tuple_type(types).parameters...]
+    rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+    return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+end
+
+check_generated_context(world::UInt) =
+    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
+        error("code reflection cannot be used from generated functions")
 
 """
-    Base.return_types(f::Function, types::DataType=default_tt(f);
-                      world::UInt=get_world_counter(), interp::NativeInterpreter=Core.Compiler.NativeInterpreter(world))
+    Base.return_types(
+        f, types=default_tt(f);
+        world::UInt=get_world_counter(),
+        interp::NativeInterpreter=Core.Compiler.NativeInterpreter(world)) -> rts::Vector{Any}
 
 Return a list of possible return types for a given function `f` and argument types `types`.
 The list corresponds to the results of type inference on all the possible method match
 candidates for `f` and `types` (see also [`methods(f, types)`](@ref methods).
+
+# Arguments
+- `f`: The function to analyze.
+- `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
+- `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+
+# Returns
+- `rts::Vector{Any}`: The list of return types that are figured out by inference on
+  methods matching with the given `f` and `types`. The list's order matches the order
+  returned by `methods(f, types)`.
 
 # Example
 
@@ -1722,25 +1752,22 @@ julia> Base.return_types(sum, (Union{Vector{Int},UnitRange{Int}},))
 ```
 
 !!! warning
-    The `return_types` function should not be used from generated functions;
+    The `Base.return_types` function should not be used from generated functions;
     doing so will result in an error.
 """
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world::UInt=get_world_counter(),
                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
-    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+    check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         _, rt = only(code_typed_opaque_closure(f))
         return Any[rt]
     end
-
     if isa(f, Core.Builtin)
-        argtypes = Any[to_tuple_type(types).parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Any[Core.Compiler.widenconst(rt)]
+        rt = _builtin_return_type(interp, f, types)
+        return Any[rt]
     end
-    rts = []
+    rts = Any[]
     tt = signature_type(f, types)
     matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     for match in matches
@@ -1752,35 +1779,220 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
 end
 
 """
-    infer_effects(f, types=default_tt(f); world=get_world_counter(), interp=Core.Compiler.NativeInterpreter(world))
+    Base.infer_exception_types(
+        f, types=default_tt(f);
+        world::UInt=get_world_counter(),
+        interp::NativeInterpreter=Core.Compiler.NativeInterpreter(world)) -> excts::Vector{Any}
 
-Compute the `Effects` of a function `f` with argument types `types`. The `Effects` represents the computational effects of the function call, such as whether it is free of side effects, guaranteed not to throw an exception, guaranteed to terminate, etc. The `world` and `interp` arguments specify the world counter and the native interpreter to use for the analysis.
+Return a list of possible exception types for a given function `f` and argument types `types`.
+The list corresponds to the results of type inference on all the possible method match
+candidates for `f` and `types` (see also [`methods(f, types)`](@ref methods).
+It works like [`Base.return_types`](@ref), but it infers the exception types instead of the return types.
 
 # Arguments
 - `f`: The function to analyze.
 - `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
 - `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
-- `interp` (optional): The native interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+- `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
 
 # Returns
-- `effects::Effects`: The computed effects of the function call.
+- `excts::Vector{Any}`: The list of exception types that are figured out by inference on
+  methods matching with the given `f` and `types`. The list's order matches the order
+  returned by `methods(f, types)`.
 
 # Example
 
 ```julia
-julia> function foo(x)
-           y = x * 2
-           return y
-       end;
+julia> throw_if_number(::Number) = error("number is given");
 
-julia> effects = Base.infer_effects(foo, (Int,))
+julia> throw_if_number(::Any) = nothing;
+
+julia> Base.infer_exception_types(throw_if_number, (Int,))
+1-element Vector{Any}:
+ ErrorException
+
+julia> methods(throw_if_number, (Any,))
+# 2 methods for generic function "throw_if_number" from Main:
+ [1] throw_if_number(x::Number)
+     @ REPL[1]:1
+ [2] throw_if_number(::Any)
+     @ REPL[2]:1
+
+julia> Base.infer_exception_types(throw_if_number, (Any,))
+2-element Vector{Any}:
+ ErrorException # the result of inference on `throw_if_number(::Number)`
+ Union{}        # the result of inference on `throw_if_number(::Any)`
+```
+
+!!! warning
+    The `Base.infer_exception_types` function should not be used from generated functions;
+    doing so will result in an error.
+"""
+function infer_exception_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                               world::UInt=get_world_counter(),
+                               interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    check_generated_context(world)
+    if isa(f, Core.OpaqueClosure)
+        return Any[Any] # TODO
+    end
+    if isa(f, Core.Builtin)
+        effects = _builtin_effects(interp, f, types)
+        exct = Core.Compiler.is_nothrow(effects) ? Union{} : Any
+        return Any[exct]
+    end
+    excts = Any[]
+    tt = signature_type(f, types)
+    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    for match in matches
+        match = match::Core.MethodMatch
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#false)
+        if frame === nothing
+            exct = Any
+        else
+            exct = Core.Compiler.widenconst(frame.result.exc_result)
+        end
+        push!(excts, exct)
+    end
+    return excts
+end
+
+_may_throw_methoderror(matches#=::Core.Compiler.MethodLookupResult=#) =
+    matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
+
+"""
+    Base.infer_exception_type(
+        f, types=default_tt(f);
+        world::UInt=get_world_counter(),
+        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> exct::Type
+
+Returns the type of exception potentially thrown by the function call specified by `f` and `types`.
+
+# Arguments
+- `f`: The function to analyze.
+- `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
+- `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+
+# Returns
+- `exct::Type`: The inferred type of exception that can be thrown by the function call
+  specified by the given call signature.
+
+!!! note
+    Note that, different from [`Base.infer_exception_types`](@ref), this doesn't give you the list
+    exception types for every possible matching method with the given `f` and `types`.
+    It provides a single exception type, taking into account all potential outcomes of
+    any function call entailed by the given signature type.
+
+# Example
+
+```julia
+julia> f1(x) = x * 2;
+
+julia> Base.infer_exception_type(f1, (Int,))
+Union{}
+```
+
+The exception inferred as `Union{}` indicates that `f1(::Int)` will not throw any exception.
+
+```julia
+julia> f2(x::Int) = x * 2;
+
+julia> Base.infer_exception_type(f2, (Integer,))
+MethodError
+```
+
+This case is pretty much the same as with `f1`, but there's a key difference to note. For
+`f2`, the argument type is limited to `Int`, while the argument type is given as `Tuple{Integer}`.
+Because of this, taking into account the chance of the method error entailed by the call
+signature, the exception type is widened to `MethodError`.
+
+!!! warning
+    The `Base.infer_exception_type` function should not be used from generated functions;
+    doing so will result in an error.
+"""
+function infer_exception_type(@nospecialize(f), @nospecialize(types=default_tt(f));
+                              world::UInt=get_world_counter(),
+                              interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    check_generated_context(world)
+    if isa(f, Core.OpaqueClosure)
+        return Any # TODO
+    end
+    if isa(f, Core.Builtin)
+        effects = _builtin_effects(interp, f, types)
+        return Core.Compiler.is_nothrow(effects) ? Union{} : Any
+    end
+    tt = signature_type(f, types)
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if matches === nothing
+        # unanalyzable call, i.e. the interpreter world might be newer than the world where
+        # the `f` is defined, return the unknown exception type
+        return Any
+    end
+    exct = Union{}
+    if _may_throw_methoderror(matches)
+        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+        exct = Core.Compiler.tmerge(exct, MethodError)
+    end
+    for match in matches.matches
+        match = match::Core.MethodMatch
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#false)
+        frame === nothing && return Any
+        exct = Core.Compiler.tmerge(exct, Core.Compiler.widenconst(frame.result.exc_result))
+    end
+    return exct
+end
+
+"""
+    Base.infer_effects(
+        f, types=default_tt(f);
+        world::UInt=get_world_counter(),
+        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
+
+Returns the possible computation effects of the function call specified by `f` and `types`.
+
+# Arguments
+- `f`: The function to analyze.
+- `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
+- `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+
+# Returns
+- `effects::Effects`: The computed effects of the function call specified by the given call signature.
+  See the documentation of [`Effects`](@ref Core.Compiler.Effects) or [`Base.@assume_effects`](@ref)
+  for more information on the various effect properties.
+
+!!! note
+    Note that, different from [`Base.return_types`](@ref), this doesn't give you the list
+    effect analysis results for every possible matching method with the given `f` and `types`.
+    It provides a single effect, taking into account all potential outcomes of any function
+    call entailed by the given signature type.
+
+# Example
+
+```julia
+julia> f1(x) = x * 2;
+
+julia> Base.infer_effects(f1, (Int,))
 (+c,+e,+n,+t,+s,+m,+i)
 ```
 
-This function will return an `Effects` object with information about the computational effects of the function `foo` when called with an `Int` argument. See the documentation for `Effects` for more information on the various effect properties.
+This function will return an `Effects` object with information about the computational
+effects of the function `f1` when called with an `Int` argument.
+
+```julia
+julia> f2(x::Int) = x * 2;
+
+julia> Base.infer_effects(f2, (Integer,))
+(+c,+e,!n,+t,+s,+m,+i)
+```
+
+This case is pretty much the same as with `f1`, but there's a key difference to note. For
+`f2`, the argument type is limited to `Int`, while the argument type is given as `Tuple{Integer}`.
+Because of this, taking into account the chance of the method error entailed by the call
+signature, the `:nothrow` bit gets tainted.
 
 !!! warning
-    The `infer_effects` function should not be used from generated functions;
+    The `Base.infer_effects` function should not be used from generated functions;
     doing so will result in an error.
 
 # See Also
@@ -1790,13 +2002,9 @@ This function will return an `Effects` object with information about the computa
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world::UInt=get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
-    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
-        error("code reflection cannot be used from generated functions")
+    check_generated_context(world)
     if isa(f, Core.Builtin)
-        types = to_tuple_type(types)
-        argtypes = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+        return _builtin_effects(interp, f, types)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1806,7 +2014,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         return Core.Compiler.Effects()
     end
     effects = Core.Compiler.EFFECTS_TOTAL
-    if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
+    if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
         effects = Core.Compiler.Effects(effects; nothrow=false)
     end
