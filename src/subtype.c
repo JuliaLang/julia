@@ -4376,18 +4376,21 @@ static void check_diagonal(jl_value_t *t, jl_varbinding_t *troot, int param)
 
 static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, int widen2ub)
 {
-    // we must replace each covariant occurrence of newvar with a different newvar2<:newvar (diagonal rule)
     if (jl_is_typevar(type)) {
+        int concretekind = widen2ub > 1 ? 0 : 1;
         jl_varbinding_t *v = troot;
         for (; v != NULL; v = v->prev) {
-            if (v->concrete && v->var == (jl_tvar_t *)type)
+            if (v->occurs_inv == 0 &&
+                v->occurs_cov > concretekind &&
+                v->var == (jl_tvar_t *)type)
                 break;
         }
         if (v != NULL) {
             if (widen2ub) {
-                type = ((jl_tvar_t *)type)->ub;
+                type = insert_nondiagonal(((jl_tvar_t *)type)->ub, troot, 2);
             }
             else {
+                // we must replace each covariant occurrence of newvar with a different newvar2<:newvar (diagonal rule)
                 if (v->innervars == NULL)
                     v->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
                 jl_value_t *newvar = NULL, *lb = v->var->lb, *ub = (jl_value_t *)v->var;
@@ -4443,7 +4446,8 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         // As for Vararg we'd better widen it's var to ub as otherwise they are still diagonal
         jl_value_t *t = jl_unwrap_vararg(type);
         jl_value_t *n = jl_unwrap_vararg_num(type);
-        widen2ub = !(n && jl_is_long(n)) || jl_unbox_long(n) > 1;
+        if (widen2ub == 0)
+            widen2ub = !(n && jl_is_long(n)) || jl_unbox_long(n) > 1;
         jl_value_t *newt;
         JL_GC_PUSH2(&newt, &n);
         newt = insert_nondiagonal(t, troot, widen2ub);
@@ -4476,10 +4480,8 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
 static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
     check_diagonal(t, troot, 0);
     int any_concrete = 0;
-    for (jl_varbinding_t *v = troot; v != NULL; v = v->prev) {
-        v->concrete = v->occurs_cov > 1 && v->occurs_inv == 0;
-        any_concrete |= v->concrete;
-    }
+    for (jl_varbinding_t *v = troot; v != NULL; v = v->prev)
+        any_concrete |= v->occurs_cov > 1 && v->occurs_inv == 0;
     if (!any_concrete)
         return t; // no diagonal
     return insert_nondiagonal(t, troot, 0);

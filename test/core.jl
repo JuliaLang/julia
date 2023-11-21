@@ -8065,5 +8065,7 @@ let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.
     check_widen_diagonal(x, y) = !<:(x, y) && x <: widen_diagonal(y)
     @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
     @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
+    @test Tuple{Real,Int,Float64} <: widen_diagonal(Tuple{S,Vararg{T}} where {S, T<:S})
+    @test Tuple{Int,Int,Float64,Float64} <: widen_diagonal(Tuple{S,S,Vararg{T}} where {S, T<:S})
     @test Union{Tuple{T}, Tuple{T,Int}} where {T} == widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
 end
