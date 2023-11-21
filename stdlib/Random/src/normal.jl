@@ -23,8 +23,23 @@ from the circularly symmetric complex normal distribution of variance 1 (corresp
 See also [`randn!`](@ref) to act in-place.
 
 # Examples
+
+1. Generating a single random number, by default of type `Float64`:
+
+```julia-repl
+julia> using Random
+
+julia> julia> randn()
+-0.942481877315864
+```
+
+2. Setting up of the random number generator with a user-defined seed, and the
+generation of a random number with a `ComplexF32` type: 
+
 ```jldoctest
-julia> using Random; rng = Xoshiro(123);
+julia> using Random 
+
+julia> rng = Xoshiro(123);
 
 julia> randn(rng, ComplexF64)
 -0.45660053706486897 - 1.0346749725929225im
