@@ -993,6 +993,9 @@ parsestmt_test_specs = [
     "x in'c'"   => "(call-i x in (char 'c'))"
     "1where'c'" => "(where 1 (char 'c'))"
     ":+'y'"     => "(juxtapose (call-post (quote-: +) ') (call-post y '))"
+    # unary subtype ops and newlines
+    "a +\n\n<:" => "(call-i a + <:)"
+    "for\n\n<:" => "(for (= <: (error (error-t))) (block (error)) (error-t))"
     # Empty character consumes trailing ' delimiter (ideally this could be
     # tested above but we don't require the input stream to be consumed in the
     # unit tests there.
