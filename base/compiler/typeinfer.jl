@@ -503,6 +503,11 @@ function adjust_effects(sv::InferenceState)
     return ipo_effects
 end
 
+function refine_exception_type(@nospecialize(exc_bestguess), ipo_effects::Effects)
+    ipo_effects.nothrow && return Bottom
+    return exc_bestguess
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
@@ -539,8 +544,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
-    me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
-    me.result.exc_result = exc_bestguess
+    ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -862,12 +867,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
         effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
         volatile_inf_result = isinferred && let inferred_src = result.src
                 isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
             end ? VolatileInferenceResult(result) : nothing
-        return EdgeCallResult(frame.bestguess, frame.exc_bestguess, edge, effects, volatile_inf_result)
+        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, Any, nothing, Effects())
@@ -875,7 +881,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    return EdgeCallResult(frame.bestguess, frame.exc_bestguess, nothing, adjust_effects(Effects(), method))
+    effects = adjust_effects(Effects(), method)
+    exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+    return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
 
 function cached_return_type(code::CodeInstance)
