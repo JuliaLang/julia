@@ -24,7 +24,7 @@ See also [`randn!`](@ref) to act in-place.
 
 # Examples
 
-1. Generating a single random number, by default of type `Float64`:
+Generating a single random number, by default of type `Float64`:
 
 ```julia-repl
 julia> using Random
@@ -33,7 +33,7 @@ julia> randn()
 -0.942481877315864
 ```
 
-2. Generating a matrix of normal random numbers, by default of type `Float64`:
+Generating a matrix of normal random numbers, by default of type `Float64`:
 
 ```julia-repl
 julia> using Random
@@ -44,7 +44,7 @@ julia> randn(2,3)
  -0.342792  -0.134299  -1.45005
 ```
 
-3. Setting up of the random number generator with a user-defined seed, and the generation of a random `ComplexF64` number, or a matrix `ComplexF32` normal random numbers:
+Setting up of the random number generator with a user-defined seed, and the generation of a random `ComplexF64` number, or a matrix `ComplexF32` normal random numbers:
 
 ```jldoctest
 julia> using Random
