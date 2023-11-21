@@ -44,8 +44,7 @@ julia> randn(2,3)
  -0.342792  -0.134299  -1.45005
 ```
 
-3. Setting up of the random number generator with a user-defined seed, and the
-generation of a random `ComplexF64` number, or a matrix `ComplexF32` normal random numbers:
+3. Setting up of the random number generator with a user-defined seed, and the generation of a random `ComplexF64` number, or a matrix `ComplexF32` normal random numbers:
 
 ```jldoctest
 julia> using Random
