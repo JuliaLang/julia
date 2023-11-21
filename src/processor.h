@@ -226,6 +226,8 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // Return the features of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Dump the name and feature set of the host CPU
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
+// Check if the CPU has native FMA instructions;
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
