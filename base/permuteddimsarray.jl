@@ -95,7 +95,7 @@ See also [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref
 
 # Examples
 ```jldoctest
-julia> A = reshape(Vector(1:8), (2,2,2))
+julia> A = [1 3; 2 4 ;;; 5 7; 6 8]
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -119,6 +119,20 @@ julia> B = permutedims(A, perm)
 
 julia> A == permutedims(B, invperm(perm)) # the inverse permutation
 true
+```
+
+`permutedims` accepts `AbstractArray`s with arbitrary element types:
+
+```jldoctest
+julia> A = ["a" "b" ; "c" "d"]
+2×2 Matrix{String}:
+ "a"  "b"
+ "c"  "d"
+
+julia> permutedims(A, (2,1))
+2×2 Matrix{String}:
+ "a"  "c"
+ "b"  "d"
 ```
 
 For each dimension `i` of `B = permutedims(A, perm)`, its corresponding dimension of `A`
@@ -187,9 +201,15 @@ the operation is not recursive.
 
 # Examples
 ```jldoctest; setup = :(using LinearAlgebra)
-julia> permutedims([1, 2, 3, 4])
-1×4 Matrix{Int64}:
- 1  2  3  4
+julia> v = ["a", "b", "c"]
+3-element Vector{String}:
+ "a"
+ "b"
+ "c"
+
+julia> permutedims(v)
+1×3 Matrix{String}:
+ "a"  "b"  "c"
 
 julia> V = [[[1 2; 3 4]]; [[5 6; 7 8]]]
 2-element Vector{Matrix{Int64}}:
