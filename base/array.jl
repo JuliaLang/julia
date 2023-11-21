@@ -1442,7 +1442,7 @@ performance.
 If the collection is ordered and `first` is `true`, then any additional space is reserved
 before the start of the collection rather than after the end. This way, subsequent calls
 to `pushfirst!` (instead of `push!`) may become faster.
-Supplying this keyword may result in an error if the collection is nor ordered
+Supplying this keyword may result in an error if the collection is not ordered
 or if `pushfirst!` is not supported for this collection.
 
 If `shrink=true` (the default), the collection's capacity may be reduced if its current
