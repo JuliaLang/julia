@@ -33,8 +33,19 @@ julia> randn()
 -0.942481877315864
 ```
 
-2. Setting up of the random number generator with a user-defined seed, and the
-generation of a random number with a `ComplexF32` type:
+2. Generating a matrix of normal random numbers, by default of type `Float64`:
+
+```julia-repl
+julia> using Random
+
+julia> randn(2,3)
+2×3 Matrix{Float64}:
+  1.18786   -0.678616   1.49463
+ -0.342792  -0.134299  -1.45005
+```
+
+3. Setting up of the random number generator with a user-defined seed, and the
+generation of a random `ComplexF64` number, or a matrix `ComplexF32` normal random numbers:
 
 ```jldoctest
 julia> using Random
