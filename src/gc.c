@@ -1746,6 +1746,19 @@ void gc_free_pages(void)
     }
 }
 
+void gc_move_to_global_page_pool(jl_gc_page_stack_t *pgstack)
+{
+    while (1) {
+        jl_gc_pagemeta_t *pg = pop_lf_back(pgstack);
+        if (pg == NULL) {
+            break;
+        }
+        jl_gc_free_page(pg);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
+        push_lf_back(&global_page_pool_freed, pg);
+    }
+}
+
 // setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(void)
 {
@@ -3776,7 +3789,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             ptls2->heap.remset->len = 0;
         }
         // free empty GC state for threads that have exited
-        if (ptls2->current_task == NULL) {
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL &&
+            (ptls->tid < gc_first_tid || ptls2->tid >= gc_first_tid + jl_n_gcthreads)) {
             jl_thread_heap_t *heap = &ptls2->heap;
             if (heap->weak_refs.len == 0)
                 small_arraylist_free(&heap->weak_refs);
@@ -3787,9 +3801,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             if (heap->last_remset->len == 0)
                 arraylist_free(heap->last_remset);
             if (ptls2->finalizers.len == 0)
-                arraylist_free(&ptls->finalizers);
+                arraylist_free(&ptls2->finalizers);
             if (ptls2->sweep_objs.len == 0)
-                arraylist_free(&ptls->sweep_objs);
+                arraylist_free(&ptls2->sweep_objs);
+            gc_move_to_global_page_pool(&ptls2->page_metadata_buffered);
         }
     }
 

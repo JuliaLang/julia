@@ -203,6 +203,8 @@ void sweep_stack_pools(void)
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
@@ -226,6 +228,9 @@ void sweep_stack_pools(void)
             if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
                 small_arraylist_free(al);
             }
+        }
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+            small_arraylist_free(ptls2->heap.free_stacks);
         }
 
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
