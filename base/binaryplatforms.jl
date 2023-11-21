@@ -1096,4 +1096,7 @@ Dict{Platform,String}()[HostPlatform()] = ""
 Platform("x86_64", "linux", Dict{String,Any}(); validate_strict=true)
 Platform("x86_64", "linux", Dict{String,String}(); validate_strict=false)  # called this way from Artifacts.unpack_platform
 
+# PkgCompat module for Pkg.jl
+include("binaryplatforms_pkgcompat.jl")
+
 end # module
