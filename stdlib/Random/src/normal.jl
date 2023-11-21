@@ -45,7 +45,7 @@ julia> randn(2,3)
 ```
 
 Setting up of the random number generator `rng` with a user-defined seed (for reproducible numbers)
-and using it to generate a random `Float32` number or a matrix `ComplexF32` random numbers:
+and using it to generate a random `Float32` number or a matrix of `ComplexF32` random numbers:
 
 ```jldoctest
 julia> using Random
