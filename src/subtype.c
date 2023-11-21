@@ -4405,27 +4405,27 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_tvar_t *var = ((jl_unionall_t*)type)->var;
         jl_varbinding_t *v = troot;
         for (; v != NULL; v = v->prev) {
-            if (v->var == (jl_tvar_t *)var)
+            if (v->var == var)
                 break;
         }
-        if (v == NULL) {
-            jl_value_t *newbody = insert_nondiagonal(body, troot, widen2ub);
-            jl_value_t *newvar = NULL;
-            JL_GC_PUSH2(&newbody, &newvar);
-            if (body == newbody || jl_has_typevar(newbody, var)) {
-                if (body != newbody)
-                    newbody = jl_new_struct(jl_unionall_type, var, newbody);
-                // n.b. we do not widen lb, since that would be the wrong direction
-                newvar = insert_nondiagonal(var->ub, troot, widen2ub);
-                if (newvar != var->ub) {
-                    newvar = (jl_value_t*)jl_new_typevar(var->name, var->lb, newvar);
-                    newbody = jl_apply_type1(newbody, newvar);
-                    newbody = jl_type_unionall((jl_tvar_t*)newvar, newbody);
-                }
+        if (v) v->var = NULL; // Temporarily remove `type->var` from binding list.
+        jl_value_t *newbody = insert_nondiagonal(body, troot, widen2ub);
+        if (v) v->var = var; // And restore it after inner insertation.
+        jl_value_t *newvar = NULL;
+        JL_GC_PUSH2(&newbody, &newvar);
+        if (body == newbody || jl_has_typevar(newbody, var)) {
+            if (body != newbody)
+                newbody = jl_new_struct(jl_unionall_type, var, newbody);
+            // n.b. we do not widen lb, since that would be the wrong direction
+            newvar = insert_nondiagonal(var->ub, troot, widen2ub);
+            if (newvar != var->ub) {
+                newvar = (jl_value_t*)jl_new_typevar(var->name, var->lb, newvar);
+                newbody = jl_apply_type1(newbody, newvar);
+                newbody = jl_type_unionall((jl_tvar_t*)newvar, newbody);
             }
-            type = newbody;
-            JL_GC_POP();
         }
+        type = newbody;
+        JL_GC_POP();
     }
     else if (jl_is_uniontype(type)) {
         jl_value_t *a = ((jl_uniontype_t*)type)->a;
