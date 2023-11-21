@@ -34,10 +34,10 @@ julia> randn()
 ```
 
 2. Setting up of the random number generator with a user-defined seed, and the
-generation of a random number with a `ComplexF32` type: 
+generation of a random number with a `ComplexF32` type:
 
 ```jldoctest
-julia> using Random 
+julia> using Random
 
 julia> rng = Xoshiro(123);
 
