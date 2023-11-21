@@ -571,7 +571,7 @@ precompile_test_harness(false) do dir
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
 
-    Baz_file = joinpath(dir, "OverwriteMethodError.jl")
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
     write(OverwriteMethodError_file,
           """
           module OverwriteMethodError
