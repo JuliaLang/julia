@@ -14,25 +14,46 @@
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
-Optionally generate an array of normally-distributed random numbers.
+Optionally generate an array of normally-distributed random numbers with size given by `dims`.
 The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
-[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default) and their
+[`Complex`](@ref) counterparts.
+
+(When `T` is complex, the values are drawn
+from the circularly symmetric complex normal distribution of variance 1, corresponding to real and imaginary parts
+having independent normal distribution with mean zero and variance `1/2`).
 
 See also [`randn!`](@ref) to act in-place.
 
 # Examples
+(The following examples use the optional `rng` argument in order to generate
+reproducible pseudo-random numbers.)
 ```jldoctest
 julia> using Random; rng = Xoshiro(123);
 
-julia> randn(rng, ComplexF64)
--0.45660053706486897 - 1.0346749725929225im
+julia> randn(rng) # default Float64 type
+-0.6457306721039767
 
-julia> randn(rng, ComplexF32, (2, 3))
-2×3 Matrix{ComplexF32}:
- -1.14806-0.153912im   0.056538+1.0954im      0.419454-0.543347im
-  0.34807+0.693657im  -0.948661+0.291442im  -0.0538589-0.463085im
+julia> randn(rng, (2,3))
+2×3 Matrix{Float64}:
+ -1.46325  -0.217665  0.98098
+ -1.6236    0.492246  0.0799568
+
+julia> randn(rng, Float32, 2)
+2-element Vector{Float32}:
+  1.5491246
+ -1.3416092
+
+julia> randn(rng, ComplexF64)
+0.29144228682925916 + 0.41945389572249037im
+
+julia> x = randn(rng, 10^3); # 1000 samples
+
+julia> sum(x)/length(x)   # mean ≈ 0
+-0.0028153389126229786
+
+julia> sum(x'x)/length(x) # variance ≈ 1
+0.9817308604870095
 ```
 """
 @inline function randn(rng::AbstractRNG=default_rng())
