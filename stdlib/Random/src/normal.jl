@@ -29,7 +29,7 @@ See also [`randn!`](@ref) to act in-place.
 ```julia-repl
 julia> using Random
 
-julia> julia> randn()
+julia> randn()
 -0.942481877315864
 ```
 
