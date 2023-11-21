@@ -442,7 +442,7 @@ function parse_toplevel(ps::ParseState)
             # a \n \n ==> (toplevel a)
             # Empty files
             #  ==> (toplevel)
-            bump_trivia(ps, skip_newlines=true)
+            bump_trivia(ps)
             break
         else
             parse_stmts(ps)
@@ -1027,7 +1027,7 @@ end
 #
 # flisp: parse-unary-subtype
 function parse_unary_subtype(ps::ParseState)
-    t = peek_token(ps, skip_newlines=true)
+    t = peek_token(ps)
     if is_type_operator(t)
         k2 = peek(ps, 2)
         if is_closing_token(ps, k2) || k2 in KSet"NewlineWs ="
@@ -1060,7 +1060,7 @@ function parse_where_chain(ps0::ParseState, mark)
     ps = ParseState(ps0, where_enabled=false)
     while peek(ps) == K"where"
         bump(ps, TRIVIA_FLAG) # where
-        bump_trivia(ps, skip_newlines=true)
+        bump_trivia(ps)
         k = peek(ps)
         if k == K"{"
             # x where \n {T}  ==>  (where x (braces T))
@@ -3457,7 +3457,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         if preceding_whitespace(t)
             # : foo   ==>  (quote-: (error-t) foo)
             # :\nfoo  ==>  (quote-: (error-t) foo)
-            bump_trivia(ps, TRIVIA_FLAG, skip_newlines=true,
+            bump_trivia(ps, TRIVIA_FLAG,
                         error="whitespace not allowed after `:` used for quoting")
         end
         # Being inside quote makes keywords into identifiers at the
