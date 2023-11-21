@@ -1520,3 +1520,16 @@ function countlines(io::IO; eol::AbstractChar='\n')
 end
 
 countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int
+
+# From Pkg.jl
+"""
+    UnstableIO <: IO
+
+Type unstable wrapper around an IO to avoid specializing write, get, and print
+"""
+struct UnstableIO <: IO
+    io::IO
+end
+Base.write(io::UnstableIO, b::UInt8) = write(io.io, b)::Int
+Base.get(io::UnstableIO, val, default) = get(io.io, val, default)
+Base.print(io::UnstableIO, arg::Union{SubString{String}, String}) = print(io.io, arg)
