@@ -202,7 +202,7 @@ permutedims(A::AbstractMatrix) = permutedims(A, (2,1))
 
 Reshape vector `v` into a `1 × length(v)` row matrix.
 Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
-the operation is not recursive, which especially useful for arrays of non-numeric values
+the operation is not recursive, which is especially useful for arrays of non-numeric values
 (where the recursive `transpose` might throw an error).
 
 # Examples
