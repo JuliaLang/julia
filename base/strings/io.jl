@@ -353,9 +353,31 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-join(iterator) = sprint(join, iterator)
-join(iterator, delim) = sprint(join, iterator, delim)
-join(iterator, delim, last) = sprint(join, iterator, delim, last)
+# TODO: If/when we have `AnnotatedIO`, we can revisit this and
+# implement it more nicely.
+function join_annotated(iterator, delim="", last=delim)
+    xs = zip(iterator, Iterators.repeated(delim)) |> Iterators.flatten |> collect
+    xs = xs[1:end-1]
+    if length(xs) > 1
+        xs[end-1] = last
+    end
+    annotatedstring(xs...)::AnnotatedString{String}
+end
+
+function _join_maybe_annotated(args...)
+    if any(function (arg)
+               t = eltype(arg)
+               !(t == Union{}) && (t <: AnnotatedString || t <: AnnotatedChar)
+           end, args)
+        join_annotated(args...)
+    else
+        sprint(join, args...)
+    end
+end
+
+join(iterator) = _join_maybe_annotated(iterator)
+join(iterator, delim) = _join_maybe_annotated(iterator, delim)
+join(iterator, delim, last) = _join_maybe_annotated(iterator, delim, last)
 
 ## string escaping & unescaping ##
 
@@ -590,14 +612,14 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString)
-    escape_raw_string(io, s::AbstractString)
+    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
-For each double-quote (`"`) character in input string `s`, this
-function counts the number _n_ of preceding backslash (`\\`) characters,
-and then increases there the number of backslashes from _n_ to 2_n_+1
-(even for _n_ = 0). It also doubles a sequence of backslashes at the end
+For each double-quote (`"`) character in input string `s` (or `delim` if
+specified), this function counts the number _n_ of preceding backslash (`\\`)
+characters, and then increases there the number of backslashes from _n_ to
+2_n_+1 (even for _n_ = 0). It also doubles a sequence of backslashes at the end
 of the string.
 
 This escaping convention is used in raw strings and other non-standard
@@ -607,36 +629,41 @@ command-line string into the argv[] array.)
 
 See also [`escape_string`](@ref).
 """
-function escape_raw_string(io, str::AbstractString)
+function escape_raw_string(io::IO, str::AbstractString, delim::Char='"')
+    total = 0
     escapes = 0
     for c in str
         if c == '\\'
             escapes += 1
         else
-            if c == '"'
+            if c == delim
                 # if one or more backslashes are followed by
                 # a double quote then escape all backslashes
                 # and the double quote
-                escapes = escapes * 2 + 1
-            end
-            while escapes > 0
-                write(io, '\\')
-                escapes -= 1
+                escapes += 1
+                total += escapes
+                while escapes > 0
+                    write(io, '\\')
+                    escapes -= 1
+                end
             end
             escapes = 0
-            write(io, c)
         end
+        write(io, c)
     end
     # also escape any trailing backslashes,
     # so they do not affect the closing quote
+    total += escapes
     while escapes > 0
-        write(io, '\\')
         write(io, '\\')
         escapes -= 1
     end
+    total
 end
-escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
-                                                sizehint = lastindex(str) + 2)
+function escape_raw_string(str::AbstractString, delim::Char='"')
+    total = escape_raw_string(devnull, str, delim) # check whether the string even needs to be copied and how much to allocate for it
+    return total == 0 ? str : sprint(escape_raw_string, str, delim; sizehint = sizeof(str) + total)
+end
 
 ## multiline strings ##
 
@@ -763,4 +790,27 @@ function String(chars::AbstractVector{<:AbstractChar})
             print(io, c)
         end
     end
+end
+
+function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
+    str = if C <: AnnotatedChar
+        String(getfield.(chars, :char))
+    else
+        sprint(sizehint=length(chars)) do io
+            for c in chars
+                print(io, c)
+            end
+        end
+    end
+    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    point = 1
+    for c in chars
+        if c isa AnnotatedChar
+            for annot in c.annotations
+                push!(annots, (point:point, annot))
+            end
+        end
+        point += ncodeunits(c)
+    end
+    AnnotatedString(str, annots)
 end

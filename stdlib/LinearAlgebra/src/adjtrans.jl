@@ -65,21 +65,6 @@ Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 """
-    adj_or_trans(::AbstractArray) -> adjoint|transpose|identity
-    adj_or_trans(::Type{<:AbstractArray}) -> adjoint|transpose|identity
-
-Return [`adjoint`](@ref) from an `Adjoint` type or object and
-[`transpose`](@ref) from a `Transpose` type or object. Otherwise,
-return [`identity`](@ref). Note that `Adjoint` and `Transpose` have
-to be the outer-most wrapper object for a non-`identity` function to be
-returned.
-"""
-adj_or_trans(::T) where {T<:AbstractArray} = adj_or_trans(T)
-adj_or_trans(::Type{<:AbstractArray}) = identity
-adj_or_trans(::Type{<:Adjoint}) = adjoint
-adj_or_trans(::Type{<:Transpose}) = transpose
-
-"""
     inplace_adj_or_trans(::AbstractArray) -> adjoint!|transpose!|copyto!
     inplace_adj_or_trans(::Type{<:AbstractArray}) -> adjoint!|transpose!|copyto!
 
@@ -94,8 +79,14 @@ inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
 inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
 inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 
+# unwraps Adjoint, Transpose, Symmetric, Hermitian
 _unwrap(A::Adjoint)   = parent(A)
 _unwrap(A::Transpose) = parent(A)
+
+# unwraps Adjoint and Transpose only
+_unwrap_at(A) = A
+_unwrap_at(A::Adjoint)   = parent(A)
+_unwrap_at(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -290,6 +281,11 @@ adjoint(A::Adjoint) = A.parent
 transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
+adjoint(A::Transpose{<:Any,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Any,<:Transpose}) = adjoint(A.parent.parent)
+# disambiguation
+adjoint(A::Transpose{<:Real,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Real,<:Transpose}) = A.parent
 
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
@@ -353,8 +349,8 @@ Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stri
 Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
 
-Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
-Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 
 Base.elsize(::Type{<:Adjoint{<:Real, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
 Base.elsize(::Type{<:Transpose{<:Any, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
@@ -404,11 +400,16 @@ map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...
 map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
+quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below
 broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Transpose{<:Any,<:AdjointAbsVec}}...) =
+    transpose(adjoint(broadcast((xs...) -> adjoint(transpose(f(conj.(xs)...))), quasiparentc.(tvs)...)))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Adjoint{<:Any,<:TransposeAbsVec}}...) =
+    adjoint(transpose(broadcast((xs...) -> transpose(adjoint(f(conj.(xs)...))), quasiparentc.(tvs)...)))
 # TODO unify and allow mixed combinations with a broadcast style
 
 

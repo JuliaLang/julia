@@ -158,7 +158,7 @@ eigmin(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, 1:1)[1]
 
 function eigen(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigen!(eigencopy_oftype{S}(A), eigencopy_oftype(B, S); kws...)
+    return eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
 
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
@@ -192,7 +192,7 @@ _UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
 
 function eigvals(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigen!(eigencopy_oftype{S}(A), eigencopy_oftype(B, S); kws...)
+    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}

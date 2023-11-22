@@ -92,7 +92,6 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
-    "manual/profile.md",
     "manual/stacktraces.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
@@ -112,6 +111,7 @@ BaseDocs = [
     "base/arrays.md",
     "base/parallel.md",
     "base/multi-threading.md",
+    "base/scopedvalues.md",
     "base/constants.md",
     "base/file.md",
     "base/io-network.md",
@@ -126,6 +126,12 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
+
+Tutorials = [
+    "tutorials/creating-packages.md",
+    "tutorials/profile.md",
+    "tutorials/external.md",
+]
 
 DevDocs = [
     "Documentation of Julia's Internals" => [
@@ -143,6 +149,7 @@ DevDocs = [
         "devdocs/isbitsunionarrays.md",
         "devdocs/sysimg.md",
         "devdocs/pkgimg.md",
+        "devdocs/llvm-passes.md",
         "devdocs/llvm.md",
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
@@ -152,8 +159,12 @@ DevDocs = [
         "devdocs/inference.md",
         "devdocs/ssair.md",
         "devdocs/EscapeAnalysis.md",
+        "devdocs/aot.md",
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
+        "devdocs/jit.md",
+        "devdocs/builtins.md",
+        "devdocs/precompile_hang.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",
@@ -180,6 +191,7 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
+    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -190,6 +202,7 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
+    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end

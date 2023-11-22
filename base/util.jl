@@ -135,8 +135,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
-!!! compat "Julia 1.9"
-    Support for italic output was added in Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for italic output was added in Julia 1.10.
 """
 @constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
@@ -163,8 +163,7 @@ To get the julia command without propagated command line arguments, `julia_cmd()
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 
 !!! compat "Julia 1.9"
-    The keyword argument `cpu_target` was added.
-
+    The keyword argument `cpu_target` was added in 1.9.
     The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
@@ -205,6 +204,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
@@ -242,9 +242,6 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     if opts.use_pkgimages == 0
         push!(addflags, "--pkgimages=no")
-    else
-        # If pkgimage is set, malloc_log and code_coverage should not
-        @assert opts.malloc_log == 0 && opts.code_coverage == 0
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -690,7 +687,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
-    delete!(ENV2, "JULIA_LOAD_PATH")
+    ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
@@ -699,7 +696,9 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     catch
         buf = PipeBuffer()
         original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        let InteractiveUtils = Base.require(Base, :InteractiveUtils)
+            @invokelatest InteractiveUtils.versioninfo(buf)
+        end
         empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")

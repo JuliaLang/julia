@@ -254,11 +254,6 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. It has an
     integer-valued `id` field giving the slot index.
     The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
-    When a slot has different types at different uses and thus requires per-use type annotations,
-    they are converted to temporary `Core.Compiler.TypedSlot` object. This object has an
-    additional `typ` field as well as the `id` field. Note that `Core.Compiler.TypedSlot`
-    only appears in an unoptimized lowered form that is scheduled for optimization,
-    and it never appears elsewhere.
 
   * `Argument`
 
@@ -606,10 +601,9 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `uninferred`
 

@@ -16,9 +16,7 @@ about strings:
   * Each `AbstractChar` in a string is encoded by one or more code units
   * Only the index of the first code unit of an `AbstractChar` is a valid index
   * The encoding of an `AbstractChar` is independent of what precedes or follows it
-  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
-
-[self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
+  * String encodings are [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) – i.e. `isvalid(s, i)` is O(1)
 
 Some string functions that extract code units, characters or substrings from
 strings error if you pass them out-of-bounds or invalid string indices. This
@@ -31,7 +29,7 @@ types may choose different "imaginary" character sizes as makes sense for their
 implementations (e.g. substrings may pass index arithmetic through to the
 underlying string they provide a view into). Relaxed indexing functions include
 those intended for index arithmetic: `thisind`, `nextind` and `prevind`. This
-model allows index arithmetic to work with out-of- bounds indices as
+model allows index arithmetic to work with out-of-bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
@@ -243,9 +241,10 @@ end
 """
     *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
 
-Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
-to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
-string types always produces a value of type `String` but other string types may choose
+Concatenate strings and/or characters, producing a [`String`](@ref) or
+[`AnnotatedString`](@ref) (as appropriate). This is equivalent to calling the
+[`string`](@ref) or [`annotatedstring`](@ref) function on the arguments. Concatenation of built-in string
+types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
 
 # Examples
@@ -257,7 +256,15 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
+function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
+    isannotated = s1 isa AnnotatedString || s1 isa AnnotatedChar ||
+        any(s -> s isa AnnotatedString || s isa AnnotatedChar, ss)
+    if isannotated
+        annotatedstring(s1, ss...)
+    else
+        string(s1, ss...)
+    end
+end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -311,7 +318,8 @@ end
     ==(a::AbstractString, b::AbstractString) -> Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point).
+code point by code point). Should either string be a [`AnnotatedString`](@ref) the
+string properties must match too.
 
 # Examples
 ```jldoctest
@@ -792,8 +800,8 @@ IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
-unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
-unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
+cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
 """
     codeunits(s::AbstractString)

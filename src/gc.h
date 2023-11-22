@@ -10,6 +10,7 @@
 #define JL_GC_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -82,6 +83,7 @@ typedef struct {
     uint64_t    total_sweep_time;
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
+    uint64_t    last_incremental_sweep;
 } jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of
@@ -135,15 +137,17 @@ JL_EXTENSION typedef struct _bigval_t {
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
-// data structure for tracking malloc'd arrays.
+// data structure for tracking malloc'd arrays and genericmemory.
 
 typedef struct _mallocarray_t {
-    jl_array_t *a;
+    jl_value_t *a;
     struct _mallocarray_t *next;
 } mallocarray_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
+    // next metadata structure in per-thread list
+    // or in one of the `jl_gc_global_page_pool_t`
     struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
@@ -178,13 +182,9 @@ typedef struct _jl_gc_pagemeta_t {
     char *data;
 } jl_gc_pagemeta_t;
 
-typedef struct {
-    _Atomic(jl_gc_pagemeta_t *) page_metadata_back;
-} jl_gc_global_page_pool_t;
-
-extern jl_gc_global_page_pool_t global_page_pool_lazily_freed;
-extern jl_gc_global_page_pool_t global_page_pool_clean;
-extern jl_gc_global_page_pool_t global_page_pool_freed;
+extern jl_gc_page_stack_t global_page_pool_lazily_freed;
+extern jl_gc_page_stack_t global_page_pool_clean;
+extern jl_gc_page_stack_t global_page_pool_freed;
 
 #define GC_BACKOFF_MIN 4
 #define GC_BACKOFF_MAX 12
@@ -201,32 +201,46 @@ STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
 
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
+// XXX: this is not a general-purpose lock-free stack. We can
+// get away with just using a CAS and not implementing some ABA
+// prevention mechanism since once a node is popped from the
+// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// in the sweeping phase, which also doesn't push a node into the
+// same stack after it's popped
 
-STATIC_INLINE void push_lf_page_metadata_back(jl_gc_global_page_pool_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
+STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {
     while (1) {
-        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         elt->next = old_back;
-        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, elt)) {
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, elt)) {
             break;
         }
         jl_cpu_pause();
     }
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *pop_lf_page_metadata_back(jl_gc_global_page_pool_t *pool) JL_NOTSAFEPOINT
+STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
 {
     while (1) {
-        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->page_metadata_back);
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         if (old_back == NULL) {
             return NULL;
         }
-        if (jl_atomic_cmpswap(&pool->page_metadata_back, &old_back, old_back->next)) {
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, old_back->next)) {
             return old_back;
         }
         jl_cpu_pause();
     }
 }
+
+// data structures for tracking fragmentation in the pool allocator
+// #define GC_MEASURE_PAGE_FRAGMENTATION
+
+typedef struct {
+    _Atomic(size_t) n_freed_objs;
+    _Atomic(size_t) n_pages_allocd;
+} gc_fragmentation_stat_t;
 
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
@@ -257,6 +271,18 @@ typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
 } pagetable_t;
 
+typedef struct {
+    _Atomic(size_t) bytes_mapped;
+    _Atomic(size_t) bytes_resident;
+    _Atomic(size_t) heap_size;
+    _Atomic(size_t) heap_target;
+} gc_heapstatus_t;
+
+#define GC_PAGE_UNMAPPED        0
+#define GC_PAGE_ALLOCATED       1
+#define GC_PAGE_LAZILY_FREED    2
+#define GC_PAGE_FREED           3
+
 extern pagetable_t alloc_map;
 
 STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
@@ -272,7 +298,7 @@ STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
     if (r0 == NULL)
         return 0;
     i = REGION0_INDEX(data);
-    return r0->meta[i];
+    return (r0->meta[i] == GC_PAGE_ALLOCATED);
 }
 
 STATIC_INLINE void gc_alloc_map_set(char *_data, uint8_t v) JL_NOTSAFEPOINT
@@ -365,10 +391,11 @@ extern jl_gc_num_t gc_num;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
-extern int64_t lazy_freed_pages;
+extern int64_t buffered_pages;
 extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
+extern gc_heapstatus_t gc_heap_stats;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -429,14 +456,19 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern uv_mutex_t gc_threads_lock;
+extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
+extern _Atomic(int) gc_n_threads_sweeping;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
+void gc_sweep_pool_parallel(void);
+void gc_free_pages(void);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 
@@ -474,9 +506,9 @@ void gc_time_big_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
 void gc_time_big_end(void) JL_NOTSAFEPOINT;
 
-void gc_time_mallocd_array_start(void) JL_NOTSAFEPOINT;
-void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT;
-void gc_time_mallocd_array_end(void) JL_NOTSAFEPOINT;
+void gc_time_mallocd_memory_start(void) JL_NOTSAFEPOINT;
+void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT;
+void gc_time_mallocd_memory_end(void) JL_NOTSAFEPOINT;
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes);
@@ -503,12 +535,12 @@ STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
     (void)bits;
 }
 #define gc_time_big_end()
-#define gc_time_mallocd_array_start()
-STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
+#define gc_time_mallocd_memory_start()
+STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }
-#define gc_time_mallocd_array_end()
+#define gc_time_mallocd_memory_end()
 #define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
@@ -627,10 +659,11 @@ void gc_stats_big_obj(void);
 // For debugging
 void gc_count_pool(void);
 
-size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
+size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable);
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void);
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

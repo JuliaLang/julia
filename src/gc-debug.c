@@ -1,7 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 // re-include assert.h without NDEBUG,
@@ -112,7 +115,7 @@ static void gc_clear_mark_outer(int bits)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             gc_clear_mark_page(pg, bits);
             pg = pg->next;
@@ -613,8 +616,7 @@ void objprofile_count(void *ty, int old, int sz)
         ty = (void*)jl_buff_tag;
     }
     else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
-             jl_typeof(ty) == (jl_value_t*)jl_datatype_type &&
-             ((jl_datatype_t*)ty)->instance) {
+             jl_is_datatype(ty) && jl_is_datatype_singleton((jl_datatype_t*)ty)) {
         ty = jl_singleton_tag;
     }
     void **bp = ptrhash_bp(&obj_counts[old], ty);
@@ -744,45 +746,37 @@ void gc_final_pause_end(int64_t t0, int64_t tend)
 
 static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i] | pagetable0->freemap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p0)++;
-                }
-            }
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT; pg_i++) {
+        uint8_t meta = pagetable0->meta[pg_i];
+        assert(meta == GC_PAGE_UNMAPPED || meta == GC_PAGE_ALLOCATED ||
+               meta == GC_PAGE_LAZILY_FREED || meta == GC_PAGE_FREED);
+        if (meta != GC_PAGE_UNMAPPED) {
+            (*p0)++;
         }
     }
 }
 
 static void gc_stats_pagetable1(pagetable1_t *pagetable1, unsigned *p1, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i] | pagetable1->freemap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p1)++;
-                    gc_stats_pagetable0(pagetable1->meta0[pg_i * 32 + j], p0);
-                }
-            }
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT; pg_i++) {
+        pagetable0_t *pagetable0 = pagetable1->meta0[pg_i];
+        if (pagetable0 == NULL) {
+            continue;
         }
+        (*p1)++;
+        gc_stats_pagetable0(pagetable0, p0);
     }
 }
 
 static void gc_stats_pagetable(unsigned *p2, unsigned *p1, unsigned *p0)
 {
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i] | memory_map.freemap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    (*p2)++;
-                    gc_stats_pagetable1(memory_map.meta1[pg_i * 32 + j], p1, p0);
-                }
-            }
+    for (int pg_i = 0; pg_i < REGION2_PG_COUNT; pg_i++) {
+        pagetable1_t *pagetable1 = alloc_map.meta1[pg_i];
+        if (pagetable1 == NULL) {
+            continue;
         }
+        (*p2)++;
+        gc_stats_pagetable1(pagetable1, p1, p0);
     }
 }
 
@@ -791,12 +785,13 @@ void jl_print_gc_stats(JL_STREAM *s)
 #ifdef _OS_LINUX_
     malloc_stats();
 #endif
-    double ptime = jl_clock_now() - process_t0;
-    jl_safe_printf("exec time\t%.5f sec\n", ptime);
+    double ptime = jl_hrtime() - process_t0;
+    double exec_time = jl_ns2s(ptime);
+    jl_safe_printf("exec time\t%.5f sec\n", exec_time);
     if (gc_num.pause > 0) {
         jl_safe_printf("gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
                        jl_ns2s(gc_num.total_time),
-                       jl_ns2s(gc_num.total_time) / ptime * 100,
+                       jl_ns2s(gc_num.total_time) / exec_time * 100,
                        gc_num.pause, gc_num.full_sweep);
         jl_safe_printf("gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
                        jl_ns2ms(gc_num.total_time) / gc_num.pause,
@@ -898,29 +893,29 @@ void gc_time_big_end(void)
                    t_ms, big_freed, big_total, big_reset);
 }
 
-static int64_t mallocd_array_total;
-static int64_t mallocd_array_freed;
-static int64_t mallocd_array_sweep_start;
+static int64_t mallocd_memory_total;
+static int64_t mallocd_memory_freed;
+static int64_t mallocd_memory_sweep_start;
 
-void gc_time_mallocd_array_start(void)
+void gc_time_mallocd_memory_start(void)
 {
-    mallocd_array_total = 0;
-    mallocd_array_freed = 0;
-    mallocd_array_sweep_start = jl_hrtime();
+    mallocd_memory_total = 0;
+    mallocd_memory_freed = 0;
+    mallocd_memory_sweep_start = jl_hrtime();
 }
 
-void gc_time_count_mallocd_array(int bits)
+void gc_time_count_mallocd_memory(int bits)
 {
-    mallocd_array_total++;
-    mallocd_array_freed += !gc_marked(bits);
+    mallocd_memory_total++;
+    mallocd_memory_freed += !gc_marked(bits);
 }
 
-void gc_time_mallocd_array_end(void)
+void gc_time_mallocd_memory_end(void)
 {
-    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_array_sweep_start);
+    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_memory_sweep_start);
     jl_safe_printf("GC sweep arrays %.2f ms "
                    "(freed %" PRId64 " / %" PRId64 ")\n",
-                   t_ms, mallocd_array_freed, mallocd_array_total);
+                   t_ms, mallocd_memory_freed, mallocd_memory_total);
 }
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
@@ -1012,7 +1007,7 @@ void jl_gc_debug_init(void)
 #endif
 
 #ifdef GC_FINAL_STATS
-    process_t0 = jl_clock_now();
+    process_t0 = jl_hrtime();
 #endif
 }
 
@@ -1115,7 +1110,7 @@ void gc_stats_big_obj(void)
         while (ma != NULL) {
             if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
                 nused++;
-                nbytes += jl_array_nbytes(ma->a);
+                nbytes += jl_genericmemory_nbytes((jl_genericmemory_t*)ma->a);
             }
             ma = ma->next;
         }
@@ -1157,7 +1152,7 @@ static void gc_count_pool_pagetable(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             if (gc_alloc_map_is_set(pg->data)) {
                 gc_count_pool_page(pg);
@@ -1207,12 +1202,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
     }
-    else if (vt->name == jl_array_typename) {
-        jl_array_t *a = (jl_array_t*)obj;
-        start = (char*)a->data;
-        len = jl_array_len(a);
-        elsize = a->elsize;
-    }
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
@@ -1224,15 +1213,25 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;
 }
 
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
     if (!gc_logging_enabled) {
         return;
     }
-    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/1e6,
+    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/(double)(1<<20),
         full ? "full" : "incr",
         recollect ? "recollect" : ""
     );
+
+    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
+        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
+        (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
+    );
+    // Should fragmentation use bytes_resident instead of heap_size?
 }
 
 #ifdef __cplusplus

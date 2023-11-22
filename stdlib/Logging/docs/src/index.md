@@ -180,7 +180,7 @@ pattern match against the log event stream.
 
 ## Environment variables
 
-Message filtering can be influenced through the `JULIA_DEBUG` environment
+Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
 module. Loading julia with `JULIA_DEBUG=loading` will activate
 `@debug` log messages in `loading.jl`. For example, in Linux shells:

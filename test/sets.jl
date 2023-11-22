@@ -124,6 +124,14 @@ end
     @test isempty(s)
     @test_throws ArgumentError pop!(s)
     @test length(Set(['x',120])) == 2
+
+    # Test that pop! returns the element in the set, not the query
+    s = Set{Any}(Any[0x01, UInt(2), 3, 4.0])
+    @test pop!(s, 1) === 0x01
+    @test pop!(s, 2) === UInt(2)
+    @test pop!(s, 3) === 3
+    @test pop!(s, 4) === 4.0
+    @test_throws KeyError pop!(s, 5)
 end
 @testset "copy" begin
     data_in = (1,2,9,8,4)
@@ -164,6 +172,19 @@ end
     sizehint!(s2, 10)
     @test s2 == GenericSet(s)
 end
+
+@testset "shrinking" begin # Similar test as for the underlying Dict
+    d = Set(i for i = 1:1000)
+    filter!(x -> x < 10, d)
+    sizehint!(d, 10)
+    @test length(d.dict.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.dict.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.dict.slots) < 1000
+end
+
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
     # array element
@@ -364,7 +385,9 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test issubset(union(l,r))(r)
             @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l)(l) == isempty(l)
             @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
@@ -381,6 +404,15 @@ end
             @test ⊋(S([1,2]), S([1]))
             @test !⊋(S([1]), S([1]))
             @test ⊉(S([1]), S([2]))
+
+            @test ⊆(S([1,2]))(S([1]))
+            @test ⊊(S([1,2]))(S([1]))
+            @test !⊊(S([1]))(S([1]))
+            @test ⊈(S([2]))(S([1]))
+            @test ⊇(S([1]))(S([1,2]))
+            @test ⊋(S([1]))(S([1,2]))
+            @test !⊋(S([1]))(S([1]))
+            @test ⊉(S([2]))(S([1]))
         end
         let s1 = S([1,2,3,4])
             @test s1 !== symdiff(s1) == s1
@@ -810,6 +842,28 @@ end
     @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
     @test replace((1, missing), missing=>0) === (1, 0)
+
+    # test that MethodError is thrown for pairs
+    @test_throws MethodError replace(identity, 1=>2)
+    @test_throws MethodError replace(identity, 1=>2, 3=>4)
+    @test_throws MethodError replace!(identity, 1=>2)
+    @test_throws MethodError replace!(identity, 1=>2, 3=>4)
+
+    # test replace and friends for AbstractDicts
+    d1 = GenericDict(Dict(1=>2, 3=>4))
+    d2 = replace(d1, (1=>2) => (1=>"a"))
+    @test d2 == Dict(1=>"a", 3=>4)
+    @test d2 isa Dict{Int, Any}
+    @test d1 === replace!(d1, (1=>2) => (1=>-2))
+    @test d1 == Dict(1=>-2, 3=>4)
+
+    dd = Dict(1=>2, 3=>1, 5=>1, 7=>1)
+    for d1 in (dd, GenericDict(dd))
+        @test replace(d1, (1=>2) => (1=>"a"), count=0) == d1
+        d2 = replace(kv->(kv[2] == 1 ? kv[1]=>2 : kv), d1, count=2)
+        @test count(==(2), values(d2)) == 3
+        @test count(==(1), values(d2)) == 1
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
@@ -837,6 +891,8 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        @test !issetequal(B)(A)
+        @test !issetequal(A)(B)
         for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
@@ -931,4 +987,6 @@ end
     end
     set = TestSet{Any}()
     @test sizehint!(set, 1) === set
+    @test sizehint!(set, 1; shrink = true) === set
+    @test sizehint!(set, 1; shrink = false) === set
 end

@@ -102,7 +102,7 @@ Random.seed!(1)
         @test_throws BoundsError ubd[1, n + 1] = 1
         @test ((cubd[2, 2] = 10) == 10; cubd[2, 2] == 10)
         # bidiagonal size
-        @test_throws ArgumentError size(ubd, 0)
+        @test_throws BoundsError size(ubd, 0)
         @test size(ubd, 1) == size(ubd, 2) == n
         @test size(ubd, 3) == 1
         # bidiagonal similar
@@ -118,6 +118,21 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+    end
+
+    @testset "isstored" begin
+        ubd = Bidiagonal(dv, ev, :U)
+        lbd = Bidiagonal(dv, ev, :L)
+        # bidiagonal isstored / upper & lower
+        @test_throws BoundsError Base.isstored(ubd, n + 1, 1)
+        @test_throws BoundsError Base.isstored(ubd, 1, n + 1)
+        @test Base.isstored(ubd, 2, 2)
+        # bidiagonal isstored / upper
+        @test Base.isstored(ubd, 2, 3)
+        @test !Base.isstored(ubd, 3, 2)
+        # bidiagonal isstored / lower
+        @test Base.isstored(lbd, 3, 2)
+        @test !Base.isstored(lbd, 2, 3)
     end
 
     @testset "show" begin
@@ -424,6 +439,9 @@ Random.seed!(1)
                 for op in (+, -, *)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
+                A = kron(T.dv, T.dv')
+                @test T * A ≈ lmul!(T, copy(A))
+                @test A * T ≈ rmul!(copy(A), T)
             end
             # test pass-through of mul! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
@@ -431,7 +449,8 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             Dia = Diagonal(T.dv)
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T) ≈ rmul!(copy(Tri), T)
+            @test Array(T*Tri) ≈ Array(T)*Array(Tri) ≈ lmul!(T, copy(Tri))
             # test mul! itself for these types
             for AA in (Tri, Dia)
                 for f in (identity, transpose, adjoint)
@@ -444,8 +463,10 @@ Random.seed!(1)
             for f in (identity, transpose, adjoint)
                 C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
                 B = rand(elty, n, n)
-                D = copy(C) + 2.0 * Array(T*f(B))
-                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                D = C + 2.0 * Array(T*f(B))
+                @test mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                @test lmul!(T, copy(f(B))) ≈ T * f(B)
+                @test rmul!(copy(f(B)), T) ≈ f(B) * T
             end
 
             # Issue #31870

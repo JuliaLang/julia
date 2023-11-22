@@ -63,6 +63,8 @@ function _tpid_to_sym(tpid::Int8)
         return :interactive
     elseif tpid == 1
         return :default
+    elseif tpid == -1
+        return :foreign
     else
         throw(ArgumentError("Unrecognized threadpool id $tpid"))
     end
@@ -73,6 +75,8 @@ function _sym_to_tpid(tp::Symbol)
         return Int8(0)
     elseif tp === :default
         return Int8(1)
+    elseif tp == :foreign
+        return Int8(-1)
     else
         throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
     end
@@ -81,7 +85,7 @@ end
 """
     Threads.threadpool(tid = threadid()) -> Symbol
 
-Returns the specified thread's threadpool; either `:default` or `:interactive`.
+Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -108,6 +112,8 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
+    elseif pool == :foreign
+        error("Threadpool size of `:foreign` is indeterminant")
     else
         error("invalid threadpool specified")
     end
@@ -146,7 +152,13 @@ function threading_run(fun, static)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        if static
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        else
+            # TODO: this should be the current pool (except interactive) if there
+            # are ever more than two pools.
+            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+        end
         tasks[i] = t
         schedule(t)
     end
@@ -246,8 +258,8 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
-- The value of [`threadid()`](@ref Threads.threadid) may change even within a single
-  iteration. See [`Task Migration`](@ref man-task-migration)
+- Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
+  may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
 
 ## Schedulers
 
@@ -351,10 +363,10 @@ end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
     tpid = _sym_to_tpid(tp)
-    if _nthreads_in_pool(tpid) == 0
+    if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
     nothing
 end
 

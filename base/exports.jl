@@ -593,6 +593,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -647,6 +648,11 @@ export
     showerror,
     sprint,
     summary,
+
+# ScopedValue
+    with,
+    @with,
+    ScopedValue,
 
 # logging
     @debug,
@@ -857,6 +863,8 @@ export
     readline,
     readlines,
     readuntil,
+    copyuntil,
+    copyline,
     redirect_stdio,
     redirect_stderr,
     redirect_stdin,
@@ -1060,4 +1068,93 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main
+
+public
+# Modules
+    Checked,
+    Filesystem,
+    Order,
+    Sort,
+
+# Types
+    AbstractLock,
+    AsyncCondition,
+    CodeUnits,
+    Event,
+    Fix1,
+    Fix2,
+    Generator,
+    ImmutableDict,
+    OneTo,
+    AnnotatedString,
+    AnnotatedChar,
+    UUID,
+
+# Annotated strings
+    annotatedstring,
+    annotate!,
+    annotations,
+
+# Semaphores
+    Semaphore,
+    acquire,
+    release,
+
+# collections
+    IteratorEltype,
+    IteratorSize,
+    to_index,
+    vect,
+    isdone,
+    front,
+    rest,
+    split_rest,
+    tail,
+    checked_length,
+
+# Loading
+    DL_LOAD_PATH,
+    load_path,
+    active_project,
+
+# Reflection and introspection
+    isambiguous,
+    isexpr,
+    isidentifier,
+    issingletontype,
+    identify_package,
+    locate_package,
+    moduleroot,
+    jit_total_bytes,
+    summarysize,
+    isexported,
+    ispublic,
+
+# Opperators
+    operator_associativity,
+    operator_precedence,
+    isbinaryoperator,
+    isoperator,
+    isunaryoperator,
+
+# C interface
+    cconvert,
+    unsafe_convert,
+
+# Error handling
+    exit_on_sigint,
+    windowserror,
+
+# Macros
+    @assume_effects,
+    @constprop,
+    @locals,
+    @propagate_inbounds,
+
+# misc
+    notnothing,
+    runtests,
+    text_colors

@@ -154,6 +154,13 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
+@testset "operators with zero argument" begin
+    @test_throws(MethodError, +())
+    @test_throws(MethodError, *())
+    @test isempty(methods(+, ()))
+    @test isempty(methods(*, ()))
+end
+
 # pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
@@ -188,7 +195,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 
-    # test keyword ags in composition
+    # test keyword args in composition
     function kwf(a;b,c); a + b + c; end
     @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
 
@@ -358,4 +365,22 @@ end
     Base.:(==)(::B46327, ::B46327) = true
     Base.:(<)(::B46327, ::B46327) = false
     @test B46327() <= B46327()
+end
+
+@testset "concrete eval `x in itr::Tuple`" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
+    for i = (1,2,3)
+        @testset let i = i
+            @test @eval Base.return_types() do
+                Val($i in (1,2,3))
+            end |> only == Val{true}
+        end
+    end
+    @test Base.return_types() do
+        Val(4 in (1,2,3))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val('1' in ('1','2','3'))
+    end |> only == Val{true}
 end

@@ -366,6 +366,11 @@ The individual components of the decomposition `F` can be retrieved via property
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
+!!! note
+    Each reference to the upper triangular factor via `F.R` allocates a new array.
+    It is therefore advisable to cache that array, say, by `R = F.R` and continue working
+    with `R`.
+
 Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
@@ -417,11 +422,14 @@ true
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = copy_similar(A, _qreltype(T))
-    return qr!(AA, arg...; kwargs...)
+    return _qr(AA, arg...; kwargs...)
 end
 # TODO: remove in Julia v2.0
 @deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
 @deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
+
+# allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `qr`
+_qr(A::AbstractMatrix, args...; kwargs...) = qr!(A, args...; kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)

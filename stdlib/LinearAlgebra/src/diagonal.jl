@@ -53,8 +53,9 @@ julia> I(2)
  ⋅  1
 ```
 
-Note that a one-column matrix is not treated like a vector, but instead calls the
-method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+!!! note
+    A one-column matrix is not treated like a vector, but instead calls the
+    method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
 
 ```jldoctest
 julia> A = transpose([7.0 13.0])
@@ -72,27 +73,31 @@ Diagonal(V::AbstractVector)
 """
     Diagonal(A::AbstractMatrix)
 
-Construct a matrix from the diagonal of `A`.
+Construct a matrix from the principal diagonal of `A`.
+The input matrix `A` may be rectangular, but the output will
+be square.
 
 # Examples
 ```jldoctest
-julia> A = permutedims(reshape(1:15, 5, 3))
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> D = Diagonal(A)
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  4
+
+julia> A = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
 julia> Diagonal(A)
-3×3 Diagonal{$Int, Vector{$Int}}:
- 1  ⋅   ⋅
- ⋅  7   ⋅
- ⋅  ⋅  13
-
-julia> diag(A, 2)
-3-element Vector{$Int}:
-  3
-  9
- 15
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  5
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
@@ -107,6 +112,7 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
+AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
@@ -133,12 +139,7 @@ copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
-function size(D::Diagonal,d::Integer)
-    if d<1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    end
-    return d<=2 ? length(D.diag) : 1
-end
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
 
 @inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(Bool, D, i, j) || return false
@@ -148,6 +149,28 @@ end
         r = true
     end
     r
+end
+
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
+end
+
+function Base.minimum(D::Diagonal{T}) where T <: Number
+    mindiag = minimum(D.diag)
+    size(D, 1) > 1 && return (min(zero(T), mindiag))
+    return mindiag
+end
+
+function Base.maximum(D::Diagonal{T}) where T <: Number
+    maxdiag = Base.maximum(D.diag)
+    size(D, 1) > 1 && return (max(zero(T), maxdiag))
+    return maxdiag
 end
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
@@ -290,7 +313,7 @@ end
 (*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+    mul!(similar(A, promote_op(*, eltype(D.diag), eltype(A))), D, A)
 (*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
@@ -758,11 +781,32 @@ function pinv(D::Diagonal{T}, tol::Real) where T
     Diagonal(Di)
 end
 
+# TODO Docstrings for eigvals, eigvecs, eigen all mention permute, scale, sortby as keyword args
+# but not all of them below provide them. Do we need to fix that?
 #Eigensystem
 eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
+    reduce(vcat, eigvals(x) for x in D.diag) #For block matrices, etc.
+function eigvecs(D::Diagonal{T}) where T<:AbstractMatrix
+    diag_vecs = [ eigvecs(x) for x in D.diag ]
+    matT = reduce((a,b) -> promote_type(typeof(a),typeof(b)), diag_vecs)
+    ncols_diag = [ size(x, 2) for x in D.diag ]
+    nrows = size(D, 1)
+    vecs = Matrix{Vector{eltype(matT)}}(undef, nrows, sum(ncols_diag))
+    for j in axes(D, 2), i in axes(D, 1)
+        jj = sum(view(ncols_diag,1:j-1))
+        if i == j
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = diag_vecs[i][:,k]
+            end
+        else
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = zeros(eltype(T), ncols_diag[i])
+            end
+        end
+    end
+    return vecs
+end
 function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -778,6 +822,19 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         end
     else
         evecs = Matrix{Td}(I, size(D))
+    end
+    Eigen(λ, evecs)
+end
+function eigen(D::Diagonal{<:AbstractMatrix}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
+    if any(any(!isfinite, x) for x in D.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    λ = eigvals(D)
+    evecs = eigvecs(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p]
+        evecs = evecs[:,p]
     end
     Eigen(λ, evecs)
 end

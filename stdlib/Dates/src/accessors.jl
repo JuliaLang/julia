@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
-# Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
+# Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
 function yearmonthday(days)
     z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)

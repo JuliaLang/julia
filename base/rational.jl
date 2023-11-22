@@ -17,12 +17,10 @@ end
 unsafe_rational(num::T, den::T) where {T<:Integer} = unsafe_rational(T, num, den)
 unsafe_rational(num::Integer, den::Integer) = unsafe_rational(promote(num, den)...)
 
-@noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 function checked_den(::Type{T}, num::T, den::T) where T<:Integer
     if signbit(den)
-        den = -den
-        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
-        num = -num
+        den = checked_neg(den)
+        num = checked_neg(num)
     end
     return unsafe_rational(T, num, den)
 end
@@ -49,6 +47,12 @@ end
     //(num, den)
 
 Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
+More generally, `//` can be used for exact rational division of other numeric types
+with integer or rational components, such as complex numbers with integer components.
+
+Note that floating-point ([`AbstractFloat`](@ref)) arguments are not permitted by `//`
+(even if the values are rational).
+The arguments must be subtypes of [`Integer`](@ref), `Rational`, or composites thereof.
 
 # Examples
 ```jldoctest
@@ -57,6 +61,13 @@ julia> 3 // 5
 
 julia> (3 // 5) // (2 // 1)
 3//10
+
+julia> (1+2im) // (3+4im)
+11//25 + 2//25*im
+
+julia> 1.0 // 2
+ERROR: MethodError: no method matching //(::Float64, ::Int64)
+[...]
 ```
 """
 //(n::Integer,  d::Integer) = Rational(n,d)
@@ -484,10 +495,6 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
-floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
-ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
-
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
@@ -549,9 +556,10 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
     num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
-    if isodd(den)
+    if isodd(den) # since den != 1, this rational can't be a Float64
         pow = trailing_zeros(num)
         num >>= pow
+        h = hash_integer(den, h)
     else
         pow = trailing_zeros(den)
         den >>= pow

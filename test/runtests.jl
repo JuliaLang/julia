@@ -71,6 +71,7 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")

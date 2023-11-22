@@ -6,6 +6,8 @@ using Base.Ryu
 
 export @printf, @sprintf
 
+public format, Format
+
 # format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
 const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
@@ -237,7 +239,7 @@ function Format(f::AbstractString)
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
-            # note - we should also set zero to false if dynamic precison > 0
+            # note - we should also set zero to false if dynamic precision > 0
             # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits

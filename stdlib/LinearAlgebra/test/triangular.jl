@@ -326,7 +326,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                                 (LowerTriangular, :L),
                                 (UnitLowerTriangular, :L))
 
-                debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
+                debug && println("elty1: $elty1, A1: $t1, elty2: $elty2, A2: $t2")
 
                 A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 === :U ? t : copy(t')))
 
@@ -393,20 +393,20 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
                 if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
-                    @test rdiv!(copy(A1), copy(A2))::t1 ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
-                    @test ldiv!(copy(A2), copy(A1))::t1 ≈ A2\A1 ≈ Matrix(A2)\Matrix(A1)
+                    @test rdiv!(copy(A1), A2)::t1 ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                    @test ldiv!(A2, copy(A1))::t1 ≈ A2\A1 ≈ Matrix(A2)\Matrix(A1)
                 end
                 if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
-                    @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
-                    @test lmul!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
-                    @test ldiv!(adjoint(copy(A1)), copy(A2)) ≈ A1'\A2 ≈ Matrix(A1)'\Matrix(A2)
-                    @test ldiv!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)\A2 ≈ transpose(Matrix(A1))\Matrix(A2)
+                    @test lmul!(adjoint(A1), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
+                    @test lmul!(transpose(A1), copy(A2)) ≈ transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
+                    @test ldiv!(adjoint(A1), copy(A2)) ≈ A1'\A2 ≈ Matrix(A1)'\Matrix(A2)
+                    @test ldiv!(transpose(A1), copy(A2)) ≈ transpose(A1)\A2 ≈ transpose(Matrix(A1))\Matrix(A2)
                 end
                 if (uplo1 != uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
-                    @test rmul!(copy(A1), adjoint(copy(A2))) ≈ A1*A2' ≈ Matrix(A1)*Matrix(A2)'
-                    @test rmul!(copy(A1), transpose(copy(A2))) ≈ A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
-                    @test rdiv!(copy(A1), adjoint(copy(A2))) ≈ A1/A2' ≈ Matrix(A1)/Matrix(A2)'
-                    @test rdiv!(copy(A1), transpose(copy(A2))) ≈ A1/transpose(A2) ≈ Matrix(A1)/transpose(Matrix(A2))
+                    @test rmul!(copy(A1), adjoint(A2)) ≈ A1*A2' ≈ Matrix(A1)*Matrix(A2)'
+                    @test rmul!(copy(A1), transpose(A2)) ≈ A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
+                    @test rdiv!(copy(A1), adjoint(A2)) ≈ A1/A2' ≈ Matrix(A1)/Matrix(A2)'
+                    @test rdiv!(copy(A1), transpose(A2)) ≈ A1/transpose(A2) ≈ Matrix(A1)/transpose(Matrix(A2))
                 end
             end
         end
@@ -420,10 +420,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test lmul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
-            mul!(C, Tri, copy(A1))
+            mul!(C, Tri, A1)
             @test C ≈ Tri*Matrix(A1)
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            mul!(C, copy(A1), Tri)
+            mul!(C, A1, Tri)
             @test C ≈ Matrix(A1)*Tri
 
             # Triangular-dense Matrix/vector multiplication
@@ -564,7 +564,7 @@ end
     end
 end
 
-@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+@testset "check matrix logarithm type-inferable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A = UpperTriangular(exp(triu(randn(elty, n, n))))
     @inferred Union{typeof(A),typeof(complex(A))} log(A)
     @test exp(Matrix(log(A))) ≈ A

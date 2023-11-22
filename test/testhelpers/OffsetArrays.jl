@@ -142,7 +142,7 @@ end
 @inline function Base.getindex(r::IdOffsetRange, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
-    @inbounds eltype(r)(r.parent[i - r.offset] + r.offset)
+    @inbounds eltype(r)(r.parent[oftype(r.offset, i) - r.offset] + r.offset)
 end
 
 # Logical indexing following https://github.com/JuliaLang/julia/pull/31829
@@ -197,6 +197,7 @@ Base.show(io::IO, r::IdOffsetRange) = print(io, IdOffsetRange, "(values=",first(
 
 # Optimizations
 @inline Base.checkindex(::Type{Bool}, inds::IdOffsetRange, i::Real) = Base.checkindex(Bool, inds.parent, i - inds.offset)
+Base._firstslice(r::IdOffsetRange) = IdOffsetRange(Base._firstslice(r.parent), r.offset)
 
 ########################################################################################################
 # origin.jl
@@ -592,7 +593,7 @@ Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 #   Δi = i - first(r)
 #   i′ = first(r.parent) + Δi
 # and one obtains the result below.
-parentindex(r::IdOffsetRange, i) = i - r.offset
+parentindex(r::IdOffsetRange, i) = oftype(r.offset, i) - r.offset
 
 @propagate_inbounds Base.getindex(A::OffsetArray{<:Any,0})  = A.parent[]
 
@@ -641,7 +642,7 @@ Base.copy(A::OffsetArray) = parent_call(copy, A)
 
 Base.strides(A::OffsetArray) = strides(parent(A))
 Base.elsize(::Type{OffsetArray{T,N,A}}) where {T,N,A} = Base.elsize(A)
-@inline Base.unsafe_convert(::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.cconvert(::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # For fast broadcasting: ref https://discourse.julialang.org/t/why-is-there-a-performance-hit-on-broadcasting-with-offsetarrays/32194
 Base.dataids(A::OffsetArray) = Base.dataids(parent(A))

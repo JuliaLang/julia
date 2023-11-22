@@ -789,16 +789,14 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sinpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -820,16 +818,14 @@ end
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:Union{IEEEFloat, Rational}
+function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return one(T)
-    end
+    x >= maxintfloat(T) && return one(T)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -856,16 +852,14 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
-    end
+    x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -895,8 +889,7 @@ Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large
 
 See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-
-function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function tanpi(_x::T) where T<:IEEEFloat
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
     x = abs(_x)
@@ -906,9 +899,7 @@ function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
     end
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -933,10 +924,10 @@ cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 tanpi(x::Integer) = x >= 0 ? (isodd(x) ? -zero(float(x)) : zero(float(x))) :
                              (isodd(x) ? zero(float(x)) : -zero(float(x)))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
-sinpi(x::Real) = sin(pi*x)
-cospi(x::Real) = cos(pi*x)
-sincospi(x::Real) = sincos(pi*x)
-tanpi(x::Real) = tan(pi*x)
+sinpi(x::AbstractFloat) = sin(pi*x)
+cospi(x::AbstractFloat) = cos(pi*x)
+sincospi(x::AbstractFloat) = sincos(pi*x)
+tanpi(x::AbstractFloat) = tan(pi*x)
 tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
 
 function sinpi(z::Complex{T}) where T
@@ -1074,7 +1065,7 @@ isinf_real(x::Number) = false
 """
     sinc(x)
 
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+Compute normalized sinc function ``\\operatorname{sinc}(x) = \\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 
 See also [`cosc`](@ref), its derivative.
 """
@@ -1093,6 +1084,8 @@ _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
+
+See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
 function _cosc(x::Number)
