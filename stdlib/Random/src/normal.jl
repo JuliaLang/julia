@@ -14,7 +14,7 @@
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
-Given the optional `dims` argument, generate an array of size `dims` of such numbers.
+Given the optional `dims` argument(s), generate an array of size `dims` of such numbers.
 Julia's standard library supports `randn` for any floating-point type
 that implements [`rand`](@ref), e.g. the `Base` types
 [`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref) (the default), and [`BigFloat`](@ref),
