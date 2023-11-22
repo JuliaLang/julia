@@ -552,7 +552,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not terminate abnormally
+The `:nothrow` settings asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -561,7 +561,11 @@ The `:nothrow` settings asserts that this method does not terminate abnormally
     method itself.
 
 !!! note
-    `MethodErrors` and similar exceptions count as abnormal termination.
+    If the execution of a method may raise `MethodError`s and similar exceptions, then
+    the method is not considered as `:nothrow`.
+    However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+    are not modeled by this effect and thus a method that may result in `StackOverflowError`
+    does not necessarily need to be `!:nothrow` (although it should usually be `!:terminates` too).
 
 ---
 ## `:terminates_globally`
