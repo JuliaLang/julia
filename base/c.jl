@@ -409,6 +409,6 @@ macro ccall(expr)
     return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
 end
 
-macro ccall_effects(effects::UInt8, expr)
+macro ccall_effects(effects::UInt16, expr)
     return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
 end

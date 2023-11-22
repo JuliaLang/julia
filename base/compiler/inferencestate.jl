@@ -198,9 +198,16 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
-const CACHE_MODE_NULL   = 0x00
-const CACHE_MODE_GLOBAL = 0x01 << 0
-const CACHE_MODE_LOCAL  = 0x01 << 1
+const CACHE_MODE_NULL     = 0x00      # not cached, without optimization
+const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization allowed
+const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization allowed
+const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
+
+mutable struct TryCatchFrame
+    exct
+    const enter_idx::Int
+    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
+end
 
 mutable struct InferenceState
     #= information about this method instance =#
@@ -217,7 +224,8 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handler_at::Vector{Int} # current exception handler info
+    handlers::Vector{TryCatchFrame}
+    handler_at::Vector{Tuple{Int, Int}} # tuple of current (handler, exception stack) value at the pc
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
@@ -238,6 +246,7 @@ mutable struct InferenceState
     unreachable::BitSet # statements that were found to be statically unreachable
     valid_worlds::WorldRange
     bestguess #::Type
+    exc_bestguess
     ipo_effects::Effects
 
     #= flags =#
@@ -265,7 +274,7 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_at = compute_trycatch(code, BitSet())
+        handler_at, handlers = compute_trycatch(code, BitSet())
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
@@ -295,6 +304,7 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
+        exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
         insert_coverage = should_insert_coverage(mod, src)
@@ -314,9 +324,9 @@ mutable struct InferenceState
 
         return new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
-            result, unreachable, valid_worlds, bestguess, ipo_effects,
+            result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
     end
@@ -346,16 +356,19 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     empty!(ip)
     ip.offset = 0 # for _bits_findnext
     push!(ip, n + 1)
-    handler_at = fill(0, n)
+    handler_at = fill((0, 0), n)
+    handlers = TryCatchFrame[]
 
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
         if isexpr(stmt, :enter)
             l = stmt.args[1]::Int
-            handler_at[pc + 1] = pc
+            push!(handlers, TryCatchFrame(Bottom, pc))
+            handler_id = length(handlers)
+            handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = pc
+            handler_at[l] = (handler_id, handler_id)
             push!(ip, l)
         end
     end
@@ -368,25 +381,26 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             pc´ = pc + 1 # next program-counter (after executing instruction)
             delete!(ip, pc)
-            cur_hand = handler_at[pc]
-            @assert cur_hand != 0 "unbalanced try/catch"
+            cur_stacks = handler_at[pc]
+            @assert cur_stacks != (0, 0) "unbalanced try/catch"
             stmt = code[pc]
             if isa(stmt, GotoNode)
                 pc´ = stmt.label
             elseif isa(stmt, GotoIfNot)
                 l = stmt.dest::Int
-                if handler_at[l] != cur_hand
-                    @assert handler_at[l] == 0 "unbalanced try/catch"
-                    handler_at[l] = cur_hand
+                if handler_at[l] != cur_stacks
+                    @assert handler_at[l][1] == 0 || handler_at[l][1] == cur_stacks[1] "unbalanced try/catch"
+                    handler_at[l] = cur_stacks
                     push!(ip, l)
                 end
             elseif isa(stmt, ReturnNode)
-                @assert !isdefined(stmt, :val) "unbalanced try/catch"
+                @assert !isdefined(stmt, :val) || cur_stacks[1] == 0 "unbalanced try/catch"
                 break
             elseif isa(stmt, Expr)
                 head = stmt.head
                 if head === :enter
-                    cur_hand = pc
+                    # Already set above
+                    cur_stacks = (handler_at[pc´][1], cur_stacks[2])
                 elseif head === :leave
                     l = 0
                     for j = 1:length(stmt.args)
@@ -402,19 +416,21 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                         end
                         l += 1
                     end
+                    cur_hand = cur_stacks[1]
                     for i = 1:l
-                        cur_hand = handler_at[cur_hand]
+                        cur_hand = handler_at[handlers[cur_hand].enter_idx][1]
                     end
-                    cur_hand == 0 && break
+                    cur_stacks = (cur_hand, cur_stacks[2])
+                    cur_stacks == (0, 0) && break
+                elseif head === :pop_exception
+                    cur_stacks = (cur_stacks[1], handler_at[(stmt.args[1]::SSAValue).id][2])
+                    cur_stacks == (0, 0) && break
                 end
             end
 
             pc´ > n && break # can't proceed with the fast-path fall-through
-            if handler_at[pc´] != cur_hand
-                if handler_at[pc´] != 0
-                    @assert false "unbalanced try/catch"
-                end
-                handler_at[pc´] = cur_hand
+            if handler_at[pc´] != cur_stacks
+                handler_at[pc´] = cur_stacks
             elseif !in(pc´, ip)
                 break  # already visited
             end
@@ -423,7 +439,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     end
 
     @assert first(ip) == n + 1
-    return handler_at
+    return handler_at, handlers
 end
 
 # check if coverage mode is enabled
@@ -467,6 +483,8 @@ function convert_cache_mode(cache_mode::Symbol)
         return CACHE_MODE_GLOBAL
     elseif cache_mode === :local
         return CACHE_MODE_LOCAL
+    elseif cache_mode === :volatile
+        return CACHE_MODE_VOLATILE
     elseif cache_mode === :no
         return CACHE_MODE_NULL
     end

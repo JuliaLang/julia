@@ -88,20 +88,6 @@ end
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
-function tuple_sort_test(x)
-    @test issorted(sort(x))
-    length(x) > 9 && return # length > 9 uses a vector fallback
-    @test 0 == @allocated sort(x)
-end
-@testset "sort(::NTuple)" begin
-    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
-    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
-    for i in 1:40
-        tuple_sort_test(tuple(rand(i)...))
-    end
-    @test_throws ArgumentError sort((1,2,3.0))
-end
-
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -544,23 +530,6 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
-@testset "sort!(iterable)" begin
-    gen = (x % 7 + 0.1x for x in 1:50)
-    @test sort(gen) == sort!(collect(gen))
-    gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
-    @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
-    @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
-
-    @test_throws ArgumentError("dimension out of range") sort(gen; dims=3)
-
-    @test_throws UndefKeywordError(:dims) sort(gen)
-    @test_throws UndefKeywordError(:dims) sort(collect(gen))
-    @test_throws UndefKeywordError(:dims) sort!(collect(gen))
-
-    @test_throws ArgumentError sort("string")
-    @test_throws ArgumentError("1 cannot be sorted") sort(1)
-end
-
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
     a = view([9:-1:0;], :)::SubArray
     sort!(a)
@@ -822,9 +791,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]

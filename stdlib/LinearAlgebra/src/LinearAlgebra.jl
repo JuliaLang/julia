@@ -161,6 +161,9 @@ export
 # Constants
     I
 
+# not exported, but public names
+public AbstractTriangular
+
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
 const BlasComplex = Union{ComplexF64,ComplexF32}

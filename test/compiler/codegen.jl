@@ -487,12 +487,16 @@ function f37262(x)
     catch
         GC.safepoint()
     end
+    local a
     try
         GC.gc()
-        return g37262(x)
+        a = g37262(x)
+        Base.inferencebarrier(false) && error()
+        return a
     catch ex
         GC.gc()
     finally
+        @isdefined(a) && Base.donotdelete(a)
         GC.gc()
     end
 end

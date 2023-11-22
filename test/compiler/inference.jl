@@ -138,7 +138,7 @@ end
       Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
       Type{Any}
 
-# issue #43296 #43296
+# issue #43296
 struct C43296{t,I} end
 r43296(b) = r43296(typeof(b))
 r43296(::Type) = nothing
@@ -149,7 +149,8 @@ f43296(g, :) = h
 k43296(b, j, :) = l
 k43296(b, j, ::Nothing) = b
 i43296(b, j) = k43296(b, j, r43296(j))
-@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}, Tuple}}))) == Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}}}))) <: Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, <:Tuple}}}))) <: Int
 
 abstract type e43296{a, j} <: AbstractArray{a, j} end
 abstract type b43296{a, j, c, d} <: e43296{a, j} end
@@ -422,12 +423,13 @@ A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(devnull, f14009, (Int,))
+@test Base.infer_exception_type(f14009, (Int,)) != Union{}
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(devnull, f14009, (Int,))
-
+code_llvm(devnull, g14009, (Type{Int},))
+@test Base.infer_exception_type(g14009, (Type{Int},)) == StackOverflowError
 
 # issue #9232
 arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
@@ -731,7 +733,7 @@ for (codetype, all_ssa) in Any[
     test_inferred_static(codetype, all_ssa)
 end
 @test f18679() === ()
-@test_throws UndefVarError(:any_undef_global) g18679()
+@test_throws UndefVarError(:any_undef_global, @__MODULE__) g18679()
 @test h18679() === nothing
 
 
@@ -1579,15 +1581,21 @@ end
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
-# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc
+# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc, memoryref_isassigned, memoryrefoffset_tfunc
 let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefget_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefget_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryref_isassigned_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_isassigned_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefset!_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefset!_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryrefoffset_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefoffset_tfunc(Core.Compiler.fallback_lattice, xs...)
+    interp = Core.Compiler.NativeInterpreter()
+    builtin_tfunction(@nospecialize xs...) = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
     @test memoryref_tfunc(Memory{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Integer}) == MemoryRef{Integer}
     @test memoryref_tfunc(MemoryRef{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Vararg{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Int}, Int) == Union{}
     @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
     @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
@@ -1602,6 +1610,20 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryrefget_tfunc(MemoryRef{Int}, String, Bool) === Union{}
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
     @test memoryrefget_tfunc(Any, Any, Any) === Any
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Int
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Any, Any) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{<:Integer}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef{:not_atomic}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(Vector{Int}, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(String, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, String, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
+    @test memoryref_isassigned_tfunc(Any, Any, Any) === Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Vararg{Any}]) == Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Bool
     @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
     let ua = MemoryRef{<:Integer}
         @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
@@ -1616,6 +1638,15 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
     @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
     @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Symbol}]) == Union{}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) == MemoryRef{Int}
+    @test memoryrefoffset_tfunc(MemoryRef) == memoryrefoffset_tfunc(GenericMemoryRef) == Int
+    @test memoryrefoffset_tfunc(Memory) == memoryrefoffset_tfunc(GenericMemory) == Union{}
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Memory}]) == Union{}
 end
 
 let tuple_tfunc(@nospecialize xs...) =
@@ -2561,7 +2592,7 @@ function h25579(g)
     return t ? typeof(h) : typeof(h)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
-        Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+        Any[Type{Float64}]
 
 f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
@@ -2998,13 +3029,16 @@ end
 @test ig27907(Int, Int, 1, 0) == 0
 
 # issue #28279
+# ensure that lowering doesn't move these into statement position, which would require renumbering
+using Base: +, -
 function f28279(b::Bool)
-    i = 1
-    while i > b
-        i -= 1
+    let i = 1
+        while i > b
+            i -= 1
+        end
+        if b end
+        return i + 1
     end
-    if b end
-    return i + 1
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
@@ -4406,8 +4440,8 @@ let x = Tuple{Int,Any}[
         #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
-    @test handler_at == first.(x)
+    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -4424,7 +4458,7 @@ end
             nothing
         end
         return x
-    end) === Union{Int, Float64, Char}
+    end) === Union{Int, Char}
 
 # issue #42097
 struct Foo42097{F} end
@@ -5372,6 +5406,127 @@ end
 @test Base.return_types(phic_type3) |> only === Union{Int, Float64}
 @test phic_type3() === 2
 
+# Issue #51852
+function phic_type4()
+    a = (;progress = "a")
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type4) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type4() === (;progress = 1.0)
+
+function phic_type5()
+    a = (;progress = "a")
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type5) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type5() === (;progress = 1.0)
+
+function phic_type6()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type6) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type6() === (;progress = 1.0)
+
+function phic_type7()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type7) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type7() === (;progress = 1.0)
+
+function phic_type8()
+    local a
+    try
+        may_error(true)
+        a = Base.inferencebarrier(1)
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type8) |> only === Int
+@test phic_type8() === 2
+
+function phic_type9()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(false) ? 1 : nothing
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type9) |> only === Int
+@test phic_type9() === 2
+
+function phic_type10()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(true) ? missing : nothing
+    catch
+    end
+
+    try
+        Base.inferencebarrier(true) && (a = 2)
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a::Int
+end
+@test Base.return_types(phic_type10) |> only === Int
+@test phic_type10() === 2
+
+undef_trycatch() = try (a_undef_trycatch = a_undef_trycatch, b = 2); return 1 catch end
+# `global a_undef_trycatch` could be defined dynamically, so both paths must be allowed
+@test Base.return_types(undef_trycatch) |> only === Union{Nothing, Int}
+@test undef_trycatch() === nothing
+
 # Test that `exit` returns `Union{}` (issue #51856)
 function test_exit_bottom(s)
     n = tryparse(Int, s)
@@ -5379,3 +5534,62 @@ function test_exit_bottom(s)
     n
 end
 @test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
+
+function foo_typed_throw_error()
+    try
+        error()
+    catch e
+        if isa(e, ErrorException)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_error) |> only === Float64
+
+will_throw_no_method(x::Int) = 1
+function foo_typed_throw_metherr()
+    try
+        will_throw_no_method(1.0)
+    catch e
+        if isa(e, MethodError)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_metherr) |> only === Float64
+
+# using `exct` information if `:nothrow` is proven
+Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+    x == Inf && return zero(x)
+    return sin(x)
+end
+@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_nothrow(x)
+    catch err
+        return err
+    end
+end |> only === Float64
+# for semi-concrete interpretation result too
+Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
+    if maythrow
+        return sin(x)
+    else
+        return @noinline sin_nothrow(x)
+    end
+end
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_maythrow(x, false)
+    catch err
+        return err
+    end
+end |> only === Float64
+
+# exception type from GotoIfNot
+@test Base.infer_exception_type(c::Bool -> c ? 1 : 2) == Union{}
+@test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
+@test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError

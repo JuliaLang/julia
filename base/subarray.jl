@@ -52,8 +52,10 @@ viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@inline; viewindexing(tail(
 # A UnitRange can follow Slices, but only if all other indices are scalar
 viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
-# In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{AbstractRange, Vararg{ScalarIndex}}) = IndexLinear()
+# In general, scalar ranges are only fast if all other indices are scalar
+# Other ranges, such as those of `CartesianIndex`es, are not fast even if these
+# are followed by `ScalarIndex`es
+viewindexing(I::Tuple{AbstractRange{<:ScalarIndex}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -483,8 +485,8 @@ end
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
 function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
-    replace_in_print_matrix(S.parent, reindex(S.indices, (i,j))..., s)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,j)))..., s)
 end
 function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
-    replace_in_print_matrix(S.parent, reindex(S.indices, (i,))..., j, s)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,)))..., j, s)
 end
