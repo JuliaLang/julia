@@ -4,8 +4,8 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#include "work-stealing-queue.h"
 #include "julia_atomics.h"
+#include "work-stealing-queue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -161,14 +161,8 @@ typedef struct {
     arraylist_t *last_remset;
 
     // variables for allocating objects from pools
-#ifdef _P64
-#  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
-#  define JL_GC_N_POOLS 50
-#else
-#  define JL_GC_N_POOLS 51
-#endif
-    jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
+#define JL_GC_N_MAX_POOLS 51 // conservative. must be kept in sync with `src/julia_internal.h`
+    jl_gc_pool_t norm_pools[JL_GC_N_MAX_POOLS];
 
 #define JL_N_STACK_POOLS 16
     small_arraylist_t free_stacks[JL_N_STACK_POOLS];
