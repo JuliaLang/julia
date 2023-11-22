@@ -53,7 +53,7 @@ julia> using Random
 julia> rng = Xoshiro(123);
 
 julia> randn(rng, Float32)
--0.45660053706486897 - 1.0346749725929225im
+-0.6457307f0
 
 julia> randn(rng, ComplexF32, (2, 3))
 2×3 Matrix{ComplexF32}:
