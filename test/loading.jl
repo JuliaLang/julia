@@ -1092,7 +1092,7 @@ end
     end
 end
 
-pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
@@ -1272,5 +1272,108 @@ end
         x = 1
         """)
         @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
+end
+
+@testset "relocatable upgrades #51989" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create fake `Foo.jl` package with two files:
+        foo_path = joinpath(depot, "dev", "Foo")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            println(io, """
+            module Foo
+            include("internal.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
+            println(io, "const a = \"asd\"")
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        # In our depot, `dev` and then `precompile` this `Foo` package.
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot))
+
+        # Get the size of the generated `.ji` file so that we can ensure that it gets altered
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        cache_size = filesize(cache_path)
+
+        # Next, remove the dependence on `internal.jl` and delete it:
+        rm(joinpath(foo_path, "src", "internal.jl"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            truncate(io, 0)
+            println(io, """
+            module Foo
+            end
+            """)
+        end
+
+        # Try to load `Foo`; this should trigger recompilation, not an error!
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Ensure that there is still only one `.ji` file (it got replaced
+        # and the file size changed).
+        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
+        @test filesize(cache_path) != cache_size
+    end
+end
+
+@testset "code coverage disabled during precompilation" begin
+    mktempdir() do depot
+        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        function rm_cov_files()
+            for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+                rm(cov_file)
+            end
+            @test !cov_exists()
+        end
+        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+
+        rm_cov_files() # clear out any coverage files first
+        @test !cov_exists()
+
+        cd(cov_test_dir) do
+            # In our depot, precompile CovTest.jl with coverage on
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            @test !cov_exists()
+            rm_cov_files()
+
+            # same again but call foo(), which is in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+
+            # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+        end
     end
 end

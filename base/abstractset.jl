@@ -101,7 +101,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && _sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
+    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break

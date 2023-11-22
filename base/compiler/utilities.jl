@@ -446,11 +446,14 @@ function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
     end
 end
 
-function is_throw_call(e::Expr)
+function is_throw_call(e::Expr, code::Vector{Any})
     if e.head === :call
         f = e.args[1]
+        if isa(f, SSAValue)
+            f = code[f.id]
+        end
         if isa(f, GlobalRef)
-            ff = abstract_eval_globalref(f)
+            ff = abstract_eval_globalref_type(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end
@@ -459,14 +462,14 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
     for stmt in find_throw_blocks(src.code, handler_at)
         src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
     end
     return nothing
 end
 
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
     stmts = BitSet()
     n = length(code)
     for i in n:-1:1
@@ -478,8 +481,8 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
                 end
             elseif s.head === :return
                 # see `ReturnNode` handling
-            elseif is_throw_call(s)
-                if handler_at[i] == 0
+            elseif is_throw_call(s, code)
+                if handler_at[i][1] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts

@@ -1814,7 +1814,7 @@ matches the inferred type modulo `AllowedType`, or when the return type is a sub
 `AllowedType`. This is useful when testing type stability of functions returning a small
 union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
+```jldoctest; setup = :(using InteractiveUtils; using Base: >), filter = r"begin\\n(.|\\n)*end"
 julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 

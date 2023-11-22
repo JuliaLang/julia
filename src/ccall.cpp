@@ -32,6 +32,7 @@ TRANSFORMED_CCALL_STAT(jl_svec_ref);
 TRANSFORMED_CCALL_STAT(jl_string_ptr);
 TRANSFORMED_CCALL_STAT(jl_symbol_name);
 TRANSFORMED_CCALL_STAT(jl_genericmemory_owner);
+TRANSFORMED_CCALL_STAT(jl_alloc_genericmemory);
 TRANSFORMED_CCALL_STAT(memcpy);
 TRANSFORMED_CCALL_STAT(memset);
 TRANSFORMED_CCALL_STAT(memmove);
@@ -1002,8 +1003,9 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
+    unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
-    Value *strct = emit_allocobj(ctx, nb, runtime_dt);
+    Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
     init_bits_value(ctx, strct, result, tbaa);
     return strct;
@@ -1382,6 +1384,10 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(i < nccallargs && i + fc_args_start <= nargs);
         jl_value_t *argi = args[fc_args_start + i];
         argv[i] = emit_expr(ctx, argi);
+        if (argv[i].typ == jl_bottom_type) {
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
     }
 
     // emit roots
@@ -1771,6 +1777,33 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_julia_type(ctx, obj, true, jl_any_type);
     }
+    else if (is_libjulia_func(jl_alloc_genericmemory)) {
+        ++CCALL_STAT(jl_alloc_genericmemory);
+        assert(lrt == ctx.types().T_prjlvalue);
+        assert(!isVa && !llvmcall && nccallargs == 2);
+        const jl_cgval_t &typ = argv[0];
+        const jl_cgval_t &nel = argv[1];
+        auto arg_typename = [&] JL_NOTSAFEPOINT {
+            auto istyp = argv[0].constant;
+            std::string type_str;
+            if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)){
+                auto eltype = jl_tparam1(istyp);
+                if (jl_is_datatype(eltype))
+                    type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+                else if (jl_is_uniontype(eltype))
+                    type_str = "Union";
+                else
+                    type_str = "<unknown type>";
+            }
+            else
+                type_str = "<unknown type>";
+            return "Memory{" + type_str + "}[]";
+            };
+        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
+        setName(ctx.emission_context, alloc, arg_typename);
+        JL_GC_POP();
+        return mark_julia_type(ctx, alloc, true, jl_any_type);
+    }
     else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
         ++CCALL_STAT(memcpy);
         const jl_cgval_t &dst = argv[0];
@@ -1852,7 +1885,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             if (!val.isghost && !val.ispointer())
                 val = value_to_pointer(ctx, val);
             Value *args[] = {
-                emit_typeof(ctx, val),
+                emit_typeof(ctx, val, false, true),
                 val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
                     ctx.builder.CreateBitCast(
                         decay_derived(ctx, data_pointer(ctx, val)),
@@ -1956,7 +1989,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // XXX: result needs to be zero'd and given a GC root here
             // and has incorrect write barriers.
             // instead this code path should behave like `unsafe_load`
-            result = emit_allocobj(ctx, (jl_datatype_t*)rt);
+            result = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
             setName(ctx.emission_context, result, "ccall_sret_box");
             sretty = ctx.types().T_jlvalue;
             sretboxed = true;
@@ -2113,7 +2146,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else if (jlretboxed && !retboxed) {
             assert(jl_is_datatype(rt));
             if (static_rt) {
-                Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt);
+                Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
                 MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
                 int boxalign = julia_alignment(rt);

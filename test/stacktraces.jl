@@ -166,6 +166,22 @@ end
 @test bt[1].line == topline+4
 end
 
+# Accidental incorrect phi block computation in interpreter
+global global_false_bool = false
+let bt, topline = @__LINE__
+    try
+        let
+            global read_write_global_bt_test, global_false_bool
+            if global_false_bool
+            end
+            (read_write_global_bt_test, (read_write_global_bt_test=2;))
+        end
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test bt[1].line == topline+6
+end
+
 # issue #28990
 let bt
 try
