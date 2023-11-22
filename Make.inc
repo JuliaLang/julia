@@ -599,10 +599,13 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)

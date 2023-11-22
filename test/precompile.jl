@@ -288,6 +288,9 @@ precompile_test_harness(false) do dir
               a_vec_inline = Pair{Int,Any}[]
               push!(a_vec_inline, 1=>2, 3=>4)
               a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -371,6 +374,10 @@ precompile_test_harness(false) do dir
         @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
         Foo.a_mat_inline[1, 2] = 5=>6
         @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
@@ -1677,7 +1684,7 @@ precompile_test_harness("issue #46296") do load_path
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1771,7 +1778,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end

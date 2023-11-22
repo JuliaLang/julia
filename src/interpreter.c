@@ -683,7 +683,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
         }
     }
     if (!src || !jl_is_code_info(src)) {
-        jl_error("source missing for method called in interpreter");
+        jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
     }
     return src;
 }

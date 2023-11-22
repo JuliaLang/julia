@@ -243,7 +243,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    interp = switch_from_irinterp(interp)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -328,10 +327,10 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
-        widenconst(result_type), rettype_const, inferred_result,
+        widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
+        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
         relocatability)
 end
 
@@ -446,6 +445,8 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     end
     if is_effect_overridden(override, :noub)
         ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
+    elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.noub !== ALWAYS_TRUE
+        ipo_effects = Effects(ipo_effects; noub=NOUB_IF_NOINBOUNDS)
     end
     return ipo_effects
 end
@@ -502,6 +503,11 @@ function adjust_effects(sv::InferenceState)
     return ipo_effects
 end
 
+function refine_exception_type(@nospecialize(exc_bestguess), ipo_effects::Effects)
+    ipo_effects.nothrow && return Bottom
+    return exc_bestguess
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
@@ -523,7 +529,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
     bestguess = me.bestguess = cycle_fix_limited(me.bestguess, me)
-    limited_ret = bestguess isa LimitedAccuracy
+    exc_bestguess = me.exc_bestguess = cycle_fix_limited(me.exc_bestguess, me)
+    limited_ret = bestguess isa LimitedAccuracy || exc_bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
         gt = me.ssavaluetypes
@@ -537,7 +544,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = bestguess
-    me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -567,6 +575,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
             me.result.src = me.src # for reflection etc.
         end
     end
+
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -794,15 +803,16 @@ end
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 struct EdgeCallResult
-    rt #::Type
+    rt
+    exct
     edge::Union{Nothing,MethodInstance}
     effects::Effects
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
-    function EdgeCallResult(@nospecialize(rt),
+    function EdgeCallResult(@nospecialize(rt), @nospecialize(exct),
                             edge::Union{Nothing,MethodInstance},
                             effects::Effects,
                             volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing)
-        return new(rt, edge, effects, volatile_inf_result)
+        return new(rt, exct, edge, effects, volatile_inf_result)
     end
 end
 
@@ -822,14 +832,14 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             rt = cached_return_type(code)
             effects = ipo_effects(code)
             update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
-            return EdgeCallResult(rt, mi, effects)
+            return EdgeCallResult(rt, code.exctype, mi, effects)
         end
     else
         cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
         add_remark!(interp, caller, "Inference is disabled for the target module")
-        return EdgeCallResult(Any, nothing, Effects())
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
@@ -847,7 +857,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             add_remark!(interp, caller, "Failed to retrieve source")
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
-            return EdgeCallResult(Any, nothing, Effects())
+            return EdgeCallResult(Any, Any, nothing, Effects())
         end
         if is_cached(caller) || frame_parent(caller) !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
@@ -857,20 +867,26 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
         effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
         volatile_inf_result = isinferred && let inferred_src = result.src
                 isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
             end ? VolatileInferenceResult(result) : nothing
-        return EdgeCallResult(frame.bestguess, edge, effects, volatile_inf_result)
+        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
-        return EdgeCallResult(Any, nothing, Effects())
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(Effects(), method))
+    effects = adjust_effects(Effects(), method)
+    exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+    # this call can fail into an infinite cycle, so incorporate this fact into
+    # `exc_bestguess` by merging `StackOverflowError` into it
+    exc_bestguess = tmerge(typeinf_lattice(interp), Core.StackOverflowError, exc_bestguess)
+    return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
 
 function cached_return_type(code::CodeInstance)
