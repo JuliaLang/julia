@@ -956,7 +956,7 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
     return inst
 end
 
-function delete_inst_here!(compact)
+function delete_inst_here!(compact::IncrementalCompact)
     # Delete the statement, update refcounts etc
     compact[SSAValue(compact.result_idx-1)] = nothing
     # Pretend that we never compacted this statement in the first place

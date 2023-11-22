@@ -278,6 +278,15 @@ end
 populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
     populate_def_use_map!(tpdum, BBScanner(ir))
 
+function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irsv::IRInterpretationState)
+    isexpr(stmt, :call) || return false
+    @inbounds for i = 2:length(stmt.args)
+        argtype = abstract_eval_value(interp, stmt.args[i], nothing, irsv)
+        is_const_argtype(argtype) || return false
+    end
+    return true
+end
+
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
@@ -302,6 +311,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         if has_flag(flag, IR_FLAG_REFINED)
             any_refined = true
             sub_flag!(inst, IR_FLAG_REFINED)
+        elseif is_all_const_call(stmt, interp, irsv)
+            # force reinference on calls with all constant arguments
+            any_refined = true
         end
         for ur in userefs(stmt)
             val = ur[]
