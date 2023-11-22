@@ -283,6 +283,10 @@ function setindex!(node::Instruction, newval::Instruction)
     return node
 end
 
+has_flag(inst::Instruction, flag::UInt32) = has_flag(inst[:flag], flag)
+add_flag!(inst::Instruction, flag::UInt32) = inst[:flag] |= flag
+sub_flag!(inst::Instruction, flag::UInt32) = inst[:flag] &= ~flag
+
 struct NewNodeInfo
     # Insertion position (interpretation depends on which array this is in)
     pos::Int
@@ -334,18 +338,24 @@ function NewInstruction(inst::Instruction;
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-effect_free_and_nothrow(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-with_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=add_flag(newinst, flags))
-without_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
+effect_free_and_nothrow(newinst::NewInstruction) = add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
 function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
-    flag === nothing && return newflag
-    return flag | newflag
+    if flag === nothing
+        flag = newflag
+    else
+        flag |= newflag
+    end
+    return NewInstruction(newinst; flag)
 end
 function sub_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
-    flag === nothing && return IR_FLAG_NULL
-    return flag & ~newflag
+    if flag === nothing
+        flag = IR_FLAG_NULL
+    else
+        flag &= ~newflag
+    end
+    return NewInstruction(newinst; flag)
 end
 
 struct IRCode
@@ -1325,7 +1335,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, GlobalRef)
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
         flag = result[result_idx][:flag]
-        if (flag & total_flags) == total_flags
+        if has_flag(flag, total_flags)
             ssa_rename[idx] = stmt
         else
             ssa_rename[idx] = SSAValue(result_idx)
@@ -1532,7 +1542,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         else
             # Constant assign, replace uses of this ssa value with its result
         end
-        if (inst[:flag] & IR_FLAG_REFINED) != 0 && !isa(stmt, Refined)
+        if has_flag(inst, IR_FLAG_REFINED) && !isa(stmt, Refined)
             # If we're compacting away an instruction that was marked as refined,
             # leave a marker in the ssa_rename, so we can taint any users.
             stmt = Refined(stmt)
@@ -1767,7 +1777,7 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    effect_free = (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    effect_free = has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
     effect_free || return false
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
