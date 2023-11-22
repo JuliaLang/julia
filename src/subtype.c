@@ -4439,7 +4439,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         newa = insert_nondiagonal(a, troot, widen2ub);
         newb = insert_nondiagonal(b, troot, widen2ub);
         if (newa != a || newb != b)
-            type = (jl_value_t *)jl_new_struct(jl_uniontype_type, newa, newb);
+            type = simple_union(newa, newb);
         JL_GC_POP();
     }
     else if (jl_is_vararg(type)) {
@@ -4499,7 +4499,8 @@ static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding
     if (vb.innervars != NULL) {
         for (size_t i = 0; i < jl_array_nrows(vb.innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb.innervars, i);
-            nt = jl_type_unionall(var, nt);
+            if (jl_has_typevar(nt, var))
+                nt = jl_type_unionall(var, nt);
         }
     }
     JL_GC_POP();
