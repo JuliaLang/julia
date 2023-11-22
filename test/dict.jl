@@ -1103,7 +1103,7 @@ import Base.PersistentDict
         end
         @test hs.depth == recompute_depth
         @test hs.shift == 0
-        hsr = Base.HAMT.HashState(key, 12, 0)
+        hsr = Base.HAMT.HashState(h, 12)
         @test hs.hash == hsr.hash
     end
     @testset "basics" begin
